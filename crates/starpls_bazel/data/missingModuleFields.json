@@ -281,6 +281,35 @@
       }
     }
   ],
+  "testing": [
+    {
+      "name": "ExecutionInfo",
+      "doc": "Creates a provider describing test execution requirements.",
+      "callable": {
+        "params": [
+          {
+            "name": "requirements",
+            "type": "Dictionary: string -> string",
+            "doc": "Special execution requirements.",
+            "default_value": "{}",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "exec_group",
+            "type": "string",
+            "doc": "The execution group used to run the test.",
+            "default_value": "'test'",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "ExecutionInfo"
+      }
+    }
+  ],
   "repository_ctx": [
     {
       "name": "repo_metadata",

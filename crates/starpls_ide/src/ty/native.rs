@@ -2438,6 +2438,12 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
     variables: TemplateVariableInfo = platform_common.TemplateVariableInfo({"CC": "clang"})
     platform_common.TemplateVariableInfo(vars={"LD": "lld"})
     selected_variables: TemplateVariableInfo = target[platform_common.TemplateVariableInfo]
+    execution: ExecutionInfo = testing.ExecutionInfo()
+    testing.ExecutionInfo({"requires-darwin": ""}, "test")
+    testing.ExecutionInfo(requirements={"local": "1"}, exec_group="test")
+    selected_execution: ExecutionInfo = target[testing.ExecutionInfo]
+    execution.exec_group.upper()
+    selected_execution.exec_group.upper()
     visibility: list[Label] = native.package_default_visibility()
     files = target.files.to_list()
     files[0].basename
@@ -2465,6 +2471,12 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
             "platform_common.TemplateVariableInfo()",
             "platform_common.TemplateVariableInfo({1: 'value'})",
             "platform_common.TemplateVariableInfo({'CC': 1})",
+            "testing.ExecutionInfo({1: 'value'})",
+            "testing.ExecutionInfo({'local': 1})",
+            "testing.ExecutionInfo(exec_group=42)",
+            "testing.ExecutionInfo(unknown=True)",
+            "_wrong: CcInfo = testing.ExecutionInfo(); _wrong",
+            "_wrong: CcInfo = target[testing.ExecutionInfo]; _wrong",
             "native.package_default_visibility(1)",
             "_wrong: list[str] = native.package_default_visibility(); _wrong",
             "_wrong: CcInfo = platform_common.ToolchainInfo(); _wrong",
