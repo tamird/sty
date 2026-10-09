@@ -226,6 +226,13 @@
       }
     }
   ],
+  "fragments": [
+    {
+      "name": "cpp",
+      "type": "cpp",
+      "doc": "C++ configuration, available to rules that request the cpp fragment."
+    }
+  ],
   "native": [
     {
       "name": "package_default_visibility",

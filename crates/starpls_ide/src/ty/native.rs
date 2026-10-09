@@ -1454,6 +1454,53 @@ json.decode("{}", default=struct(value="fallback"))
     }
 
     #[test]
+    fn cpp_fragment_uses_exported_member_types() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = r#"
+def flags(ctx: ctx):
+    ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + ctx.fragments.cpp.cxxopts + ctx.fragments.cpp.linkopts
+    ctx.fragments.cpp.no_such_option
+    ctx.fragments.no_such_fragment
+    ctx.fragments.cpp.apple_generate_dsym + 1
+
+example = rule(implementation = flags, fragments = ["cpp"])
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/fragments.bzl"),
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Bzl,
+                    is_external: false,
+                }),
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        for (diagnostic, (expected_id, expected_source)) in diagnostics.iter().zip([
+            ("unresolved-attribute", "ctx.fragments.cpp.no_such_option"),
+            ("unresolved-attribute", "ctx.fragments.no_such_fragment"),
+            (
+                "unsupported-operator",
+                "ctx.fragments.cpp.apple_generate_dsym + 1",
+            ),
+        ]) {
+            assert_eq!(diagnostic.id().as_str(), expected_id);
+            let range = diagnostic.range().unwrap();
+            assert_eq!(&source[range], expected_source);
+        }
+    }
+
+    #[test]
     fn legacy_globals_preserve_macro_fallback() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"

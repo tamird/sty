@@ -76,16 +76,25 @@ impl From<BuiltinsJson> for Builtins {
 #[derive(Debug, Serialize, Deserialize)]
 struct ValueJson {
     name: String,
+    #[serde(default)]
+    r#type: String,
     doc: String,
     callable: Option<CallableJson>,
 }
 
 impl From<ValueJson> for Value {
     fn from(val: ValueJson) -> Self {
+        let ValueJson {
+            name,
+            r#type,
+            doc,
+            callable,
+        } = val;
         Value {
-            name: val.name,
-            doc: val.doc,
-            callable: val.callable.map(|callable| Callable {
+            name,
+            r#type,
+            doc,
+            callable: callable.map(|callable| Callable {
                 param: callable
                     .params
                     .into_iter()
