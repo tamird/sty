@@ -63,16 +63,16 @@ export class Context {
     };
 
     return this._client = new LanguageClient(
-      'starpls',
-      'Starlark Language Server',
+      'sty',
+      'sty',
       serverOptions,
       clientOptions,
     );
   }
 
   private async ensureServerInstalled(): Promise<string> {
-    const defaultServerPath = path.join(this.extensionContext.extensionPath, '/bin/starpls');
-    const serverPath = process.env.__STARPLS_SERVER_DEBUG ? process.env.__STARPLS_SERVER_DEBUG : defaultServerPath;
+    const defaultServerPath = path.join(this.extensionContext.extensionPath, '/bin/sty');
+    const serverPath = process.env.__STY_SERVER_DEBUG ? process.env.__STY_SERVER_DEBUG : defaultServerPath;
     console.log('context: using server executable at %s', serverPath);
     return serverPath;
   }

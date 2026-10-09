@@ -325,7 +325,7 @@ impl Server {
             .unwrap_or(false)
         {
             if self.configuration.watched.is_empty() {
-                self.send_error_message("The client cannot watch Starpls dependencies. Changes to closed files require restarting the server.");
+                self.send_error_message("The client cannot watch sty dependencies. Changes to closed files require restarting the server.");
             }
             self.configuration.watched = paths;
             return Ok(());
@@ -342,7 +342,7 @@ impl Server {
                     .to_string_lossy();
                 escape_glob(&name)
             } else {
-                "**/{*.bzl,*.bzli,BUILD,BUILD.bazel,MODULE.bazel,MODULE.bazel.lock,*.MODULE.bazel,WORKSPACE,WORKSPACE.bazel,WORKSPACE.bzlmod,starpls.toml,.bazelrc,.bazelversion}".to_owned()
+                "**/{*.bzl,*.bzli,BUILD,BUILD.bazel,MODULE.bazel,MODULE.bazel.lock,*.MODULE.bazel,WORKSPACE,WORKSPACE.bazel,WORKSPACE.bzlmod,sty.toml,.bazelrc,.bazelversion}".to_owned()
             };
             let base = if manifests.contains(path) {
                 path.parent().expect("absolute manifest")
@@ -359,7 +359,7 @@ impl Server {
                     pattern,
                 })
             } else {
-                self.send_error_message("The client cannot watch external Starpls dependencies without relative-pattern support. Changes to closed files require restarting the server.");
+                self.send_error_message("The client cannot watch external sty dependencies without relative-pattern support. Changes to closed files require restarting the server.");
                 continue;
             };
             watchers.push(lsp_types::FileSystemWatcher {
@@ -371,7 +371,7 @@ impl Server {
             self.send_request::<lsp_types::request::UnregisterCapability>(
                 lsp_types::UnregistrationParams {
                     unregisterations: vec![lsp_types::Unregistration {
-                        id: format!("starpls-dependencies-{}", self.configuration.watcher_id),
+                        id: format!("sty-dependencies-{}", self.configuration.watcher_id),
                         method: lsp_types::notification::DidChangeWatchedFiles::METHOD.to_owned(),
                     }],
                 },
@@ -381,7 +381,7 @@ impl Server {
         self.configuration.watched = paths;
         let params = lsp_types::RegistrationParams {
             registrations: vec![lsp_types::Registration {
-                id: format!("starpls-dependencies-{}", self.configuration.watcher_id),
+                id: format!("sty-dependencies-{}", self.configuration.watcher_id),
                 method: lsp_types::notification::DidChangeWatchedFiles::METHOD.to_owned(),
                 register_options: Some(serde_json::to_value(
                     lsp_types::DidChangeWatchedFilesRegistrationOptions { watchers },
@@ -402,12 +402,12 @@ impl Server {
         let inputs = self.loader.configuration_inputs();
         let configured = self.config.args.type_interfaces.is_configured()
             || inputs
-                .get(&self.workspace.join("starpls.toml"))
+                .get(&self.workspace.join("sty.toml"))
                 .is_some_and(Option::is_some);
         for path in paths {
             let metadata = is_bazel_dependency(path)
                 || (configured && path.extension().is_some_and(|extension| extension == "bzl"))
-                || path == &self.workspace.join("starpls.toml")
+                || path == &self.workspace.join("sty.toml")
                 || inputs.contains_key(path);
             if !metadata {
                 continue;
@@ -455,7 +455,7 @@ impl Server {
         self.pending_repos.clear();
         if self.configuration.restart_required {
             self.configuration.pending = false;
-            self.send_error_message("Bazel startup configuration changed. Restart Starpls to reload the Bazel environment; trusted stub registrations have been removed.");
+            self.send_error_message("Bazel startup configuration changed. Restart sty to reload the Bazel environment; trusted stub registrations have been removed.");
         } else {
             self.start_configuration_refresh();
         }
@@ -568,7 +568,7 @@ impl Server {
             .and_then(|()| interfaces?.install(&mut self.analysis, &self.workspace));
         self.configuration.complete = result.is_ok();
         if let Err(error) = result {
-            self.send_error_message(&format!("Cannot reload Starpls configuration: {error:#}"));
+            self.send_error_message(&format!("Cannot reload sty configuration: {error:#}"));
         }
         self.configuration
             .inputs

@@ -818,7 +818,7 @@ mod tests {
                 mapping_requests: Default::default(),
             });
             let cli = crate::Cli::try_parse_from([
-                "starpls",
+                "sty",
                 "server",
                 "--type_interface",
                 "source.bzl=source.bzli",
@@ -900,9 +900,9 @@ mod tests {
                     .contents
                     .contains("unsaved"));
                 drop(snapshot);
-                std::fs::write(root.join("starpls.toml"), "invalid configuration").unwrap();
+                std::fs::write(root.join("sty.toml"), "invalid configuration").unwrap();
                 server
-                    .configuration_changed(&[root.join("starpls.toml")])
+                    .configuration_changed(&[root.join("sty.toml")])
                     .unwrap();
                 finish_reload(&mut server);
                 assert!(!server.snapshot().configuration_ready);
@@ -1527,7 +1527,7 @@ mod tests {
             request,
         };
         std::fs::write(
-            root.join("starpls.toml"),
+            root.join("sty.toml"),
             "[[stub-packages]]\nmanifest = 'stubs.toml'\nallow-unversioned = true\n",
         )
         .unwrap();
@@ -1539,7 +1539,7 @@ mod tests {
         };
         crate::handlers::notifications::did_change_watched_files(
             &mut server,
-            changed(&root.join("starpls.toml")),
+            changed(&root.join("sty.toml")),
         )
         .unwrap();
         server.handle_task(old);
@@ -1548,13 +1548,13 @@ mod tests {
         let ready = next_configuration(&mut server);
         // A second save arrives while a prepared result is waiting in the queue.
         std::fs::write(
-            root.join("starpls.toml"),
+            root.join("sty.toml"),
             "[[stub-packages]]\nmanifest = 'stubs.toml'\nallow-unversioned = true\n# second save\n",
         )
         .unwrap();
         crate::handlers::notifications::did_change_watched_files(
             &mut server,
-            changed(&root.join("starpls.toml")),
+            changed(&root.join("sty.toml")),
         )
         .unwrap();
         server.handle_task(ready);
@@ -1645,12 +1645,12 @@ mod tests {
             .unwrap();
         server.handle_task(ready);
         assert_eq!(server.analysis.type_interface_files().len(), 1);
-        std::fs::remove_file(root.join("starpls.toml")).unwrap();
+        std::fs::remove_file(root.join("sty.toml")).unwrap();
         crate::handlers::notifications::did_save_text_document(
             &mut server,
             lsp_types::DidSaveTextDocumentParams {
                 text_document: lsp_types::TextDocumentIdentifier {
-                    uri: lsp_types::Url::from_file_path(root.join("starpls.toml")).unwrap(),
+                    uri: lsp_types::Url::from_file_path(root.join("sty.toml")).unwrap(),
                 },
                 text: None,
             },
@@ -1672,7 +1672,7 @@ mod tests {
         assert!(!server.configuration.refreshing);
         assert!(client.receiver.try_iter().any(|message| match message {
             lsp_server::Message::Notification(message) =>
-                message.params.to_string().contains("Restart Starpls"),
+                message.params.to_string().contains("Restart sty"),
             _ => false,
         }));
         std::fs::remove_dir_all(root).unwrap();
@@ -2269,7 +2269,7 @@ mod tests {
                 .iter()
                 .any(|watcher| match &watcher.glob_pattern {
                     lsp_types::GlobPattern::String(pattern) =>
-                        pattern.contains("starpls.toml") && pattern.contains("*.bzli"),
+                        pattern.contains("sty.toml") && pattern.contains("*.bzli"),
                     lsp_types::GlobPattern::Relative(_) => false,
                 }),
             "{options:?}"

@@ -1,13 +1,19 @@
 {
-  "name": "starpls",
+  "name": "sty",
+  "displayName": "sty",
   "version": "0.1.0",
-  "description": "An LSP implementation for Starlark",
-  "publisher": "withered-magic",
+  "description": "Starlark type checking and language server powered by ty",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tamird/sty",
+    "directory": "editors/code"
+  },
+  "publisher": "tamird",
   "main": "./dist/main",
   "scripts": {
     "build": "pnpm run build-lsp && pnpm run build-ext",
     "build-ext": "bazelisk run //editors/code",
-    "build-lsp": "bazelisk run //editors/code:copy_starpls",
+    "build-lsp": "bazelisk run //editors/code:copy_sty",
     "test": "bazelisk test //editors/code/...",
     "watch": "ibazel run //editors/code"
   },
@@ -20,19 +26,19 @@
   "contributes": {
     "commands": [
       {
-        "command": "starpls.showHir",
+        "command": "sty.showHir",
         "title": "Show HIR",
-        "category": "starpls"
+        "category": "sty"
       },
       {
-        "command": "starpls.showSyntaxTree",
+        "command": "sty.showSyntaxTree",
         "title": "Show Syntax Tree",
-        "category": "starpls"
+        "category": "sty"
       },
       {
-        "command": "starpls.showVersion",
+        "command": "sty.showVersion",
         "title": "Show Language Server Version",
-        "category": "starpls"
+        "category": "sty"
       }
     ],
     "grammars": [

@@ -1,79 +1,61 @@
-# Starpls
-`starpls` is a language server for [Starlark](https://github.com/bazelbuild/starlark), the configuration language used by Bazel and Buck2.
+# sty
+
+`sty` (Starlark ty) is an experimental type checker and language server for
+[Starlark](https://github.com/bazelbuild/starlark), with Bazel support and
+analysis powered by [ty](https://github.com/astral-sh/ty).
+It is a fork of [Starpls](https://github.com/withered-magic/starpls).
 
 ## Installation
 
-### VSCode
-
-Make sure you have at least the [0.10.0](https://github.com/bazelbuild/vscode-bazel/releases/tag/0.10.0) version of the [vscode-bazel](https://github.com/bazelbuild/vscode-bazel) extension installed, as it adds support for launching a language server.
-
-If you're on a Mac with Apple Silicon, then you can install `starpls` with Homebrew and skip ahead to the section about configuring VSCode:
+Build the executable from [this repository](https://github.com/tamird/sty):
 
 ```sh
-brew install withered-magic/brew/starpls
+bazel build -c opt //:sty
 ```
 
-Otherwise, you can grab a release from the [releases page](https://github.com/withered-magic/starpls/releases). Make sure to download the appropriate version for your OS and architecture! After downloading the binary, make sure to adjust its permissions to make it executable, e.g.
+The executable is `bazel-bin/crates/starpls/sty` (`sty.exe` on Windows).
+Put it on your `PATH` as `sty`, or configure your editor with its absolute path.
+Tagged builds use the [releases page](https://github.com/tamird/sty/releases).
 
-```sh
-chmod +x starpls-darwin-arm64
-```
+### VS Code and Cursor
 
-Additionally, on Mac OS, you may see an error similar to
-
-```
-“starpls-darwin-arm64” can’t be opened because Apple cannot check it for malicious software.
-```
-
-To fix this, click `Show in Finder`, then right-click on the `starpls-darwin-arm64` executable, click `Open`, and select `Open` in the warning that comes up. This will cause the `com.apple.quarantine` xattr to be removed from the executable and will stop the warning from appearing further.
-
-Either way, at this point you can put the executable somewhere on your `$PATH`.
-
-Once done, add the following to your VSCode configuration and reload VSCode for it to take effect:
+Install the [Bazel extension](https://github.com/bazelbuild/vscode-bazel),
+version 0.10.0 or later, and add this to your editor settings:
 
 ```json
 {
-  "bazel.lsp.command": "starpls"
+  "bazel.lsp.command": "sty",
+  "bazel.lsp.args": ["server", "--experimental_infer_ctx_attributes"]
 }
 ```
 
-Experimental features are enabled through flags on the `starpls server` subcommand. For example:
+Reload the editor after changing the executable. Bazel metadata loads in the
+background while local hover, completion, and navigation are available.
+Diagnostics wait for configuration loading to finish; workspace references and
+rename require a valid configuration.
 
-```jsonc
-{
-    "bazel.lsp.command": "starpls",
-    // Note the first argument is "server", which is required because the flags exist only
-    // on the "starpls server" subcommand (and not the top-level "starpls" command).
-    "bazel.lsp.args": ["server", "--experimental_infer_ctx_attributes"]
-}
+For the development extension in this repository, build and copy the server:
+
+```sh
+bazel run -c opt //editors/code:copy_sty
 ```
 
-If `starpls` is outside `$PATH`, set `bazel.lsp.command` to its absolute path.
-Bazel metadata loads in the background while local hover, completion, and
-navigation are available. Diagnostics wait for configuration loading to
-finish; workspace references and rename require a valid configuration.
+This writes `editors/code/bin/sty`. The extension's debug launch configuration
+uses that executable.
 
-Alternatively, you can build `starpls` with Bazel:
+### Other editors
 
-```
-bazel run -c opt //editors/code:copy_starpls
-```
+Configure your Starlark language client to launch `sty server` over stdio.
+For an existing nvim-lspconfig Starpls configuration, override the executable:
 
-This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory, remembering to update the extension settings as detailed above.
-
-### Zed
-
-Install the [zed-starlark](https://github.com/zaucy/zed-starlark) extension.
-
-### Neovim via nvim-lspconfig
-Make sure you've installed and configured [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) in a way that works for you.
-
-Install using homebrew as described above, then do the following in your init.lua:
 ```lua
-require("lspconfig").starpls.setup { }
+require("lspconfig").starpls.setup { cmd = { "sty", "server" } }
 ```
 
-You can see the config info [here](https://github.com/neovim/nvim-lspconfig/blob/master/lua/lspconfig/configs/starpls.lua).
+### Migrating from this fork's Starpls name
+
+Rename the workspace configuration from `starpls.toml` to `sty.toml`, and
+update editor commands and scripts to launch `sty`.
 
 ## Tips and Tricks
 
@@ -134,10 +116,10 @@ with `[]` similarly retains `Label` in `select[list[Label | Unknown] | None]`.
 
 ## Batch checking
 
-Run `starpls check` from the Bazel workspace with source files or directories:
+Run `sty check` from the Bazel workspace with source files or directories:
 
 ```sh
-starpls check --bazel-only --files-from files.txt --progress --report coverage.json
+sty check --bazel-only --files-from files.txt --progress --report coverage.json
 ```
 
 `--files-from` reads one path per line; `-` reads standard input. Relative
@@ -164,7 +146,7 @@ package; an overlaid BUILD file establishes its package boundary. This
 allows checking owned sources before Bazel downloads their repositories.
 Dependencies are fetched as ordinary load resolution requires them.
 
-For `starpls check`, repeat `--ignore_pattern` to exclude inputs. A bare name
+For `sty check`, repeat `--ignore_pattern` to exclude inputs. A bare name
 such as `vendor` matches that file or directory name anywhere in a path.
 A path such as `project/tools/vendor` uses exact components to exclude that
 workspace-relative file or subtree. Use `./vendor` to limit a single name to
@@ -219,7 +201,7 @@ stderr in either case.
 See the [stub specification](docs/type-interfaces.md) for declarations,
 package selection, conflict handling, and versioning.
 
-Select packages in `starpls.toml` at the Bazel workspace root. Batch checking
+Select packages in `sty.toml` at the Bazel workspace root. Batch checking
 and the language server read this configuration at startup:
 
 ```toml
@@ -246,8 +228,8 @@ def fetch(name: string, timeout: int = ...) -> list[string]:
 Configure the same mapping for batch checking or the language server:
 
 ```sh
-starpls check --type_interface third_party/vendor.bzl=types/vendor.bzli BUILD.bazel
-starpls server --type_interface third_party/vendor.bzl=types/vendor.bzli
+sty check --type_interface third_party/vendor.bzl=types/vendor.bzli BUILD.bazel
+sty server --type_interface third_party/vendor.bzl=types/vendor.bzli
 ```
 
 Repeat `--type_interface SOURCE=INTERFACE` for additional modules. Relative paths use the main
@@ -258,7 +240,7 @@ use `...` or `pass`, and optional defaults use `= ...`.
 
 ## Experimental features
 
-Starpls has a number of experimental features that can be enabled via command-line arguments:
+sty has a number of experimental features that can be enabled via command-line arguments:
 
 ### `--experimental_infer_ctx_attributes`
 
@@ -359,7 +341,7 @@ my_rule(
 
 ## Development
 
-`starpls` uses the Rust version pinned in `rust-toolchain.toml` and `MODULE.bazel`.
+`sty` uses the Rust version pinned in `rust-toolchain.toml` and `MODULE.bazel`.
 
 ### Prerequisites
 
@@ -382,5 +364,7 @@ Steps to get up and running:
 
 ## Acknowledgements
 
-- `starpls` is heavily based on the [rust-analyzer](https://github.com/rust-lang/rust-analyzer/tree/master) codebase; one might consider it a vastly simplified version of rust-analyzer that works on Starlark files! As such, major thanks to the rust-analyzer team, especially [Aleksey Kladov](https://matklad.github.io/), whose [Explaining rust-analyzer](https://www.youtube.com/playlist?list=PLhb66M_x9UmrqXhQuIpWC5VgTdrGxMx3y) series on YouTube proved invaluable as a learning resource!
-- `starpls`'s mechanism for carrying out type inference is heavily derived from that of [Pyright](https://github.com/microsoft/pyright).
+- [Starpls](https://github.com/withered-magic/starpls) provides the Starlark frontend, Bazel integration, and language server foundation.
+- [ty and Ruff](https://github.com/astral-sh/ruff) provide the type analysis and shared language tooling used by this fork.
+- Starpls was heavily based on [rust-analyzer](https://github.com/rust-lang/rust-analyzer). [Aleksey Kladov's Explaining rust-analyzer series](https://www.youtube.com/playlist?list=PLhb66M_x9UmrqXhQuIpWC5VgTdrGxMx3y) was an important resource for its original author.
+- Starpls's original type inference was derived from [Pyright](https://github.com/microsoft/pyright).

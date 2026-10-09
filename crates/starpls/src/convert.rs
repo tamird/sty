@@ -56,7 +56,7 @@ pub(crate) fn lsp_diagnostic_from_native(
                 href: lsp_types::Url::parse(url).ok()?,
             })
         }),
-        source: Some("starpls".to_string()),
+        source: Some("sty".to_string()),
         message,
         related_information: None,
         tags: diagnostic
@@ -388,7 +388,7 @@ mod tests {
             let mut expected = serde_json::json!({
                 "range": {"start": {"line": 0, "character": 2}, "end": {"line": 0, "character": 3}},
                 "severity": severity_number,
-                "source": "starpls",
+                "source": "sty",
                 "code": "type-check",
                 "message": "message: Expected int, found str\n\ninfo: The parameter is declared as int",
             });

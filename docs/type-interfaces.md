@@ -19,7 +19,7 @@ consists of an optional docstring followed by `...` or `pass`. Public variables,
 functions, and classes declared in the stub define its exports; loaded names
 are available in annotation expressions.
 
-For each name loaded from a mapped `.bzl` module, Starpls uses the stub declaration
+For each name loaded from a mapped `.bzl` module, sty uses the stub declaration
 when present and source inference otherwise. Annotations are resolved in the
 stub's scope. Call checking trusts the stub declarations.
 
@@ -98,7 +98,7 @@ annotations, `__init__`, docstrings, and placeholders; its identity is distinct
 from every other provider class. Field and constructor annotations resolve in
 the stub scope, including references to the provider itself.
 
-Starpls follows source aliases and reexports to pair the class with a unique
+sty follows source aliases and reexports to pair the class with a unique
 `provider(...)` declaration. The paired class supplies the nominal identity for
 source instances, callers, annotations, and `Target` lookups. Multiple distinct
 classes claiming the same declaration are an error. A stub may expose a subset
@@ -157,7 +157,7 @@ cover dictionaries supplied by Bazel as well as these allocations. A native
 ## Selectors
 
 `select[T]` describes configurable values whose branches have type `T`.
-Starpls also tracks the first branch's runtime kind when its value is a
+sty also tracks the first branch's runtime kind when its value is a
 supported literal and the dictionary keys are distinct string literals. It
 also recognizes mappings whose values all have one runtime category: strings,
 booleans, `None`, or lists and tuples. For these mappings, every possible first
@@ -272,7 +272,7 @@ attribute access requires a more specific type.
 ## Packaging
 
 Projects obtain source and stub repositories through Bazel dependencies and
-select stub packages in `starpls.toml` at the workspace root:
+select stub packages in `sty.toml` at the workspace root:
 
 ```toml
 [[stub-packages]]

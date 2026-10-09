@@ -7,14 +7,15 @@ import { isStarlarkDocument, isStarlarkTextEditor } from './util';
  */
 export type CommandFactory = (ctx: Context) => (...args: any[]) => unknown;
 
-function showVersion() {
+function showVersion(ctx: Context) {
   return () => {
-    vscode.window.showInformationMessage('starpls, v0.1.0');
+    const server = ctx.client.initializeResult?.serverInfo;
+    vscode.window.showInformationMessage(server?.version ? `${server.name}, v${server.version}` : 'sty');
   };
 }
 
 function showHir(ctx: Context) {
-  const hirScheme = 'starpls-hir';
+  const hirScheme = 'sty-hir';
   const hirUri = vscode.Uri.parse(`${hirScheme}://hir/hir`);
 
   const hirProvider = new class implements vscode.TextDocumentContentProvider {
@@ -30,7 +31,7 @@ function showHir(ctx: Context) {
       if (!ctx.activeStarlarkTextEditor) {
         return;
       }
-      return ctx.client.sendRequest('starpls/showHir', {
+      return ctx.client.sendRequest('sty/showHir', {
         textDocument: {
           uri: ctx.activeStarlarkTextEditor.document.uri.toString(),
         },
@@ -63,7 +64,7 @@ function showHir(ctx: Context) {
 
 function showSyntaxTree(ctx: Context) {
   // Define and register a content provider for the syntax tree viewer.
-  const syntaxTreeScheme = 'starpls-syntax-tree';
+  const syntaxTreeScheme = 'sty-syntax-tree';
   const syntaxTreeUri = vscode.Uri.parse(`${syntaxTreeScheme}://syntaxtree/tree.rast`);
 
   const syntaxTreeProvider = new class implements vscode.TextDocumentContentProvider {
@@ -79,7 +80,7 @@ function showSyntaxTree(ctx: Context) {
       if (!ctx.activeStarlarkTextEditor) {
         return;
       }
-      return ctx.client.sendRequest('starpls/showSyntaxTree', {
+      return ctx.client.sendRequest('sty/showSyntaxTree', {
         textDocument: {
           uri: ctx.activeStarlarkTextEditor.document.uri.toString(),
         },
@@ -115,8 +116,8 @@ function showSyntaxTree(ctx: Context) {
 
 export default function createCommandFactories(): Record<string, CommandFactory> {
   return {
-    'starpls.showHir': showHir,
-    'starpls.showSyntaxTree': showSyntaxTree,
-    'starpls.showVersion': showVersion,
+    'sty.showHir': showHir,
+    'sty.showSyntaxTree': showSyntaxTree,
+    'sty.showVersion': showVersion,
   };
 }

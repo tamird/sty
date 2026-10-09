@@ -157,7 +157,7 @@ mod tests {
     fn check_and_server_share_repeatable_mapping_arguments() {
         for command in ["check", "server"] {
             let parsed = crate::Cli::try_parse_from([
-                "starpls",
+                "sty",
                 command,
                 "--type_interface",
                 "source.bzl=one.bzli",
@@ -173,8 +173,7 @@ mod tests {
             assert_eq!(options.mappings.len(), 2);
             for bad in ["missing-separator", "=empty.bzli", "empty.bzl="] {
                 assert!(
-                    crate::Cli::try_parse_from(["starpls", command, "--type_interface", bad])
-                        .is_err()
+                    crate::Cli::try_parse_from(["sty", command, "--type_interface", bad]).is_err()
                 );
             }
         }
@@ -278,7 +277,7 @@ mod tests {
                 "@stubs//:stubs.toml"
             };
             std::fs::write(
-                workspace.join("starpls.toml"),
+                workspace.join("sty.toml"),
                 format!("[[stub-packages]]\nmanifest = '{manifest}'\n"),
             )
             .unwrap();
@@ -430,7 +429,7 @@ mod tests {
         std::fs::write(stubs.join("first.toml"), &first).unwrap();
         std::fs::write(stubs.join("second.toml"), &second).unwrap();
         let configuration = package("first") + &package("second");
-        std::fs::write(workspace.join("starpls.toml"), &configuration).unwrap();
+        std::fs::write(workspace.join("sty.toml"), &configuration).unwrap();
         let (sender, _) = crossbeam_channel::unbounded();
         let loader = std::sync::Arc::new(crate::document::DefaultFileLoader::new(
             std::sync::Arc::new(starpls_bazel::client::BazelCLI::default()),
@@ -500,7 +499,7 @@ mod tests {
                 "duplicate type interface",
             ),
         ] {
-            std::fs::write(workspace.join("starpls.toml"), config).unwrap();
+            std::fs::write(workspace.join("sty.toml"), config).unwrap();
             std::fs::write(stubs.join("first.toml"), content).unwrap();
             let error = super::TypeInterfaceOptions::default()
                 .prepare(&loader, &workspace)
@@ -515,7 +514,7 @@ mod tests {
             manifest("nested/../one.bzl", "two.bzli"),
         )
         .unwrap();
-        std::fs::write(workspace.join("starpls.toml"), &configuration).unwrap();
+        std::fs::write(workspace.join("sty.toml"), &configuration).unwrap();
         let error = super::TypeInterfaceOptions::default()
             .prepare(&loader, &workspace)
             .and_then(|prepared| prepared.install(&mut analysis, &workspace))
@@ -524,7 +523,7 @@ mod tests {
         for expected in ["one.bzl", "first.toml", "second.toml"] {
             assert!(error.contains(expected), "{error}");
         }
-        std::fs::write(workspace.join("starpls.toml"), package("first")).unwrap();
+        std::fs::write(workspace.join("sty.toml"), package("first")).unwrap();
         let options = super::TypeInterfaceOptions {
             mappings: vec![super::TypeInterfaceMapping {
                 source: "one.bzl".into(),
@@ -577,7 +576,7 @@ mod tests {
                 .unwrap();
         }
         std::fs::write(
-            workspace.join("starpls.toml"),
+            workspace.join("sty.toml"),
             "[[stub-packages]]\nmanifest = '@@stubs+//:stubs.toml'\nallow-unversioned = true\n",
         )
         .unwrap();

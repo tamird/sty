@@ -55,13 +55,12 @@ pub(crate) struct ServerCommand {
 
 impl ServerCommand {
     pub(crate) fn run(self) -> anyhow::Result<()> {
-        info!("starpls, v{}", get_version());
+        info!("sty, v{}", get_version());
 
         // Create the transport over stdio.
         let (connection, io_threads) = Connection::stdio();
 
-        // Initialize the connection with server capabilities. For now, this consists
-        // only of `TextDocumentSyncKind.Full`.
+        // Initialize the connection with server capabilities and identity.
         let server_capabilities = serde_json::to_value(ServerCapabilities {
             completion_provider: Some(CompletionOptions {
                 trigger_characters: Some(make_trigger_characters(COMPLETION_TRIGGER_CHARACTERS)),
@@ -111,8 +110,15 @@ impl ServerCommand {
             )),
             ..Default::default()
         })?;
-        let initialize_params =
-            serde_json::from_value(connection.initialize(server_capabilities)?)?;
+        let (initialize_id, initialize_params) = connection.initialize_start()?;
+        connection.initialize_finish(
+            initialize_id,
+            serde_json::json!({
+                "capabilities": server_capabilities,
+                "serverInfo": { "name": "sty", "version": get_version() },
+            }),
+        )?;
+        let initialize_params = serde_json::from_value(initialize_params)?;
         event_loop::process_connection(connection, self, initialize_params)?;
 
         // Graceful shutdown.

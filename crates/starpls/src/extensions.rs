@@ -15,7 +15,7 @@ pub enum ShowSyntaxTree {}
 impl Request for ShowSyntaxTree {
     type Params = ShowSyntaxTreeParams;
     type Result = String;
-    const METHOD: &'static str = "starpls/showSyntaxTree";
+    const METHOD: &'static str = "sty/showSyntaxTree";
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -30,5 +30,5 @@ pub enum ShowHir {}
 impl Request for ShowHir {
     type Params = ShowHirParams;
     type Result = String;
-    const METHOD: &'static str = "starpls/showHir";
+    const METHOD: &'static str = "sty/showHir";
 }

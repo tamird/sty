@@ -4,7 +4,7 @@ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
 package(default_visibility = ["//visibility:public"])
 
 rust_binary(
-    name = "starpls",
+    name = "sty",
     srcs = glob(["src/**/*.rs"]),
     compile_data = [":src/builtin/builtin.pb"],
     rustc_env_files = [":generate_rustc_env_file"],
@@ -17,8 +17,8 @@ rust_binary(
 )
 
 rust_test(
-    name = "starpls_test",
-    crate = ":starpls",
+    name = "sty_test",
+    crate = ":sty",
 )
 
 genrule(

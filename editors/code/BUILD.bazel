@@ -42,9 +42,9 @@ write_source_files(
 )
 
 write_source_file(
-    name = "copy_starpls",
+    name = "copy_sty",
     diff_test = False,
     executable = True,
-    in_file = "//crates/starpls",
-    out_file = "bin/starpls",
+    in_file = "//:sty",
+    out_file = "bin/sty",
 )

@@ -31,11 +31,11 @@ jobs:
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
-        run: bazel build -c opt ${{ matrix.target.name == 'linux-aarch64' && '--platforms @zig_sdk//platform:linux_arm64' || '' }} //crates/starpls
+        run: bazel build -c opt ${{ matrix.target.name == 'linux-aarch64' && '--platforms @zig_sdk//platform:linux_arm64' || '' }} //:sty
       - uses: actions/upload-artifact@v4
         with:
-          name: starpls-${{ matrix.target.name }}
-          path: bazel-bin/crates/starpls/starpls
+          name: sty-${{ matrix.target.name }}
+          path: bazel-bin/crates/starpls/sty
 
   build-windows:
     name: Build (Windows)
@@ -53,11 +53,11 @@ jobs:
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
-        run: bazel build -c opt //crates/starpls
+        run: bazel build -c opt //:sty
       - uses: actions/upload-artifact@v4
         with:
-          name: starpls-windows-amd64
-          path: bazel-bin/crates/starpls/starpls.exe
+          name: sty-windows-amd64
+          path: bazel-bin/crates/starpls/sty.exe
 
   release:
     name: Release
@@ -70,25 +70,25 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: starpls-*
+          pattern: sty-*
       - name: Prepare release artifacts
         run: |
           mkdir -p release
-          mv artifacts/starpls-linux-aarch64/starpls release/starpls-linux-aarch64
-          mv artifacts/starpls-linux-amd64/starpls release/starpls-linux-amd64
-          mv artifacts/starpls-darwin-amd64/starpls release/starpls-darwin-amd64
-          mv artifacts/starpls-darwin-arm64/starpls release/starpls-darwin-arm64
-          mv artifacts/starpls-windows-amd64/starpls.exe release/starpls-windows-amd64.exe
-          chmod +x release/starpls-*
+          mv artifacts/sty-linux-aarch64/sty release/sty-linux-aarch64
+          mv artifacts/sty-linux-amd64/sty release/sty-linux-amd64
+          mv artifacts/sty-darwin-amd64/sty release/sty-darwin-amd64
+          mv artifacts/sty-darwin-arm64/sty release/sty-darwin-arm64
+          mv artifacts/sty-windows-amd64/sty.exe release/sty-windows-amd64.exe
+          chmod +x release/sty-*
 
           # Also create archives for usage by installation methods like Homebrew.
           # Eventually, we'll remove the non-zipped binaries above.
           cd release
-          cp starpls-linux-aarch64 starpls && tar -czvf starpls-linux-aarch64.tar.gz starpls && rm starpls
-          cp starpls-linux-amd64 starpls && tar -czvf starpls-linux-amd64.tar.gz starpls && rm starpls
-          cp starpls-darwin-amd64 starpls && tar -czvf starpls-darwin-amd64.tar.gz starpls && rm starpls
-          cp starpls-darwin-arm64 starpls && tar -czvf starpls-darwin-arm64.tar.gz starpls && rm starpls
-          cp starpls-windows-amd64.exe starpls.exe && zip starpls-windows-amd64.zip starpls.exe && rm starpls.exe
+          cp sty-linux-aarch64 sty && tar -czvf sty-linux-aarch64.tar.gz sty && rm sty
+          cp sty-linux-amd64 sty && tar -czvf sty-linux-amd64.tar.gz sty && rm sty
+          cp sty-darwin-amd64 sty && tar -czvf sty-darwin-amd64.tar.gz sty && rm sty
+          cp sty-darwin-arm64 sty && tar -czvf sty-darwin-arm64.tar.gz sty && rm sty
+          cp sty-windows-amd64.exe sty.exe && zip sty-windows-amd64.zip sty.exe && rm sty.exe
       - name: Show release artifacts
         run: find release
       - name: Create release

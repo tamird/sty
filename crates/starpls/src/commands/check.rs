@@ -1672,7 +1672,7 @@ mod tests {
             std::fs::create_dir_all(path).unwrap();
         }
         std::fs::write(
-            workspace.join("starpls.toml"),
+            workspace.join("sty.toml"),
             "[[stub-packages]]\nmanifest='@stubs//:package.toml'\nallow-unversioned=true\n",
         )
         .unwrap();
@@ -2208,7 +2208,7 @@ impl Checker {
                 Severity::Fatal => counts.errors += 1,
             }
         }
-        let config = DisplayDiagnosticConfig::new("starpls").color(true);
+        let config = DisplayDiagnosticConfig::new("sty").color(true);
         anstream::print!("{}", snapshot.render_diagnostics(diagnostics, &config)?);
         Ok(())
     }

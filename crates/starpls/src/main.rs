@@ -18,13 +18,14 @@ mod server;
 mod task_pool;
 mod utils;
 
+/// sty (Starlark ty): type checking and language services for Starlark.
 #[derive(Parser)]
+#[command(name = "sty")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
-/// Starpls is an LSP implementation for Starlark, the configuration language used by Bazel and Buck2.
 #[derive(Subcommand)]
 enum Commands {
     /// Analyze the specified Starlark files and report errors.
@@ -43,7 +44,8 @@ fn main() -> anyhow::Result<()> {
     // Don't do any log filtering when running the language server.
     if matches!(cli.command, Some(Commands::Server(_)) | None) {
         env_logger::Builder::from_default_env()
-            .filter(Some("starpls"), log::LevelFilter::max())
+            .filter(Some("sty"), log::LevelFilter::max())
+            .filter(Some("starpls_"), log::LevelFilter::max())
             .init();
     } else {
         env_logger::init();
@@ -52,7 +54,7 @@ fn main() -> anyhow::Result<()> {
     // Ruff indexes and traverses recursive ASTs after parsing. Keep CLI and
     // server analysis on the same stack size as their background workers.
     std::thread::Builder::new()
-        .name("starpls-main".into())
+        .name("sty-main".into())
         .stack_size(ruff_db::STACK_SIZE)
         .spawn(move || run(cli))?
         .join()
@@ -70,7 +72,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
 }
 
 fn run_version() -> anyhow::Result<()> {
-    println!("starpls version: v{}", get_version());
+    println!("sty version: v{}", get_version());
     Ok(())
 }
 

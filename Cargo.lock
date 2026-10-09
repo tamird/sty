@@ -2518,36 +2518,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "starpls"
-version = "0.1.22"
-dependencies = [
- "annotate-snippets",
- "anstream",
- "anyhow",
- "clap",
- "crossbeam-channel",
- "dashmap 5.5.3",
- "env_logger",
- "indexmap 2.14.2",
- "log",
- "lsp-server",
- "lsp-types",
- "parking_lot",
- "rayon",
- "ruff_db",
- "ruff_source_file",
- "rustc-hash 1.1.0",
- "serde",
- "serde_json",
- "starpls_bazel",
- "starpls_common",
- "starpls_ide",
- "starpls_syntax",
- "toml",
- "walkdir",
-]
-
-[[package]]
 name = "starpls_bazel"
 version = "0.1.0"
 dependencies = [
@@ -2678,6 +2648,36 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "sty"
+version = "0.1.22"
+dependencies = [
+ "annotate-snippets",
+ "anstream",
+ "anyhow",
+ "clap",
+ "crossbeam-channel",
+ "dashmap 5.5.3",
+ "env_logger",
+ "indexmap 2.14.2",
+ "log",
+ "lsp-server",
+ "lsp-types",
+ "parking_lot",
+ "rayon",
+ "ruff_db",
+ "ruff_source_file",
+ "rustc-hash 1.1.0",
+ "serde",
+ "serde_json",
+ "starpls_bazel",
+ "starpls_common",
+ "starpls_ide",
+ "starpls_syntax",
+ "toml",
+ "walkdir",
 ]
 
 [[package]]

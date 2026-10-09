@@ -69,7 +69,7 @@ pub(super) fn load(
     loader: &DefaultFileLoader,
     workspace: &Path,
 ) -> anyhow::Result<Vec<Registration>> {
-    let path = workspace.join("starpls.toml");
+    let path = workspace.join("sty.toml");
     loader.watch_manifest(&path);
     let contents = match loader.read_manifest(&path) {
         Ok(contents) => contents,
@@ -172,7 +172,7 @@ fn manifest_location(
             (path, repository)
         } else {
             if Path::new(manifest).is_absolute() {
-                bail!("manifest path must be relative to starpls.toml");
+                bail!("manifest path must be relative to sty.toml");
             }
             (workspace.join(manifest), main)
         };
@@ -370,7 +370,7 @@ mod tests {
                     },
                 );
             }
-            std::fs::write(workspace.join("starpls.toml"), config).unwrap();
+            std::fs::write(workspace.join("sty.toml"), config).unwrap();
             let client = Arc::new(client);
             let (sender, _) = crossbeam_channel::unbounded();
             let loader = DefaultFileLoader::new(
