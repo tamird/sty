@@ -238,6 +238,20 @@ pub(super) fn pairing_diagnostics(
             }
         }
     }
+    let mut origins: FxHashMap<Definition<'_>, usize> = FxHashMap::default();
+    for definitions in provider_pairs(db).values() {
+        for definition in definitions {
+            *origins.entry(*definition).or_default() += 1;
+        }
+    }
+    for (definition, count) in origins {
+        if count > 1 && definition.program_file(db) == program {
+            report(
+                definition.kind(db).target_range(&parsed),
+                "A provider declaration cannot describe distinct source providers".into(),
+            );
+        }
+    }
     diagnostics
 }
 
@@ -597,7 +611,9 @@ impl Database {
 
 /// Correspondence is syntax and binding provenance; type inference begins after selection.
 #[salsa::tracked(returns(ref))]
-fn provider_pairs(db: &dyn Db) -> FxHashMap<(ProgramFile<'_>, u32), Vec<Definition<'_>>> {
+pub(super) fn provider_pairs(
+    db: &dyn Db,
+) -> FxHashMap<(ProgramFile<'_>, u32), Vec<Definition<'_>>> {
     let mut pairs: FxHashMap<_, Vec<_>> = FxHashMap::default();
     for (implementation, interface) in db.environment().type_interfaces(db).values() {
         if implementation.api_context() == Some(APIContext::Build) {
@@ -609,11 +625,13 @@ fn provider_pairs(db: &dyn Db) -> FxHashMap<(ProgramFile<'_>, u32), Vec<Definiti
             let [definition] = definitions.as_slice() else {
                 continue;
             };
-            let DefinitionKind::Class(class) = definition.kind(db) else {
-                continue;
-            };
             let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
-            if !is_provider_class(class.node(&parsed)) {
+            let provider = match definition.kind(db) {
+                DefinitionKind::Class(class) => is_provider_class(class.node(&parsed)),
+                DefinitionKind::Function(_) => super::providers::is_declaration(db, *definition),
+                _ => false,
+            };
+            if !provider {
                 continue;
             }
             let implementations =
@@ -798,6 +816,9 @@ pub(super) fn provider_fields<'db>(
     class: Type<'db>,
     environment: &ProgramEnvironment<'db>,
 ) -> Option<Vec<ProvidedField<'db>>> {
+    if let Some(fields) = super::providers::constructor_fields(db, class, environment) {
+        return Some(fields);
+    }
     let definition = provider_definition(db, class, environment)?;
     let DefinitionKind::Class(class) = definition.kind(db) else {
         return None;

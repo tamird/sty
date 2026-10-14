@@ -32,6 +32,8 @@ mod factory;
 pub(crate) mod interface;
 pub(crate) mod load;
 mod native;
+mod providers;
+mod shapes;
 mod support;
 
 pub(crate) use diagnostics::check;
@@ -244,7 +246,7 @@ impl Database {
                 .chain(starpls_bazel::BUILTINS_VALUES_DENY_LIST.iter().copied())
                 .chain([
                     "str", "string", "Any", "Unknown", "unknown", "NoneType", "Sequence",
-                    "Iterable", "Mapping", "object", "property",
+                    "Iterable", "Mapping", "object", "property", "record",
                 ])
                 .chain(native::TYPING_ANNOTATIONS.iter().copied());
             return candidates
@@ -461,6 +463,32 @@ impl ty_python_core::Db for Database {
 
 #[salsa::db]
 impl ty_python_semantic::Db for Database {
+    fn provided_type_reference<'db>(
+        &'db self,
+        file: ProgramFile<'db>,
+        value_type: Type<'db>,
+        _definition: Option<Definition<'db>>,
+    ) -> Option<Type<'db>> {
+        self.starlark_file(file)?;
+        providers::constructor_instance(self, value_type, &ProgramEnvironment::from_file(file))
+    }
+
+    fn provided_instance_fields<'db>(
+        &'db self,
+        file: ProgramFile<'db>,
+        data: &ty_python_semantic::provided::ProvidedData,
+    ) -> Option<ty_python_semantic::provided::ProvidedInstanceFields<'db>> {
+        providers::fields(self, file, data)
+    }
+
+    fn provided_type_application<'db>(
+        &'db self,
+        application: ty_python_semantic::provided::ProvidedTypeApplication<'_, 'db>,
+        context: &mut dyn ty_python_semantic::provided::TypeExpressionContext<'db>,
+    ) -> Option<Type<'db>> {
+        shapes::type_application(self, application, context)
+    }
+
     fn provided_parameter_type<'db>(
         &'db self,
         definition: Definition<'db>,
@@ -520,17 +548,10 @@ impl ty_python_semantic::Db for Database {
     fn provided_getattr_presence<'db>(
         &'db self,
         definition: Definition<'db>,
-        _receiver: Type<'db>,
-        _attribute: &str,
+        receiver: Type<'db>,
+        attribute: &str,
     ) -> ty_python_semantic::provided::ProvidedGetattrPresence {
-        if matches!(
-            factory::declaration(self, definition),
-            Some(factory::BuiltinFunction::StructGetattr)
-        ) {
-            ty_python_semantic::provided::ProvidedGetattrPresence::PossiblyMissing
-        } else {
-            ty_python_semantic::provided::ProvidedGetattrPresence::Present
-        }
+        shapes::getattr_presence(self, definition, receiver, attribute)
     }
 
     fn provided_type_test<'db>(

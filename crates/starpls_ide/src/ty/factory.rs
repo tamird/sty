@@ -35,6 +35,10 @@ use ty_python_semantic::types::ParameterKind;
 use ty_python_semantic::types::Parameters;
 use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
+use ty_python_semantic::types::TypedDictFieldBuilder;
+use ty_python_semantic::types::TypedDictOpenness;
+use ty_python_semantic::types::TypedDictSchema;
+use ty_python_semantic::types::TypedDictType;
 use ty_python_semantic::types::UnionType;
 use ty_python_semantic::ProgramEnvironment;
 
@@ -384,6 +388,12 @@ pub(super) fn declaration<'db>(
     let owner = scope.node(db);
     if let NodeWithScopeKind::Class(class) = owner {
         let parent = scope.scope(db).parent()?.to_scope_id(db, file);
+        if matches!(parent.node(db), NodeWithScopeKind::Module)
+            && class.node(&parsed).name.as_str() == "_starpls_annotation_record"
+        {
+            return (function.name.as_str() == "__getattr__")
+                .then_some(BuiltinFunction::StructGetattr);
+        }
         let NodeWithScopeKind::Class(namespace) = parent.node(db) else {
             return None;
         };
@@ -1740,23 +1750,51 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
     }
     let environment = ProgramEnvironment::from_file(call.file());
     let mut fields = Vec::new();
+    let mut shape = TypedDictSchema::default();
+    let mut openness = TypedDictOpenness::Closed;
+    let mut values = Vec::new();
     for keyword in &call.call().arguments.keywords {
         match &keyword.arg {
-            Some(name) => fields.push(ProvidedField {
-                name: name.id.clone(),
-                ty: call.expression_type(&keyword.value)?,
-                source: Some(FileRange::new(call.file().file(db), name.range())),
-            }),
+            Some(name) => {
+                let ty = call.expression_type(&keyword.value)?;
+                values.push(ty);
+                shape.insert(
+                    name.id.clone(),
+                    TypedDictFieldBuilder::new(ty)
+                        .required(true)
+                        .read_only(true)
+                        .build(),
+                );
+                fields.push(ProvidedField {
+                    name: name.id.clone(),
+                    ty,
+                    source: Some(FileRange::new(call.file().file(db), name.range())),
+                });
+            }
             None => {
                 let Some(DictionaryItems {
                     items,
-                    extra_items: _,
+                    extra_items,
                     first_entry: _,
                 }) = call.dictionary_items(db, &keyword.value)
                 else {
+                    openness = TypedDictOpenness::ImplicitlyOpen;
+                    values.push(Type::unknown());
                     continue;
                 };
+                if let DictionaryExtraItems::Value(ty) = extra_items {
+                    openness = TypedDictOpenness::ImplicitlyOpen;
+                    values.push(ty);
+                }
                 for item in items {
+                    values.push(item.ty);
+                    shape.insert(
+                        item.name.clone(),
+                        TypedDictFieldBuilder::new(item.ty)
+                            .required(item.is_required())
+                            .read_only(true)
+                            .build(),
+                    );
                     if !item.is_required() {
                         continue;
                     }
@@ -1775,11 +1813,23 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
             }
         }
     }
+    let shape = Type::TypedDict(TypedDictType::from_schema_items_with_openness(
+        db, shape, openness,
+    ));
+    let values = UnionType::from_elements(db, &environment, values);
+    let base = call.declaration().and_then(|declaration| {
+        specialized_native_class(
+            db,
+            declaration.program_file(db),
+            "struct",
+            vec![values, shape],
+        )
+    });
     let class = call.class_type(
         db,
         ProvidedClass {
             name: Name::new("struct"),
-            bases: declared_base(db, call, "struct"),
+            bases: base.into_iter().collect(),
             class_members: Box::default(),
             instance_fields: ProvidedInstanceFields {
                 fields: fields.into_boxed_slice(),
@@ -1816,7 +1866,8 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                     None => parameter,
                 }
             });
-        let instance = class.to_instance_approximation(db, &environment)?;
+        let instance = super::providers::constructor_instance(db, class, &environment)
+            .or_else(|| class.to_instance_approximation(db, &environment))?;
         let raw = Type::single_callable(
             db,
             Signature::new(Parameters::standard(parameters), instance),
@@ -2352,9 +2403,9 @@ wrong_argument = record.callback("wrong")
             ("text", "Literal[\"x\"]"),
             ("number", "Literal[1]"),
             ("spread_value", "Literal[\"x\"]"),
-            ("uncertain_repr", "Unknown"),
-            ("uncertain_str", "Unknown"),
-            ("uncertain_class", "Unknown"),
+            ("uncertain_repr", "int"),
+            ("uncertain_str", "int"),
+            ("uncertain_class", "int"),
             ("known_repr", "Literal[1]"),
             ("rendered", "str"),
             ("stringified", "str"),

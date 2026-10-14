@@ -12,12 +12,17 @@ DEFAULT_TIMEOUT: int
 def fetch(name: string, timeout: int = ...) -> list[string]: ...
 ```
 
-A stub consists of variable annotations, function declarations, provider,
-TypedDict and protocol classes, loads, docstrings, and placeholders. Variable
+A stub consists of variable annotations, function declarations, type aliases,
+provider declarations, loads, docstrings, and placeholders. Variable
 initializers and parameter defaults are omitted or `...`. A function body
 consists of an optional docstring followed by `...` or `pass`. Public variables,
 functions, and classes declared in the stub define its exports; loaded names
 are available in annotation expressions.
+
+Field-map annotations and type aliases use syntax from
+[starlark#362](https://github.com/bazelbuild/starlark/pull/362). The field-map
+and openness semantics below are defined by sty. Existing Python-style
+provider, TypedDict, and Protocol declarations remain accepted.
 
 For each name loaded from a mapped `.bzl` module, sty uses the stub declaration
 when present and source inference otherwise. Annotations are resolved in the
@@ -38,17 +43,16 @@ def identity(value: str) -> str: ...
 
 Calls use the complete overload family. Each declaration has its own parameter
 and result annotations and may declare type parameters. Overload families must
-contain at least two declarations. Ty checks the declarations and resolves calls
+contain at least two declarations. ty checks the declarations and resolves calls
 using its ordinary overload rules.
 
 ### Shared declarations
 
 Stub loads accept `.bzl` and `.bzli` labels. For example, `shared.bzli` can
-declare a public protocol:
+declare a public struct type:
 
 ```starlark
-class Builder(Protocol):
-    def build(self) -> str: ...
+type Builder = struct[{"build": Callable[[], str]}, ...]
 ```
 
 Other stubs can import it under a private local name:
@@ -65,9 +69,7 @@ An explicit mapping such as `BUILD.bazel=BUILD.bzli` applies variable annotation
 to the BUILD file's module assignments, including private names:
 
 ```starlark
-class _Case(TypedDict):
-    name: str
-    enabled: bool
+type _Case = dict[{"name": str, "enabled": bool}]
 
 _CASES: list[_Case]
 ```
@@ -76,7 +78,7 @@ Each annotated variable requires one direct assignment to that name in the BUILD
 file and one declaration in the stub. Missing, unsupported, and ambiguous
 bindings are errors. Helper classes and loads supply annotation types; top-level
 function declarations are unsupported. Source type comments take precedence.
-Ty checks the initializer, subsequent uses, and mutations against the annotation
+ty checks the initializer, subsequent uses, and mutations against the annotation
 in the BUILD host context.
 
 ## Providers
@@ -122,30 +124,36 @@ same provider.
 
 ## Dictionaries
 
-A `TypedDict` describes string-keyed dictionaries whose values have different
-types:
+A dictionary field map assigns a type to each string key:
 
 ```starlark
-class _Artifact(TypedDict):
-    path: str
-    checksum: NotRequired[str]
+type _Artifact = dict[{"path": str, "checksum": NotRequired[str]}]
 
 ARTIFACTS: list[_Artifact]
 
 def artifact() -> _Artifact: ...
 ```
 
-Fields are required unless annotated with `NotRequired[T]`. A field of type
-`T | None` permits a `None` value; `NotRequired[T]` permits an absent key. Ty
+The map is closed: values may contain only the declared keys. Fields are required
+unless annotated with `NotRequired[T]`. A field of type
+`T | None` permits a `None` value; `NotRequired[T]` permits an absent key. ty
 checks field values and required keys, and preserves their types through
-indexing, `get`, and keyword expansion. Private helper classes describe the
-dictionary values of source exports.
+indexing, `get`, and keyword expansion.
 
-`class _Artifact(TypedDict, closed=True)` limits keys to the declared fields.
-The default open form permits additional fields when accepting existing values.
-`extra_items=ReadOnly[object]` also accepts additional fields in literal
-initializers. Their values have type `object`, and access through the contract
-permits reads. Declared fields retain their individual types and mutability.
+A trailing ellipsis permits additional keys, including in literal values:
+
+```starlark
+type _Named = dict[{"name": str}, ...]
+```
+
+Additional values have type `object`. The contract permits reading these values;
+declared fields retain their individual types and mutability. `ReadOnly[T]`
+marks a declared key as readable without permitting assignment or deletion
+through this contract.
+
+The equivalent Python-style closed declaration is
+`class _Artifact(TypedDict, closed=True)`. An open field map corresponds to
+`extra_items=ReadOnly[object]`.
 
 `ExactDict[K, V]` describes dictionaries allocated by dictionary literals,
 comprehensions, `dict()`, and dictionary union. It preserves the same invariant
@@ -153,6 +161,27 @@ key and value types as `dict[K, V]` and can carry allocation information through
 callback parameters and results. Ordinary `dict` and `TypedDict` annotations
 cover dictionaries supplied by Bazel as well as these allocations. A native
 `type(value) == "dict"` check identifies that broader category.
+
+## Structs
+
+Struct field maps describe immutable attributes structurally:
+
+```starlark
+type _Point = struct[{"x": int, "y": int}]
+type _HasName = struct[{"name": str}, ...]
+
+def distance(point: _Point) -> int: ...
+def name(value: _HasName) -> str: ...
+```
+
+`_Point` requires exactly `x` and `y`. `_HasName` requires `name` and permits
+additional fields. Independently constructed structs satisfy the same shape
+when their fields have compatible types. An open contract does not establish
+that other fields are absent, so it cannot satisfy a closed contract.
+
+Struct fields are required. `NotRequired` applies to dictionary keys. The
+existing `struct[T]` form bounds the values of fields without declaring their
+names.
 
 ## Selectors
 
@@ -219,7 +248,7 @@ def builder() -> _Builder: ...
 ```
 
 Protocol bases are names resolved in the stub's scope. Method signatures use
-ordinary function annotations and declaration bodies. Ty checks compatibility
+ordinary function annotations and declaration bodies. ty checks compatibility
 structurally. Private helper protocols describe return values and parameters
 without declaring a corresponding source export.
 

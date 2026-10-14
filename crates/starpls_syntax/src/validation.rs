@@ -249,6 +249,20 @@ impl Validator<'_> {
             return;
         }
         match stmt {
+            Stmt::TypeAlias(alias) if self.annotation_mode == AnnotationMode::Interface => {
+                let py::StmtTypeAlias {
+                    node_index: _,
+                    range: _,
+                    name,
+                    type_params,
+                    value,
+                } = alias;
+                self.visit_expr(name);
+                if let Some(parameters) = type_params {
+                    self.visit_type_params(parameters);
+                }
+                self.annotation(value);
+            }
             Stmt::ClassDef(class) => {
                 if self.annotation_mode == AnnotationMode::Interface {
                     self.visit_identifier(&class.name);
@@ -569,6 +583,7 @@ impl Validator<'_> {
 /// Declaration shape only; the ordinary visitor still validates names and annotations.
 fn interface_statement(statement: &Stmt) -> bool {
     match statement {
+        Stmt::TypeAlias(_) => true,
         Stmt::ClassDef(class) => {
             let has_bases = class
                 .arguments
