@@ -234,7 +234,8 @@ pub(super) fn parameter_type<'db>(
                     has_dynamic_fields,
                     implications,
                     data: None,
-                },
+                }
+                .into(),
             },
         )?;
         class.to_instance_approximation(db, &environment)
@@ -1825,7 +1826,7 @@ example = macro(implementation=implementation, attrs={{
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False)})", "str"),
             ("value", "", "first = macro(implementation=implementation, attrs={'value': attr.string()})\nsecond = macro(implementation=implementation, attrs={'value': attr.int()})", "Unknown"),
             ("value", "    # type: (str, list[Label], Unknown) -> None\n", "example = macro(implementation=implementation, attrs={'value': attr.string()})", "Unknown"),
-            ("value=42", "", "example = macro(implementation=implementation, attrs={'value': attr.string()})", "Unknown | Literal[42]"),
+            ("value=42", "", "example = macro(implementation=implementation, attrs={'value': attr.string()})", "select[str | None, Any] | Literal[42]"),
         ] {
             let source = format!("def implementation(name, visibility, {parameter}):\n{annotation}    value\n{registrations}\n");
             analysis.update_file(file, source.clone());

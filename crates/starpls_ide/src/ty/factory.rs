@@ -578,7 +578,8 @@ fn descriptor<'db>(
                 has_dynamic_fields: false,
                 implications: Box::default(),
                 data: Some(data),
-            },
+            }
+            .into(),
         },
     )
     .to_instance_approximation(db, &environment)
@@ -1209,7 +1210,8 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     executable,
                     build_setting: setting_kind,
                 })),
-            },
+            }
+            .into(),
         },
     )
     .to_instance_approximation(db, &environment)
@@ -1785,7 +1787,8 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
                 has_dynamic_fields: false,
                 implications: Box::default(),
                 data: None,
-            },
+            }
+            .into(),
         },
     );
     class.to_instance_approximation(db, &environment)
@@ -1962,7 +1965,8 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                 has_dynamic_fields: open,
                 implications: Box::default(),
                 data: Some(ProvidedData::new(data.clone())),
-            },
+            }
+            .into(),
         },
     );
     if initializer.is_some() {

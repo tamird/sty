@@ -517,11 +517,20 @@ impl ty_python_semantic::Db for Database {
         )
     }
 
-    fn provided_getattr_may_be_missing(&self, definition: Definition<'_>) -> bool {
-        matches!(
+    fn provided_getattr_presence<'db>(
+        &'db self,
+        definition: Definition<'db>,
+        _receiver: Type<'db>,
+        _attribute: &str,
+    ) -> ty_python_semantic::provided::ProvidedGetattrPresence {
+        if matches!(
             factory::declaration(self, definition),
             Some(factory::BuiltinFunction::StructGetattr)
-        )
+        ) {
+            ty_python_semantic::provided::ProvidedGetattrPresence::PossiblyMissing
+        } else {
+            ty_python_semantic::provided::ProvidedGetattrPresence::Present
+        }
     }
 
     fn provided_type_test<'db>(
