@@ -1,7 +1,14 @@
-//! Provider declarations establish nominal identity before resolving their fields.
+//! Nominal provider declarations keep constructor inputs separate from stored fields.
 
+use ruff_db::diagnostic::Annotation;
+use ruff_db::diagnostic::Diagnostic;
+use ruff_db::diagnostic::DiagnosticId;
+use ruff_db::diagnostic::Severity;
+use ruff_db::diagnostic::Span;
 use ruff_db::files::FileRange;
+use ruff_python_ast::find_node::covering_node;
 use ruff_python_ast::name::Name;
+use ruff_python_ast::AnyNodeRef;
 use ruff_python_ast::AnyRootNodeRef;
 use ruff_python_ast::Expr;
 use ruff_python_ast::HasNodeIndex;
@@ -9,20 +16,38 @@ use ruff_python_ast::NodeIndex;
 use ruff_python_ast::Stmt;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_text_size::Ranged;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
+use starpls_hir::Db as _;
 use ty_python_core::definition::Definition;
 use ty_python_core::definition::DefinitionKind;
+use ty_python_core::definition::ParameterDefinitionNodeKind;
 use ty_python_core::global_scope;
 use ty_python_core::place_table;
 use ty_python_core::ProgramFile;
+use ty_python_semantic::provided::BuiltinUsage;
 use ty_python_semantic::provided::ProvidedClass;
 use ty_python_semantic::provided::ProvidedData;
 use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::provided::ProvidedGetattrPresence;
 use ty_python_semantic::provided::ProvidedInstanceFields;
 use ty_python_semantic::provided::ProvidedInstanceFieldsSource;
+use ty_python_semantic::types::ide_support::definitions_for_name;
+use ty_python_semantic::types::CallableTypeKind;
+use ty_python_semantic::types::CheckedArgument;
+use ty_python_semantic::types::CheckedCall;
+use ty_python_semantic::types::KnownClass;
+use ty_python_semantic::types::Parameter;
+use ty_python_semantic::types::ParameterKind;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypeDefinition;
+use ty_python_semantic::types::TypedDictFieldBuilder;
+use ty_python_semantic::types::TypedDictOpenness;
+use ty_python_semantic::types::TypedDictSchema;
+use ty_python_semantic::types::TypedDictType;
+use ty_python_semantic::HasDefinition;
 use ty_python_semantic::HasType;
+use ty_python_semantic::ImportAliasResolution;
 use ty_python_semantic::ProgramEnvironment;
 use ty_python_semantic::SemanticModel;
 
@@ -184,6 +209,594 @@ pub(super) fn getattr_presence<'db>(
     )
 }
 
+/// Registered callback identity is resolved without inferring the callback's body.
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
+struct InitializerContract<'db> {
+    declaration: Definition<'db>,
+    provider_file: ProgramFile<'db>,
+    provider_node: u32,
+}
+
+#[salsa::tracked(returns(ref))]
+fn initializer_contracts(
+    db: &dyn super::interface::Db,
+) -> FxHashMap<Definition<'_>, Vec<InitializerContract<'_>>> {
+    let mut result: FxHashMap<_, Vec<_>> = FxHashMap::default();
+    for ((file, node), declarations) in super::interface::provider_pairs(db) {
+        let [declaration] = declarations.as_slice() else {
+            continue;
+        };
+        let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+        let AnyRootNodeRef::Expr(Expr::Call(call)) = parsed.get_by_index(NodeIndex::from(*node))
+        else {
+            continue;
+        };
+        let Some(factory) = resolve_function(db, *file, &call.func, &mut FxHashSet::default())
+        else {
+            continue;
+        };
+        if !matches!(
+            super::factory::declaration(db, factory),
+            Some(super::factory::BuiltinFunction::Provider)
+        ) {
+            continue;
+        }
+        let Some(initializer) = call.arguments.find_keyword("init") else {
+            continue;
+        };
+        let Some(definition) =
+            resolve_function(db, *file, &initializer.value, &mut FxHashSet::default())
+        else {
+            continue;
+        };
+        let contracts = result.entry(definition).or_default();
+        let contract = InitializerContract {
+            declaration: *declaration,
+            provider_file: *file,
+            provider_node: *node,
+        };
+        if !contracts.contains(&contract) {
+            contracts.push(contract);
+        }
+    }
+    result
+}
+
+fn resolve_function<'db>(
+    db: &'db dyn super::interface::Db,
+    file: ProgramFile<'db>,
+    expression: &Expr,
+    visited: &mut FxHashSet<Definition<'db>>,
+) -> Option<Definition<'db>> {
+    let Expr::Name(name) = expression else {
+        return None;
+    };
+    let model = SemanticModel::new(db, file);
+    let definitions = definitions_for_name(
+        &model,
+        &name.id,
+        name.into(),
+        ImportAliasResolution::PreserveAliases,
+    );
+    let definition = match definitions.as_slice() {
+        [definition] => definition.definition()?,
+        [] => match model
+            .builtin_type(&name.id, BuiltinUsage::Runtime)?
+            .definition(db, &model.program_environment())?
+        {
+            TypeDefinition::Function(definition) => definition,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    resolve_definition(db, definition, visited)
+}
+
+fn resolve_definition<'db>(
+    db: &'db dyn super::interface::Db,
+    definition: Definition<'db>,
+    visited: &mut FxHashSet<Definition<'db>>,
+) -> Option<Definition<'db>> {
+    if !visited.insert(definition) {
+        return None;
+    }
+    match definition.kind(db) {
+        DefinitionKind::Function(_) => Some(definition),
+        DefinitionKind::Assignment(assignment) => {
+            let file = definition.program_file(db);
+            let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+            resolve_function(db, file, assignment.value(&parsed), visited)
+        }
+        DefinitionKind::ProvidedBinding(_) => {
+            let (from, module, name) = super::load::binding_names(db, definition)?;
+            let source = starpls_common::Db::load_file(db, &module, from.dialect, from).ok()??;
+            let definitions =
+                super::interface::export_definitions(db, db.starlark_program_file(source), &name);
+            let [definition] = definitions.as_slice() else {
+                return None;
+            };
+            resolve_definition(db, *definition, visited)
+        }
+        _ => None,
+    }
+}
+
+pub(super) fn parameter_type<'db>(
+    db: &'db Database,
+    definition: Definition<'db>,
+) -> Option<Type<'db>> {
+    let DefinitionKind::Parameter(parameter_node) = definition.kind(db) else {
+        return None;
+    };
+    let file = definition.program_file(db);
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let parameter = match parameter_node {
+        ParameterDefinitionNodeKind::Parameter(parameter) => &parameter.node(&parsed).parameter,
+        ParameterDefinitionNodeKind::VariadicPositionalParameter(parameter)
+        | ParameterDefinitionNodeKind::VariadicKeywordParameter(parameter) => {
+            parameter.node(&parsed)
+        }
+    };
+    let function = covering_node(parsed.syntax().into(), parameter.range())
+        .ancestors()
+        .find_map(|node| match node {
+            AnyNodeRef::StmtFunctionDef(function) => Some(function),
+            _ => None,
+        })?;
+    let model = SemanticModel::new(db, file);
+    let [contract] = initializer_contracts(db)
+        .get(&function.definition(&model))?
+        .as_slice()
+    else {
+        return None;
+    };
+    let contract = contract.declaration;
+    let contract_file = contract.program_file(db);
+    let parsed = ruff_db::parsed::parsed_module(db, contract_file.python_file(db)).load(db);
+    let constructor = match contract.kind(db) {
+        DefinitionKind::Function(function) => function.node(&parsed),
+        DefinitionKind::Class(class) => {
+            class
+                .node(&parsed)
+                .body
+                .iter()
+                .find_map(|statement| match statement {
+                    Stmt::FunctionDef(function) if function.name.as_str() == "__init__" => {
+                        Some(function)
+                    }
+                    _ => None,
+                })?
+        }
+        _ => return None,
+    };
+    let model = SemanticModel::new(db, contract_file);
+    if matches!(
+        parameter_node,
+        ParameterDefinitionNodeKind::VariadicPositionalParameter(_)
+    ) {
+        // Different fixed prefixes change which arguments enter *args. Keep ordinary
+        // inference until that correspondence can be established by call binding.
+        if function.parameters.args.len() != constructor.parameters.args.len() {
+            return None;
+        }
+        let input = constructor.parameters.vararg.as_deref()?;
+        let definitions =
+            ty_python_core::semantic_index(db, contract_file).try_definitions(input.into())?;
+        let [definition] = definitions else {
+            return None;
+        };
+        return Some(model.definition_type(*definition));
+    }
+    if matches!(
+        parameter_node,
+        ParameterDefinitionNodeKind::VariadicKeywordParameter(_)
+    ) {
+        let mut fields = TypedDictSchema::default();
+        let mut openness = TypedDictOpenness::Closed;
+        for input in constructor.parameters.iter_non_variadic_params() {
+            if matches!(contract.kind(db), DefinitionKind::Class(_))
+                && input.parameter.name.id == "self"
+            {
+                continue;
+            }
+            if function
+                .parameters
+                .iter_non_variadic_params()
+                .any(|source| source.parameter.name.id == input.parameter.name.id)
+            {
+                continue;
+            }
+            let ty = input
+                .parameter
+                .annotation
+                .as_deref()
+                .and_then(|annotation| annotation.inferred_type(&model))
+                .unwrap_or_else(Type::unknown);
+            let required = constructor
+                .parameters
+                .kwonlyargs
+                .iter()
+                .any(|keyword| keyword.parameter.name.id == input.parameter.name.id)
+                && input.default.is_none();
+            fields.insert(
+                input.parameter.name.id.clone(),
+                TypedDictFieldBuilder::new(ty).required(required).build(),
+            );
+        }
+        if let Some(kwargs) = &constructor.parameters.kwarg {
+            let value_type = kwargs
+                .annotation
+                .as_deref()
+                .and_then(|annotation| annotation.inferred_type(&model))
+                .unwrap_or_else(Type::unknown);
+            let binding_type = ty_python_core::semantic_index(db, contract_file)
+                .try_definitions(kwargs.as_ref().into())
+                .and_then(|definitions| match definitions {
+                    [definition] => Some(model.definition_type(*definition)),
+                    _ => None,
+                });
+            match binding_type {
+                Some(Type::TypedDict(schema)) => {
+                    for (name, field) in schema.items(db) {
+                        if !function
+                            .parameters
+                            .iter_non_variadic_params()
+                            .any(|source| source.parameter.name.id == *name)
+                        {
+                            fields.insert(name.clone(), field.clone());
+                        }
+                    }
+                    openness = schema.openness(db);
+                }
+                _ => openness = TypedDictOpenness::extra(db, value_type, false),
+            }
+        }
+        return Some(Type::TypedDict(
+            TypedDictType::from_schema_items_with_openness(db, fields, openness),
+        ));
+    }
+    let input = constructor
+        .parameters
+        .iter()
+        .find(|input| input.name().id == parameter.name.id)?;
+    input.annotation()?.inferred_type(&model)
+}
+
+pub(super) fn return_contract<'db>(
+    db: &'db Database,
+    definition: Definition<'db>,
+) -> Option<(Type<'db>, FileRange)> {
+    let [contract] = initializer_contracts(db).get(&definition)?.as_slice() else {
+        return None;
+    };
+    let (fields, source) = field_contract(db, contract.declaration)?;
+    let parsed =
+        ruff_db::parsed::parsed_module(db, contract.provider_file.python_file(db)).load(db);
+    let AnyRootNodeRef::Expr(Expr::Call(call)) =
+        parsed.get_by_index(NodeIndex::from(contract.provider_node))
+    else {
+        return None;
+    };
+    Some((
+        restrict_fields(
+            db,
+            &ProgramEnvironment::from_file(contract.provider_file),
+            fields,
+            allowed_fields(call),
+        ),
+        source,
+    ))
+}
+
+fn allowed_fields(call: &ruff_python_ast::ExprCall) -> Option<Vec<Name>> {
+    let fields = &call.arguments.find_keyword("fields")?.value;
+    let names: Vec<_> = match fields {
+        Expr::List(list) => list.elts.iter().collect(),
+        Expr::Tuple(tuple) => tuple.elts.iter().collect(),
+        Expr::Dict(mapping) => mapping
+            .items
+            .iter()
+            .map(|item| item.key.as_ref())
+            .collect::<Option<_>>()?,
+        _ => return None,
+    };
+    names
+        .into_iter()
+        .map(|name| match name {
+            Expr::StringLiteral(name) => Some(Name::new(name.value.to_str())),
+            _ => None,
+        })
+        .collect()
+}
+
+fn restrict_fields<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    fields: Type<'db>,
+    allowed: Option<Vec<Name>>,
+) -> Type<'db> {
+    let (Type::TypedDict(schema), Some(allowed)) = (fields, allowed) else {
+        return fields;
+    };
+    if matches!(schema.openness(db), TypedDictOpenness::Closed) {
+        return fields;
+    }
+    let mut fields = schema.items(db).clone();
+    let object = KnownClass::Object.to_instance(db, environment);
+    for name in allowed {
+        fields
+            .entry(name)
+            .or_insert_with(|| TypedDictFieldBuilder::new(object).read_only(true).build());
+    }
+    Type::TypedDict(TypedDictType::from_schema_items_with_openness(
+        db,
+        fields,
+        TypedDictOpenness::Closed,
+    ))
+}
+
+fn field_contract<'db>(
+    db: &'db Database,
+    definition: Definition<'db>,
+) -> Option<(Type<'db>, FileRange)> {
+    let file = definition.program_file(db);
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let model = SemanticModel::new(db, file);
+    let environment = ProgramEnvironment::from_file(file);
+    match definition.kind(db) {
+        DefinitionKind::Function(function) => {
+            let function = function.node(&parsed);
+            let Expr::Subscript(application) = function.returns.as_deref()? else {
+                return None;
+            };
+            let (mapping, _, _) = super::shapes::mapping_argument(&application.slice)?;
+            let ty = mapping.inferred_type(&model)?;
+            matches!(ty, Type::TypedDict(_))
+                .then_some((ty, FileRange::new(file.file(db), mapping.range())))
+        }
+        DefinitionKind::Class(class) => {
+            let ty = model.definition_type(definition);
+            let fields = super::interface::provider_fields(db, ty, &environment)?;
+            let fields: TypedDictSchema<'_> = fields
+                .into_iter()
+                .map(
+                    |ProvidedField {
+                         name,
+                         ty,
+                         source: _,
+                     }| {
+                        (
+                            name,
+                            TypedDictFieldBuilder::new(ty)
+                                .required(true)
+                                .read_only(true)
+                                .build(),
+                        )
+                    },
+                )
+                .collect();
+            let openness = TypedDictOpenness::extra(
+                db,
+                KnownClass::Object.to_instance(db, &environment),
+                true,
+            );
+            let schema = TypedDictType::from_schema_items_with_openness(db, fields, openness);
+            Some((
+                Type::TypedDict(schema),
+                FileRange::new(file.file(db), class.node(&parsed).name.range()),
+            ))
+        }
+        _ => None,
+    }
+}
+
+pub(super) fn raw_extra_parameters<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    constructor: Type<'db>,
+) -> Vec<Parameter<'db>> {
+    let environment = ProgramEnvironment::from_file(call.file());
+    let schema = constructor
+        .definition(db, &environment)
+        .and_then(|definition| definition.definition())
+        .and_then(|definition| field_contract(db, definition));
+    let Some((Type::TypedDict(schema), _)) = schema else {
+        return Vec::new();
+    };
+    if matches!(schema.openness(db), TypedDictOpenness::Closed) {
+        return Vec::new();
+    }
+    let object = KnownClass::Object.to_instance(db, &environment);
+    match allowed_fields(call.call()) {
+        Some(names) => names
+            .into_iter()
+            .filter(|name| !schema.items(db).contains_key(name))
+            .map(|name| {
+                Parameter::keyword_only(name)
+                    .with_annotated_type(object)
+                    .with_default_type(Type::unknown())
+            })
+            .collect(),
+        None => vec![Parameter::keyword_variadic(Name::new("kwargs")).with_annotated_type(object)],
+    }
+}
+
+pub(super) fn call_diagnostics(db: &Database, call: &CheckedCall<'_, '_>) -> Vec<Diagnostic> {
+    let Some(declaration) = call.declaration() else {
+        return Vec::new();
+    };
+    if call.has_binding_errors()
+        || !matches!(
+            super::factory::declaration(db, declaration),
+            Some(super::factory::BuiltinFunction::Provider)
+        )
+    {
+        return Vec::new();
+    }
+    let Some(constructor) = db.provider_interface(call.file(), call.call().node_index().load())
+    else {
+        return Vec::new();
+    };
+    let environment = ProgramEnvironment::from_file(call.file());
+    let Some(contract) = constructor
+        .definition(db, &environment)
+        .and_then(|definition| definition.definition())
+    else {
+        return Vec::new();
+    };
+    let Some((fields, source)) = field_contract(db, contract) else {
+        return Vec::new();
+    };
+    let allowed = allowed_fields(call.call());
+    let declared_outside_source = match (fields, &allowed) {
+        (Type::TypedDict(schema), Some(allowed)) => schema
+            .items(db)
+            .keys()
+            .filter(|name| !allowed.contains(name))
+            .cloned()
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    let fields = restrict_fields(db, &environment, fields, allowed);
+    let mut diagnostics = Vec::new();
+    let mut report = |message: String| {
+        let mut diagnostic = Diagnostic::new(
+            DiagnosticId::Lint(super::diagnostics::INVALID_PROVIDER_INTERFACE.name()),
+            Severity::Error,
+            message,
+        );
+        diagnostic.annotate(Annotation::primary(
+            Span::from(call.file().file(db)).with_range(call.call().range()),
+        ));
+        diagnostic.annotate(
+            Annotation::secondary(Span::from(source.file()).with_range(source.range()))
+                .message("Provider fields declared here"),
+        );
+        diagnostics.push(diagnostic);
+    };
+    let object = KnownClass::Object.to_instance(db, &environment);
+    for name in declared_outside_source {
+        report(format!(
+            "Field `{name}` is excluded by the source provider's fields declaration"
+        ));
+    }
+    let expected_inputs = constructor.map_callable_signatures(
+        db,
+        &environment,
+        CallableTypeKind::FunctionLike,
+        |signature| signature.with_return_type(object),
+    );
+    match call.argument("init") {
+        CheckedArgument::Value { ty, expression: _ } if !ty.is_none(db) => {
+            let actual_inputs = ty.map_callable_signatures(db, &environment, CallableTypeKind::FunctionLike, |signature| {
+                if !signature.return_type().is_assignable_to(db, &environment, fields) {
+                    report(format!("Initializer returns `{}`, which does not satisfy the declared provider fields `{}`", signature.return_type().display(db, &environment), fields.display(db, &environment)));
+                }
+                signature.with_return_type(object)
+            });
+            if let (Some(actual), Some(expected)) = (actual_inputs, expected_inputs) {
+                if !actual.is_assignable_to(db, &environment, expected) {
+                    report(
+                        "Initializer does not accept the declared provider constructor arguments"
+                            .into(),
+                    );
+                }
+            }
+        }
+        CheckedArgument::Indeterminate => {
+            report("Cannot determine the initializer for this provider contract".into());
+        }
+        _ => {
+            let _ = constructor.map_callable_signatures(db, &environment, CallableTypeKind::FunctionLike, |signature| {
+                let mut actual_fields = TypedDictSchema::default();
+                let mut openness = TypedDictOpenness::Closed;
+                for parameter in signature.parameters().iter() {
+                    match parameter.kind() {
+                        ParameterKind::KeywordOnly { name, default_type: _ } => {
+                            actual_fields.insert(name.clone(), TypedDictFieldBuilder::new(parameter.annotated_type()).required(!parameter.has_default()).read_only(true).build());
+                        }
+                        ParameterKind::KeywordVariadic { name: _ } => {
+                            openness = TypedDictOpenness::extra(db, parameter.annotated_type(), true);
+                        }
+                        _ => report("A provider without an initializer accepts only keyword arguments".into()),
+                    }
+                }
+                let actual = Type::TypedDict(TypedDictType::from_schema_items_with_openness(db, actual_fields, openness));
+                if !actual.is_assignable_to(db, &environment, fields) {
+                    report(format!("Constructor arguments `{}` do not guarantee the declared provider fields `{}`", actual.display(db, &environment), fields.display(db, &environment)));
+                }
+                signature
+            });
+        }
+    }
+    diagnostics
+}
+
+pub(super) fn declaration_diagnostics(
+    db: &Database,
+    file: starpls_common::File,
+) -> Vec<Diagnostic> {
+    if !file.is_type_interface(db)
+        || !db
+            .environment()
+            .type_interfaces(db)
+            .values()
+            .any(|(_, interface)| *interface == file)
+    {
+        return Vec::new();
+    }
+    let program = db.starlark_program_file(file);
+    let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+    let model = SemanticModel::new(db, program);
+    let mut diagnostics = Vec::new();
+    for statement in parsed.suite() {
+        let Stmt::FunctionDef(function) = statement else {
+            continue;
+        };
+        let definition = function.definition(&model);
+        if !is_declaration(db, definition) {
+            continue;
+        }
+        let valid_source =
+            super::interface::provider_pairs(db)
+                .iter()
+                .any(|((file, node), declarations)| {
+                    if !declarations.contains(&definition) {
+                        return false;
+                    }
+                    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+                    let AnyRootNodeRef::Expr(Expr::Call(call)) =
+                        parsed.get_by_index(NodeIndex::from(*node))
+                    else {
+                        return false;
+                    };
+                    resolve_function(db, *file, &call.func, &mut FxHashSet::default()).is_some_and(
+                        |definition| {
+                            matches!(
+                                super::factory::declaration(db, definition),
+                                Some(super::factory::BuiltinFunction::Provider)
+                            )
+                        },
+                    )
+                });
+        if !valid_source {
+            let mut diagnostic = Diagnostic::new(
+                DiagnosticId::Lint(super::diagnostics::INVALID_PROVIDER_INTERFACE.name()),
+                Severity::Error,
+                format!(
+                    "Provider constructor `{}` must describe a source provider() declaration",
+                    function.name
+                ),
+            );
+            diagnostic.annotate(Annotation::primary(
+                Span::from(file.source).with_range(function.name.range()),
+            ));
+            diagnostics.push(diagnostic);
+        }
+    }
+    diagnostics
+}
+
 #[cfg(test)]
 mod tests {
     use starpls_hir::Fixture;
@@ -276,5 +889,275 @@ absent_result = getattr(value, "absent", None)
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
             assert!(!diagnostics.is_empty(), "accepted {invalid}");
         }
+    }
+
+    #[test]
+    fn provider_initializers_check_inputs_and_returned_fields() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let valid = r#"
+def _init(value, count=0):
+    return {"value": value, "count": count}
+Info, raw_info = provider(fields=["value", "count"], init=_init)
+"#;
+        let source = fixture.add_file(&mut analysis.db, "info.bzl", valid);
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"
+def Info(value: str, count: int = ...) -> record[{"value": str, "count": int}]: ...
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for returned in [
+            "{'value': 1, 'count': count}",
+            "{'value': value}",
+            "{'value': value, 'count': count, 'extra': True}",
+            "None",
+        ] {
+            let body = valid.replace("{\"value\": value, \"count\": count}", returned);
+            analysis.update_file(source, body);
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| matches!(
+                    diagnostic.id().as_str(),
+                    "invalid-return-type"
+                        | "invalid-key"
+                        | "missing-typed-dict-key"
+                        | "invalid-provider-interface"
+                )),
+                "accepted {returned}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(source, valid.replace("count=0", "count='bad default'"));
+        assert!(!analysis.snapshot().diagnostics(source).unwrap().is_empty());
+        analysis.update_file(
+            source,
+            valid.replace("value, count=0", "value: int, count=0"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.headline_message()
+                    == "Initializer does not accept the declared provider constructor arguments"),
+            "{diagnostics:?}"
+        );
+        analysis.update_file(source, valid.into());
+        assert!(analysis.snapshot().diagnostics(source).unwrap().is_empty());
+    }
+
+    #[test]
+    fn variadic_initializers_receive_constructor_keyword_types() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "info.bzl",
+            r#"
+def _init(**values):
+    return {"value": values["value"]}
+Info, _raw = provider(fields=["value"], init=_init)
+"#,
+        );
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            "def Info(*, value: str) -> record[{'value': str}]: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(source, "def _init(**values):\n    return {'value': values['value'] + 1}\nInfo, _raw = provider(fields=['value'], init=_init)\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "unsupported-operator"),
+            "{diagnostics:?}"
+        );
+        for (annotation, access, value_type, invalid) in [
+            (
+                "dict[{'x': int}]",
+                "values['first']['x']",
+                "int",
+                "values['first']['missing']",
+            ),
+            (
+                "Unpack[dict[{'value': str}]]",
+                "values['value']",
+                "str",
+                "values['value'] + 1",
+            ),
+        ] {
+            analysis.update_file(
+                stub,
+                format!(
+                    "def Info(**values: {annotation}) -> record[{{'value': {value_type}}}]: ...\n"
+                ),
+            );
+            analysis.update_file(source, format!("def _init(**values):\n    return {{'value': {access}}}\nInfo, _raw = provider(fields=['value'], init=_init)\n"));
+            for file in [stub, source] {
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert!(diagnostics.is_empty(), "{annotation}: {diagnostics:?}");
+            }
+            analysis.update_file(source, format!("def _init(**values):\n    return {{'value': {invalid}}}\nInfo, _raw = provider(fields=['value'], init=_init)\n"));
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(!diagnostics.is_empty(), "accepted {invalid}");
+        }
+        analysis.update_file(
+            stub,
+            "def Info(*parts: str) -> record[{'value': str}]: ...\n".into(),
+        );
+        analysis.update_file(source, "def _init(*values):\n    return {'value': values[0]}\nInfo, _raw = provider(fields=['value'], init=_init)\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(source, "def _init(*values):\n    return {'value': values[0] + 1}\nInfo, _raw = provider(fields=['value'], init=_init)\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "unsupported-operator"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn open_provider_contracts_check_loaded_initializers_and_source_fields() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let helper = fixture.add_file(
+            &mut analysis.db,
+            "helper.bzl",
+            "def initialize(value):\n    return {'value': value, 'extra': True}\n",
+        );
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "info.bzl",
+            "load('helper.bzl', 'initialize')\nInfo, raw = provider(fields=['value', 'extra'], init=initialize)\nraw(value='direct', extra=1)\nraw(value='direct')\n",
+        );
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            "def Info(value: str) -> record[{'value': str}, ...]: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for file in [source, stub, helper] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for returned in [
+            "{'value': value + 1}",
+            "{'extra': True}",
+            "{'value': value, 'forbidden': True}",
+        ] {
+            analysis.update_file(
+                helper,
+                format!("def initialize(value):\n    return {returned}\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(helper).unwrap();
+            assert!(!diagnostics.is_empty(), "accepted {returned}");
+        }
+        analysis.update_file(
+            helper,
+            "def initialize(value):\n    return {'value': value}\n".into(),
+        );
+        analysis.update_file(source, "load('helper.bzl', 'initialize')\nInfo, raw = provider(fields=['extra'], init=initialize)\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| diagnostic
+                .headline_message()
+                .contains("Field `value` is excluded")),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn provider_declarations_require_matching_constructors() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "info.bzl",
+            "Info = provider(fields=['value'])\n",
+        );
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            "def Info(*, value: str) -> record[{'value': str}]: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for signature in ["value: str", "*, value: str = ...", "*, value: int"] {
+            analysis.update_file(
+                stub,
+                format!("def Info({signature}) -> record[{{'value': str}}]: ...\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == "invalid-provider-interface"),
+                "{signature}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(
+            stub,
+            "def Info(*, value: str) -> record[{'value': str}]: ...\n".into(),
+        );
+        analysis.update_file(
+            source,
+            "def Info(value):\n    return struct(value=value)\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-provider-interface"),
+            "{diagnostics:?}"
+        );
     }
 }

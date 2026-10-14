@@ -20,8 +20,8 @@ functions, and classes declared in the stub define its exports; loaded names
 are available in annotation expressions.
 
 Field-map annotations and type aliases use syntax from
-[starlark#362](https://github.com/bazelbuild/starlark/pull/362). The field-map
-and openness semantics below are defined by sty. Existing Python-style
+[starlark#362](https://github.com/bazelbuild/starlark/pull/362). The field-map,
+openness, and record semantics below are defined by sty. Existing Python-style
 provider, TypedDict, and Protocol declarations remain accepted.
 
 For each name loaded from a mapped `.bzl` module, sty uses the stub declaration
@@ -83,44 +83,66 @@ in the BUILD host context.
 
 ## Providers
 
-A provider export is declared as a class with readonly fields and an explicit
-constructor:
+A provider constructor declaration describes its arguments and the fields of
+its instances:
 
 ```starlark
-class FilesInfo:
-    files: Final[depset[File]]
-
-    def __init__(self, *, files: depset[File]) -> None: ...
+def FilesInfo(files: list[File]) -> record[{"files": depset[File]}]: ...
 ```
 
-`Final[T]` declares a field with value type `T`. Every declared field is present
-on an instance. `T | None` permits a `None` value. Constructors declare accepted
-arguments using ordinary function annotations. A provider class contains field
-annotations, `__init__`, docstrings, and placeholders; its identity is distinct
-from every other provider class. Field and constructor annotations resolve in
-the stub scope, including references to the provider itself.
-
-sty follows source aliases and reexports to pair the class with a unique
-`provider(...)` declaration. The paired class supplies the nominal identity for
-source instances, callers, annotations, and `Target` lookups. Multiple distinct
-classes claiming the same declaration are an error. A stub may expose a subset
-of the fields allowed by the source provider.
-
-For a provider with an initializer, `__init__` describes the initializer's public
-arguments. An exported raw constructor has its own declaration:
+The declaration pairs with the source module's `provider(...)` binding,
+including aliases and reexports. `FilesInfo` denotes the constructor in value
+expressions and its nominal instance type in annotations. Two provider
+declarations with the same fields have distinct identities. Recursive fields
+can refer to the constructor's name:
 
 ```starlark
-class FilesInfo:
-    files: Final[depset[File]]
+def Node(value: str, next: Node | None = ...) -> record[{
+    "value": str,
+    "next": Node | None,
+}]: ...
+```
 
-    def __init__(self, files: list[File]) -> None: ...
+Record fields are readonly and required. A closed record describes all fields
+of an instance; `record[{"files": depset[File]}, ...]` describes a partial
+contract. Additional fields must also satisfy the source provider's `fields`
+declaration. `record[...]` is the return annotation of a provider constructor
+in a stub. Constructor declarations have one signature and no type parameters.
+`Provider[T]` continues to describe a constructor returning `T`.
 
+For `provider(init=...)`, a uniquely associated constructor supplies input
+types to corresponding unannotated initializer parameters. sty checks the
+initializer's returned dictionary against the record, including field types
+and required keys. Source annotations take precedence; shared initializers
+use source annotations and ordinary inference. Every initializer must accept
+its constructor's declared arguments. A defaulted input does not make an
+output field optional.
+
+A provider without an initializer stores its keyword arguments directly. Its
+constructor declaration therefore uses keyword-only parameters and requires
+every promised field:
+
+```starlark
+def FilesInfo(*, files: depset[File]) -> record[{"files": depset[File]}]: ...
+```
+
+Raw constructors accept stored field values directly and return the same
+nominal instance type:
+
+```starlark
 def raw_files(*, files: depset[File]) -> FilesInfo: ...
 ```
 
-Raw constructors accept field values directly. Each declared field is a required
-keyword argument. The source raw binding and the stub return type identify the
-same provider.
+The Python-style provider declaration remains supported:
+
+```starlark
+class FilesInfo:
+    files: Final[depset[File]]
+    def __init__(self, files: list[File]) -> None: ...
+```
+
+Its field declarations form a partial contract. Every declared field is
+present; `T | None` permits a present field containing `None`.
 
 ## Dictionaries
 

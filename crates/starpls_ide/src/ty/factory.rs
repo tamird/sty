@@ -1865,7 +1865,8 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                     Some(source) => parameter.with_source_range(source),
                     None => parameter,
                 }
-            });
+            })
+            .chain(super::providers::raw_extra_parameters(db, call, class));
         let instance = super::providers::constructor_instance(db, class, &environment)
             .or_else(|| class.to_instance_approximation(db, &environment))?;
         let raw = Type::single_callable(

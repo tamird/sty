@@ -198,6 +198,7 @@ pub(super) fn diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic:
         }
     }
     diagnostics.extend(pairing_diagnostics(db, file));
+    diagnostics.extend(super::providers::declaration_diagnostics(db, file));
 
     diagnostics
 }

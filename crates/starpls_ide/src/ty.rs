@@ -494,6 +494,15 @@ impl ty_python_semantic::Db for Database {
         definition: Definition<'db>,
     ) -> Option<ty_python_semantic::types::Type<'db>> {
         context::parameter_type(self, definition)
+            .or_else(|| providers::parameter_type(self, definition))
+    }
+
+    fn provided_function_return_type<'db>(
+        &'db self,
+        definition: Definition<'db>,
+    ) -> Option<ty_python_semantic::provided::ProvidedReturnType<'db>> {
+        let (ty, source) = providers::return_contract(self, definition)?;
+        Some(ty_python_semantic::provided::ProvidedReturnType { ty, source })
     }
 
     fn provided_call_result<'db>(
@@ -502,7 +511,7 @@ impl ty_python_semantic::Db for Database {
     ) -> ty_python_semantic::provided::ProvidedCallResult<'db> {
         ty_python_semantic::provided::ProvidedCallResult {
             return_type: factory::result(self, call),
-            diagnostics: Vec::new(),
+            diagnostics: providers::call_diagnostics(self, call),
         }
     }
 
