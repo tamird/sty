@@ -76,6 +76,10 @@ pub(super) static INVALID_PROVIDER_INTERFACE: LintMetadata = lint(
     "invalid-provider-interface",
     "Reports invalid or conflicting provider declarations in stubs.",
 );
+pub(super) static INVALID_FUNCTION_INTERFACE: LintMetadata = lint(
+    "invalid-function-interface",
+    "Reports function implementations that cannot satisfy their stub declarations.",
+);
 
 pub(super) fn registry() -> &'static LintRegistry {
     static REGISTRY: LazyLock<LintRegistry> = LazyLock::new(|| {
@@ -88,6 +92,7 @@ pub(super) fn registry() -> &'static LintRegistry {
             &DEPRECATED_ARGUMENT,
             &INVALID_PROVIDER_INTERFACE,
             &INVALID_BUILD_ANNOTATION,
+            &INVALID_FUNCTION_INTERFACE,
         ] {
             builder.register_lint(lint);
         }

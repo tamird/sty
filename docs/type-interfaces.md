@@ -28,6 +28,19 @@ For each name loaded from a mapped `.bzl` module, sty uses the stub declaration
 when present and source inference otherwise. Annotations are resolved in the
 stub's scope. Call checking trusts the stub declarations.
 
+When sty checks a mapped implementation, a single ordinary function declaration
+supplies types for its unannotated parameters and return. ty checks the function
+body, including paths through its default arguments, and checks that its
+signature accepts the stub's calls. Source annotations and type comments take
+precedence. Generic annotations retain the stub's type parameters and scope.
+
+This correspondence requires a unique top-level source function with the same
+parameter layout. Overloads, aliases, decorated functions, and partially mixed
+source and stub generic annotations produce an `invalid-function-interface`
+diagnostic when checking the implementation. Generic signatures require complete
+annotations in either source or stub. Missing annotations in ordinary signatures
+retain gradual typing semantics.
+
 ### Overloaded functions
 
 Use `@overload` on consecutive declarations with the same name to describe
@@ -132,6 +145,9 @@ nominal instance type:
 ```starlark
 def raw_files(*, files: depset[File]) -> FilesInfo: ...
 ```
+
+For a direct `FilesInfo, raw_files = provider(...)` binding, sty checks the raw
+constructor's inferred signature against its declaration.
 
 The Python-style provider declaration remains supported:
 

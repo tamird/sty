@@ -1,4 +1,4 @@
-//! Trusted client contracts use ordinary stub exports; implementations remain separate files.
+//! Stub exports supply trusted client contracts and annotations for source declarations.
 
 use std::collections::hash_map::Entry;
 
@@ -34,6 +34,7 @@ use ty_python_core::ProgramFile;
 use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::types::ide_support::definitions_for_name;
 use ty_python_semantic::types::list_members::all_end_of_scope_members;
+use ty_python_semantic::types::CallableTypeKind;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypeDefinition;
 use ty_python_semantic::ImportAliasResolution;
@@ -99,7 +100,7 @@ pub(super) fn diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic:
     use ruff_db::diagnostic::Severity;
     use ruff_db::diagnostic::Span;
     if !file.is_type_interface(db) {
-        return Vec::new();
+        return function_diagnostics(db, file);
     }
     let program = db.starlark_program_file(file);
     let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
@@ -200,6 +201,307 @@ pub(super) fn diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic:
     diagnostics.extend(pairing_diagnostics(db, file));
     diagnostics.extend(super::providers::declaration_diagnostics(db, file));
 
+    diagnostics
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct FunctionAnnotations {
+    interface: File,
+    owners: FxHashMap<NodeIndex, NodeIndex>,
+    value_declarations: Vec<NodeIndex>,
+    errors: Vec<(TextRange, TextRange, String)>,
+}
+
+fn function_annotations(db: &dyn Db, file: File) -> Option<&FunctionAnnotations> {
+    if file.api_context() == Some(APIContext::Build)
+        || !db
+            .environment()
+            .type_interfaces(db)
+            .contains_key(&file.source)
+    {
+        return None;
+    }
+    function_annotations_query(db, file.source, (file.dialect, file.info)).as_ref()
+}
+
+/// Correspondence is needed during indexing and must depend only on syntax.
+#[salsa::tracked(returns(ref))]
+fn function_annotations_query(
+    db: &dyn Db,
+    source: ruff_db::files::File,
+    context: (Dialect, Option<FileInfo>),
+) -> Option<FunctionAnnotations> {
+    let (dialect, info) = context;
+    let file = File {
+        source,
+        dialect,
+        info,
+    };
+    let &(implementation, interface) = db.environment().type_interfaces(db).get(&source)?;
+    if implementation != file {
+        return None;
+    }
+    let source_names = module_bindings(db, file);
+    let stub_names = module_bindings(db, interface);
+    let parsed = starpls_common::parsed_module(db, file).load(db);
+    let source_functions: FxHashMap<_, _> = parsed
+        .suite()
+        .iter()
+        .filter_map(|statement| {
+            let Stmt::FunctionDef(function) = statement else {
+                return None;
+            };
+            Some((&function.name.id, function))
+        })
+        .collect();
+    let stub = starpls_common::parsed_module(db, interface).load(db);
+    let mut result = FunctionAnnotations {
+        interface,
+        owners: FxHashMap::default(),
+        value_declarations: Vec::new(),
+        errors: Vec::new(),
+    };
+    for statement in stub.suite() {
+        let Stmt::FunctionDef(declaration) = statement else {
+            continue;
+        };
+        // Provider constructors have their own correspondence and field checking.
+        if super::providers::has_record_return(declaration) && !stub_names.contains_key("record") {
+            continue;
+        }
+        let source = source_functions.get(&declaration.name.id).copied();
+        let error = if stub_names.get(&declaration.name.id) != Some(&1) {
+            Some("the stub must contain one ordinary function declaration")
+        } else if source_names.get(&declaration.name.id) != Some(&1) {
+            Some("the source must bind this name exactly once")
+        } else if let Some(source) = source {
+            if !source.decorator_list.is_empty() || !declaration.decorator_list.is_empty() {
+                Some("decorated function correspondence is unsupported")
+            } else {
+                match parameter_pairs(source, declaration) {
+                    Err(error) => Some(error),
+                    Ok(pairs) => {
+                        let comments = starpls_hir::Source::new(db);
+                        let source_return = source.returns.is_some()
+                            || comments
+                                .type_comment_annotation(file, source.node_index().load())
+                                .is_some();
+                        let source_parameter = |parameter: &Parameter| {
+                            parameter.annotation.is_some()
+                                || comments
+                                    .type_comment_annotation(file, parameter.node_index().load())
+                                    .is_some()
+                        };
+                        let has_source_annotation = source.type_params.is_some()
+                            || source_return
+                            || pairs
+                                .iter()
+                                .any(|(parameter, _)| source_parameter(parameter));
+                        let complete_source = source_return
+                            && pairs
+                                .iter()
+                                .all(|(parameter, _)| source_parameter(parameter));
+                        let complete = declaration.returns.is_some()
+                            && pairs
+                                .iter()
+                                .all(|(_, parameter)| parameter.annotation.is_some());
+                        if declaration.type_params.is_some()
+                            && !complete_source
+                            && (has_source_annotation || !complete)
+                        {
+                            Some("generic signatures require complete source annotations or complete stub annotations with an unannotated source signature")
+                        } else {
+                            result.owners.insert(
+                                source.node_index().load(),
+                                declaration.node_index().load(),
+                            );
+                            for (source, declaration) in pairs {
+                                result.owners.insert(
+                                    source.node_index().load(),
+                                    declaration.node_index().load(),
+                                );
+                            }
+                            None
+                        }
+                    }
+                }
+            }
+        } else {
+            result
+                .value_declarations
+                .push(declaration.node_index().load());
+            None
+        };
+        if let Some(error) = error {
+            result.errors.push((
+                source.map_or(TextRange::default(), |source| source.name.range()),
+                declaration.name.range(),
+                format!(
+                    "Cannot check `{}` against its stub: {error}",
+                    declaration.name.id,
+                ),
+            ));
+        }
+    }
+    Some(result)
+}
+
+pub(super) fn function_annotation<'db>(
+    db: &'db Database,
+    file: File,
+    owner: NodeIndex,
+) -> Option<ty_python_core::ProvidedAnnotation<'db>> {
+    let FunctionAnnotations {
+        interface,
+        owners,
+        value_declarations: _,
+        errors: _,
+    } = function_annotations(db, file)?;
+    let &owner = owners.get(&owner)?;
+    Some(ty_python_core::ProvidedAnnotation::External {
+        file: db.starlark_program_file(*interface),
+        owner,
+    })
+}
+
+fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::Diagnostic> {
+    use ruff_db::diagnostic::Annotation;
+    use ruff_db::diagnostic::Diagnostic;
+    use ruff_db::diagnostic::DiagnosticId;
+    use ruff_db::diagnostic::Severity;
+    use ruff_db::diagnostic::Span;
+    let Some(FunctionAnnotations {
+        interface,
+        owners,
+        value_declarations,
+        errors,
+    }) = function_annotations(db, file)
+    else {
+        return Vec::new();
+    };
+    let mut diagnostics = Vec::new();
+    let mut report = |source_range, stub_range, message: String| {
+        let mut diagnostic = Diagnostic::new(
+            DiagnosticId::Lint(super::diagnostics::INVALID_FUNCTION_INTERFACE.name()),
+            Severity::Error,
+            message,
+        );
+        diagnostic.annotate(Annotation::primary(
+            Span::from(file.source).with_range(source_range),
+        ));
+        diagnostic.annotate(
+            Annotation::secondary(Span::from(interface.source).with_range(stub_range))
+                .message("Function declared here"),
+        );
+        diagnostics.push(diagnostic);
+    };
+    for (source, stub, message) in errors {
+        report(*source, *stub, message.clone());
+    }
+    let program = db.starlark_program_file(file);
+    let stub_program = db.starlark_program_file(*interface);
+    let parsed = starpls_common::parsed_module(db, file).load(db);
+    let stub = starpls_common::parsed_module(db, *interface).load(db);
+    let model = SemanticModel::new(db, program);
+    let stub_model = SemanticModel::new(db, stub_program);
+    let index = semantic_index(db, program);
+    let stub_index = semantic_index(db, stub_program);
+    let environment = model.program_environment();
+    let mut functions = Vec::new();
+    for statement in parsed.suite() {
+        let Stmt::FunctionDef(function) = statement else {
+            continue;
+        };
+        let Some(&owner) = owners.get(&function.node_index().load()) else {
+            continue;
+        };
+        let ruff_python_ast::AnyRootNodeRef::Stmt(Stmt::FunctionDef(declaration)) =
+            stub.get_by_index(owner)
+        else {
+            unreachable!("function annotations refer to function declarations");
+        };
+        let Some([definition]) = index.try_definitions(function.into()) else {
+            report(
+                function.name.range(),
+                declaration.name.range(),
+                format!("Cannot resolve both declarations of `{}`", function.name.id),
+            );
+            continue;
+        };
+        functions.push((*definition, declaration));
+    }
+    for owner in value_declarations {
+        let ruff_python_ast::AnyRootNodeRef::Stmt(Stmt::FunctionDef(declaration)) =
+            stub.get_by_index(*owner)
+        else {
+            unreachable!("value declarations refer to stub functions");
+        };
+        let definitions = export_definitions(db, program, &declaration.name.id);
+        if let [definition] = definitions.as_slice() {
+            if super::providers::is_raw_constructor(db, *definition) {
+                functions.push((*definition, declaration));
+                continue;
+            }
+        }
+        report(
+            definitions.first().map_or(TextRange::default(), |definition| definition.kind(db).target_range(&parsed)),
+            declaration.name.range(),
+            format!("Cannot check `{}` against its stub: the source binding must be a direct function declaration or native raw provider constructor", declaration.name.id),
+        );
+    }
+    for (definition, declaration) in functions {
+        let source_range = definition.kind(db).target_range(&parsed);
+        let Some([stub_definition]) = stub_index.try_definitions(declaration.into()) else {
+            report(
+                source_range,
+                declaration.name.range(),
+                format!(
+                    "Cannot resolve the stub declaration of `{}`",
+                    declaration.name.id
+                ),
+            );
+            continue;
+        };
+        let actual = model.definition_type(definition);
+        let expected = stub_model.definition_type(*stub_definition);
+        // Function literals identify declarations; compare their callable signatures.
+        let (Some(actual), Some(expected)) = (
+            actual.map_callable_signatures(
+                db,
+                &environment,
+                CallableTypeKind::FunctionLike,
+                |signature| signature,
+            ),
+            expected.map_callable_signatures(
+                db,
+                &environment,
+                CallableTypeKind::FunctionLike,
+                |signature| signature,
+            ),
+        ) else {
+            report(
+                source_range,
+                declaration.name.range(),
+                format!(
+                    "Cannot resolve both signatures of `{}`",
+                    declaration.name.id
+                ),
+            );
+            continue;
+        };
+        if !actual.is_assignable_to(db, &environment, expected) {
+            report(
+                source_range,
+                declaration.name.range(),
+                format!(
+                    "Function `{}` with type `{}` does not satisfy its stub type `{}`",
+                    declaration.name.id,
+                    actual.display(db, &environment),
+                    expected.display(db, &environment),
+                ),
+            );
+        }
+    }
     diagnostics
 }
 
@@ -395,6 +697,7 @@ fn module_bindings(db: &dyn Db, file: File) -> FxHashMap<Name, usize> {
                     .iter()
                     .for_each(|target| self.target(target)),
                 Stmt::AnnAssign(assignment) => self.target(&assignment.target),
+                Stmt::TypeAlias(alias) => self.target(&alias.name),
                 Stmt::AugAssign(assignment) => self.target(&assignment.target),
                 Stmt::For(statement) => self.target(&statement.target),
                 _ => {}
@@ -966,6 +1269,204 @@ mod tests {
     use crate::LocationLink;
 
     #[test]
+    fn function_stubs_check_bodies_and_follow_edits() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "source.bzl",
+            "def convert(value):\n    return value + 1\n",
+        );
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "def convert(value: str) -> str: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "unsupported-operator"),
+            "{diagnostics:?}"
+        );
+        analysis.update_file(stub, "def convert(value: int) -> int: ...\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            source,
+            "def convert(value):\n    value = str(value)\n    return value\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-assignment"),
+            "{diagnostics:?}"
+        );
+        analysis.update_file(stub, "def convert(value: int) -> str: ...\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_type_interfaces([]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            source,
+            "def convert(*, count, text):\n    return text.upper() if count > 0 else ''\n".into(),
+        );
+        analysis.update_file(
+            stub,
+            "def convert(*, text: str, count: int) -> str: ...\n".into(),
+        );
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn function_stubs_preserve_source_annotations_and_defaults() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "");
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "def convert(value: str = ...) -> str: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for (text, expected) in [
+            ("def convert(value=None):\n    if value == None:\n        value = ''\n    return value\n", None),
+            ("def convert(value=None):\n    return value\n", Some("invalid-return-type")),
+            ("def convert(value):\n    return value\n", Some("invalid-function-interface")),
+            ("def convert(value: int = 0) -> int:\n    return value + 1\n", Some("invalid-function-interface")),
+            ("def convert(value=0):\n    # type: (int) -> int\n    return value + 1\n", Some("invalid-function-interface")),
+        ] {
+            analysis.update_file(source, text.into());
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            if let Some(expected) = expected {
+                assert!(diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == expected), "{text}: {diagnostics:?}");
+            } else {
+                assert!(diagnostics.is_empty(), "{text}: {diagnostics:?}");
+            }
+            assert!(!diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == "unsupported-operator"), "{text}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
+    fn function_stubs_keep_donor_generic_and_load_scopes() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(&mut analysis.db, "types.bzli", "type Value = str\n");
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "Value = int\ndef identity(value):\n    return value\ndef upper(value):\n    return value.upper()\n");
+        let stub = fixture.add_file(&mut analysis.db, "source.bzli", "load('types.bzli', 'Value')\ndef identity[T](value: T) -> T: ...\ndef upper(value: Value) -> Value: ...\n");
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(source, "Value = int\ndef identity(value):\n    return 1\ndef upper(value):\n    return value.upper()\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+        analysis.update_file(source, "Value = int\ndef identity(value: object) -> object:\n    return value\ndef upper(value):\n    return value.upper()\n".into());
+        analysis.update_file(stub, "load('types.bzli', 'Value')\ndef identity[T](value: T) -> object: ...\ndef upper(value: Value) -> Value: ...\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(source, "def collect():\n    return ['bad']\n".into());
+        analysis.update_file(
+            stub,
+            "type record[T] = list[T]\ndef collect() -> record[int]: ...\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn function_stubs_report_unsupported_correspondence() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "");
+        let stub = fixture.add_file(&mut analysis.db, "source.bzli", "");
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for (text, contract) in [
+            ("def helper(value): return value\nidentity = helper\n", "def identity(value: int) -> int: ...\n"),
+            ("def identity(value): return value\n", "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\n"),
+            ("def identity(value, other): return value + other\n", "def identity(value: int) -> int: ...\n"),
+            ("def identity(other): return other\n", "def identity(value: int) -> int: ...\n"),
+            ("def identity(value: int): return value\n", "def identity[T](value: T) -> T: ...\n"),
+            ("def identity(value): return value\n", "def identity[T](value) -> T: ...\n"),
+        ] {
+            analysis.update_file(source, text.into());
+            analysis.update_file(stub, contract.into());
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"), "{text} {contract}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
+    fn function_stubs_check_native_raw_constructors() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "def _init(value):\n    return {'value': value}\nInfo, raw = provider(fields=['value'], init=_init)\n");
+        let stub = fixture.add_file(&mut analysis.db, "source.bzli", "");
+        loader.add_files_from_fixture(&fixture);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for (input, output, valid) in [
+            ("str", "Info", true),
+            ("int", "Info", false),
+            ("str", "int", false),
+        ] {
+            analysis.update_file(stub, format!("def Info(value: str) -> record[{{'value': str}}]: ...\ndef raw(*, value: {input}) -> {output}: ...\n"));
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            if valid {
+                assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            } else {
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"),
+                    "{diagnostics:?}"
+                );
+            }
+        }
+        analysis.update_file(stub, "def raw(*, value: str) -> object: ...\n".into());
+        analysis.update_file(source, "def provider(**kwargs) -> tuple[object, Callable[..., object]]:\n    return (kwargs, lambda **values: values)\nInfo, raw = provider(fields=['value'])\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn private_value_contracts_distinguish_values_from_type_helpers() {
         use starpls_common::Db as _;
 
@@ -1247,7 +1748,12 @@ mod tests {
             )
             .unwrap();
         analysis.set_type_interfaces([(source, interface)]).unwrap();
-        for file in [source, interface, caller] {
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "empty-body");
+        for file in [interface, caller] {
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
         }

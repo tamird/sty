@@ -458,6 +458,7 @@ impl ty_python_core::Db for Database {
             .type_comment_annotation(file, owner)
             .map(ty_python_core::ProvidedAnnotation::Range)
             .or_else(|| interface::build_annotation(self, file, owner))
+            .or_else(|| interface::function_annotation(self, file, owner))
     }
 }
 
