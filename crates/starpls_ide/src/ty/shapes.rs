@@ -301,6 +301,34 @@ text = result["name"]
     }
 
     #[test]
+    fn dictionary_shapes_check_union_assignments() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let valid = r#"
+def merge(a: dict[{"name": str}], b: dict[{"count": int}]) -> dict[{"name": str, "count": int}]:
+    print(a | b)
+    ab: dict[{"name": str, "count": int}] = a | b
+    return ab
+"#;
+        let file = fixture.add_file(&mut analysis.db, "main.bzl", valid);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let invalid = r#"
+def wrong(a: dict[{"name": str}], b: dict[{"name": int}]):
+    result: dict[{"name": str}] = a | b
+    return result
+"#;
+        analysis.update_file(file, format!("{valid}\n{invalid}"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn struct_shapes_compare_fields_across_construction_sites() {
         let (mut analysis, _) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
