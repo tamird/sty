@@ -5,7 +5,7 @@ use crate::SyntaxKind;
 use crate::SyntaxKind::*;
 use crate::T;
 
-const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], ELLIPSIS]);
+const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], T![None], ELLIPSIS]);
 
 const PARAMETER_TYPE_START: SyntaxKindSet = TYPE_START.union(SyntaxKindSet::new(&[T![*], T![**]]));
 
@@ -45,6 +45,10 @@ pub(crate) fn parameter_type(p: &mut Parser) {
     let m = p.start();
     match p.current() {
         T![ident] => {
+            union_type(p);
+            m.complete(p, SIMPLE_PARAMETER_TYPE);
+        }
+        T![None] => {
             union_type(p);
             m.complete(p, SIMPLE_PARAMETER_TYPE);
         }
@@ -125,7 +129,7 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
 pub(crate) fn function_type(p: &mut Parser) -> CompletedMarker {
     let m = p.start();
     p.bump(T!['(']);
-    if p.at_kinds(TYPE_START) {
+    if p.at_kinds(PARAMETER_TYPE_START) {
         let m = p.start();
         parameter_types(p);
         m.complete(p, PARAMETER_TYPES);
@@ -138,7 +142,7 @@ pub(crate) fn function_type(p: &mut Parser) -> CompletedMarker {
         p.error_recover_until("Expected \"->\"", EMPTY);
         return m.complete(p, FUNCTION_TYPE);
     }
-    type_(p);
+    union_type(p);
     m.complete(p, FUNCTION_TYPE)
 }
 

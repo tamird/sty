@@ -178,10 +178,12 @@ impl<'a> SourceVisitor<'a> {
             parameters.push((None, range));
         }
         parameters.sort_by_key(|(_, range)| range.start());
+        let mut specification = specification.iter();
         for (index, (parameter, range)) in parameters.iter().copied().enumerate() {
             let Some(parameter) = parameter else {
                 continue;
             };
+            let specified_type = specification.next().copied().flatten();
             let end = parameters
                 .get(index + 1)
                 .map_or(syntax.end(), |(_, range)| range.start());
@@ -194,7 +196,7 @@ impl<'a> SourceVisitor<'a> {
                         .type_()
                         .map(|ty| comment_type_range(comment, &ty))
                 })
-                .or_else(|| specification.get(index).copied().flatten());
+                .or(specified_type);
             if let Some(annotation) = annotation {
                 self.info
                     .annotations

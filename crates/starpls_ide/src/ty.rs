@@ -1784,6 +1784,116 @@ def checked(value="bad"):
     }
 
     #[test]
+    fn comments_check_keyword_only_and_variadic_parameters() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let source = r#"
+def maybe(value, *, enabled=True, suffix=""):
+    # type: (str, bool, str) -> str | None
+    return value + suffix if enabled else None
+
+def collect(*values, **names):
+    # type: (*str, **int) -> list[str]
+    return list(values)
+
+def inline(
+    value,  # type: str
+    *,
+    enabled=True,  # type: bool
+    suffix="",
+):
+    # type: (int, int, str) -> str | None
+    return value + suffix if enabled else None
+
+maybe("ok", enabled=False)
+collect("ok", count=1)
+inline("ok", enabled=False)
+maybe("ok", enabled="bad-keyword")
+collect(42, count="bad-variadic")
+inline("ok", enabled="bad-inline", suffix=123)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/comments.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let snapshot = analysis.snapshot();
+        let db = &snapshot.db;
+        let file = db.starlark_program_file(file);
+        let diagnostics = ty_python_semantic::check_file_unwrap(db, file);
+        let mut rejected = Vec::new();
+        for diagnostic in &diagnostics {
+            assert_eq!(diagnostic.id().to_string(), "invalid-argument-type");
+            let range = diagnostic.primary_span().unwrap().range().unwrap();
+            rejected.push(&source[range]);
+        }
+        rejected.sort();
+        assert_eq!(
+            rejected,
+            [
+                "42",
+                "count=\"bad-variadic\"",
+                "enabled=\"bad-inline\"",
+                "enabled=\"bad-keyword\"",
+                "suffix=123"
+            ],
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn comments_check_nullable_returns() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let source = r#"
+def maybe(value):
+    # type: (str | None) -> str | None
+    return value
+
+def wrong():
+    # type: () -> str | None
+    return 42
+
+def only_none(value):
+    # type: (None) -> None
+    return value
+
+def text(value):
+    # type: (str) -> None
+    pass
+
+maybe(None)
+only_none(None)
+text(maybe("ok"))
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/comments.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let snapshot = analysis.snapshot();
+        let db = &snapshot.db;
+        let file = db.starlark_program_file(file);
+        let diagnostics = ty_python_semantic::check_file_unwrap(db, file);
+        let mut ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().to_string())
+            .collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            ["invalid-argument-type", "invalid-return-type"],
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn program_identity_preserves_host_context() {
         let (mut analysis, _) = Analysis::new_for_test();
         let file = analysis

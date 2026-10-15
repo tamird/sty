@@ -219,8 +219,8 @@ pub fn parameter_range(
     }
 }
 
-/// Ruff omits the bare `*` from parameters, but it occupies a Starlark function
-/// type-comment slot and separates parameter comments.
+/// Ruff omits the bare `*` from parameters. Its range separates inline parameter
+/// comments, but does not consume a function type-comment slot.
 pub fn bare_star_range(
     parameters: &ruff_python_ast::Parameters,
     tokens: &Tokens,
