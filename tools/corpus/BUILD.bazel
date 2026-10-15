@@ -1,0 +1,37 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
+
+_SUPPORTED_PLATFORMS = select({
+    "@platforms//os:linux": [],
+    "@platforms//os:macos": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
+rust_binary(
+    name = "corpus",
+    srcs = ["main.rs"],
+    args = [
+        "--manifest",
+        "$(rlocationpath :manifest.json)",
+        "--sty",
+        "$(rlocationpath //crates/starpls:sty)",
+    ],
+    data = [
+        "manifest.json",
+        "//crates/starpls:sty",
+    ] + glob(["probes/*.bzl"]),
+    edition = "2021",
+    target_compatible_with = _SUPPORTED_PLATFORMS,
+    deps = [
+        "@crates//:anyhow",
+        "@crates//:clap",
+        "@crates//:runfiles",
+        "@crates//:serde",
+        "@crates//:serde_json",
+    ],
+)
+
+rust_test(
+    name = "corpus_test",
+    crate = ":corpus",
+    target_compatible_with = _SUPPORTED_PLATFORMS,
+)

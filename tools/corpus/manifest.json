@@ -1,0 +1,447 @@
+[
+  {
+    "directory": "with_cfg.bzl",
+    "origin": "git@github.com:tamird/with_cfg.bzl.git",
+    "commit": "e46aa9e4dc3241f72620ff83f0045d0eb38c9ec9",
+    "sources": [
+      "with_cfg/private/args.bzl",
+      "with_cfg/private/frontend.bzl",
+      "examples/dynamic_deps/rules/runfiles_dir.bzl"
+    ],
+    "cases": [
+      {
+        "name": "positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_corpus__.bzl",
+            "fixture": "probes/with-cfg.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_corpus__.bzl",
+            "fixture": "probes/with-cfg-bad-call.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_corpus__.bzl",
+            "line": 7
+          }
+        ]
+      },
+      {
+        "name": "bad-provider-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "    return [\n        OutputGroupInfo(",
+            "new": "    return [\"bad\"] + [\n        OutputGroupInfo("
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 111
+          }
+        ]
+      },
+      {
+        "name": "bad-frontend-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/frontend.bzl",
+            "old": "    return [\n        DefaultInfo(\n            executable = executable,\n            files = target[DefaultInfo].files,\n            data_runfiles = data_runfiles,\n            default_runfiles = default_runfiles,\n        ),\n        coverage_common.instrumented_files_info(\n            ctx = ctx,\n            dependency_attributes = [\"exports\"],\n        ),\n    ] + [\n        target[provider]\n        for provider in target[FrontendInfo].providers\n        if provider in target\n    ] + (\n        [run_environment_info] if run_environment_info else []\n    )",
+            "new": "    return str([\n        DefaultInfo(\n            executable = executable,\n            files = target[DefaultInfo].files,\n            data_runfiles = data_runfiles,\n            default_runfiles = default_runfiles,\n        ),\n        coverage_common.instrumented_files_info(\n            ctx = ctx,\n            dependency_attributes = [\"exports\"],\n        ),\n    ] + [\n        target[provider]\n        for provider in target[FrontendInfo].providers\n        if provider in target\n    ] + (\n        [run_environment_info] if run_environment_info else []\n    ))"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 57
+          }
+        ]
+      }
+    ],
+    "bazel_version": "9.2.0"
+  },
+  {
+    "directory": "bazel_features",
+    "origin": "https://github.com/bazel-contrib/bazel_features.git",
+    "commit": "343fe370fa36adf7e9c809d6fdd4db472381bd0b",
+    "sources": [
+      "private/parse.bzl",
+      "private/util.bzl",
+      "features.bzl"
+    ],
+    "cases": [
+      {
+        "name": "positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "__sty_corpus__.bzl",
+            "fixture": "probes/bazel-features-consumer.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "__sty_corpus__.bzl",
+            "fixture": "probes/bazel-features-bad-caller.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "__sty_corpus__.bzl",
+            "line": 7
+          }
+        ]
+      },
+      {
+        "name": "bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "private/parse.bzl",
+            "old": "    return s, \"\"",
+            "new": "    return s, 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "private/parse.bzl",
+            "line": 17
+          }
+        ]
+      }
+    ],
+    "bazel_version": "9.3.0"
+  },
+  {
+    "directory": "bazel-skylib",
+    "origin": "https://github.com/bazelbuild/bazel-skylib.git",
+    "commit": "93fddfd8a08e2fb4763a11ce2493c60eaf786515",
+    "sources": [
+      "lib/paths.bzl"
+    ],
+    "cases": [
+      {
+        "name": "positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/skylib.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/skylib-bad-call.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 3
+          }
+        ]
+      },
+      {
+        "name": "bad-result",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/skylib-bad-result.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 3
+          }
+        ]
+      },
+      {
+        "name": "bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "lib/paths.bzl",
+            "old": "    return p.rpartition(\"/\")[-1]",
+            "new": "    return 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "lib/paths.bzl",
+            "line": 37
+          }
+        ]
+      }
+    ],
+    "bazel_version": "8.8.1"
+  },
+  {
+    "directory": "apple_support",
+    "origin": "https://github.com/bazelbuild/apple_support.git",
+    "commit": "ac4288d4ae026b996def504be79ac3133db1f273",
+    "sources": [
+      "lib/apple_support.bzl"
+    ],
+    "cases": [
+      {
+        "name": "positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/apple-consumer.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/apple-bad-call.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 5
+          }
+        ]
+      },
+      {
+        "name": "bad-nullable-result",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/apple-bad-nullable-result.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 5
+          }
+        ]
+      },
+      {
+        "name": "bad-dict-result",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/apple-bad-dict-result.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 3
+          }
+        ]
+      },
+      {
+        "name": "bad-placeholder-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "lib/apple_support.bzl",
+            "old": "    return \"__BAZEL_XCODE_SDKROOT__\"",
+            "new": "    return 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "lib/apple_support.bzl",
+            "line": 201
+          }
+        ]
+      },
+      {
+        "name": "bad-platform-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "lib/apple_support.bzl",
+            "old": "        return str(apple_common.platform_type.ios)",
+            "new": "        return 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "lib/apple_support.bzl",
+            "line": 627
+          }
+        ]
+      }
+    ],
+    "bazel_version": "9.3.0"
+  },
+  {
+    "directory": "hermetic-llvm",
+    "origin": "https://github.com/hermeticbuild/hermetic-llvm.git",
+    "commit": "d1731cfb8124f11b98165e771251a1d6dc079082",
+    "sources": [
+      "defs.bzl",
+      "directory.bzl"
+    ],
+    "cases": [
+      {
+        "name": "positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_contract_test.bzl",
+            "fixture": "probes/llvm-valid-caller.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_contract_test.bzl",
+            "fixture": "probes/llvm-bad-caller.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 8
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 9
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 10
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 11
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 12
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 13
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 14
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 15
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 16
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 17
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 18
+          }
+        ]
+      },
+      {
+        "name": "bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "        name = name + \"_\",",
+            "new": "        name = name - \"_\","
+          }
+        ],
+        "expected": [
+          {
+            "id": "unsupported-operator",
+            "path": "defs.bzl",
+            "line": 18
+          }
+        ]
+      },
+      {
+        "name": "bad-provider-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "    return [\n        DefaultInfo(",
+            "new": "    return [\"bad\"] + [\n        DefaultInfo("
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "defs.bzl",
+            "line": 52
+          }
+        ]
+      }
+    ],
+    "bazel_version": "9.3.0rc2"
+  }
+]
