@@ -1,4 +1,5 @@
 common --enable_platform_specific_config
+common --repo_env=CARGO_BAZEL_ISOLATED=false
 
 build --enable_runfiles
 
