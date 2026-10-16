@@ -1293,6 +1293,12 @@ fn write_function(
             (CallableKind::Method("coverage_common"), "instrumented_files_info", "source_attributes" | "dependency_attributes") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
             (CallableKind::Function, "exec_group", "toolchains") => (classes.contains("Label") && classes.contains("toolchain_type")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.toolchain_type]"),
             (CallableKind::Function, "rule" | "aspect", "exec_groups") => classes.contains("exec_group").then_some("_starpls_typing.Mapping[_StringKey, _starpls_types.exec_group] | None"),
+            (CallableKind::Function, "rule", "cfg") => {
+                let declared = env::normalize_doc(r#type, true);
+                (classes.contains("transition")
+                    && matches!(declared.as_str(), "" | "Unknown" | "unknown" | "Any"))
+                .then_some("_starpls_types.transition | None")
+            }
             (CallableKind::Method("attr"), _, "cfg") => (classes.contains("transition") && classes.contains("ExecTransitionFactory")).then_some("_starpls_builtins.str | _starpls_types.transition | _starpls_types.ExecTransitionFactory | None"),
             (CallableKind::Function, "OutputGroupInfo", "kwargs") => Some("_starpls_typing.Sequence[_starpls_types.File] | _starpls_types.depset[_starpls_types.File]"),
             (CallableKind::Function, "macro", "inherit_attrs") => Some("_starpls_types.rule | _starpls_types.macro | _starpls_typing.Literal[\"common\"] | None"),
@@ -2744,6 +2750,8 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
         );
         let source = r#"group = exec_group(toolchains=['//:toolchain'], exec_compatible_with=['//:constraint'])
 groups: dict[Literal['tools'], exec_group] = {'tools': group}
+def implementation(context: object) -> None:
+    pass
 def inspect(context: ctx, file: File, change: transition) -> None:
     files = context.runfiles(files=[file])
     default = DefaultInfo(executable=file, runfiles=files)
@@ -2757,6 +2765,9 @@ def inspect(context: ctx, file: File, change: transition) -> None:
     exec_attr = attr.label(cfg='exec')
     changed_attr = attr.label_list(cfg=change)
     native_attr = attr.label(cfg=config.exec())
+    rule(implementation=implementation, cfg=None)
+    rule(implementation=implementation, cfg=config.none())
+    rule(implementation=implementation, cfg=change)
     print(default, other, value, inherited, exec_attr, changed_attr, native_attr)
 "#;
         let file = analysis
@@ -2785,12 +2796,65 @@ def inspect(context: ctx, file: File, change: transition) -> None:
             "RunEnvironmentInfo(inherited_environment=[42])",
             "exec_group(toolchains=[42])",
             "attr.label(cfg=42)",
+            "rule(implementation=implementation, cfg='exec')",
             "rule(implementation=lambda ctx: [], exec_groups={'tools': 42})",
         ] {
             analysis.update_file(file, format!("{source}    {call}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert_eq!(diagnostics.len(), 1, "{call}: {diagnostics:?}");
             assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        }
+    }
+
+    #[test]
+    fn rule_transitions_preserve_supplied_metadata() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for (declared, has_transition, accepted, rejected) in [
+            ("None", true, "None", Some("config.none()")),
+            ("unknown", false, "42", None),
+        ] {
+            let mut builtins = builtins.clone();
+            if !has_transition {
+                builtins.r#type.retain(|class| class.name != "transition");
+            }
+            let parameter = builtins
+                .global
+                .iter_mut()
+                .find(|value| value.name == "rule")
+                .unwrap()
+                .callable
+                .as_mut()
+                .unwrap()
+                .param
+                .iter_mut()
+                .find(|parameter| parameter.name == "cfg")
+                .unwrap();
+            parameter.r#type = declared.to_owned();
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let source = |value| format!("rule(implementation=lambda ctx: [], cfg={value})\n");
+            let file = analysis
+                .open_document(
+                    Path::new("/transition.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source(accepted),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{declared}: {diagnostics:?}");
+            if let Some(rejected) = rejected {
+                analysis.update_file(file, source(rejected));
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+                assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+            }
         }
     }
 
