@@ -742,6 +742,14 @@ fn declarations(
                             "inherited_environment" => Some("_starpls_builtins.list[_starpls_builtins.str]"),
                             _ => None,
                         }
+                    } else if class.name == "TemplateVariableInfo"
+                        && field.name == "variables"
+                        && matches!(
+                            env::normalize_doc(&field.r#type, true).as_str(),
+                            "dict" | "Dict" | "Dictionary"
+                        )
+                    {
+                        Some("_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]")
                     } else if class.name == "runfiles" {
                         // RunfilesApi's Java declarations omit these depset
                         // arguments from exported metadata.
@@ -3615,6 +3623,46 @@ def aspect_implementation(target: Target, context: ctx) -> None: pass
                 }
             }
         }
+    }
+
+    #[test]
+    fn template_variables_preserve_string_dictionary() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def selected(target: Target) -> dict[str, str]:
+    return target[platform_common.TemplateVariableInfo].variables
+def constructed() -> dict[str, str]:
+    return platform_common.TemplateVariableInfo({'CC': 'clang'}).variables
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/template_variables.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(file, source.replace("dict[str, str]", "dict[str, int]"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
     }
 
     #[test]
