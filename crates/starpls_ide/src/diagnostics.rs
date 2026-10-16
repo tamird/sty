@@ -206,12 +206,28 @@ def as_runfiles(context: ctx, value: depset[File] | runfiles) -> runfiles:
     if type(value) != type(context.runfiles()):
         return context.runfiles(transitive_files=value)
     return value
+def empty(value: depset[File]) -> bool:
+    if value:
+        return False
+    return True
+def rewrapped(value: depset[File] | runfiles) -> depset[File] | runfiles:
+    if type(value) != DEPSET_TYPE:
+        return value
+    return depset(transitive=[value])
+def members(value: runfiles) -> tuple[depset[File], depset[SymlinkEntry], depset[SymlinkEntry], depset[str]]:
+    return (value.files, value.symlinks, value.root_symlinks, value.empty_filenames)
 def paths(value: depset[File] | runfiles) -> list[File]:
     if type(value) == "depset":
         return value.to_list()
     return value.files.to_list()
 "#;
         let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
         let file = fixture.main_file();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");

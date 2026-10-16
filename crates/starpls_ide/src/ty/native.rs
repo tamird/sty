@@ -362,7 +362,12 @@ fn declarations(
         // types from group lookup results.
         if matches!(
             class.name.as_str(),
-            "DefaultInfo" | "PackageSpecificationInfo" | "FilesToRunProvider" | "Target"
+            "DefaultInfo"
+                | "PackageSpecificationInfo"
+                | "FilesToRunProvider"
+                | "Target"
+                | "depset"
+                | "runfiles"
         ) {
             writeln!(body, "    @_starpls_typing.final")?;
         }
@@ -427,6 +432,15 @@ fn declarations(
             // Autoloads can replace the original native Java namespace.
             writeln!(body, "        if _starpls_native_rule_available:")?;
             writeln!(body, "            internal_DO_NOT_USE: _starpls_typing.Callable[[], _starpls_types._JavaCommonInternal] = ...")?;
+        }
+        if class.name == "depset" {
+            names.insert("__bool__");
+            // Depset.truth() tests emptiness without exposing Starlark len().
+            writeln!(body, "        @_starpls_typing.type_check_only")?;
+            writeln!(
+                body,
+                "        def __bool__(self) -> _starpls_builtins.bool: ..."
+            )?;
         }
         if class.name == "ToolchainInfo" {
             names.insert("__getattr__");
@@ -599,6 +613,19 @@ fn declarations(
                         match field.name.as_str() {
                             "files" => Some("_DefaultInfoFiles"),
                             "files_to_run" => Some("_DefaultInfoFilesToRun"),
+                            _ => None,
+                        }
+                    } else if class.name == "runfiles" {
+                        // RunfilesApi's Java declarations omit these depset
+                        // arguments from exported metadata.
+                        match field.name.as_str() {
+                            "files" => Some("_starpls_types.depset[_starpls_types.File]"),
+                            "symlinks" | "root_symlinks" => {
+                                Some("_starpls_types.depset[_starpls_types.SymlinkEntry]")
+                            }
+                            "empty_filenames" => {
+                                Some("_starpls_types.depset[_starpls_builtins.str]")
+                            }
                             _ => None,
                         }
                     } else if class.name == "FilesToRunProvider" {
