@@ -40,8 +40,8 @@ these names. Stub declarations are available in annotations and type comments;
 runtime expressions use the implementation's own bindings.
 
 This correspondence requires a unique top-level source function with the same
-parameter layout. Overloads, aliases, decorated functions, and partially mixed
-source and stub generic annotations produce an `invalid-function-interface`
+parameter layout. Aliases, decorated functions, and partially mixed source
+and stub generic annotations produce an `invalid-function-interface`
 diagnostic when checking the implementation. Generic signatures require complete
 annotations in either source or stub. Missing annotations in ordinary signatures
 retain gradual typing semantics.
@@ -63,6 +63,26 @@ Calls use the complete overload family. Each declaration has its own parameter
 and result annotations and may declare type parameters. Overload families must
 contain at least two declarations. ty checks the declarations and resolves calls
 using its ordinary overload rules.
+
+To check a mapped source implementation, follow a non-generic overload family
+with an ordinary declaration that has complete parameter and return annotations:
+
+```starlark
+@overload
+def identity(value: int) -> int: ...
+
+@overload
+def identity(value: str) -> str: ...
+
+def identity(value: int | str) -> int | str: ...
+```
+
+ty checks the overloads against the ordinary implementation signature. Sty uses
+that signature to check the source body; source annotations still take
+precedence. Callers see only the overloads. This checks the body's broad input
+and result types, not the correlation between individual overloads and branches
+in the body. Families without an explicit implementation, or with generic
+signatures, produce `invalid-function-interface` when checking mapped source.
 
 ### Shared declarations
 
