@@ -608,7 +608,7 @@
   {
     "directory": "rules_rs",
     "origin": "git@github.com:tamird/rules_rs.git",
-    "commit": "4460d53baa9903682de2752ec0e24cc722bc364d",
+    "commit": "ddfb77e8b5b2b0cfe783382e79bac7cac71832dc",
     "bazel_version": "9.0.0",
     "sources": [
       "rs/private/select_utils.bzl",

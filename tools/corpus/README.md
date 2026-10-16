@@ -53,7 +53,7 @@ lists constrain their elements. The manifest lists the checked API slices.
 
 The C++ toolchain configuration contracts cover all thirteen constructor helpers
 and their nominal providers, including recursive flag groups. The Rust dependency
-contracts cover lists and tuples of dependency specifications, optional dictionary
+contracts cover iterable dependency specifications, optional dictionary
 fields, finite key unions, shared dependencies, and platform selectors. Runfiles
 group contracts cover entry construction, content conversion, provider lookup, name
 rendering, and generic packagers. The packager cases preserve one handle type
