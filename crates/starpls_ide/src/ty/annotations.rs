@@ -258,6 +258,46 @@ mod tests {
     }
 
     #[test]
+    fn callable_type_comments_check_inputs_and_bodies() {
+        let signature =
+            "def rewrite(value, callback):\n    # type: (str, Callable[[str], str]) -> str\n";
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        let file = fixture.main_file();
+        analysis.set_rules(rules("error"));
+        for (body, call, expected) in [
+            (
+                "return callback(value)",
+                "rewrite('ok', lambda text: text.upper())",
+                None,
+            ),
+            (
+                "return callback(value)",
+                "rewrite(42, lambda text: text)",
+                Some("invalid-argument-type"),
+            ),
+            (
+                "return callback(value)",
+                "rewrite('ok', lambda text: 42)",
+                Some("invalid-argument-type"),
+            ),
+            ("return callback(42)", "", Some("invalid-argument-type")),
+            ("return 42", "", Some("invalid-return-type")),
+        ] {
+            analysis.update_file(file, format!("{signature}    {body}\n{call}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(
+                ids,
+                expected.into_iter().collect::<Vec<_>>(),
+                "{body}; {call}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
     fn annotation_policy_accepts_provider_initializer_contracts() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

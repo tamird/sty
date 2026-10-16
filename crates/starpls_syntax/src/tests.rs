@@ -49,6 +49,42 @@ fn test_parse_error() {
     }
 }
 
+#[test]
+fn callable_type_comments_preserve_argument_lists() {
+    for annotation in [
+        "Callable[[str], int]",
+        "Callable[[], int]",
+        "Callable[[str,], int]",
+        "list[Callable[[str, int], None]]",
+        "(int, Callable[[Callable[[str], int]], str]) -> int",
+    ] {
+        let source = format!("# type: {annotation}");
+        let parsed = ruff_python_parser::parse_unchecked_source(
+            &source,
+            ruff_python_ast::PySourceType::Python,
+        );
+        let mut errors = Vec::new();
+        let comments =
+            crate::parse_type_comments(&source, parsed.tokens(), &mut |error| errors.push(error));
+        assert!(errors.is_empty(), "{annotation}: {errors:?}");
+        let [comment] = comments.as_slice() else {
+            panic!("expected one comment: {comments:?}");
+        };
+        assert_eq!(comment.parsed.syntax().text().to_string(), source);
+    }
+    let source = "# type: Callable[[str";
+    let parsed =
+        ruff_python_parser::parse_unchecked_source(source, ruff_python_ast::PySourceType::Python);
+    let mut errors = Vec::new();
+    crate::parse_type_comments(source, parsed.tokens(), &mut |error| errors.push(error));
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.message == "\"[\" was not closed"),
+        "{errors:?}"
+    );
+}
+
 #[derive(Debug)]
 struct TestCase {
     input: String,

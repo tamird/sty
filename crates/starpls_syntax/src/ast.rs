@@ -129,6 +129,7 @@ ast_node! {
 
 pub enum Type {
     PathType(PathType),
+    TypeList(TypeList),
     UnionType(UnionType),
     NoneType(NoneType),
     EllipsisType(EllipsisType),
@@ -141,7 +142,10 @@ impl AstNode for Type {
     where
         Self: Sized,
     {
-        matches!(kind, PATH_TYPE | UNION_TYPE | NONE_TYPE | ELLIPSIS_TYPE)
+        matches!(
+            kind,
+            PATH_TYPE | TYPE_LIST | UNION_TYPE | NONE_TYPE | ELLIPSIS_TYPE
+        )
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self>
@@ -150,6 +154,7 @@ impl AstNode for Type {
     {
         Some(match syntax.kind() {
             PATH_TYPE => Self::PathType(PathType { syntax }),
+            TYPE_LIST => Self::TypeList(TypeList { syntax }),
             UNION_TYPE => Self::UnionType(UnionType { syntax }),
             NONE_TYPE => Self::NoneType(NoneType { syntax }),
             ELLIPSIS_TYPE => Self::EllipsisType(EllipsisType { syntax }),
@@ -160,6 +165,7 @@ impl AstNode for Type {
     fn syntax(&self) -> &rowan::SyntaxNode<Self::Language> {
         match self {
             Type::PathType(type_) => type_.syntax(),
+            Type::TypeList(type_) => type_.syntax(),
             Type::UnionType(type_) => type_.syntax(),
             Type::NoneType(type_) => type_.syntax(),
             Type::EllipsisType(type_) => type_.syntax(),

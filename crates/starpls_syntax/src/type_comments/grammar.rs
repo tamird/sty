@@ -5,7 +5,7 @@ use crate::SyntaxKind;
 use crate::SyntaxKind::*;
 use crate::T;
 
-const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], T![None], ELLIPSIS]);
+const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], T![None], T!['['], ELLIPSIS]);
 
 const PARAMETER_TYPE_START: SyntaxKindSet = TYPE_START.union(SyntaxKindSet::new(&[T![*], T![**]]));
 
@@ -23,6 +23,9 @@ pub(crate) fn types(p: &mut Parser, stop: Option<SyntaxKind>) {
     while cond(p) {
         if !p.eat(T![,]) {
             p.error_recover_until("Expected \",\"", EMPTY);
+            break;
+        }
+        if !cond(p) {
             break;
         }
         if !p.at_kinds(TYPE_START) {
@@ -49,6 +52,10 @@ pub(crate) fn parameter_type(p: &mut Parser) {
             m.complete(p, SIMPLE_PARAMETER_TYPE);
         }
         T![None] => {
+            union_type(p);
+            m.complete(p, SIMPLE_PARAMETER_TYPE);
+        }
+        T!['['] => {
             union_type(p);
             m.complete(p, SIMPLE_PARAMETER_TYPE);
         }
@@ -114,6 +121,15 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
             m.complete(p, PATH_TYPE)
         }
         T!['('] => function_type(p),
+        T!['['] => {
+            let m = p.start();
+            p.bump(T!['[']);
+            types(p, Some(T![']']));
+            if !p.eat(T![']']) {
+                p.error_recover_until("\"[\" was not closed", EMPTY);
+            }
+            m.complete(p, TYPE_LIST)
+        }
         ELLIPSIS => {
             let m = p.start();
             p.bump(ELLIPSIS);
