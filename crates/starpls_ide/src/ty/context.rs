@@ -838,6 +838,76 @@ mod tests {
     }
 
     #[test]
+    fn repeated_attributes_preserve_context_fields() {
+        for (factory, parameters, expression, descriptor, result) in [
+            ("rule", "ctx", "ctx.attr.message", "attr.string()", "[]"),
+            (
+                "repository_rule",
+                "ctx",
+                "ctx.attr.message",
+                "attr.string()",
+                "None",
+            ),
+            (
+                "aspect",
+                "target, ctx",
+                "ctx.attr.message",
+                "attr.string()",
+                "[]",
+            ),
+            (
+                "macro",
+                "name, visibility, message",
+                "message",
+                "attr.string(mandatory=True, configurable=False)",
+                "None",
+            ),
+        ] {
+            let source = format!(
+                r#"def implementation({parameters}):
+    checked: str = {expression}
+    print(checked)
+    return {result}
+attributes = {{"message": {descriptor}}}
+first = {factory}(implementation=implementation, attrs=attributes)
+second = {factory}(implementation=implementation, attrs=attributes)
+"#
+            );
+            let (mut analysis, fixture) = Analysis::from_single_file_fixture(&source);
+            enable_context(&mut analysis);
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("unsound-assignment".into(), "error".into())].into(),
+                )
+                .unwrap(),
+            );
+            let file = fixture.main_file();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{factory}: {diagnostics:?}");
+            for (edit, expected) in [
+                ("attributes['message'] = attr.int()\n", "invalid-assignment"),
+                (
+                    "def expose(value): pass\nexpose(attributes)\n",
+                    "unsound-assignment",
+                ),
+            ] {
+                analysis.update_file(file, source.replace("second =", &format!("{edit}second =")));
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.id().as_str() == expected
+                            && diagnostic
+                                .range()
+                                .is_some_and(|range| range.end().to_usize()
+                                    < source.find("attributes =").unwrap())),
+                    "{factory}, {edit}: {diagnostics:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn stub_parameters_share_generated_source_context() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

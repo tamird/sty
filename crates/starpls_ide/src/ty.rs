@@ -555,6 +555,23 @@ impl ty_python_semantic::Db for Database {
         )
     }
 
+    fn provided_parameter_preserves_contents(
+        &self,
+        definition: Definition<'_>,
+        parameter: &str,
+    ) -> bool {
+        // Bazel copies the outer attrs mapping into its declaration metadata.
+        parameter == "attrs"
+            && matches!(
+                factory::declaration(self, definition),
+                Some(
+                    factory::BuiltinFunction::Rule { repository: _ }
+                        | factory::BuiltinFunction::Aspect
+                        | factory::BuiltinFunction::Macro
+                )
+            )
+    }
+
     fn provided_getattr_result<'db>(
         &'db self,
         definition: Definition<'db>,
