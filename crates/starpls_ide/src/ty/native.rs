@@ -443,6 +443,14 @@ fn declarations(
             )?;
         }
         let mut names = BTreeSet::new();
+        if class.name == "Label" {
+            // Label implements Comparable<Label>; Starlark uses that ordering
+            // for comparisons and lexicographic sorting of nested collections.
+            for method in ["__lt__", "__le__", "__gt__", "__ge__"] {
+                names.insert(method);
+                writeln!(body, "        def {method}(self, other: _starpls_types.Label, /) -> _starpls_builtins.bool: ...")?;
+            }
+        }
         if xcode_config_available && class.name == "XcodeVersionConfig" {
             // common/xcode/providers.bzl exports functions as provider fields.
             // The API inventory includes the key, but omits this instance type.
@@ -2416,6 +2424,54 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
             assert!(diagnostics.iter().all(|diagnostic| usize::from(
                 diagnostic.range().unwrap().start()
             ) >= source.len()));
+        }
+    }
+
+    #[test]
+    fn labels_support_ordered_comparisons() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def order(first: Label, second: Label) -> None:
+    labels: list[Label] = sorted([first, second])
+    nested: list[tuple[int, list[Label]]] = sorted([(0, [first]), (0, [second])])
+    minimum: Label = min(first, second)
+    comparisons: list[bool] = [first < second, first <= second, first > second, first >= second]
+    print(labels, nested, minimum, comparisons)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/labels.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (expression, expected) in [
+            ("first < '//:text'", "unsupported-operator"),
+            ("sorted([first, None])", "invalid-argument-type"),
+            ("first < 1", "unsupported-operator"),
+        ] {
+            analysis.update_file(file, format!("{source}    {expression}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|d| d.id().as_str() == expected),
+                "{expression}: {diagnostics:?}"
+            );
         }
     }
 
