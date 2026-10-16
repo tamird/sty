@@ -207,6 +207,29 @@ def paths(value: depset[File] | runfiles) -> list[File]:
     }
 
     #[test]
+    fn collection_annotations_preserve_element_types() {
+        let source = r#"
+def collect(values):
+    # type: (Collection[str]) -> set[str]
+    result = set()
+    result.update(values)
+    return result
+collect(["a"])
+collect(("a",))
+collect(set(["a"]))
+collect({"a": 1})
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(file, format!("{source}collect([1])\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
     fn repeated_host_boolean_guards_preserve_boundness() {
         let (analysis, fixture) = native_analysis(
             r#"def inspect(value):

@@ -22,6 +22,7 @@ use ty_ide::MarkupKind;
 pub(super) const TYPING_ANNOTATIONS: &[&str] = &[
     "Final",
     "Callable",
+    "Collection",
     "Protocol",
     "TypedDict",
     "TypeGuard",
