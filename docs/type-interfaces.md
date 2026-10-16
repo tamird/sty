@@ -120,8 +120,31 @@ Record fields are readonly and required. A closed record describes all fields
 of an instance; `record[{"files": depset[File]}, ...]` describes a partial
 contract. Additional fields must also satisfy the source provider's `fields`
 declaration. `record[...]` is the return annotation of a provider constructor
-in a stub. Constructor declarations have one signature and no type parameters.
-`Provider[T]` continues to describe a constructor returning `T`.
+in a stub. Constructor declarations have one signature.
+`Provider[T]` describes a constructor returning `T`.
+
+Constructor type parameters relate input values to stored fields:
+
+```starlark
+def Partial[T](*, handle: T, pieces: depset[T]) -> record[{
+    "handle": T,
+    "pieces": depset[T],
+}]: ...
+
+def handles[T](partials: list[Partial[T]]) -> list[T]: ...
+```
+
+Calls infer type arguments from their inputs. `Partial[str]` describes an
+instance with a `str` handle and `depset[str]` pieces. Specializations of one
+provider share its nominal identity. Readonly fields preserve their value types;
+a field containing `list[T]` still permits list mutations and therefore
+requires compatible element types. Recursive generic provider declarations produce
+an `invalid-provider-interface` diagnostic.
+
+Omitted type arguments in annotations use the declaration's defaults. A runtime
+provider key identifies every specialization of that provider, so
+`target[Partial].handle` has an unknown type, including when the declaration
+specifies a default for `T`.
 
 For `provider(init=...)`, a uniquely associated constructor supplies input
 types to corresponding unannotated initializer parameters. sty checks the

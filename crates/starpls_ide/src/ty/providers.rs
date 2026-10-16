@@ -32,6 +32,8 @@ use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::provided::ProvidedGetattrPresence;
 use ty_python_semantic::provided::ProvidedInstanceFields;
 use ty_python_semantic::provided::ProvidedInstanceFieldsSource;
+use ty_python_semantic::provided::ProvidedTypeApplication;
+use ty_python_semantic::provided::TypeExpressionContext;
 use ty_python_semantic::types::ide_support::definitions_for_name;
 use ty_python_semantic::types::CallableTypeKind;
 use ty_python_semantic::types::CheckedArgument;
@@ -39,6 +41,7 @@ use ty_python_semantic::types::CheckedCall;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::ParameterKind;
+use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypeDefinition;
 use ty_python_semantic::types::TypedDictFieldBuilder;
@@ -58,6 +61,7 @@ struct RecordDeclaration {
     function: u32,
     fields: Box<[Name]>,
     open: bool,
+    generic: bool,
 }
 
 /// Selecting a provider declaration must not infer its signature: fields can refer to itself.
@@ -137,7 +141,64 @@ pub(super) fn reference<'db>(db: &'db Database, definition: Definition<'db>) -> 
     };
     let file = definition.program_file(db);
     let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
-    instance(db, file, function.node(&parsed))
+    let function = function.node(&parsed);
+    if function.type_params.is_some() {
+        let signature = constructor_signature(db, definition)?;
+        return Some(signature.default_specialized_return_type(db));
+    }
+    instance(db, file, function)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
+struct RecursiveProvider;
+
+#[salsa::tracked(returns(ref), cycle_result=|_, _, _| Err(RecursiveProvider))]
+fn record_signature<'db>(
+    db: &'db dyn super::interface::Db,
+    definition: Definition<'db>,
+) -> Result<Option<Signature<'db>>, RecursiveProvider> {
+    let model = SemanticModel::new(db, definition.program_file(db));
+    let Type::FunctionLiteral(function) = model.definition_type(definition) else {
+        return Ok(None);
+    };
+    let mut declarations = function.iter_overloads_and_implementation(db);
+    let Some(declaration) = declarations.next() else {
+        return Ok(None);
+    };
+    if declarations.next().is_some() {
+        return Ok(None);
+    }
+    Ok(Some(declaration.signature(db)))
+}
+
+pub(super) fn constructor_signature<'db>(
+    db: &'db Database,
+    definition: Definition<'db>,
+) -> Option<Signature<'db>> {
+    let signature = record_signature(db, definition).as_ref().ok()?;
+    signature.clone()
+}
+
+pub(super) fn type_application<'db>(
+    db: &'db Database,
+    application: &ProvidedTypeApplication<'_, 'db>,
+    context: &mut dyn TypeExpressionContext<'db>,
+) -> Option<Type<'db>> {
+    let environment = ProgramEnvironment::from_file(context.program_file());
+    let TypeDefinition::Function(definition) =
+        application.value_type.definition(db, &environment)?
+    else {
+        return None;
+    };
+    if !is_declaration(db, definition) {
+        return None;
+    }
+    let signature = match record_signature(db, definition) {
+        Ok(signature) => signature,
+        Err(RecursiveProvider) => return Some(Type::unknown()),
+    };
+    let signature = signature.as_ref()?;
+    Some(context.infer_specialized_return_type(application.expression, signature))
 }
 
 pub(super) fn constructor_instance<'db>(
@@ -159,10 +220,18 @@ pub(super) fn constructor_fields<'db>(
     let TypeDefinition::Function(definition) = constructor.definition(db, environment)? else {
         return None;
     };
-    let instance = reference(db, definition)?;
+    if !is_declaration(db, definition) {
+        return None;
+    }
+    let DefinitionKind::Function(function) = definition.kind(db) else {
+        return None;
+    };
+    let file = definition.program_file(db);
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let instance = instance(db, file, function.node(&parsed))?;
     let data = instance.provided_data(db, environment)?;
-    let fields = fields(db, definition.program_file(db), data)?;
-    Some(fields.fields.into_vec())
+    let declaration = data.downcast_ref::<RecordDeclaration>()?;
+    declaration_fields(db, file, declaration)
 }
 
 pub(super) fn instance<'db>(
@@ -186,6 +255,7 @@ pub(super) fn instance<'db>(
             })
             .collect(),
         open,
+        generic: function.type_params.is_some(),
     };
     let class = ProvidedClass {
         name: function.name.id.clone(),
@@ -206,6 +276,27 @@ pub(super) fn fields<'db>(
     data: &ProvidedData,
 ) -> Option<ProvidedInstanceFields<'db>> {
     let declaration = data.downcast_ref::<RecordDeclaration>()?;
+    // Generic fields live in the constructor's structural return type, where ty
+    // applies its ordinary function specialization. The nominal identity carries
+    // no competing fields containing the constructor's unbound type parameters.
+    let fields = if declaration.generic {
+        Vec::new()
+    } else {
+        declaration_fields(db, file, declaration)?
+    };
+    Some(ProvidedInstanceFields {
+        fields: fields.into_boxed_slice(),
+        has_dynamic_fields: false,
+        implications: Box::default(),
+        data: Some(data.clone()),
+    })
+}
+
+fn declaration_fields<'db>(
+    db: &'db Database,
+    file: ProgramFile<'db>,
+    declaration: &RecordDeclaration,
+) -> Option<Vec<ProvidedField<'db>>> {
     let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
     let AnyRootNodeRef::Stmt(Stmt::FunctionDef(function)) =
         parsed.get_by_index(NodeIndex::from(declaration.function))
@@ -229,12 +320,7 @@ pub(super) fn fields<'db>(
             source: Some(FileRange::new(file.file(db), key.range())),
         });
     }
-    Some(ProvidedInstanceFields {
-        fields: fields.into_boxed_slice(),
-        has_dynamic_fields: false,
-        implications: Box::default(),
-        data: Some(data.clone()),
-    })
+    Some(fields)
 }
 
 pub(super) fn getattr_presence<'db>(
@@ -781,25 +867,42 @@ pub(super) fn declaration_diagnostics(
     db: &Database,
     file: starpls_common::File,
 ) -> Vec<Diagnostic> {
-    if !file.is_type_interface(db)
-        || !db
-            .environment()
-            .type_interfaces(db)
-            .values()
-            .any(|(_, interface)| *interface == file)
-    {
+    if !file.is_type_interface(db) {
         return Vec::new();
     }
+    let mapped = db
+        .environment()
+        .type_interfaces(db)
+        .values()
+        .any(|(_, interface)| *interface == file);
     let program = db.starlark_program_file(file);
     let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
-    let model = SemanticModel::new(db, program);
+    let index = ty_python_core::semantic_index(db, program);
     let mut diagnostics = Vec::new();
     for statement in parsed.suite() {
         let Stmt::FunctionDef(function) = statement else {
             continue;
         };
-        let definition = function.definition(&model);
+        let Some([definition]) = index.try_definitions(function.into()) else {
+            continue;
+        };
+        let definition = *definition;
         if !is_declaration(db, definition) {
+            continue;
+        }
+        if function.type_params.is_some() && record_signature(db, definition).is_err() {
+            let mut diagnostic = Diagnostic::new(
+                DiagnosticId::Lint(super::diagnostics::INVALID_PROVIDER_INTERFACE.name()),
+                Severity::Error,
+                "A recursive generic provider declaration is not supported",
+            );
+            diagnostic.annotate(Annotation::primary(
+                Span::from(file.source).with_range(function.name.range()),
+            ));
+            diagnostics.push(diagnostic);
+            continue;
+        }
+        if !mapped {
             continue;
         }
         let valid_source =
@@ -934,6 +1037,251 @@ absent_result = getattr(value, "absent", None)
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
             assert!(!diagnostics.is_empty(), "accepted {invalid}");
         }
+    }
+
+    #[test]
+    fn generic_provider_fields_follow_constructor_arguments() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "info.bzl",
+            "Info = provider(fields=['value', 'pieces'])\nOther = provider(fields=['value', 'pieces'])\nEnvelope = provider(fields=['inner'])\nDefaulted = provider(fields=['value'])\nBounded = provider(fields=['value'])\n",
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"
+def Info[T](*, value: T, pieces: depset[tuple[str, T]]) -> record[{"value": T, "pieces": depset[tuple[str, T]]}]: ...
+def Other[T](*, value: T, pieces: depset[tuple[str, T]]) -> record[{"value": T, "pieces": depset[tuple[str, T]]}]: ...
+def Envelope[T](*, inner: Info[T]) -> record[{"inner": Info[T]}]: ...
+def Defaulted[T = str](*, value: T) -> record[{"value": T}]: ...
+def Bounded[T: str](*, value: T) -> record[{"value": T}]: ...
+"#,
+        );
+        let valid = r#"
+load("info.bzl", "Info", "Other", "Envelope", "Defaulted", "Bounded")
+alias = Info
+value = alias(value="ok", pieces=depset([("source", "piece")]))
+text: str = value.value
+pieces: list[tuple[str, str]] = value.pieces.to_list()
+def consume(value: Info[str]) -> str:
+    return value.value
+def readonly(value: Info[object]) -> object:
+    return value.value
+consume(value)
+readonly(value)
+envelope: Envelope[str] = Envelope(inner=value)
+nested: str = envelope.inner.value
+default_value: Defaulted = Defaulted(value="default")
+bounded_value: Bounded[str] = Bounded(value="bounded")
+absent = getattr(value, "absent", None)
+def absent_union(value: Info[str] | Info[int]) -> None:
+    return getattr(value, "absent", None)
+def from_target(target: Target):
+    erased = target[Info].value
+    defaulted = target[Defaulted].value
+    return erased, defaulted
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [source, interface, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for variable in ["erased", "defaulted"] {
+            let hover = analysis
+                .snapshot()
+                .hover(FilePosition {
+                    file_id: caller,
+                    pos: (valid.find(&format!("{variable} =")).unwrap() as u32).into(),
+                })
+                .unwrap()
+                .unwrap();
+            assert!(
+                hover.contents.value.contains("Unknown") && !hover.contents.value.contains("Any"),
+                "{}",
+                hover.contents.value
+            );
+        }
+        for (invalid, expected) in [
+            ("wrong: int = value.value", "invalid-assignment"),
+            (
+                "wrong: list[tuple[str, int]] = value.pieces.to_list()",
+                "invalid-assignment",
+            ),
+            (
+                "consume(Info(value=1, pieces=depset([('source', 2)])))",
+                "invalid-argument-type",
+            ),
+            (
+                "consume(Other(value='same fields', pieces=depset([])))",
+                "invalid-argument-type",
+            ),
+            (
+                "consume(struct(value='same fields', pieces=depset([])))",
+                "invalid-argument-type",
+            ),
+            ("value.value = 'changed'", "invalid-assignment"),
+            ("wrong: Info[str, int] = value", "invalid-type-arguments"),
+            (
+                "wrong_default: Defaulted = Defaulted(value=42)",
+                "invalid-assignment",
+            ),
+            (
+                "def bad_bound(value: Bounded[int]) -> None: pass",
+                "invalid-type-arguments",
+            ),
+        ] {
+            analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].id().as_str(),
+                expected,
+                "{invalid}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(caller, valid.into());
+        let hover = analysis
+            .snapshot()
+            .hover(FilePosition {
+                file_id: caller,
+                pos: (valid.find("absent =").unwrap() as u32).into(),
+            })
+            .unwrap()
+            .unwrap();
+        assert!(
+            hover.contents.value.contains(": None\n"),
+            "{}",
+            hover.contents.value
+        );
+    }
+
+    #[test]
+    fn recursive_generic_provider_fields_are_diagnosed() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let interface = fixture.add_file(&mut analysis.db, "info.bzli", "");
+        loader.add_files_from_fixture(&fixture);
+        for source in [
+            "def Node[T](*, value: T, child: Node[T] | None) -> record[{'value': T, 'child': Node[T] | None}]: ...\n",
+            "def Left[T](*, value: T, right: Right[T] | None) -> record[{'value': T, 'right': Right[T] | None}]: ...\ndef Right[T](*, value: T, left: Left[T] | None) -> record[{'value': T, 'left': Left[T] | None}]: ...\n",
+            "def Node[T](*, value: T, child: Node | None) -> record[{'value': T, 'child': Node | None}]: ...\n",
+            "type Child[T] = Node[T]\ndef Node[T](*, value: T, child: Child[T] | None) -> record[{'value': T, 'child': Child[T] | None}]: ...\n",
+            "def Left[T](*, value: T, right: Right | None) -> record[{'value': T, 'right': Right | None}]: ...\ndef Right[T](*, value: T, left: Left | None) -> record[{'value': T, 'left': Left | None}]: ...\n",
+        ] {
+            analysis.update_file(interface, source.into());
+            let diagnostics = analysis.snapshot().diagnostics(interface).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic|
+                    diagnostic.id().as_str() == "invalid-provider-interface"
+                    && diagnostic.headline_message().contains("recursive")
+                ),
+                "{source}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn generic_provider_initializers_and_raw_constructors_preserve_fields() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let valid = r#"
+def _init(value):
+    return {"value": value, "values": [value]}
+Info, raw = provider(fields=["value", "values"], init=_init)
+_init("direct")
+"#;
+        let source = fixture.add_file(&mut analysis.db, "info.bzl", valid);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"
+def Info[T](value: T) -> record[{"value": T, "values": list[T]}]: ...
+"#,
+        );
+        let caller_source = r#"
+load("info.bzl", "Info", "raw")
+value = Info("text")
+texts: list[str] = ["text"]
+raw_value = raw(value="text", values=texts)
+contextual: Info[str] = Info("other")
+text: str = value.value
+raw_text: str = raw_value.value
+def accept(value: Info[str]) -> list[str]:
+    return value.values
+accept(value)
+accept(raw_value)
+accept(contextual)
+def mutate(value: Info[object]) -> None:
+    value.values.append(42)
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", caller_source);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [source, interface, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (invalid, expected) in [
+            ("wrong: int = raw_value.value", "invalid-assignment"),
+            (
+                "accept(raw(value=42, values=[42]))",
+                "invalid-argument-type",
+            ),
+            ("raw(value=42, values=texts)", "invalid-argument-type"),
+            ("mutate(value)", "invalid-argument-type"),
+        ] {
+            analysis.update_file(caller, format!("{caller_source}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].id().as_str(),
+                expected,
+                "{invalid}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(source, valid.replacen("[value]", "[42]", 1));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let mut ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        ids.sort_unstable();
+        assert_eq!(
+            ids,
+            ["invalid-argument-type", "invalid-return-type"],
+            "{diagnostics:?}"
+        );
     }
 
     #[test]

@@ -35,6 +35,7 @@ use ty_python_semantic::types::ParameterKind;
 use ty_python_semantic::types::Parameters;
 use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
+use ty_python_semantic::types::TypeDefinition;
 use ty_python_semantic::types::TypedDictFieldBuilder;
 use ty_python_semantic::types::TypedDictOpenness;
 use ty_python_semantic::types::TypedDictSchema;
@@ -1867,12 +1868,19 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                 }
             })
             .chain(super::providers::raw_extra_parameters(db, call, class));
-        let instance = super::providers::constructor_instance(db, class, &environment)
-            .or_else(|| class.to_instance_approximation(db, &environment))?;
-        let raw = Type::single_callable(
-            db,
-            Signature::new(Parameters::standard(parameters), instance),
-        );
+        let parameters = Parameters::standard(parameters);
+        let definition = class.definition(db, &environment)?;
+        let signature = match definition {
+            TypeDefinition::Function(definition) => {
+                let signature = super::providers::constructor_signature(db, definition)?;
+                signature.with_parameters(parameters)
+            }
+            _ => {
+                let instance = class.to_instance_approximation(db, &environment)?;
+                Signature::new(parameters, instance)
+            }
+        };
+        let raw = Type::single_callable(db, signature);
         return Some(Type::heterogeneous_tuple(db, &environment, [class, raw]));
     }
     let mut fields: Vec<ProvidedField<'_>> = Vec::new();

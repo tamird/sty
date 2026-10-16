@@ -188,13 +188,30 @@ pub(super) fn type_application<'db>(
             return Some(Type::unknown());
         }
         let function = function?;
-        if function.type_params.is_some() || !function.decorator_list.is_empty() {
+        if !function.decorator_list.is_empty() {
             context.report_invalid_type_form(
                 function.name.range(),
-                "Provider constructor declarations cannot have type parameters or decorators",
+                "Provider constructor declarations cannot have decorators",
             );
         }
-        return super::providers::instance(db, program, function);
+        let instance = super::providers::instance(db, program, function)?;
+        if function.type_params.is_none() {
+            return Some(instance);
+        }
+        let members = Type::protocol_with_readonly_members(
+            db,
+            &environment,
+            schema
+                .items(db)
+                .iter()
+                .map(|(name, field)| (name.as_str(), field.declared_type())),
+        );
+        return Some(IntersectionType::from_two_elements(
+            db,
+            &environment,
+            instance,
+            members,
+        ));
     }
     if !is_struct {
         return Some(shape);

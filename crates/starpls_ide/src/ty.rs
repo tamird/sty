@@ -487,7 +487,8 @@ impl ty_python_semantic::Db for Database {
         application: ty_python_semantic::provided::ProvidedTypeApplication<'_, 'db>,
         context: &mut dyn ty_python_semantic::provided::TypeExpressionContext<'db>,
     ) -> Option<Type<'db>> {
-        shapes::type_application(self, application, context)
+        providers::type_application(self, &application, context)
+            .or_else(|| shapes::type_application(self, application, context))
     }
 
     fn provided_parameter_type<'db>(
