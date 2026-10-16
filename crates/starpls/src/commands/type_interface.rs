@@ -58,6 +58,7 @@ impl TypeInterfaceOptions {
                     type_interfaces,
                     stub_packages,
                     rules: _,
+                    analysis: _,
                 } = config;
                 !type_interfaces.is_empty() || !stub_packages.is_empty()
             })
@@ -71,6 +72,7 @@ impl TypeInterfaceOptions {
             stub_packages,
             type_interfaces,
             rules,
+            analysis,
         } = super::project_config::ProjectConfig::load(loader, workspace)?;
         let rules = starpls_ide::DiagnosticRules::from_settings(&rules).with_context(|| {
             format!(
@@ -147,6 +149,7 @@ impl TypeInterfaceOptions {
         Ok(PreparedInterfaces {
             registrations,
             rules,
+            analysis,
         })
     }
 }
@@ -155,6 +158,7 @@ impl TypeInterfaceOptions {
 pub(crate) struct PreparedInterfaces {
     registrations: Vec<Registration>,
     rules: starpls_ide::DiagnosticRules,
+    analysis: super::project_config::AnalysisOptions,
 }
 
 impl PreparedInterfaces {
@@ -172,6 +176,7 @@ impl PreparedInterfaces {
         let Self {
             registrations,
             rules,
+            analysis: analysis_options,
         } = self;
         let mut mappings = Vec::with_capacity(registrations.len());
         for Registration {
@@ -201,6 +206,7 @@ impl PreparedInterfaces {
         }
         analysis.set_type_interfaces(mappings)?;
         analysis.set_rules(rules);
+        analysis.set_strict_generic_narrowing(analysis_options.strict_generic_narrowing);
         Ok(())
     }
 }
@@ -292,6 +298,7 @@ mod tests {
                 origin: "test mapping".into(),
             }],
             rules: Default::default(),
+            analysis: Default::default(),
         }
         .install(&mut analysis, &root)
         .unwrap();
@@ -319,13 +326,13 @@ mod tests {
     }
 
     #[test]
-    fn local_configuration_installs_interfaces_and_diagnostic_policy() {
+    fn local_configuration_installs_interfaces_and_analysis_policy() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("local-type-configuration");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(
             root.join("source.bzl"),
-            "def convert(value): return value + 1\ndef unchecked(value: list): return value\n",
+            "def convert(value): return value + 1\ndef unchecked(value: list): return value\ndef inspect(value: object) -> None:\n    if type(value) == 'list':\n        value.append(42)\n",
         )
         .unwrap();
         std::fs::write(
@@ -368,6 +375,8 @@ mod tests {
             "[rules]\nmisspelled = 'error'\n",
             "[rules]\nmissing-type-argument = 'warning'\n",
             "[unknown]\n",
+            "[analysis]\nmisspelled = true\n",
+            "[analysis]\nstrict-generic-narrowing = 'yes'\n",
         ] {
             std::fs::write(root.join("sty.toml"), invalid).unwrap();
             assert!(options.prepare(&loader, &root).is_err());
@@ -384,6 +393,34 @@ mod tests {
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
+        let strict = format!("{config}\n[analysis]\nstrict-generic-narrowing = true\n");
+        std::fs::write(root.join("sty.toml"), strict).unwrap();
+        options
+            .prepare(&loader, &root)
+            .unwrap()
+            .install(&mut analysis, &root)
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let mut ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+        ids.sort_unstable();
+        assert_eq!(
+            ids,
+            [
+                "invalid-argument-type",
+                "missing-type-argument",
+                "unsupported-operator"
+            ],
+            "{diagnostics:?}"
+        );
+        // Removing the setting restores ordinary inference without changing source.
+        std::fs::write(root.join("sty.toml"), config).unwrap();
+        options
+            .prepare(&loader, &root)
+            .unwrap()
+            .install(&mut analysis, &root)
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
         std::fs::remove_dir_all(root).unwrap();
     }
 

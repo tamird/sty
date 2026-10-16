@@ -151,6 +151,18 @@ rules. Code can narrow that value before using operations that require a more
 specific type. Inference retains ty's distinction between `object`, `Any`, and
 `Unknown`.
 
+The `analysis` section exposes ty's stricter generic narrowing:
+
+```toml
+[analysis]
+strict-generic-narrowing = true
+```
+
+After a runtime check establishes that an `object` is a list, its elements can
+be read as `object`. Mutating that list requires evidence of its element type.
+This setting applies to CLI and editor analysis and is independent of diagnostic
+severity. It preserves existing `Any` in values that were already gradual.
+
 ty's `unsound-assignment` and `unsound-return-statement` check values crossing
 fully static declared variable and return boundaries. They can be enabled while
 unannotated code still uses gradual types.

@@ -39,14 +39,13 @@ mod strictness;
 mod support;
 
 pub(crate) use diagnostics::check;
+pub(crate) use diagnostics::CheckSettings;
 pub use diagnostics::DiagnosticRules;
-pub(crate) use diagnostics::DiagnosticSettings;
 pub(crate) use factory::Documentation;
 pub(crate) use support::file_system;
 
 pub(crate) struct SemanticSettings {
     program: ProgramSettings,
-    analysis: AnalysisSettings,
 }
 
 impl SemanticSettings {
@@ -54,10 +53,7 @@ impl SemanticSettings {
         let mut program = ProgramSettings::empty(vendored);
         // Semantic node identities must use the same parse as starpls_common::parsed_module.
         program.python_version.version = starpls_common::PARSER_VERSION;
-        Self {
-            program,
-            analysis: AnalysisSettings::default(),
-        }
+        Self { program }
     }
 }
 
@@ -654,7 +650,7 @@ impl ty_python_semantic::Db for Database {
     }
 
     fn rule_selection(&self, _file: File) -> &RuleSelection {
-        self.diagnostic_settings
+        self.check_settings
             .expect("database initialization is complete")
             .rules(self)
             .selection(self.environment().options(self).use_code_flow_analysis)
@@ -665,7 +661,9 @@ impl ty_python_semantic::Db for Database {
     }
 
     fn analysis_settings(&self, _file: File) -> &AnalysisSettings {
-        &self.semantic.analysis
+        self.check_settings
+            .expect("database initialization is complete")
+            .analysis(self)
     }
 
     fn dependency_metadata(&self, _file: File) -> Option<&DependencyMetadata> {

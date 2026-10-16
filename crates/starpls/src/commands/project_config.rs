@@ -16,6 +16,15 @@ pub(super) struct ProjectConfig {
     pub type_interfaces: BTreeMap<PathBuf, PathBuf>,
     #[serde(default)]
     pub rules: BTreeMap<String, String>,
+    #[serde(default)]
+    pub analysis: AnalysisOptions,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub(super) struct AnalysisOptions {
+    #[serde(default)]
+    pub strict_generic_narrowing: bool,
 }
 
 impl ProjectConfig {

@@ -188,9 +188,11 @@ impl DiagnosticRules {
 }
 
 #[salsa::input]
-pub(crate) struct DiagnosticSettings {
+pub(crate) struct CheckSettings {
     #[returns(ref)]
     pub rules: DiagnosticRules,
+    #[returns(ref)]
+    pub analysis: ty_python_semantic::AnalysisSettings,
 }
 
 fn default_rules(use_code_flow_analysis: bool) -> RuleSelection {

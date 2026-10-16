@@ -90,7 +90,7 @@ pub(crate) struct Database {
     loader: Arc<dyn FileLoader>,
     environment: Option<Environment>,
     semantic: Arc<ty::SemanticSettings>,
-    diagnostic_settings: Option<ty::DiagnosticSettings>,
+    check_settings: Option<ty::CheckSettings>,
     #[cfg(test)]
     executions: Arc<std::sync::atomic::AtomicUsize>,
     // Drop shared source ownership before Salsa wakes a cancelled writer.
@@ -112,7 +112,7 @@ impl ruff_db::Db for Database {
             loader: _,
             environment: _,
             semantic: _,
-            diagnostic_settings: _,
+            check_settings: _,
             #[cfg(test)]
                 executions: _,
         } = self;
@@ -127,7 +127,7 @@ impl ruff_db::Db for Database {
             loader: _,
             environment: _,
             semantic: _,
-            diagnostic_settings: _,
+            check_settings: _,
             #[cfg(test)]
                 executions: _,
         } = self;
@@ -142,7 +142,7 @@ impl ruff_db::Db for Database {
             loader: _,
             environment: _,
             semantic: _,
-            diagnostic_settings: _,
+            check_settings: _,
             #[cfg(test)]
                 executions: _,
         } = self;
@@ -161,7 +161,7 @@ impl starpls_common::Db for Database {
             loader: _,
             environment: _,
             semantic: _,
-            diagnostic_settings: _,
+            check_settings: _,
             #[cfg(test)]
                 executions: _,
         } = self;
@@ -243,9 +243,19 @@ pub struct Analysis {
 }
 
 impl Analysis {
+    pub fn set_strict_generic_narrowing(&mut self, enabled: bool) {
+        let settings = self
+            .db
+            .check_settings
+            .expect("database initialization is complete");
+        let mut analysis = settings.analysis(&self.db).clone();
+        analysis.strict_generic_narrowing = enabled;
+        settings.set_analysis(&mut self.db).to(analysis);
+    }
+
     pub fn set_rules(&mut self, rules: DiagnosticRules) {
         self.db
-            .diagnostic_settings
+            .check_settings
             .expect("database initialization is complete")
             .set_rules(&mut self.db)
             .to(rules);
@@ -276,7 +286,7 @@ impl Analysis {
             loader,
             environment: None,
             semantic,
-            diagnostic_settings: None,
+            check_settings: None,
             #[cfg(test)]
             executions: Default::default(),
         };
@@ -290,7 +300,11 @@ impl Analysis {
             })));
         }
         db.environment = Some(Environment::initialize(&db, options));
-        db.diagnostic_settings = Some(ty::DiagnosticSettings::new(&db, DiagnosticRules::default()));
+        db.check_settings = Some(ty::CheckSettings::new(
+            &db,
+            DiagnosticRules::default(),
+            ty_python_semantic::AnalysisSettings::default(),
+        ));
         for dialect in [Dialect::Standard, Dialect::Bazel] {
             db.set_builtin_defs(dialect, Builtins::default(), Default::default())
                 .expect("bundled native declarations are valid");
