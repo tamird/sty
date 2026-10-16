@@ -1696,7 +1696,7 @@ def check_literal_keys(attrs: dict[_starpls_typing.Literal["dep"], _starpls_type
 relative = label.relative(":other")
 name = json.encode(None)
 computed = getattr(struct(field='value'), name)
-called = computed()
+called = computed.upper()
 "#;
         let file = analysis
             .open_document(
@@ -1731,8 +1731,8 @@ called = computed()
             *name,
             ty_python_semantic::types::KnownClass::Str.to_instance(db, &environment)
         );
-        assert_eq!(computed.display(db, &environment).to_string(), "Any");
-        assert_eq!(called, computed);
+        assert_eq!(computed.string_literal_value(db), Some("value"));
+        assert_eq!(called, name);
         assert_eq!(
             label.display(db, &model.program_environment()).to_string(),
             "Label"

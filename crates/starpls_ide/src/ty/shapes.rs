@@ -8,11 +8,14 @@ use ruff_python_ast::ExprDict;
 use ruff_python_ast::HasNodeIndex;
 use ruff_python_ast::Stmt;
 use ruff_text_size::Ranged;
+use starpls_hir::Db as _;
 use ty_python_core::definition::Definition;
 use ty_python_semantic::provided::ProvidedGetattrPresence;
 use ty_python_semantic::provided::ProvidedGetattrResult;
 use ty_python_semantic::provided::ProvidedTypeApplication;
 use ty_python_semantic::provided::TypeExpressionContext;
+use ty_python_semantic::types::CheckedArgument;
+use ty_python_semantic::types::CheckedCall;
 use ty_python_semantic::types::IntersectionType;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Type;
@@ -37,6 +40,54 @@ pub(super) fn mapping_argument(expression: &Expr) -> Option<(&Expr, &ExprDict, b
         },
         _ => None,
     }
+}
+
+/// A dynamic field name preserves a struct's uniform value bound.
+pub(super) fn getattr_call_result<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+) -> Option<Type<'db>> {
+    if call.has_binding_errors() {
+        return None;
+    }
+    let file = db.starlark_file(call.file())?;
+    let definitions = db.get_builtin_defs(&file.dialect);
+    let structure = definitions
+        .builtins(db)
+        .r#type
+        .iter()
+        .find(|class| class.name == "struct")?;
+    // Older hosts expose methods such as to_json outside the field-value bound.
+    if !structure.field.is_empty() {
+        return None;
+    }
+    let CheckedArgument::Value {
+        ty: receiver,
+        expression: _,
+    } = call.argument("x")
+    else {
+        return None;
+    };
+    let environment = ProgramEnvironment::from_file(call.file());
+    let instance = db
+        .annotation_builtin(file, "struct")?
+        .to_instance_approximation(db, &environment)?;
+    let (class, _) = instance.class_specialization(db, &environment)?;
+    let specialization = receiver.base_class_specialization(db, &environment, class)?;
+    let [value, _shape] = specialization.types(db) else {
+        return None;
+    };
+    let default = match call.argument("default") {
+        CheckedArgument::Omitted => Type::Never,
+        CheckedArgument::Value { ty, expression: _ } => ty,
+        CheckedArgument::Indeterminate => return None,
+    };
+    Some(UnionType::from_two_elements(
+        db,
+        &environment,
+        *value,
+        default,
+    ))
 }
 
 pub(super) fn getattr_result<'db>(
@@ -257,6 +308,9 @@ pub(super) fn type_application<'db>(
 #[cfg(test)]
 mod tests {
     use starpls_hir::Fixture;
+    use ty_python_semantic::types::KnownClass;
+    use ty_python_semantic::types::Type;
+    use ty_python_semantic::ProgramEnvironment;
 
     use crate::Analysis;
     use crate::FilePosition;
@@ -351,6 +405,118 @@ def wrong(a: dict[{"name": str}], b: dict[{"name": int}]):
             diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn dynamic_struct_lookup_preserves_the_value_bound() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("non-static-type".into(), "error".into()),
+                    ("unsound-return-statement".into(), "error".into()),
+                ]
+                .into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def homogeneous(value: struct[int], name: str) -> int:
+    return getattr(value, name)
+def heterogeneous(value: struct[{"count": int, "name": str}], name: str) -> int | str:
+    return getattr(value, name)
+def precise(value: struct[{"count": int, "name": str}]) -> int:
+    return getattr(value, "count")
+def defaulted(value: struct[int], name: str) -> int | None:
+    return getattr(value, name, None)
+def opaque(value: struct[object], name: str) -> object:
+    return getattr(value, name)
+"#;
+        let file = fixture.add_file(&mut analysis.db, "main.bzl", source);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        // Both struct parameters are covariant, so materialization is carried
+        // by the projected value, including invariant containers nested in it.
+        let db = &analysis.db;
+        let environment = ProgramEnvironment::from_file(db.starlark_program_file(file));
+        let Type::ClassLiteral(class) = db.annotation_builtin(file, "struct").unwrap() else {
+            panic!("expected the native struct class");
+        };
+        let list = KnownClass::List.to_specialized_instance(db, &environment, &[Type::unknown()]);
+        let receiver = Type::from(class.apply_specialization(db, |parameters| {
+            parameters.specialize(db, vec![list, Type::unknown()])
+        }))
+        .to_instance_approximation(db, &environment)
+        .unwrap();
+        let (class, _) = receiver.class_specialization(db, &environment).unwrap();
+        let specialization = receiver
+            .top_materialization(db, &environment)
+            .base_class_specialization(db, &environment, class)
+            .unwrap();
+        let [value, _shape] = specialization.types(db) else {
+            panic!("expected struct's two type arguments");
+        };
+        assert_eq!(*value, list.top_materialization(db, &environment));
+        assert!(!value.is_equivalent_to(db, &environment, list));
+        for invalid in [
+            "def wrong(value: struct[int], name: str) -> str:\n    return getattr(value, name)",
+            "def omitted(value: struct[int], name: str) -> int:\n    return getattr(value, name, None)",
+            "def heterogeneous(value: struct[{'count': int, 'name': str}], name: str) -> int:\n    return getattr(value, name)",
+        ] {
+            analysis.update_file(file, invalid.to_owned());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        }
+        for receiver in ["object", "struct[int] | str"] {
+            analysis.update_file(
+                file,
+                format!("def unknown(value: {receiver}, name: str) -> object:\n    return getattr(value, name)\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic.headline_message().contains("call result")
+                }),
+                "{receiver}: {diagnostics:?}"
+            );
+        }
+        builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "struct")
+            .unwrap()
+            .field
+            .push(starpls_bazel::builtin::Value {
+                name: "to_json".into(),
+                callable: Some(starpls_bazel::builtin::Callable {
+                    return_type: "string".into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.update_file(file, source.to_owned());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == "non-static-type"
+                    && diagnostic.headline_message().contains("call result")
+            }),
             "{diagnostics:?}"
         );
     }

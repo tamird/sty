@@ -476,7 +476,9 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
         BuiltinFunction::Struct => structure(db, call),
         BuiltinFunction::Select => selector(db, call),
         BuiltinFunction::StructGetattr => None,
-        BuiltinFunction::Getattr => call.getattr_return_type(db),
+        BuiltinFunction::Getattr => call
+            .getattr_return_type(db)
+            .or_else(|| super::shapes::getattr_call_result(db, call)),
         BuiltinFunction::Provider => provider(db, call),
         BuiltinFunction::Transition => descriptor(
             db,
