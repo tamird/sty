@@ -614,19 +614,53 @@ def Initialized(value: str, count: int = ...) -> record[{"value": str, "count": 
     }
 
     #[test]
-    fn sorted_keys_preserve_comparable_result_types() {
+    fn comparison_keys_preserve_comparable_result_types() {
         let (mut analysis, fixture) = Analysis::from_single_file_fixture(
-            "values = sorted([3, 1])\nkeys = sorted([3, 1], key=lambda value: str(value))\n",
+            r#"
+values = sorted([3, 1])
+keys = sorted([3, 1], key=lambda value: str(value))
+pairs: list[tuple[str, list[str]]] = sorted([("key", ["value"])])
+records = sorted([struct(rank=2), struct(rank=1)], key=lambda value: value.rank)
+minimum: int = min([3, 1], key=lambda value: str(value))
+maximum: int = max([3, 1], key=lambda value: str(value))
+first: int = min(3, 1, key=lambda value: str(value))
+last: int = max(3, 1, key=lambda value: str(value))
+"#,
         );
         analysis.set_rules(rules(&["non-static-type"]));
         let file = fixture.main_file();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         analysis.set_rules(DiagnosticRules::default());
-        analysis.update_file(file, "sorted([3, 1], key=lambda value: None)\n".into());
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        for (call, expected) in [
+            (
+                "sorted([3, 1], key=lambda value: None)",
+                "no-matching-overload",
+            ),
+            (
+                "min([3, 1], key=lambda value: None)",
+                "no-matching-overload",
+            ),
+            (
+                "max([3, 1], key=lambda value: None)",
+                "no-matching-overload",
+            ),
+            (
+                "sorted([struct(rank=1), struct(rank=2)])",
+                "invalid-argument-type",
+            ),
+            (
+                "sorted([{'rank': 1}, {'rank': 2}], key=None)",
+                "no-matching-overload",
+            ),
+            ("min(3, 1, key=lambda value: None)", "no-matching-overload"),
+            ("max(3, 1, key=lambda value: None)", "no-matching-overload"),
+        ] {
+            analysis.update_file(file, format!("{call}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{call}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected, "{call}");
+        }
     }
 
     #[test]

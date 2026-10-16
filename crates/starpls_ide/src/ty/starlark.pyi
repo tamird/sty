@@ -6,7 +6,7 @@ They do not describe or rewrite executable Starlark source.
 
 import builtins as _builtins
 import typing as _typing
-from _typeshed import SupportsRichComparison as _Comparable, SupportsRichComparisonT as _ComparableT
+from _typeshed import SupportsRichComparisonT as _ComparableT
 
 _T = _typing.TypeVar("_T")
 _U = _typing.TypeVar("_U")
@@ -29,10 +29,19 @@ def enumerate(
 
 def reversed(sequence: _typing.Iterable[_T], /) -> _builtins.list[_T]: ...
 
+@_typing.overload
+def sorted(
+    iterable: _typing.Iterable[_ComparableT],
+    /,
+    key: None = None,
+    *,
+    reverse: _builtins.bool = False,
+) -> _builtins.list[_ComparableT]: ...
+@_typing.overload
 def sorted(
     iterable: _typing.Iterable[_T],
     /,
-    key: _typing.Callable[[_T], _ComparableT] | None = None,
+    key: _typing.Callable[[_T], _ComparableT],
     *,
     reverse: _builtins.bool = False,
 ) -> _builtins.list[_T]: ...
@@ -40,20 +49,20 @@ def sorted(
 @_typing.overload
 def min(first: _ComparableT, second: _ComparableT, /, *args: _ComparableT, key: None = None) -> _ComparableT: ...
 @_typing.overload
-def min(first: _T, second: _T, /, *args: _T, key: _typing.Callable[[_T], _Comparable]) -> _T: ...
+def min(first: _T, second: _T, /, *args: _T, key: _typing.Callable[[_T], _ComparableT]) -> _T: ...
 @_typing.overload
 def min(iterable: _typing.Iterable[_ComparableT], /, *, key: None = None) -> _ComparableT: ...
 @_typing.overload
-def min(iterable: _typing.Iterable[_T], /, *, key: _typing.Callable[[_T], _Comparable]) -> _T: ...
+def min(iterable: _typing.Iterable[_T], /, *, key: _typing.Callable[[_T], _ComparableT]) -> _T: ...
 
 @_typing.overload
 def max(first: _ComparableT, second: _ComparableT, /, *args: _ComparableT, key: None = None) -> _ComparableT: ...
 @_typing.overload
-def max(first: _T, second: _T, /, *args: _T, key: _typing.Callable[[_T], _Comparable]) -> _T: ...
+def max(first: _T, second: _T, /, *args: _T, key: _typing.Callable[[_T], _ComparableT]) -> _T: ...
 @_typing.overload
 def max(iterable: _typing.Iterable[_ComparableT], /, *, key: None = None) -> _ComparableT: ...
 @_typing.overload
-def max(iterable: _typing.Iterable[_T], /, *, key: _typing.Callable[[_T], _Comparable]) -> _T: ...
+def max(iterable: _typing.Iterable[_T], /, *, key: _typing.Callable[[_T], _ComparableT]) -> _T: ...
 
 @_typing.overload
 def zip() -> _builtins.list[_builtins.tuple[()]]: ...
