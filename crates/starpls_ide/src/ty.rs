@@ -26,6 +26,7 @@ use ty_site_packages::PythonVersionWithSource;
 
 use crate::Database;
 
+mod annotations;
 mod context;
 mod diagnostics;
 mod factory;

@@ -80,6 +80,21 @@ pub(super) static INVALID_FUNCTION_INTERFACE: LintMetadata = lint(
     "invalid-function-interface",
     "Reports function implementations that cannot satisfy their stub declarations.",
 );
+pub(super) static MISSING_PARAMETER_ANNOTATION: LintMetadata = LintMetadata {
+    default_level: Level::Ignore,
+    ..lint(
+        "missing-parameter-annotation",
+        "Reports function parameters without a type contract.",
+    )
+};
+pub(super) static MISSING_RETURN_ANNOTATION: LintMetadata = LintMetadata {
+    default_level: Level::Ignore,
+    ..lint(
+        "missing-return-annotation",
+        "Reports functions without a return type contract.",
+    )
+};
+
 pub(super) fn registry() -> &'static LintRegistry {
     static REGISTRY: LazyLock<LintRegistry> = LazyLock::new(|| {
         let mut builder =
@@ -92,6 +107,8 @@ pub(super) fn registry() -> &'static LintRegistry {
             &INVALID_PROVIDER_INTERFACE,
             &INVALID_BUILD_ANNOTATION,
             &INVALID_FUNCTION_INTERFACE,
+            &MISSING_PARAMETER_ANNOTATION,
+            &MISSING_RETURN_ANNOTATION,
         ] {
             builder.register_lint(lint);
         }
@@ -203,6 +220,7 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
     let model = SemanticModel::new(db, program_file);
     diagnostics.extend(load::diagnostics(db, program_file));
     diagnostics.extend(super::interface::diagnostics(db, file));
+    diagnostics.extend(super::annotations::diagnostics(db, file));
     if !options.allow_unused_definitions {
         let index = semantic_index(db, program_file);
         let environment = model.program_environment();

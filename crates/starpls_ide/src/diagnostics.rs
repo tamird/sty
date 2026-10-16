@@ -45,6 +45,34 @@ mod tests {
     }
 
     #[test]
+    fn annotation_policy_accepts_generated_bazel_contracts() {
+        let source = "def implementation(ctx) -> None:\n    print(ctx.attr.value)\ndef unregistered(ctx) -> None:\n    print(ctx)\nexample = rule(implementation=implementation, attrs={'value': attr.string()})\n";
+        let (mut analysis, fixture) = native_analysis(source);
+        let environment = analysis.db.environment();
+        let mut options = environment.options(&analysis.db).clone();
+        options.infer_ctx_attributes = true;
+        environment.set_options(&mut analysis.db).to(options);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("missing-parameter-annotation".into(), "error".into()),
+                    ("missing-return-annotation".into(), "error".into()),
+                ]
+                .into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "missing-parameter-annotation");
+        let range = diagnostics[0].range().unwrap();
+        assert!(range.start().to_usize() > source.find("def unregistered").unwrap());
+    }
+
+    #[test]
     fn selector_runtime_kind_ordinary_diagnostics() {
         let mut failures = Vec::new();
         for (body, parameters, ordinary_error) in [

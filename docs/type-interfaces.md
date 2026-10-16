@@ -94,6 +94,32 @@ and selected stub packages; duplicate registrations are configuration errors.
 The `[rules]` table accepts ty and sty diagnostic names with levels `ignore`,
 `warn`, or `error`. Unknown names and levels are configuration errors.
 
+### Requiring annotations
+
+Projects can require type contracts at function boundaries:
+
+```toml
+[rules]
+missing-parameter-annotation = "error"
+missing-return-annotation = "error"
+missing-type-argument = "error"
+```
+
+`missing-parameter-annotation` checks every named parameter, including `*args`
+and `**kwargs`. `missing-return-annotation` checks function returns. Both include
+private and nested functions and are disabled by default. Inline annotations,
+type comments, registered `.bzli` annotations, and generated Bazel contracts
+satisfy these rules. Implicit method receivers use ty's inferred receiver type.
+Local variables continue to use inference. Projects that prefer inferred returns
+can enable only the parameter rule.
+
+ty's `missing-type-argument` rejects bare generic annotations such as `list`.
+Explicit `Any` still satisfies an annotation
+requirement; gradual types retain ty's usual compatibility behavior.
+
+Suppressions use `# ty: ignore[rule-name]`. Unused suppressions are errors by
+default, including suppressions made obsolete by adding an annotation.
+
 ## BUILD annotations
 
 An explicit mapping such as `BUILD.bazel=BUILD.bzli` applies variable annotations
