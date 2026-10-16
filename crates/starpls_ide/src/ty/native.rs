@@ -148,6 +148,11 @@ fn refine_builtin_signature(value: &mut Value) {
         "rule" => callable.return_type = "rule".to_owned(),
         // Bazel documents a mutable list, which the inventory calls a sequence.
         "glob" => callable.return_type = "list of strings".to_owned(),
+        "visibility" => {
+            if let [input] = callable.param.as_mut_slice() {
+                input.r#type = "string; or list of strings".to_owned();
+            }
+        }
         _ => {}
     }
 }
@@ -2383,6 +2388,52 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
             assert!(diagnostics.iter().all(|diagnostic| usize::from(
                 diagnostic.range().unwrap().start()
             ) >= source.len()));
+        }
+    }
+
+    #[test]
+    fn visibility_requires_package_strings() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())]
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let file = analysis
+            .open_document(
+                Path::new("/visibility.bzl"),
+                Dialect::Bazel,
+                None,
+                "visibility(['//lib/...', '//test/...'])\n".into(),
+                1,
+            )
+            .unwrap();
+        for value in [
+            "'public'",
+            "'//lib/...'",
+            "[]",
+            "['//lib/...', '//test/...']",
+        ] {
+            analysis.update_file(file, format!("visibility({value})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{value}: {diagnostics:?}");
+        }
+        analysis.set_rules(crate::DiagnosticRules::default());
+        for value in ["42", "[42]", "('//lib/...',)", "None"] {
+            analysis.update_file(file, format!("visibility({value})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{value}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
         }
     }
 
