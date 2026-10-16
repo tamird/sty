@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::builtin::Callable;
 use crate::builtin::Param;
+use crate::builtin::Type;
 use crate::builtin::Value;
 use crate::Builtins;
 
@@ -55,7 +56,7 @@ pub fn normalize_doc(text: &str, is_type: bool) -> String {
     result
 }
 
-/// Apply API additions that postdate the bundled inventory, using `bazel info release`.
+/// Complete version-dependent API metadata using `bazel info release`.
 pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     let version = release.strip_prefix("release ").and_then(|version| {
         let mut parts = version.split('.');
@@ -64,7 +65,53 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             parts.next()?.parse::<u32>().ok()?,
         ))
     });
-    if !version.is_some_and(|version| version >= (9, 3)) {
+    let Some(version) = version else {
+        return;
+    };
+    if let Some(platform_type) = builtins
+        .r#type
+        .iter_mut()
+        .find(|class| class.name == "apple_common")
+        .and_then(|class| {
+            class.field.iter_mut().find(|field| {
+                field.name == "platform_type" && normalize_doc(&field.r#type, true) == "struct"
+            })
+        })
+    {
+        // Bazel 8 moved these enum values to string constants in apple_platform.bzl.
+        // https://github.com/bazelbuild/bazel/blob/8.0.0/src/main/starlark/builtins_bzl/common/objc/apple_platform.bzl
+        platform_type.r#type = "_ApplePlatformTypes".to_owned();
+        let value_type = if version >= (8, 0) {
+            "string"
+        } else {
+            "apple_platform_type"
+        };
+        if version < (8, 0) && !builtins.r#type.iter().any(|class| class.name == value_type) {
+            builtins.r#type.push(Type {
+                name: value_type.to_owned(),
+                ..Default::default()
+            });
+        }
+        if !builtins
+            .r#type
+            .iter()
+            .any(|class| class.name == "_ApplePlatformTypes")
+        {
+            builtins.r#type.push(Type {
+                name: "_ApplePlatformTypes".to_owned(),
+                field: ["ios", "visionos", "watchos", "tvos", "macos", "catalyst"]
+                    .into_iter()
+                    .map(|name| Value {
+                        name: name.to_owned(),
+                        r#type: value_type.to_owned(),
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            });
+        }
+    }
+    if version < (9, 3) {
         return;
     }
 
@@ -227,6 +274,50 @@ pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn platform_types_follow_bazel_release() {
+        let original = Builtins {
+            r#type: vec![Type {
+                name: "apple_common".to_owned(),
+                field: vec![Value {
+                    name: "platform_type".to_owned(),
+                    r#type: "struct".to_owned(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        for (release, expected) in [
+            ("development version", None),
+            ("release 7.6.0", Some("apple_platform_type")),
+            ("release 8.0.0", Some("string")),
+            ("release 9.3.0", Some("string")),
+        ] {
+            let mut builtins = original.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            if let Some(expected) = expected {
+                let namespace = builtins
+                    .r#type
+                    .iter()
+                    .find(|class| class.name == "_ApplePlatformTypes")
+                    .unwrap();
+                assert_eq!(namespace.field.len(), 6);
+                assert!(namespace.field.iter().all(|field| field.r#type == expected));
+            } else {
+                assert_eq!(builtins, original);
+            }
+            let once = builtins.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            assert_eq!(builtins, once);
+        }
+        let mut supplied = original;
+        supplied.r#type[0].field[0].r#type = "KnownPlatformTypes".to_owned();
+        let unchanged = supplied.clone();
+        apply_versioned_signatures(&mut supplied, "release 9.2.0");
+        assert_eq!(supplied, unchanged);
+    }
 
     #[test]
     fn resource_set_signatures_follow_bazel_release() {

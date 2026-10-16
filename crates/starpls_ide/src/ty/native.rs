@@ -681,6 +681,13 @@ fn declarations(
                     let field_type = field_type
                         .map(str::to_owned)
                         .unwrap_or_else(|| value_annotation(field, &declared_classes));
+                    let field_type = if class.name == "_ApplePlatformTypes"
+                        || (class.name == "apple_common" && field.name == "platform_type")
+                    {
+                        format!("_starpls_typing.Final[{field_type}]")
+                    } else {
+                        field_type
+                    };
                     writeln!(body, "        {}: {field_type}", field.name)?;
                     if !field.doc.is_empty() {
                         writeln!(
@@ -1625,10 +1632,12 @@ json.decode("{}", default=struct(value="fallback"))
 
     #[test]
     fn apple_platform_namespace_has_typed_members() {
-        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
         .unwrap();
+        let original_builtins = builtins.clone();
+        env::apply_versioned_signatures(&mut builtins, "release 9.2.0");
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
             .set_builtin_defs(builtins, Default::default())
@@ -1661,6 +1670,14 @@ platforms: list[apple_platform] = [
     apple_common.platform.catalyst,
 ]
 name: str = apple_common.platform.ios_device.name_in_plist
+platform_types: list[str] = [
+    apple_common.platform_type.ios,
+    apple_common.platform_type.macos,
+    apple_common.platform_type.tvos,
+    apple_common.platform_type.visionos,
+    apple_common.platform_type.watchos,
+    apple_common.platform_type.catalyst,
+]
 "#;
         let file = analysis
             .open_document(
@@ -1675,7 +1692,7 @@ name: str = apple_common.platform.ios_device.name_in_plist
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         analysis.update_file(
             file,
-            "wrong: str = apple_common.platform.ios_device\napple_common.platform.ios_simualtor\n"
+            "wrong: str = apple_common.platform.ios_device\napple_common.platform.ios_simualtor\nwrong_platform: apple_platform = apple_common.platform_type.ios\napple_common.platform_type.ios = 'watchos'\napple_common.platform_type.unknown\n"
                 .into(),
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -1683,7 +1700,27 @@ name: str = apple_common.platform.ios_device.name_in_plist
             .iter()
             .map(|diagnostic| diagnostic.id().as_str())
             .collect();
-        assert_eq!(ids, ["invalid-assignment", "unresolved-attribute"]);
+        assert_eq!(
+            ids,
+            [
+                "invalid-assignment",
+                "unresolved-attribute",
+                "invalid-assignment",
+                "invalid-assignment",
+                "unresolved-attribute"
+            ]
+        );
+        let mut old_builtins = original_builtins;
+        env::apply_versioned_signatures(&mut old_builtins, "release 7.6.0");
+        analysis
+            .set_builtin_defs(old_builtins, Default::default())
+            .unwrap();
+        analysis.update_file(file, "name: str = str(apple_common.platform_type.ios)\nwrong: str = apple_common.platform_type.ios\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
     }
 
     #[test]
