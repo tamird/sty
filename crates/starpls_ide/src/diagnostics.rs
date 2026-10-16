@@ -228,6 +228,14 @@ def required_executable(value: File | FilesToRunProvider[File]) -> File:
     if type(value) == "FilesToRunProvider":
         return value.executable
     return value
+def path(value: File | str) -> str:
+    if type(value) == "File":
+        return value.path
+    return value
+def file_or_fallback(value: File | str, fallback: File) -> File:
+    if type(value) != type(fallback):
+        return fallback
+    return value
 def sequence(value: list[File] | tuple[File, ...] | None) -> list[File]:
     result: list[File] = []
     if type(value) in ("list", "tuple"):
@@ -250,6 +258,7 @@ def sequence(value: list[File] | tuple[File, ...] | None) -> list[File]:
                 "return value.files\n",
                 "unresolved-attribute",
             ),
+            ("return value.path", "return value", "invalid-return-type"),
             ("-> list[File]:", "-> list[str]:", "invalid-return-type"),
             (
                 "return value.executable",

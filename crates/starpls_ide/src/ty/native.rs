@@ -931,6 +931,11 @@ fn write_type_overloads(
     .into_iter()
     .chain(
         declared_classes
+            .contains("File")
+            .then_some(("_starpls_types.File", "File")),
+    )
+    .chain(
+        declared_classes
             .contains("Label")
             .then_some(("_starpls_types.Label", "Label")),
     )
