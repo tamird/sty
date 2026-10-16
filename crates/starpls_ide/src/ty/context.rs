@@ -28,7 +28,6 @@ use ty_python_semantic::types::DictionaryExtraItems;
 use ty_python_semantic::types::DictionaryFirstEntry;
 use ty_python_semantic::types::DictionaryItem;
 use ty_python_semantic::types::DictionaryItems;
-use ty_python_semantic::types::DynamicType;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::UnionType;
@@ -377,11 +376,20 @@ pub(super) fn parameter_type<'db>(
     let base = if context_kind == ContextKind::Repository {
         factory::native_class(db, declarations, name)?
     } else {
-        let build_setting = rule
-            .and_then(|rule| rule.build_setting)
-            .map_or(Type::Dynamic(DynamicType::Any), |setting| {
-                setting.value_type(db, &environment)
-            });
+        let build_setting = match rule.and_then(|rule| rule.build_setting) {
+            Some(setting) => setting.value_type(db, &environment),
+            None => {
+                // The native default describes every successful build-setting read,
+                // even when the exact descriptor is unavailable.
+                let instance = factory::native_class(db, declarations, name)?
+                    .to_instance_approximation(db, &environment)?;
+                let (_, specialization) = instance.class_specialization(db, &environment)?;
+                let [value, _attrs] = specialization.types(db) else {
+                    return None;
+                };
+                *value
+            }
+        };
         let attributes = context_fields
             .iter()
             .find(|field| field.name == "attr")
@@ -1738,6 +1746,30 @@ example = make_aspect(implementation=implementation, attrs={
     }
 
     #[test]
+    fn unspecified_build_setting_values_have_a_static_domain() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        enable_context(&mut analysis);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = "def setting(context: ctx) -> bool | int | str | list[str] | set[str]:\n    return context.build_setting_value\n";
+        let file = fixture.add_file(&mut analysis.db, "//:settings.bzl", source);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            file,
+            source.replace("bool | int | str | list[str] | set[str]", "str"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
     fn loaded_build_setting_values_follow_descriptor_edits() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
@@ -1851,11 +1883,18 @@ example = rule(implementation=implementation, build_setting=setting)
             "def choose(value): return value\nsetting = choose(None)\n".to_owned(),
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-assignment");
+        assert!(diagnostics[0].range().unwrap().contains(
+            (source
+                .find("context.build_setting_value\n    _wrong_default")
+                .unwrap() as u32)
+                .into()
+        ));
         let source = source.replace("build_setting=setting)", "build_setting=setting, attrs={\"build_setting_default\": attr.int(), \"help\": attr.bool()})");
         analysis.update_file(file, source.clone());
         for (descriptor, default, help, errors) in [
-            ("choose(None)", "int", "bool", 2),
+            ("choose(None)", "int", "bool", 3),
             ("config.string()", "str", "str", 3),
         ] {
             analysis.update_file(
