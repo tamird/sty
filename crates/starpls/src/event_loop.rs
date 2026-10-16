@@ -712,7 +712,7 @@ mod tests {
             Ok(starpls_bazel::client::BazelInfo {
                 workspace: self.workspace.clone(),
                 output_base: self.workspace.join("output"),
-                release: "release 9".to_owned(),
+                release: "release 9.3.0".to_owned(),
                 starlark_semantics: String::new(),
                 workspace_name: None,
             })
@@ -839,6 +839,25 @@ mod tests {
             )
             .unwrap();
             entering.recv_timeout(Duration::from_secs(10)).unwrap();
+            let resources = root.join("resources.bzl");
+            server.open_document(&resources, "def check(ctx: ctx):\n    ctx.actions.run(outputs=[], executable='tool', resource_set={'cpu': 1})\n".into(), 1).unwrap();
+            let resources_file = server
+                .analysis
+                .snapshot()
+                .open_file(&resources)
+                .unwrap()
+                .unwrap();
+            let diagnostics = server
+                .analysis
+                .snapshot()
+                .diagnostics(resources_file)
+                .unwrap();
+            assert_eq!(
+                diagnostics.len(),
+                1,
+                "before version discovery: {diagnostics:?}"
+            );
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
             let external = root.join("output/external/dependency+/open.bzl");
             std::fs::create_dir_all(external.parent().unwrap()).unwrap();
             std::fs::write(&external, "answer = 7\n").unwrap();
@@ -876,6 +895,16 @@ mod tests {
             );
             finish_reload(&mut server);
             assert_eq!(server.configuration.complete, !fail);
+            let diagnostics = server
+                .analysis
+                .snapshot()
+                .diagnostics(resources_file)
+                .unwrap();
+            assert_eq!(
+                diagnostics.len(),
+                usize::from(fail),
+                "after version discovery: {diagnostics:?}"
+            );
             assert_eq!(
                 server.analysis.type_interface_files().len(),
                 usize::from(!fail)
@@ -907,6 +936,15 @@ mod tests {
                 finish_reload(&mut server);
                 assert!(!server.snapshot().configuration_ready);
                 assert!(server.analysis.type_interface_files().is_empty());
+                let diagnostics = server
+                    .analysis
+                    .snapshot()
+                    .diagnostics(resources_file)
+                    .unwrap();
+                assert!(
+                    diagnostics.is_empty(),
+                    "configuration reload preserves native version: {diagnostics:?}"
+                );
             }
             drop(server);
             std::fs::remove_dir_all(root).unwrap();

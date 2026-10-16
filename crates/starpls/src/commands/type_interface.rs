@@ -283,7 +283,7 @@ mod tests {
         ));
         let mut analysis = starpls_ide::Analysis::new(loader, Default::default()).unwrap();
         analysis
-            .set_builtin_defs(crate::server::load_bazel_builtins(), Default::default())
+            .set_builtin_defs(crate::server::load_bazel_builtins(None), Default::default())
             .unwrap();
         super::PreparedInterfaces {
             registrations: vec![super::Registration {

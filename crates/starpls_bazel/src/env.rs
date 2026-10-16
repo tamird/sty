@@ -55,6 +55,45 @@ pub fn normalize_doc(text: &str, is_type: bool) -> String {
     result
 }
 
+/// Apply API additions that postdate the bundled inventory, using `bazel info release`.
+pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
+    let version = release.strip_prefix("release ").and_then(|version| {
+        let mut parts = version.split('.');
+        Some((
+            parts.next()?.parse::<u32>().ok()?,
+            parts.next()?.parse::<u32>().ok()?,
+        ))
+    });
+    if !version.is_some_and(|version| version >= (9, 3)) {
+        return;
+    }
+
+    // Bazel 9.3 accepts the callback's numeric dictionary directly as well.
+    // Preserve the rest of the inventory, including newer supplied signatures.
+    for class in &mut builtins.r#type {
+        if class.name != "actions" {
+            continue;
+        }
+        for method in &mut class.field {
+            if !matches!(method.name.as_str(), "run" | "run_shell" | "map_directory") {
+                continue;
+            }
+            let Some(callable) = &mut method.callable else {
+                continue;
+            };
+            for parameter in &mut callable.param {
+                if parameter.name == "resource_set"
+                    && !normalize_doc(&parameter.r#type, true)
+                        .split("; or ")
+                        .any(|member| member == "dict")
+                {
+                    parameter.r#type.push_str("; or dict");
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct BuiltinsJson {
     builtins: Vec<ValueJson>,
@@ -183,4 +222,70 @@ pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
     .into_iter()
     .map(|(name, fields)| (name, fields.into_iter().map(|field| field.into()).collect()))
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resource_set_signatures_follow_bazel_release() {
+        let old_type = "<a href=\"callable.html\">callable</a>; or None";
+        let original = Builtins {
+            r#type: vec![crate::builtin::Type {
+                name: "actions".to_owned(),
+                field: ["run", "run_shell", "map_directory", "unrelated"]
+                    .into_iter()
+                    .map(|name| Value {
+                        name: name.to_owned(),
+                        callable: Some(Callable {
+                            param: vec![Param {
+                                name: "resource_set".to_owned(),
+                                r#type: old_type.to_owned(),
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        for (release, dictionary) in [
+            ("", false),
+            ("development version", false),
+            ("release 9", false),
+            ("release 9.2.9", false),
+            ("release 9.3.0", true),
+            ("release 9.3.0rc1", true),
+            ("release 9.10.0", true),
+            ("release 10.0.0", true),
+        ] {
+            let mut builtins = original.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            for method in &builtins.r#type[0].field {
+                let expected = if dictionary && method.name != "unrelated" {
+                    format!("{old_type}; or dict")
+                } else {
+                    old_type.to_owned()
+                };
+                assert_eq!(
+                    method.callable.as_ref().unwrap().param[0].r#type,
+                    expected,
+                    "{release}: {}",
+                    method.name
+                );
+            }
+            let once = builtins.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            assert_eq!(builtins, once, "{release}: refinement must be idempotent");
+            apply_versioned_signatures(&mut builtins, "development version");
+            assert_eq!(
+                builtins, once,
+                "unknown releases preserve supplied metadata"
+            );
+        }
+    }
 }

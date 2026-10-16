@@ -96,7 +96,7 @@ pub(crate) struct ConfigurationReady {
 
 pub(crate) struct PreparedConfiguration {
     loader: Box<DefaultFileLoader>,
-    rules: Option<starpls_bazel::build::BuildLanguage>,
+    native: Option<(Builtins, starpls_bazel::build::BuildLanguage)>,
     interfaces: anyhow::Result<crate::commands::type_interface::PreparedInterfaces>,
 }
 
@@ -146,7 +146,7 @@ impl Server {
                 ..Default::default()
             },
         )?;
-        analysis.set_builtin_defs(load_bazel_builtins(), Default::default())?;
+        analysis.set_builtin_defs(load_bazel_builtins(None), Default::default())?;
         let prelude = workspace.join("tools/build_rules/prelude_bazel");
         if let Ok(file) = analysis.file(
             &prelude,
@@ -478,7 +478,7 @@ impl Server {
         let client = self.bazel_client.clone();
         self.bazel_task_pool.spawn(move || {
             let result = (|| {
-                let (loader, rules) = if template.has_bazel_context() {
+                let (loader, native) = if template.has_bazel_context() {
                     (template.fresh(), None)
                 } else {
                     let context = BazelContext::new(&*client)?;
@@ -495,12 +495,13 @@ impl Server {
                         context.bzlmod_enabled,
                     );
                     loader.finish_mapping(String::new(), Ok(context.main_repo_mapping));
-                    (loader, Some(context.rules))
+                    let builtins = load_bazel_builtins(Some(&context.info.release));
+                    (loader, Some((builtins, context.rules)))
                 };
                 let interfaces = options.prepare(&loader, &workspace);
                 Ok(PreparedConfiguration {
                     loader: Box::new(loader),
-                    rules,
+                    native,
                     interfaces,
                 })
             })();
@@ -517,7 +518,7 @@ impl Server {
         }
         let PreparedConfiguration {
             loader,
-            rules,
+            native,
             interfaces,
         } = match result {
             Ok(prepared) => prepared,
@@ -559,8 +560,8 @@ impl Server {
         self.bzlmod_enabled = loader.bzlmod_enabled();
         self.loader = loader;
         let replacement = self.analysis.replace_loader(self.loader.clone());
-        let native = match rules {
-            Some(rules) => self.analysis.set_builtin_defs(load_bazel_builtins(), rules),
+        let native = match native {
+            Some((builtins, rules)) => self.analysis.set_builtin_defs(builtins, rules),
             None => Ok(()),
         };
         let result = admission
@@ -769,11 +770,15 @@ impl ServerSnapshot {
 
 impl panic::RefUnwindSafe for ServerSnapshot {}
 
-pub(crate) fn load_bazel_builtins() -> Builtins {
+pub(crate) fn load_bazel_builtins(release: Option<&str>) -> Builtins {
     let data = include_bytes!("builtin/builtin.pb");
 
     // We want to crash if the bundled protobuf file is ever invalid.
-    decode_builtins(&data[..]).expect("bug: invalid builtin.pb")
+    let mut builtins = decode_builtins(&data[..]).expect("bug: invalid builtin.pb");
+    if let Some(release) = release {
+        starpls_bazel::env::apply_versioned_signatures(&mut builtins, release);
+    }
+    builtins
 }
 
 pub(crate) fn load_bazel_build_language(

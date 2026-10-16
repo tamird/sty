@@ -1833,7 +1833,7 @@ impl CheckCommand {
                 ..Default::default()
             },
         )?;
-        analysis.set_builtin_defs(load_bazel_builtins(), rules)?;
+        analysis.set_builtin_defs(load_bazel_builtins(Some(&info.release)), rules)?;
         for SourceOverlay { logical, physical } in &self.source_overlay {
             let logical = starpls_common::absolute_path(logical)?;
             let Some((Dialect::Bazel, context)) =
