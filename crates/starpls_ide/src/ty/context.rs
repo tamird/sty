@@ -2345,9 +2345,9 @@ example = macro(implementation=implementation, attrs={{
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False)})", "str"),
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.int(configurable=False)})", "int"),
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False)})", "str"),
-            ("value", "", "first = macro(implementation=implementation, attrs={'value': attr.string()})\nsecond = macro(implementation=implementation, attrs={'value': attr.int()})", "select[str | None, Any] | select[int | None, Any]"),
+            ("value", "", "first = macro(implementation=implementation, attrs={'value': attr.string()})\nsecond = macro(implementation=implementation, attrs={'value': attr.int()})", "select[str | None, object] | select[int | None, object]"),
             ("value", "    # type: (str, list[Label], Unknown) -> None\n", "example = macro(implementation=implementation, attrs={'value': attr.string()})", "Unknown"),
-            ("value=42", "", "example = macro(implementation=implementation, attrs={'value': attr.string()})", "select[str | None, Any] | Literal[42]"),
+            ("value=42", "", "example = macro(implementation=implementation, attrs={'value': attr.string()})", "select[str | None, object] | Literal[42]"),
         ] {
             let source = format!("def implementation(name, visibility, {parameter}):\n{annotation}    value\n{registrations}\n");
             analysis.update_file(file, source.clone());
@@ -2766,7 +2766,7 @@ example = macro(implementation=implementation, inherit_attrs=parent)
                     assert_eq!(parent_type.display(db, &environment).to_string(), "rule");
                 }
                 let (srcs_type, optional_type) = if !erased && !keyword_parameters {
-                    ("list[Label]", "select[bool | None, Any] | None")
+                    ("list[Label]", "select[bool | None, object] | None")
                 } else {
                     ("Unknown", "Unknown")
                 };

@@ -1270,7 +1270,7 @@ foo(
 "#,
             expect![[r#"
                 ```python
-                (parameter) bar: str | select[str | None, Any] | None
+                (parameter) bar: str | select[str | None, object] | None
                 ```
                 The bar attr
             "#]],

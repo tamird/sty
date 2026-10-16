@@ -27,7 +27,6 @@ use ty_python_semantic::types::DictionaryExtraItems;
 use ty_python_semantic::types::DictionaryFirstEntry;
 use ty_python_semantic::types::DictionaryItem;
 use ty_python_semantic::types::DictionaryItems;
-use ty_python_semantic::types::DynamicType;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::ParameterDefault;
@@ -116,12 +115,16 @@ impl RuleData {
             } else {
                 UnionType::from_elements(db, environment, [value, none])
             };
+            let kind = selector_value_kind(db, environment, alternatives).map_or_else(
+                || KnownClass::Object.to_instance(db, environment),
+                |kind| Type::string_literal(db, kind),
+            );
             specialized_native_instance(
                 db,
                 environment,
                 declarations,
                 "select",
-                vec![alternatives, Type::Dynamic(DynamicType::Any)],
+                vec![alternatives, kind],
             )
         };
         let value = match attribute.configurable() {
@@ -546,6 +549,7 @@ fn selector_value_kind<'db>(
         (KnownClass::Str, "str"),
         (KnownClass::Bool, "bool"),
         (KnownClass::NoneType, "none"),
+        (KnownClass::Range, "list"),
     ] {
         if value.is_subtype_of(db, environment, class.to_instance(db, environment)) {
             return Some(kind);
@@ -1628,7 +1632,10 @@ fn configurable_input<'db>(
         &environment,
         declaration.program_file(db),
         "select",
-        vec![alternatives, Type::Dynamic(DynamicType::Any)],
+        vec![
+            alternatives,
+            KnownClass::Object.to_instance(db, &environment),
+        ],
     )?;
     Some(UnionType::from_elements(
         db,
@@ -2937,13 +2944,13 @@ target_test($0name="valid", exports="//:input", count=1)
         assert!(
             signature
                 .label
-                .contains("exports: Label | str | select[Label | str | None, Any]"),
+                .contains("exports: Label | str | select[Label | str | None, object]"),
             "{help:?}"
         );
         assert!(
             signature
                 .label
-                .contains("count: int | select[int | None, Any] | None = ..."),
+                .contains("count: int | select[int | None, object] | None = ..."),
             "{help:?}"
         );
         assert!(!signature.label.contains("**kwargs"), "{help:?}");
@@ -2998,16 +3005,14 @@ target($0name="valid", before=1, after=2)
         };
         let parameters = signature.parameters.as_ref().unwrap();
         assert!(
-            parameters
-                .iter()
-                .any(|parameter| parameter.label
-                    == "before: int | select[int | None, Any] | None = ..."),
+            parameters.iter().any(|parameter| parameter.label
+                == "before: int | select[int | None, object] | None = ..."),
             "{help:?}"
         );
         assert!(
             parameters
                 .iter()
-                .any(|parameter| parameter.label == "after: int | select[int | None, Any]"),
+                .any(|parameter| parameter.label == "after: int | select[int | None, object]"),
             "{help:?}"
         );
         assert!(!signature.label.contains("**kwargs"), "{help:?}");

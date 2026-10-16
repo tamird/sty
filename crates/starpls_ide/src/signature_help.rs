@@ -225,7 +225,7 @@ fallback = unknown({{}})
                 .unwrap();
             assert!(rule_hover.contents.value.contains("(function)"));
             assert!(rule_hover.contents.value.contains(&format!(
-                "foo: str | select[str | None, Any] | None = {default}"
+                "foo: str | select[str | None, object] | None = {default}"
             )));
             assert!(rule_hover.contents.value.contains("Rule documentation."));
             let field_hover = analysis
@@ -239,7 +239,7 @@ fallback = unknown({{}})
                 .unwrap()
                 .unwrap();
             assert!(field_hover.contents.value.contains(&format!(
-                "foo: str | select[str | None, Any] | None = {default}"
+                "foo: str | select[str | None, object] | None = {default}"
             )));
             let fallback_help = analysis
                 .snapshot()
@@ -269,7 +269,7 @@ fallback = unknown({{}})
                 .unwrap();
             assert_eq!(
                 parameter.label,
-                format!("foo: str | select[str | None, Any] | None = {default}")
+                format!("foo: str | select[str | None, object] | None = {default}")
             );
             assert!(signature
                 .documentation
@@ -355,12 +355,12 @@ base = rule(implementation=implementation, attrs={{
             for (name, expected, doc) in [
                 (
                     "original:",
-                    format!("original: {ty} | select[{ty} | None, Any] | None = None"),
+                    format!("original: {ty} | select[{ty} | None, object] | None = None"),
                     "Inherited documentation.",
                 ),
                 (
                     "overridden:",
-                    "overridden: int | select[int | None, Any] | None = 3".to_owned(),
+                    "overridden: int | select[int | None, object] | None = 3".to_owned(),
                     "Own documentation.",
                 ),
             ] {

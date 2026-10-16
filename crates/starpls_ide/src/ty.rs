@@ -1023,11 +1023,11 @@ def register(name: str, visibility: list[str] | None):
             ),
             ("set[str] | Target", "set", "set[str]", "Target"),
             ("Label | str", "Label", "Label", "str"),
-            ("select[int] | int", "select", "select[int, Any]", "int"),
+            ("select[int] | int", "select", "select[int, object]", "int"),
             (
                 "select[list[str]] | list[str]",
                 "select",
-                "select[list[str], Any]",
+                "select[list[str], object]",
                 "list[str]",
             ),
             (
@@ -1146,21 +1146,21 @@ def register(name: str, visibility: list[str] | None):
                 "classify",
                 "select[int] | int",
                 "select",
-                "select[int, Any]",
+                "select[int, object]",
             ),
             (
                 "def type(value): return \"select\"",
                 "type",
                 "select[int] | int",
                 "select",
-                "select[int, Any] | int",
+                "select[int, object] | int",
             ),
             (
                 "classify = type",
                 "classify",
                 "select[int] | int",
                 "select",
-                "select[int, Any]",
+                "select[int, object]",
             ),
         ] {
             let source = format!("{declarations}\ndef probe(value: {annotation}):\n    if {call}(value) == \"{tag}\":\n        return value # matched\n    return value\n");

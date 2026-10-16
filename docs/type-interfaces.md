@@ -352,22 +352,24 @@ open shape do not weaken the types of declared optional fields. The existing
 sty also tracks the first branch's runtime kind when its value is a
 supported literal and the dictionary keys are distinct string literals. It
 also recognizes mappings whose values all have one runtime category: strings,
-booleans, `None`, or lists and tuples. For these mappings, every possible first
-branch has the same kind. The kind determines which selector operations Bazel
+booleans, `None`, or lists, tuples, and ranges. For these mappings, every possible
+first branch has the same kind. The kind determines which selector operations Bazel
 accepts. For example, selectors whose first branch is `None` combine with `+`,
 including when later branches are
 dictionaries; selectors whose first branch is a dictionary combine with `|`.
 
 Inferred types display this information as a second parameter, such as
-`select[dict[str, int] | None, Literal["none"]]`. List and tuple branches share
-the `"list"` kind. Combined selectors preserve their kind and include the
+`select[dict[str, int] | None, Literal["none"]]`. List, tuple, and range branches
+share the `"list"` kind. Combined selectors preserve their kind and include the
 nullable contributions of both operands in their branch type.
 
-`select[T]` defaults the kind to `Any`, so annotations can describe branch
-values while leaving runtime kind unspecified. Mappings with unknown or mixed
-value categories retain an unspecified kind, as do integer and dictionary value
-types with several native representations. Integer literals retain the `"int"`
-category, and literal dictionary branches retain the `"dict"` kind. Bazel uses
+`select[T]` defaults the kind to `object`, accepting every runtime kind while
+preserving the branch-value contract. An operation requiring a particular kind
+uses an explicit annotation, such as `select[list[str], Literal["list"]]`.
+Mappings with unknown or mixed value categories retain an unspecified kind,
+as do integer and dictionary value types with several native representations.
+Integer literals retain the `"int"` category, and literal dictionary branches
+retain the `"dict"` kind. Bazel uses
 several native integer representations, so integer operands carry an `Unknown`
 compatibility requirement.
 

@@ -84,12 +84,13 @@ mod tests {
             (
                 "select(value) + select(value)",
                 "value: Mapping[str, str | None]",
-                false,
+                true,
             ),
-            ("value + value", "value: select[str]", false),
+            ("value + value", "value: select[str]", true),
+            ("value + value", "value: select[str, Literal['str']]", false),
             // This payload admits both list-first and None-first selectors.
-            ("value + None", "value: select[list[str] | None]", false),
-            ("None + value", "value: select[list[str] | None]", false),
+            ("value + None", "value: select[list[str] | None]", true),
+            ("None + value", "value: select[list[str] | None]", true),
             // Reflected dispatch accepts this selected dictionary.
             ("{} | select({'//:a': {'x': 1}})", "", false),
             ("('x',) + select({'//:a': [1]})", "", false),
@@ -111,6 +112,33 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn selector_annotations_preserve_static_forwarding() {
+        let source = r#"
+def forward(values: Sequence[str] | select[Sequence[str]]) -> Sequence[str] | select[Sequence[str]]:
+    return values
+forward(["plain"])
+forward(select({"//:condition": ["selected"]}))
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            file,
+            format!("{source}forward(select({{'//:condition': [42]}}))\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
     }
 
     #[test]
@@ -878,7 +906,6 @@ def implementation(name, visibility, srcs, tool, optional, inherited, _private, 
     checked_name = name # type: str
     checked_visibility = visibility # type: list[Label]
     checked_srcs = srcs # type: select[list[Label] | None]
-    combined = srcs + []
     checked_tool = tool # type: Label
     checked_optional = optional # type: select[Label | None] | None
     checked_inherited = inherited # type: select[str | None] | None
@@ -916,8 +943,11 @@ example(name="omitted", tool="//:tool", _private=None)
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
         }
         for (name, expected) in [
-            ("srcs", "select[list[Label] | None, Any]"),
-            ("combined", "select[list[Label | Unknown] | None, Any]"),
+            ("srcs", "select[list[Label] | None, object]"),
+            (
+                "combined_private",
+                "select[list[Label | Unknown], Literal[\"list\"]]",
+            ),
         ] {
             let hover = analysis
                 .snapshot()
@@ -942,10 +972,7 @@ example(name="omitted", tool="//:tool", _private=None)
                 "bad = srcs # type: select[list[int] | None]",
                 "invalid-assignment",
             ),
-            (
-                "bad = combined # type: select[list[int] | None]",
-                "invalid-assignment",
-            ),
+            ("bad = srcs + []", "unsupported-operator"),
             ("bad = tool # type: str", "invalid-assignment"),
             ("bad = visibility # type: list[str]", "invalid-assignment"),
             (
@@ -1169,7 +1196,11 @@ mapping_before = {"a": 1} | select({"//:condition": {"b": "c"}}) # type: select[
             ("none_left", "select[None, Literal[\"none\"]]"),
             ("none_pair", "select[None, Literal[\"none\"]]"),
             ("known_mixed", "select[list[str | int], Literal[\"list\"]]"),
-            ("declared_mixed", "select[list[str | int], Any]"),
+            ("mixed_values", "select[list[str | int], Literal[\"list\"]]"),
+            (
+                "declared_mixed",
+                "select[list[str | int], Literal[\"list\"]]",
+            ),
             (
                 "nullable_mixed",
                 "select[list[str | int] | None, Literal[\"list\"]]",
