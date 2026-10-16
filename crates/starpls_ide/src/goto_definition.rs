@@ -265,6 +265,14 @@ pub(crate) fn goto_definition(
     let source = file.contents(db);
     let parsed = starpls_common::parsed_module(db, file).load(db);
     let token = navigation_token(&source, parsed.tokens(), u32::from(pos).into())?;
+    let mut handler = GotoDefinitionHandler {
+        db,
+        sema,
+        model: SemanticModel::new(db, db.starlark_program_file(file)),
+        file,
+        origin: text_range(token.range()),
+        skip_re_exports,
+    };
     if crate::selection::type_comment_at_cursor(
         starpls_common::syntax_info(db, file),
         u32::from(pos).into(),
@@ -273,19 +281,18 @@ pub(crate) fn goto_definition(
     )
     .is_some()
     {
-        return None;
+        let owner = sema.type_comment_owner(file, u32::from(pos).into())?;
+        let (annotation, model) = handler.model.enter_provided_annotation(owner)?;
+        let token = navigation_token(&source, annotation.tokens(), u32::from(pos).into())?;
+        let node = covering_node(annotation.expr().into(), token.range());
+        let selection = crate::selection::classify(&node, token.range())?;
+        handler.model = model;
+        handler.origin = text_range(token.range());
+        return handler.handle(selection, &source);
     }
     let node = covering_node(parsed.syntax().into(), token.range());
     let selection = crate::selection::classify(&node, token.range())?;
-    GotoDefinitionHandler {
-        db,
-        sema,
-        model: SemanticModel::new(db, db.starlark_program_file(file)),
-        file,
-        origin: text_range(token.range()),
-        skip_re_exports,
-    }
-    .handle(selection, &source)
+    handler.handle(selection, &source)
 }
 
 #[cfg(test)]
@@ -345,6 +352,29 @@ mod tests {
             .map(|(file, range)| (file.source, range))
             .collect();
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn type_comments_use_their_declaration_scope() {
+        for usage in [
+            "value = None # type: Lis$0t[str]",
+            "def f(value):\n    # type: (Lis$0t[str]) -> None\n    pass",
+            "def f():\n    # type: () -> Lis$0t[str]\n    pass",
+        ] {
+            check_goto_definition(&format!("List = list\n#^^^\n{usage}\n"));
+        }
+        for source in [
+            "List = list\n# Lis$0t\n",
+            "List = list\n# type: Lis$0t[str]\n",
+        ] {
+            let (analysis, fixture) = Analysis::from_single_file_fixture(source);
+            let (file_id, pos) = fixture.cursor_pos.unwrap();
+            let locations = analysis
+                .snapshot()
+                .goto_definition(FilePosition { file_id, pos }, false)
+                .unwrap();
+            assert!(locations.is_none(), "{source}: {locations:?}");
+        }
     }
 
     #[test]
