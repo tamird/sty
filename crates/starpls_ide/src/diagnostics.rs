@@ -167,6 +167,46 @@ mod tests {
     }
 
     #[test]
+    fn type_names_narrow_runfiles_and_depsets() {
+        let source = r#"
+DEPSET_TYPE = type(depset())
+def files(value: depset[File] | runfiles) -> depset[File]:
+    if type(value) == DEPSET_TYPE:
+        return value
+    return value.files
+def as_runfiles(context: ctx, value: depset[File] | runfiles) -> runfiles:
+    if type(value) != type(context.runfiles()):
+        return context.runfiles(transitive_files=value)
+    return value
+def paths(value: depset[File] | runfiles) -> list[File]:
+    if type(value) == "depset":
+        return value.to_list()
+    return value.files.to_list()
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (old, new, expected) in [
+            (
+                "return value\n",
+                "return value.files\n",
+                "unresolved-attribute",
+            ),
+            ("-> list[File]:", "-> list[str]:", "invalid-return-type"),
+        ] {
+            analysis.update_file(file, source.replacen(old, new, 1));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == expected),
+                "{new}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
     fn repeated_host_boolean_guards_preserve_boundness() {
         let (analysis, fixture) = native_analysis(
             r#"def inspect(value):

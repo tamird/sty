@@ -737,7 +737,17 @@ fn write_type_overloads(
     .chain(declared_classes.contains("select").then_some((
         "_starpls_types.select[_builtins.object, _builtins.object]",
         "select",
-    ))) {
+    )))
+    .chain(
+        declared_classes
+            .contains("depset")
+            .then_some(("_starpls_types.depset[_builtins.object]", "depset")),
+    )
+    .chain(
+        declared_classes
+            .contains("runfiles")
+            .then_some(("_starpls_types.runfiles", "runfiles")),
+    ) {
         writeln!(output, "@_typing.overload")?;
         writeln!(
             output,
