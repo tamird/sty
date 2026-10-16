@@ -116,9 +116,17 @@ private and nested functions and are disabled by default. Inline annotations,
 type comments, registered `.bzli` annotations, and generated Bazel contracts
 satisfy these rules. Implicit method receivers use ty's inferred receiver type.
 Local variables continue to use inference. Projects that prefer inferred returns
-can enable only the parameter rule. Generated callback contracts can describe a
-function body without declaring its public callable signature; passing that
-function under `non-static-type` also requires a complete public annotation.
+can enable only the parameter rule.
+
+With `--experimental_infer_ctx_attributes`, a local named implementation passed
+to a module-level `rule`, `repository_rule`, or `aspect` registration uses its
+generated parameter contract at that registration. A shared implementation's
+body accepts the union of all its registered contexts. Explicit parameter annotations take precedence, and
+sty checks that each registration can invoke the callback with its runtime
+arguments. This verifies input domains; Bazel-specific restrictions on returned
+providers are not checked. Return annotations remain required for a fully static
+callback. The function's public signature is unchanged: storing it or passing it elsewhere
+still requires a complete callable contract.
 
 ty's `missing-type-argument` rejects bare generic annotations such as `list`.
 

@@ -1,5 +1,11 @@
-//! Bazel's optional implementation-parameter contract, supplied to Ty's body binding.
+//! Bazel implementation-parameter contracts for function bodies and registrations.
 
+use ruff_db::diagnostic::Annotation;
+use ruff_db::diagnostic::Diagnostic;
+use ruff_db::diagnostic::DiagnosticId;
+use ruff_db::diagnostic::LintName;
+use ruff_db::diagnostic::Severity;
+use ruff_db::diagnostic::Span;
 use ruff_db::files::FileRange;
 use ruff_python_ast::find_node::covering_node;
 use ruff_python_ast::name::Name;
@@ -17,6 +23,7 @@ use starpls_hir::Db as _;
 use ty_python_core::definition::Definition;
 use ty_python_core::definition::DefinitionKind;
 use ty_python_core::definition::ParameterDefinitionNodeKind;
+use ty_python_core::scope::FileScopeId;
 use ty_python_core::ProgramFile;
 use ty_python_semantic::provided::ProvidedClass;
 use ty_python_semantic::provided::ProvidedField;
@@ -29,6 +36,9 @@ use ty_python_semantic::types::DictionaryFirstEntry;
 use ty_python_semantic::types::DictionaryItem;
 use ty_python_semantic::types::DictionaryItems;
 use ty_python_semantic::types::KnownClass;
+use ty_python_semantic::types::Parameter;
+use ty_python_semantic::types::Parameters;
+use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypedDictFieldBuilder;
 use ty_python_semantic::types::TypedDictOpenness;
@@ -47,6 +57,121 @@ use super::factory::AttributeUse;
 use super::factory::BuiltinFunction;
 use super::factory::RuleAttributeData;
 use crate::Database;
+
+pub(super) struct CallbackContract<'a, 'db> {
+    pub argument: &'a Expr,
+    pub ty: Type<'db>,
+    invocation: Type<'db>,
+}
+
+/// A callback view applies only to the registration that supplies its runtime arguments.
+/// Its public function type stays independent of registration and body inference.
+pub(super) fn callback_contract<'a, 'db>(
+    db: &'db Database,
+    model: &SemanticModel<'db>,
+    call: &'a ExprCall,
+) -> Option<CallbackContract<'a, 'db>> {
+    if !db.environment().options(db).infer_ctx_attributes
+        || model.scope(call.into()) != Some(FileScopeId::global())
+    {
+        return None;
+    }
+    let registration = resolved_call_signature(model, call)?;
+    let declaration = registration.definition?;
+    let factory = factory::declaration(db, declaration)?;
+    let context_kind = match factory {
+        BuiltinFunction::Rule { repository } => {
+            if repository {
+                ContextKind::Repository
+            } else {
+                ContextKind::Build
+            }
+        }
+        BuiltinFunction::Aspect => ContextKind::Aspect,
+        _ => return None,
+    };
+    let argument = argument(call, &registration, "implementation").ok()??;
+    let Type::FunctionLiteral(function_type) = argument.inferred_type(model)? else {
+        return None;
+    };
+    let mut overloads = function_type.iter_overloads_and_implementation(db);
+    let overload = overloads.next()?;
+    if overloads.next().is_some() {
+        return None;
+    }
+    let definition = overload.definition(db);
+    let file = definition.program_file(db);
+    // Other modules are checked with their own registrations and declared contracts.
+    if file != model.program_file() {
+        return None;
+    }
+    let signature = overload.signature(db);
+    let environment = model.program_environment();
+    let mut parameters = Vec::new();
+    if context_kind == ContextKind::Aspect {
+        let declarations = declaration.program_file(db);
+        let target = factory::native_class(db, declarations, "Target")?;
+        let target = target.to_instance_approximation(db, &environment)?;
+        parameters.push(Parameter::positional_only(None).with_annotated_type(target));
+    }
+    let context = registration_context_type(db, model, file, call, &registration, context_kind)?;
+    parameters.push(Parameter::positional_only(None).with_annotated_type(context));
+    let invocation = Type::single_callable(
+        db,
+        Signature::new(
+            Parameters::from_annotation(db, parameters),
+            KnownClass::Object.to_instance(db, &environment),
+        ),
+    );
+    // The body binding already combines every registration, source defaults, and annotation
+    // precedence. Project only unannotated slots; the declared return remains authoritative.
+    let signature = signature
+        .with_inferred_parameter_context(|parameter| Some(model.definition_type(parameter)));
+    Some(CallbackContract {
+        argument,
+        ty: Type::single_callable(db, signature),
+        invocation,
+    })
+}
+
+pub(super) fn diagnostics(db: &Database, file: starpls_common::File) -> Vec<Diagnostic> {
+    if !db.environment().options(db).infer_ctx_attributes || file.is_type_interface(db) {
+        return Vec::new();
+    }
+    let program = db.starlark_program_file(file);
+    let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+    let model = SemanticModel::new(db, program);
+    let environment = model.program_environment();
+    let mut calls = RegistrationCalls::default();
+    calls.visit_body(parsed.suite());
+    calls
+        .calls
+        .into_iter()
+        .filter_map(|call| {
+            let CallbackContract {
+                argument,
+                ty,
+                invocation,
+            } = callback_contract(db, &model, call)?;
+            if ty.is_assignable_to(db, &environment, invocation) {
+                return None;
+            }
+            let mut diagnostic = Diagnostic::new(
+                DiagnosticId::Lint(LintName::of("invalid-argument-type")),
+                Severity::Error,
+                format!(
+                    "Callback `{}` does not accept the arguments supplied by this registration: `{}`",
+                    ty.display(db, &environment),
+                    invocation.display(db, &environment),
+                ),
+            );
+            diagnostic.annotate(Annotation::primary(
+                Span::from(file.source).with_range(argument.range()),
+            ));
+            Some(diagnostic)
+        })
+        .collect()
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ContextKind {
@@ -200,6 +325,20 @@ fn registration_parameter_type<'db>(
             return target.to_instance_approximation(db, &environment);
         }
     }
+    registration_context_type(db, model, file, call, signature, context_kind)
+}
+
+fn registration_context_type<'db>(
+    db: &'db Database,
+    model: &SemanticModel<'db>,
+    file: ProgramFile<'db>,
+    call: &ExprCall,
+    signature: &CallSignatureDetails<'db>,
+    context_kind: ContextKind,
+) -> Option<Type<'db>> {
+    let environment = model.program_environment();
+    let declaration = signature.definition?;
+    let declarations = declaration.program_file(db);
     let result = call.inferred_type(model)?;
     let rule = result
         .provided_data(db, &environment)
@@ -1926,7 +2065,11 @@ example = make_aspect(implementation=implementation, attrs={
         let source = "def implementation(item: str, env):\n    item.upper()\nexample = aspect(implementation=implementation)\n";
         analysis.update_file(file, source.to_owned());
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        assert_eq!(&source[diagnostic.range().unwrap()], "implementation");
     }
 
     #[test]
@@ -2204,6 +2347,140 @@ fake = rule(implementation=implementation, attrs=struct(items=lambda: []))
                 check_field(&snapshot, file, &source, "ctx.attr.count", expected, "");
             }
         }
+    }
+
+    #[test]
+    fn registered_callback_contracts_are_local_to_each_use() {
+        let source = r#"def implementation(ctx) -> list[DefaultInfo]:
+    value: bool | str = ctx.attr.enabled
+    print(value)
+    return []
+first = rule(implementation=implementation, attrs={"enabled": attr.bool()})
+second = rule(implementation=implementation, attrs={"enabled": attr.string()})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for extra in [
+            "saved = implementation\n",
+            "implementation(None)\n",
+            "def later() -> object:\n    return rule(implementation=implementation, attrs={'enabled': attr.int()})\n",
+        ] {
+            analysis.update_file(file, format!("{source}{extra}"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(!diagnostics.is_empty(), "{extra}");
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
+                "{extra}: {diagnostics:?}"
+            );
+            assert!(
+                diagnostics.iter().all(
+                    |diagnostic| diagnostic.range().unwrap().start().to_usize() >= source.len()
+                ),
+                "{extra}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn registered_callback_contracts_use_stub_annotations() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "source.bzl",
+            "def implementation(ctx):\n    enabled: bool = ctx.attr.enabled\n    print(enabled)\n    return None\nexample = rule(implementation=implementation, attrs={'enabled': attr.bool()})\n",
+        );
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "def implementation(ctx) -> None: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        enable_context(&mut analysis);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        for file in [source, stub] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.update_file(stub, "def implementation(ctx: str) -> None: ...\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn registered_callbacks_validate_runtime_arguments_without_strictness() {
+        for (parameters, body, expected) in [
+            ("ctx: str", "return None", "invalid-argument-type"),
+            ("", "return None", "invalid-argument-type"),
+            ("*, ctx: object", "return None", "invalid-argument-type"),
+            (
+                "ctx",
+                "value: str = ctx.attr.enabled\n    print(value)\n    return None",
+                "invalid-assignment",
+            ),
+        ] {
+            let source = format!("def implementation({parameters}) -> None:\n    {body}\nexample = rule(implementation=implementation, attrs={{'enabled': attr.bool()}})\n");
+            let (mut analysis, fixture) = Analysis::from_single_file_fixture(&source);
+            enable_context(&mut analysis);
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            assert_eq!(
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.id().as_str())
+                    .collect::<Vec<_>>(),
+                [expected],
+                "{parameters}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn registered_callbacks_preserve_unannotated_returns() {
+        let source = "def implementation(ctx):\n    return None\nexample = rule(implementation=implementation)\n";
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"
+                    && diagnostic.headline_message().contains("argument")),
+            "{diagnostics:?}"
+        );
     }
 
     #[test]

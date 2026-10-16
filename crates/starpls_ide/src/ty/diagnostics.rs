@@ -236,6 +236,7 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
     diagnostics.extend(load::diagnostics(db, program_file));
     diagnostics.extend(super::interface::diagnostics(db, file));
     diagnostics.extend(super::annotations::diagnostics(db, file));
+    diagnostics.extend(super::context::diagnostics(db, file));
     diagnostics.extend(super::strictness::diagnostics(db, file));
     if !options.allow_unused_definitions {
         let index = semantic_index(db, program_file);

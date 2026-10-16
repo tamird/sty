@@ -20,7 +20,7 @@ use ruff_text_size::TextRange;
 use starpls_common::File;
 use ty_python_core::definition::Definition;
 use ty_python_semantic::lint::LintMetadata;
-use ty_python_semantic::types::ide_support::call_input_types;
+use ty_python_semantic::types::ide_support::call_input_types_with_context;
 use ty_python_semantic::types::ide_support::CallInputError;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::Db as _;
@@ -113,13 +113,32 @@ impl<'db> Checks<'_, 'db> {
         }
     }
 
-    fn check_call_inputs(&mut self, call: &ruff_python_ast::ExprCall) {
+    fn check_argument(
+        &mut self,
+        expression: &Expr,
+        callback: Option<&super::context::CallbackContract<'_, 'db>>,
+    ) {
+        match callback.filter(|callback| callback.argument.range() == expression.range()) {
+            Some(callback) => self.check_type(expression.range(), callback.ty, "argument"),
+            None => self.check_expression(expression, "argument"),
+        }
+    }
+
+    fn check_call_inputs(
+        &mut self,
+        call: &ruff_python_ast::ExprCall,
+        callback: Option<&super::context::CallbackContract<'_, '_>>,
+    ) {
         // Excluded source syntax does not participate in ordinary call inference.
         if self.model.scope(call.into()).is_none() {
             return;
         }
         let env = self.model.program_environment();
-        match call_input_types(self.model, call) {
+        match call_input_types_with_context(self.model, call, |expression| {
+            callback
+                .filter(|callback| callback.argument.range() == expression.range())
+                .map(|callback| callback.ty)
+        }) {
             Ok(arguments) => {
                 // A checked invocation need only satisfy the selected contracts for supplied
                 // arguments. Subtyping proves that no gradual alternative was needed; the
@@ -291,15 +310,16 @@ impl<'ast> Visitor<'ast> for Checks<'_, '_> {
         if self.non_static && !self.file.is_type_interface(self.db) {
             if let Expr::Call(call) = expression {
                 let result = expression.inferred_type(self.model);
-                self.check_call_inputs(call);
+                let callback = super::context::callback_contract(self.db, self.model, call);
+                self.check_call_inputs(call, callback.as_ref());
                 if let Some(result) = result {
                     self.check_type(expression.range(), result, "call result");
                 }
                 for argument in &call.arguments.args {
-                    self.check_expression(argument, "argument");
+                    self.check_argument(argument, callback.as_ref());
                 }
                 for keyword in &call.arguments.keywords {
-                    self.check_expression(&keyword.value, "argument");
+                    self.check_argument(&keyword.value, callback.as_ref());
                 }
             }
         }
