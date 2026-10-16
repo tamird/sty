@@ -195,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn type_names_narrow_runfiles_and_depsets() {
+    fn type_names_narrow_native_values() {
         let source = r#"
 DEPSET_TYPE = type(depset())
 def files(value: depset[File] | runfiles) -> depset[File]:
@@ -220,6 +220,19 @@ def paths(value: depset[File] | runfiles) -> list[File]:
     if type(value) == "depset":
         return value.to_list()
     return value.files.to_list()
+def executable(value: File | str | FilesToRunProvider) -> File | None:
+    if type(value) == "FilesToRunProvider":
+        return value.executable
+    return None
+def required_executable(value: File | FilesToRunProvider[File]) -> File:
+    if type(value) == "FilesToRunProvider":
+        return value.executable
+    return value
+def sequence(value: list[File] | tuple[File, ...] | None) -> list[File]:
+    result: list[File] = []
+    if type(value) in ("list", "tuple"):
+        result.extend(value)
+    return result
 "#;
         let (mut analysis, fixture) = native_analysis(source);
         analysis.set_rules(
@@ -238,6 +251,16 @@ def paths(value: depset[File] | runfiles) -> list[File]:
                 "unresolved-attribute",
             ),
             ("-> list[File]:", "-> list[str]:", "invalid-return-type"),
+            (
+                "return value.executable",
+                "return value",
+                "invalid-return-type",
+            ),
+            (
+                "result.extend(value)",
+                "result.append(value)",
+                "invalid-argument-type",
+            ),
         ] {
             analysis.update_file(file, source.replacen(old, new, 1));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();

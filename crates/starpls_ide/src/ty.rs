@@ -597,7 +597,8 @@ impl ty_python_semantic::Db for Database {
             }
             "set" => KnownClass::Set.to_specialized_instance(self, &environment, &[unknown]),
             "tuple" => Type::homogeneous_tuple(self, &environment, unknown),
-            "Label" | "rule" | "macro" | "select" | "depset" | "runfiles" => {
+            "Label" | "rule" | "macro" | "select" | "depset" | "runfiles"
+            | "FilesToRunProvider" => {
                 let binding = self.language_builtin(file, tag, BuiltinUsage::Annotation)?;
                 let class = binding.resolve_type(self)?;
                 if !matches!(class, Type::ClassLiteral(_)) {

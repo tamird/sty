@@ -879,6 +879,11 @@ fn write_type_overloads(
         declared_classes
             .contains("runfiles")
             .then_some(("_starpls_types.runfiles", "runfiles")),
+    )
+    .chain(
+        declared_classes
+            .contains("FilesToRunProvider")
+            .then_some(("_starpls_types.FilesToRunProvider", "FilesToRunProvider")),
     ) {
         writeln!(output, "@_typing.overload")?;
         writeln!(
