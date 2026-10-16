@@ -1004,10 +1004,19 @@ fn write_type_overloads(
         ("_builtins.bool", "bool"),
         ("_builtins.int", "int"),
         ("_builtins.str", "string"),
-        ("_builtins.list[_T]", "list"),
-        ("_builtins.dict[_T, _U]", "dict"),
+        (
+            "_starpls_ty_extensions.Top[_builtins.list[_typing.Any]]",
+            "list",
+        ),
+        (
+            "_starpls_ty_extensions.Top[_builtins.dict[_typing.Any, _typing.Any]]",
+            "dict",
+        ),
         ("_builtins.tuple[_T, ...]", "tuple"),
-        ("_builtins.set[_T]", "set"),
+        (
+            "_starpls_ty_extensions.Top[_builtins.set[_typing.Any]]",
+            "set",
+        ),
         ("_builtins.range", "range"),
         ("None", "NoneType"),
     ]

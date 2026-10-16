@@ -433,6 +433,56 @@ renamed(2)
     }
 
     #[test]
+    fn type_queries_preserve_container_domains() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(rules(&["non-static-type"]));
+        let file = fixture.main_file();
+        for expression in [
+            "type([])",
+            "type({})",
+            "type(())",
+            "type(set())",
+            "type(select({'//conditions:default': 0}))",
+        ] {
+            analysis.update_file(file, format!("tag = {expression}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{expression}: {diagnostics:?}");
+        }
+        for (parameter, argument) in [
+            ("value: Any", "[value]"),
+            ("value", "[value]"),
+            ("values: list[Any]", "values"),
+            ("value: Any", "{'key': value}"),
+            ("value", "{'key': value}"),
+            ("fields: dict[str, Any]", "fields"),
+            ("values: set[Any]", "values"),
+        ] {
+            let source = format!("def tag({parameter}) -> str:\n    return type({argument})\n");
+            analysis.update_file(file, source.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic.headline_message().contains("argument")
+                        && diagnostic.range().is_some_and(|range| {
+                            &source[range.start().to_usize()..range.end().to_usize()] == argument
+                        })
+                }),
+                "{source}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
     fn incomplete_values_are_opt_in_and_suppressions_expire() {
         let (mut analysis, fixture) = Analysis::from_single_file_fixture("values = []\n");
         let file = fixture.main_file();
