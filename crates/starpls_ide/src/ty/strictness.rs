@@ -114,7 +114,7 @@ impl<'db> Checks<'_, 'db> {
     }
 
     fn check_call_inputs(&mut self, call: &ruff_python_ast::ExprCall) {
-        // Import syntax such as load() is excluded from ordinary call inference.
+        // Excluded source syntax does not participate in ordinary call inference.
         if self.model.scope(call.into()).is_none() {
             return;
         }
@@ -186,6 +186,11 @@ impl<'db> Checks<'_, 'db> {
 
 impl<'ast> Visitor<'ast> for Checks<'_, '_> {
     fn visit_stmt(&mut self, statement: &'ast Stmt) {
+        let index = ty_python_core::semantic_index(self.db, self.model.program_file());
+        if index.provided_statement_definitions(statement).is_some() {
+            // The frontend supplies bindings for imports; their source expressions are not calls.
+            return;
+        }
         if !self.file.is_type_interface(self.db) {
             if let Stmt::Return(statement) = statement {
                 if let Some(value) = &statement.value {
@@ -348,6 +353,40 @@ mod tests {
                 .collect(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn loads_do_not_contribute_call_contracts() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "api.bzli",
+            "def complete(value: int) -> int: ...\ndef gradual(value: Any) -> int: ...\n",
+        );
+        let source = r#"
+load("api.bzli", "complete")
+load(
+    "api.bzli",
+    "gradual",
+    renamed = "complete",
+)
+complete(1)
+renamed(2)
+"#;
+        let file = fixture.add_file(&mut analysis.db, "main.bzl", source);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_rules(rules(&["non-static-type"]));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(file, format!("{source}gradual(1)\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "non-static-type");
+        assert_eq!(
+            diagnostics[0].range().unwrap().start().to_usize(),
+            source.len()
+        );
     }
 
     #[test]
