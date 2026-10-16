@@ -1,0 +1,90 @@
+name: Check Starlark with sty
+description: Build the pinned sty revision and check a Bazel workspace's implementations and stubs.
+
+inputs:
+  files:
+    description: Newline-separated implementation files or directories, relative to working-directory.
+    required: true
+  working-directory:
+    description: Bazel workspace containing sty.toml.
+    default: .
+  bazel-version:
+    description: Bazel version for the checked workspace; defaults to its .bazelversion.
+    default: ''
+  artifact-name:
+    description: Name of the artifact containing build logs, diagnostics, and the coverage report.
+    default: sty
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare reports
+      id: reports
+      shell: bash
+      env:
+        # Nested actions replace github.action_ref when evaluating their inputs.
+        STY_REVISION: ${{ github.action_ref }}
+      run: |
+        directory=$(mktemp -d "$RUNNER_TEMP/sty.XXXXXX")
+        echo "directory=$directory" >> "$GITHUB_OUTPUT"
+        echo "revision=$STY_REVISION" >> "$GITHUB_OUTPUT"
+
+    - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+      with:
+        bazelisk-version: 1.29.0
+        bazelisk-cache: true
+        module-root: ${{ inputs.working-directory }}
+        # The pinned action revision covers checker inputs; setup-bazel hashes
+        # the consumer's manifests within GITHUB_WORKSPACE.
+        cache-version: sty-${{ steps.reports.outputs.revision }}
+        disk-cache: true
+        repository-cache: true
+        cache-save: ${{ github.event_name != 'pull_request' }}
+
+    - name: Build sty
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        REPORT_DIRECTORY: ${{ steps.reports.outputs.directory }}
+      run: |
+        export USE_BAZEL_VERSION
+        USE_BAZEL_VERSION=$(cat .bazelversion)
+        bazel build -c opt --lockfile_mode=error //:sty 2>&1 | tee "$REPORT_DIRECTORY/build.log"
+        # The following check uses the consumer's workspace and Bazel version.
+        # Keep the binary outside the build output base before that switch.
+        cp "$(bazel info -c opt bazel-bin)/crates/starpls/sty" "$REPORT_DIRECTORY/sty"
+
+    - name: Check implementations and stubs
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        REPORT_DIRECTORY: ${{ steps.reports.outputs.directory }}
+        CHECK_FILES: ${{ inputs.files }}
+        CHECK_BAZEL_VERSION: ${{ inputs.bazel-version }}
+      run: |
+        if [[ -z "${CHECK_FILES//[[:space:]]/}" ]]; then
+          echo 'The files input must select at least one implementation.' >&2
+          exit 1
+        fi
+        if [[ -n "$CHECK_BAZEL_VERSION" ]]; then
+          export USE_BAZEL_VERSION="$CHECK_BAZEL_VERSION"
+        else
+          unset USE_BAZEL_VERSION
+        fi
+        printf '%s\n' "$CHECK_FILES" > "$REPORT_DIRECTORY/files.txt"
+        "$REPORT_DIRECTORY/sty" check --experimental_infer_ctx_attributes \
+          --files-from "$REPORT_DIRECTORY/files.txt" \
+          --progress --report "$REPORT_DIRECTORY/coverage.json" \
+          2>&1 | tee "$REPORT_DIRECTORY/diagnostics.log"
+
+    - name: Upload sty reports
+      if: ${{ always() && steps.reports.outputs.directory != '' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          ${{ steps.reports.outputs.directory }}/*.log
+          ${{ steps.reports.outputs.directory }}/*.json
+          ${{ steps.reports.outputs.directory }}/files.txt
+        if-no-files-found: warn
+        retention-days: 14

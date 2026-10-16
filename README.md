@@ -116,6 +116,8 @@ with `[]` similarly retains `Label` in `select[list[Label | Unknown] | None]`.
 
 ## Batch checking
 
+For an advisory pull request check, see [GitHub Actions](docs/github-actions.md).
+
 Run `sty check` from the Bazel workspace with source files or directories:
 
 ```sh
