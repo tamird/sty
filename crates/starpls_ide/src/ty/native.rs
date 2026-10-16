@@ -567,6 +567,11 @@ fn declarations(
                             "repo_mapping_manifest" => Some("_starpls_types.File | None"),
                             _ => None,
                         }
+                    } else if class.name == "apple_common"
+                        && field.name == "platform"
+                        && classes.contains_key("apple_platform")
+                    {
+                        Some("_starpls_typing.Final[_starpls_types._ApplePlatforms]")
                     } else {
                         None
                     };
@@ -583,6 +588,29 @@ fn declarations(
                     }
                 }
             }
+        }
+    }
+    if classes.contains_key("apple_common") && classes.contains_key("apple_platform") {
+        // ApplePlatform.getStarlarkStruct exports each enum value under its
+        // Starlark name; the inventory records only the enclosing struct.
+        // https://github.com/bazelbuild/bazel/blob/9.2.0/src/main/java/com/google/devtools/build/lib/rules/apple/ApplePlatform.java
+        body.push_str("    @_starpls_typing.final\n    class _ApplePlatforms:\n");
+        for name in [
+            "ios_device",
+            "ios_simulator",
+            "macos",
+            "tvos_device",
+            "tvos_simulator",
+            "visionos_device",
+            "visionos_simulator",
+            "watchos_device",
+            "watchos_simulator",
+            "catalyst",
+        ] {
+            writeln!(
+                body,
+                "        {name}: _starpls_typing.Final[_starpls_types.apple_platform] = ..."
+            )?;
         }
     }
     if dialect == Dialect::Bazel
@@ -1464,6 +1492,69 @@ json.decode("{}", default=struct(value="fallback"))
             let diagnostics = ty_python_semantic::check_file_unwrap(db, file);
             assert_eq!(!diagnostics.is_empty(), errors, "{source}: {diagnostics:?}");
         }
+    }
+
+    #[test]
+    fn apple_platform_namespace_has_typed_members() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("non-static-type".into(), "error".into()),
+                    ("unsound-return-statement".into(), "error".into()),
+                ]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap(),
+        );
+        let source = r#"
+def platform() -> apple_platform:
+    return apple_common.platform.ios_device
+
+platforms: list[apple_platform] = [
+    apple_common.platform.ios_device,
+    apple_common.platform.ios_simulator,
+    apple_common.platform.macos,
+    apple_common.platform.tvos_device,
+    apple_common.platform.tvos_simulator,
+    apple_common.platform.visionos_device,
+    apple_common.platform.visionos_simulator,
+    apple_common.platform.watchos_device,
+    apple_common.platform.watchos_simulator,
+    apple_common.platform.catalyst,
+]
+name: str = apple_common.platform.ios_device.name_in_plist
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/platforms.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            file,
+            "wrong: str = apple_common.platform.ios_device\napple_common.platform.ios_simualtor\n"
+                .into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(ids, ["invalid-assignment", "unresolved-attribute"]);
     }
 
     #[test]
