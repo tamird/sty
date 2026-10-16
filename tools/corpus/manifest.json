@@ -762,17 +762,25 @@
   {
     "directory": "rules_runfiles_group",
     "origin": "https://github.com/bazel-contrib/rules_runfiles_group.git",
-    "commit": "e979ab99a092c3460e68e42c2bb4ae035b721e14",
+    "commit": "7eac86bf2d8da7094e7ddb3c4b1c9d161bf4be4c",
     "bazel_version": "9.3.0",
     "sources": [
       "runfiles_group/private/lib/content.bzl",
       "runfiles_group/private/lib/entry.bzl",
       "runfiles_group/private/lib/names.bzl",
-      "runfiles_group/private/providers/runfiles_group_info.bzl"
+      "runfiles_group/private/providers/runfiles_group_info.bzl",
+      "runfiles_group/private/lib/packager.bzl",
+      "runfiles_group/private/lib/partial.bzl",
+      "runfiles_group/private/lib/resolve.bzl",
+      "runfiles_group/private/providers/runfiles_group_partial_info.bzl"
     ],
     "interfaces": {
       "runfiles_group/private/providers/runfiles_group_info.bzl": "runfiles_group/private/providers/runfiles_group_info.bzli",
-      "runfiles_group/private/lib/names.bzl": "runfiles_group/private/lib/names.bzli"
+      "runfiles_group/private/lib/names.bzl": "runfiles_group/private/lib/names.bzli",
+      "runfiles_group/private/lib/packager.bzl": "runfiles_group/private/lib/packager.bzli",
+      "runfiles_group/private/lib/partial.bzl": "runfiles_group/private/lib/partial.bzli",
+      "runfiles_group/private/lib/resolve.bzl": "runfiles_group/private/lib/resolve.bzli",
+      "runfiles_group/private/providers/runfiles_group_partial_info.bzl": "runfiles_group/private/providers/runfiles_group_partial_info.bzli"
     },
     "cases": [
       {
@@ -924,6 +932,97 @@
             "id": "invalid-return-type",
             "path": "runfiles_group/private/lib/names.bzl",
             "line": 25
+          }
+        ]
+      },
+      {
+        "name": "packager",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "fixture": "probes/runfiles-packager.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-callback",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "fixture": "probes/runfiles-bad-callback.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 16
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 26
+          }
+        ]
+      },
+      {
+        "name": "bad-handle",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "fixture": "probes/runfiles-bad-handle.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 5
+          },
+          {
+            "id": "invalid-return-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 9
+          }
+        ]
+      },
+      {
+        "name": "bad-partial-handle",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "runfiles_group/private/lib/partial.bzl",
+            "old": "        handle = handle,",
+            "new": "        handle = str(handle),"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "runfiles_group/private/lib/partial.bzl",
+            "line": 11
+          }
+        ]
+      },
+      {
+        "name": "bad-merge-handle",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "runfiles_group/private/lib/resolve.bzl",
+            "old": "        handle = ops.merge(ctx, name, inputs),",
+            "new": "        handle = str(ops.merge(ctx, name, inputs)),"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "runfiles_group/private/lib/resolve.bzl",
+            "line": 115
           }
         ]
       }

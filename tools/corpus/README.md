@@ -55,10 +55,10 @@ The C++ toolchain configuration contracts cover all thirteen constructor helpers
 and their nominal providers, including recursive flag groups. The Rust dependency
 contracts cover lists and tuples of dependency specifications, optional dictionary
 fields, finite key unions, shared dependencies, and platform selectors. Runfiles
-group contracts cover entry construction, content conversion, provider lookup, and
-name rendering. Its packager callbacks remain unannotated: preserving their
-handle type through partials and merge operations
-requires generic provider declarations, which sty currently rejects.
+group contracts cover entry construction, content conversion, provider lookup, name
+rendering, and generic packagers. The packager cases preserve one handle type
+through materialization, partial transformations, and merging; incompatible
+callbacks and implementations that change that type are rejected.
 
 The runner uses sty's coverage report and rendered primary diagnostics. A change
 to either format fails visibly and requires updating this harness. Unit tests for
