@@ -88,7 +88,7 @@ pub(super) fn parameter_type<'db>(
     for statement in parsed.suite() {
         calls.visit_stmt(statement);
     }
-    let mut registration = None;
+    let mut parameter_types = Vec::new();
     for call in calls.calls {
         let Some(signature) = resolved_call_signature(&model, call) else {
             continue;
@@ -107,11 +107,15 @@ pub(super) fn parameter_type<'db>(
         ) {
             continue;
         }
-        // An unknown expansion could register this callback a second time;
-        // uncertainty here prevents a unique schema for the entire module.
+        // An unknown expansion could register this callback with another schema;
+        // every possible body contract must be accounted for.
         let Some(argument) = argument(call, &signature, "implementation").ok()? else {
             continue;
         };
+        // An inline lambda is a distinct callback from this named function.
+        if matches!(argument, Expr::Lambda(_)) {
+            continue;
+        }
         let ty = argument.inferred_type(&model)?;
         if !matches!(ty, Type::FunctionLiteral(_)) {
             return None;
@@ -122,20 +126,42 @@ pub(super) fn parameter_type<'db>(
         if target != implementation {
             continue;
         }
-        if registration.is_some() {
-            // A callback used with more than one schema has no unique body contract.
-            return None;
-        }
-        registration = Some((call, signature, declaration, factory));
+        parameter_types.push(registration_parameter_type(
+            db,
+            &model,
+            file,
+            function,
+            parameter.name().as_str(),
+            call,
+            &signature,
+        )?);
     }
-    let (call, signature, declaration, factory) = registration?;
+    if parameter_types.is_empty() {
+        return None;
+    }
+    // A shared implementation must accept the context from every registration.
+    Some(UnionType::from_elements(db, &environment, parameter_types))
+}
+
+fn registration_parameter_type<'db>(
+    db: &'db Database,
+    model: &SemanticModel<'db>,
+    file: ProgramFile<'db>,
+    function: &ruff_python_ast::StmtFunctionDef,
+    parameter: &str,
+    call: &ExprCall,
+    signature: &CallSignatureDetails<'db>,
+) -> Option<Type<'db>> {
+    let environment = model.program_environment();
+    let declaration = signature.definition?;
+    let factory = factory::declaration(db, declaration)?;
     let declarations = declaration.program_file(db);
     let context_kind = match factory {
         BuiltinFunction::Macro => {
-            let result = call.inferred_type(&model)?;
+            let result = call.inferred_type(model)?;
             let data = result.provided_data(db, &environment)?;
             let data = data.downcast_ref::<factory::RuleData>()?;
-            return data.parameter_type(db, &environment, declarations, parameter.name().as_str());
+            return data.parameter_type(db, &environment, declarations, parameter);
         }
         BuiltinFunction::Rule { repository } => {
             if repository {
@@ -169,19 +195,19 @@ pub(super) fn parameter_type<'db>(
         if !function.parameters.kwonlyargs.is_empty() {
             return None;
         }
-        if function.parameters.index(parameter.name().as_str()) == Some(0) {
+        if function.parameters.index(parameter) == Some(0) {
             let target = factory::native_class(db, declarations, "Target")?;
             return target.to_instance_approximation(db, &environment);
         }
     }
-    let result = call.inferred_type(&model)?;
+    let result = call.inferred_type(model)?;
     let rule = result
         .provided_data(db, &environment)
         .and_then(|data| data.downcast_ref::<factory::RuleData>());
     let aspect_attributes;
     let mut analyzed_types = TypedDictSchema::default();
     let (attributes, complete) = if context_kind == ContextKind::Aspect {
-        let mapping = match argument(call, &signature, "attrs").ok()? {
+        let mapping = match argument(call, signature, "attrs").ok()? {
             Some(attrs) => model.dictionary_items(attrs).unwrap_or(DictionaryItems {
                 items: Box::default(),
                 extra_items: DictionaryExtraItems::Value(Type::unknown()),
@@ -344,7 +370,7 @@ pub(super) fn parameter_type<'db>(
         if view == View::Outputs {
             let output = factory::native_class(db, declarations, "File")?
                 .to_instance_approximation(db, &environment)?;
-            if let Some(outputs) = argument(call, &signature, "outputs").ok()? {
+            if let Some(outputs) = argument(call, signature, "outputs").ok()? {
                 match model.dictionary_items(outputs) {
                     Some(mapping) => {
                         let is_complete = mapping.is_complete();
@@ -816,7 +842,7 @@ mod tests {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
         enable_context(&mut analysis);
-        let text = "def implementation(ctx):\n    target: Target = ctx.attr.src\n    print(target)\n    return []\ndef unrelated(value):\n    pass\nexample = rule(implementation=implementation, attrs={'src': attr.label(mandatory=True)})\n";
+        let text = "def implementation(ctx):\n    target: Target = ctx.attr.src\n    print(target)\n    return []\ndef unrelated(value):\n    pass\nunrelated_rule = rule(implementation=lambda context: [])\nexample = rule(implementation=implementation, attrs={'src': attr.label(mandatory=True)})\nsecond = rule(implementation=implementation, attrs={'src': attr.label(mandatory=True), 'enabled': attr.bool()})\n";
         let source = fixture.add_file(&mut analysis.db, "source.bzl", text);
         let stub = fixture.add_file(
             &mut analysis.db,
@@ -858,12 +884,32 @@ mod tests {
         assert_eq!(parameter_type(stub), parameter_type(source));
 
         // Editing the source schema updates the shared context without weakening its fields.
-        analysis.update_file(source, text.replace("mandatory=True", "mandatory=False"));
+        for changed in [
+            text.replace("mandatory=True", "mandatory=False"),
+            text.replacen("attr.label(mandatory=True)", "attr.string()", 1),
+        ] {
+            analysis.update_file(source, changed);
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+            assert_eq!(
+                ids,
+                ["invalid-assignment", "missing-parameter-annotation"],
+                "{diagnostics:?}"
+            );
+        }
+        analysis.update_file(
+            source,
+            text.replacen(
+                "'src': attr.label(mandatory=True)",
+                "'other': attr.string()",
+                1,
+            ),
+        );
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
-        assert_eq!(
-            ids,
-            ["invalid-assignment", "missing-parameter-annotation"],
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.id().as_str() == "unresolved-attribute"),
             "{diagnostics:?}"
         );
 
@@ -2299,7 +2345,7 @@ example = macro(implementation=implementation, attrs={{
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False)})", "str"),
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.int(configurable=False)})", "int"),
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False)})", "str"),
-            ("value", "", "first = macro(implementation=implementation, attrs={'value': attr.string()})\nsecond = macro(implementation=implementation, attrs={'value': attr.int()})", "Unknown"),
+            ("value", "", "first = macro(implementation=implementation, attrs={'value': attr.string()})\nsecond = macro(implementation=implementation, attrs={'value': attr.int()})", "select[str | None, Any] | select[int | None, Any]"),
             ("value", "    # type: (str, list[Label], Unknown) -> None\n", "example = macro(implementation=implementation, attrs={'value': attr.string()})", "Unknown"),
             ("value=42", "", "example = macro(implementation=implementation, attrs={'value': attr.string()})", "select[str | None, Any] | Literal[42]"),
         ] {

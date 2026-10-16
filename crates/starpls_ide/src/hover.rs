@@ -864,7 +864,7 @@ example = register(implementation=callback, attrs={'value': attr.string()})",
                 "",
                 "first = rule(implementation=implementation, attrs={'value': attr.string()})
 second = rule(implementation=implementation, attrs={'value': attr.int()})",
-                "Unknown",
+                "str | int",
             ),
             (
                 "    # type: (Unknown) -> None\n",
