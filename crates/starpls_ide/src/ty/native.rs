@@ -376,7 +376,9 @@ fn declarations(
         // types from group lookup results.
         if matches!(
             class.name.as_str(),
-            "DefaultInfo"
+            "File"
+                | "Label"
+                | "DefaultInfo"
                 | "PackageSpecificationInfo"
                 | "FilesToRunProvider"
                 | "Target"
@@ -600,6 +602,21 @@ fn declarations(
                         ] {
                             writeln!(body, "        @_starpls_typing.overload")?;
                             writeln!(body, "        def getenv(_starpls_self, name: _starpls_builtins.str, default: {default}) -> {result}:")?;
+                            writeln!(body, "            {}", quoted(&documentation))?;
+                            writeln!(body, "            ...")?;
+                        }
+                    } else if class.name == "Args" && field.name == "add" {
+                        // Args.addArgument stringifies scalar objects, but rejects
+                        // Java Sequence values and depsets before conversion.
+                        // Directory File rejection is a value-level constraint.
+                        let documentation = callable_documentation(field, callable)?;
+                        let scalar = "_starpls_ty_extensions.Not[_starpls_typing.Sequence[_starpls_builtins.object] | _starpls_types.depset[_starpls_builtins.object]]";
+                        for arguments in [
+                            format!("arg_name_or_value: {scalar}"),
+                            format!("arg_name_or_value: _starpls_builtins.str, value: {scalar}"),
+                        ] {
+                            writeln!(body, "        @_starpls_typing.overload")?;
+                            writeln!(body, "        def add(_starpls_self, {arguments}, /, *, format: _starpls_builtins.str | None = None) -> _starpls_types.Args:")?;
                             writeln!(body, "            {}", quoted(&documentation))?;
                             writeln!(body, "            ...")?;
                         }
@@ -2366,6 +2383,66 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
             assert!(diagnostics.iter().all(|diagnostic| usize::from(
                 diagnostic.range().unwrap().start()
             ) >= source.len()));
+        }
+    }
+
+    #[test]
+    fn action_arguments_distinguish_scalars_and_vectors() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = r#"def inspect(args: Args, file: File, label: Label):
+    args.add(file)
+    args.add("--file", file, format="%s")
+    args.add(label)
+    args.add("text")
+    args.add(42)
+    args.add(None)
+    args.add({"key": "value"})
+    _sequence: Sequence[int] = range(3)
+    print(_sequence)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for invalid in [
+            "[file]",
+            "(file,)",
+            "_sequence",
+            "range(3)",
+            "depset([file])",
+            "file, file",
+            "'--file', [file]",
+            "'value', format=42",
+        ] {
+            analysis.update_file(file, format!("{source}    args.add({invalid})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| matches!(
+                    diagnostic.id().as_str(),
+                    "invalid-argument-type" | "no-matching-overload"
+                )),
+                "{invalid}: {diagnostics:?}"
+            );
+            assert!(
+                diagnostics.iter().all(|diagnostic| usize::from(
+                    diagnostic.range().unwrap().start()
+                ) >= source.len()),
+                "{invalid}: {diagnostics:?}"
+            );
         }
     }
 
