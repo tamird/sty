@@ -279,6 +279,20 @@ fn declarations(
     let propagation_context_available = dialect == Dialect::Bazel
         && classes.contains_key("Label")
         && classes.contains_key("struct");
+    let xcode_config_available = dialect == Dialect::Bazel
+        && classes.contains_key("apple_common")
+        && classes.contains_key("apple_platform")
+        && classes.contains_key("DottedVersion")
+        && classes.contains_key("Provider");
+    if xcode_config_available {
+        classes
+            .entry("XcodeVersionConfig".to_owned())
+            .or_insert_with(|| Type {
+                name: "XcodeVersionConfig".to_owned(),
+                doc: "Xcode versions and execution requirements.".to_owned(),
+                ..Default::default()
+            });
+    }
     if dialect == Dialect::Bazel {
         classes
             .entry("repo_metadata".to_owned())
@@ -407,6 +421,26 @@ fn declarations(
             )?;
         }
         let mut names = BTreeSet::new();
+        if xcode_config_available && class.name == "XcodeVersionConfig" {
+            // common/xcode/providers.bzl exports functions as provider fields.
+            // The API inventory includes the key, but omits this instance type.
+            names.extend([
+                "xcode_version",
+                "minimum_os_for_platform_type",
+                "sdk_version_for_platform",
+                "availability",
+                "execution_info",
+            ]);
+            writeln!(body, "        xcode_version: _starpls_typing.Final[_starpls_typing.Callable[[], _starpls_types.DottedVersion | _starpls_builtins.str | None]]")?;
+            writeln!(body, "        minimum_os_for_platform_type: _starpls_typing.Final[_starpls_typing.Callable[[_starpls_builtins.str], _starpls_types.DottedVersion]]")?;
+            writeln!(body, "        sdk_version_for_platform: _starpls_typing.Final[_starpls_typing.Callable[[_starpls_types.apple_platform], _starpls_types.DottedVersion]]")?;
+            writeln!(body, "        availability: _starpls_typing.Final[_starpls_typing.Callable[[], _starpls_builtins.str]]")?;
+            writeln!(body, "        execution_info: _starpls_typing.Final[_starpls_typing.Callable[[], _starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]]]")?;
+        }
+        if xcode_config_available && class.name == "apple_common" {
+            names.insert("XcodeVersionConfig");
+            writeln!(body, "        XcodeVersionConfig: _starpls_typing.Final[_starpls_types.Provider[_starpls_types.XcodeVersionConfig]]")?;
+        }
         if propagation_context_available && class.name == "propagation_ctx" {
             names.extend(["attr", "rule"]);
             writeln!(body, "        attr: _starpls_typing.Final[_starpls_types.struct[_starpls_builtins.object]]")?;
@@ -1050,6 +1084,9 @@ fn write_function(
             output.push('*');
         }
         let parameter_type = match (kind, value.name.as_str(), name) {
+            (CallableKind::Method("apple_common"), "apple_host_system_env", "xcode_config") => classes.contains("XcodeVersionConfig").then_some("_starpls_types.XcodeVersionConfig | None"),
+            (CallableKind::Method("apple_common"), "target_apple_env", "xcode_config") => classes.contains("XcodeVersionConfig").then_some("_starpls_types.XcodeVersionConfig"),
+            (CallableKind::Method("apple_common"), "target_apple_env", "platform") => classes.contains("apple_platform").then_some("_starpls_types.apple_platform"),
             (CallableKind::Function, "struct", "kwargs") => Some("_StructField"),
             // Encoding accepts any object; unsupported values raise rather than return.
             (CallableKind::Method("json"), "encode", "x") => Some("_starpls_builtins.object"),
@@ -1151,6 +1188,9 @@ fn write_function(
         output.push_str(", stripPrefix: _starpls_builtins.str = ''");
     }
     let return_type = match (kind, value.name.as_str()) {
+        (CallableKind::Method("apple_common"), "apple_host_system_env" | "target_apple_env") => {
+            Some("_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]")
+        }
         (CallableKind::Function, "struct") => Some("_starpls_types.struct[_StructField]"),
         (CallableKind::Function, "select") => Some("_starpls_types.select[_SelectValue]"),
         (CallableKind::Function, "depset") => Some("_starpls_types.depset[_DepsetElement]"),
@@ -1627,6 +1667,71 @@ name: str = apple_common.platform.ios_device.name_in_plist
             .map(|diagnostic| diagnostic.id().as_str())
             .collect();
         assert_eq!(ids, ["invalid-assignment", "unresolved-attribute"]);
+    }
+
+    #[test]
+    fn xcode_provider_preserves_execution_and_environment_types() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"
+def selected(target: Target) -> XcodeVersionConfig:
+    return target[apple_common.XcodeVersionConfig]
+
+def execution(config: XcodeVersionConfig) -> dict[str, str]:
+    return config.execution_info()
+
+def host(config: XcodeVersionConfig | None) -> dict[str, str]:
+    return apple_common.apple_host_system_env(config)
+
+def target(config: XcodeVersionConfig, platform: apple_platform) -> dict[str, str]:
+    return apple_common.target_apple_env(config, platform)
+
+def version(config: XcodeVersionConfig) -> DottedVersion | str | None:
+    return config.xcode_version()
+
+def sdk(config: XcodeVersionConfig, platform: apple_platform) -> DottedVersion:
+    return config.sdk_version_for_platform(platform)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/xcode.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            file,
+            "def invalid(config: XcodeVersionConfig) -> int:\n    config.execution_info = lambda: {}\n    apple_common.target_apple_env(config, 'ios')\n    return config.execution_info()\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "invalid-assignment",
+                "invalid-argument-type",
+                "invalid-return-type"
+            ]
+        );
     }
 
     #[test]
