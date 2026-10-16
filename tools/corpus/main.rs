@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::fs;
@@ -51,6 +52,8 @@ struct Repository {
     commit: String,
     bazel_version: String,
     sources: Vec<PathBuf>,
+    #[serde(default)]
+    interfaces: BTreeMap<PathBuf, PathBuf>,
     cases: Vec<Case>,
 }
 
@@ -288,6 +291,7 @@ fn run_case(
     checkout: &Path,
     output: &Path,
     sources: &[PathBuf],
+    interfaces: &BTreeMap<PathBuf, PathBuf>,
     case: Case,
 ) -> Result<()> {
     let Checker {
@@ -320,6 +324,28 @@ fn run_case(
         let path = checkout.join(source);
         ensure!(path.is_file(), "source does not exist: {}", path.display());
         selected.insert(path);
+    }
+    for (source, interface) in interfaces {
+        relative(source)?;
+        relative(interface)?;
+        ensure!(
+            sources.contains(source),
+            "interface source must be a selected implementation: {}",
+            source.display()
+        );
+        let source = checkout.join(source);
+        let interface = checkout.join(interface);
+        ensure!(
+            interface.is_file(),
+            "interface does not exist: {}",
+            interface.display()
+        );
+        command.arg("--type_interface").arg(format!(
+            "{}={}",
+            source.display(),
+            interface.display()
+        ));
+        selected.insert(interface);
     }
     let mut overlaid = BTreeSet::new();
     for (index, overlay) in overlays.into_iter().enumerate() {
@@ -461,6 +487,7 @@ fn main() -> Result<()> {
         commit,
         bazel_version,
         sources,
+        interfaces,
         cases,
     } in repositories
     {
@@ -484,13 +511,15 @@ fn main() -> Result<()> {
         println!("{} at {commit}", directory.display());
         for case in cases {
             let name = case.name.clone();
-            run_case(&checker, &checkout, &output, &sources, case).with_context(|| {
-                format!(
-                    "{} / {name}; evidence: {}",
-                    directory.display(),
-                    output.display()
-                )
-            })?;
+            run_case(&checker, &checkout, &output, &sources, &interfaces, case).with_context(
+                || {
+                    format!(
+                        "{} / {name}; evidence: {}",
+                        directory.display(),
+                        output.display()
+                    )
+                },
+            )?;
         }
         repository_identity(&checkout, &origin, &commit)?;
     }
