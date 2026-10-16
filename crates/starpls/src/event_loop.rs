@@ -1468,6 +1468,43 @@ mod tests {
     }
 
     #[test]
+    fn rules_only_configuration_preserves_caches_on_source_save() {
+        let TestServer {
+            mut server,
+            client: _,
+            disk: _,
+            tasks,
+            debounced: _,
+        } = server();
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("rules-only-configuration");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("sty.toml"),
+            "[rules]\nmissing-type-argument = 'error'\n",
+        )
+        .unwrap();
+        let source = root.join("source.bzl");
+        std::fs::write(&source, "value = 1\n").unwrap();
+        server.bazel_client = Arc::new(crate::document::source_tests::TestBazelClient::default());
+        server.loader = Arc::new(DefaultFileLoader::new(
+            server.bazel_client.clone(),
+            root.clone(),
+            None,
+            root.join("external"),
+            tasks,
+            false,
+        ));
+        server.loader.watch_manifest(&root.join("sty.toml"));
+        server.workspace = root.clone();
+        let revision = server.configuration.revision;
+        server.configuration_changed(&[source]).unwrap();
+        assert_eq!(server.configuration.revision, revision);
+        assert!(!server.configuration.refreshing);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn saved_configuration_replaces_stubs_and_recovers() {
         let TestServer {
             mut server,

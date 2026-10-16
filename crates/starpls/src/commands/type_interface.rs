@@ -42,8 +42,25 @@ impl FromStr for TypeInterfaceMapping {
 }
 
 impl TypeInterfaceOptions {
-    pub(crate) fn is_configured(&self) -> bool {
+    pub(crate) fn is_configured(&self, configuration: Option<&[u8]>) -> bool {
         !self.mappings.is_empty()
+            || configuration.is_some_and(|contents| {
+                // Invalid configurations may still declare interfaces. Preserve
+                // source-change recovery until the configuration can be read.
+                let Ok(contents) = std::str::from_utf8(contents) else {
+                    return true;
+                };
+                let Ok(config) = toml::from_str::<super::project_config::ProjectConfig>(contents)
+                else {
+                    return true;
+                };
+                let super::project_config::ProjectConfig {
+                    type_interfaces,
+                    stub_packages,
+                    rules: _,
+                } = config;
+                !type_interfaces.is_empty() || !stub_packages.is_empty()
+            })
     }
     pub(crate) fn prepare(
         &self,
@@ -191,6 +208,35 @@ impl PreparedInterfaces {
 #[cfg(test)]
 mod tests {
     use clap::Parser;
+
+    #[test]
+    fn source_reload_requires_declared_interfaces() {
+        let options = super::TypeInterfaceOptions::default();
+        assert!(!options.is_configured(None));
+        for config in [
+            "",
+            "[rules]\nmissing-type-argument = 'error'",
+            "[type-interfaces]",
+            "stub-packages = []",
+        ] {
+            assert!(!options.is_configured(Some(config.as_bytes())), "{config}");
+        }
+        for config in [
+            "[type-interfaces]\n'missing.bzl' = 'missing.bzli'",
+            "[[stub-packages]]\nmanifest = 'missing.toml'",
+            "[malformed",
+        ] {
+            assert!(options.is_configured(Some(config.as_bytes())), "{config}");
+        }
+        assert!(options.is_configured(Some(&[0xff])));
+        let options = super::TypeInterfaceOptions {
+            mappings: vec![super::TypeInterfaceMapping {
+                source: "missing.bzl".into(),
+                interface: "missing.bzli".into(),
+            }],
+        };
+        assert!(options.is_configured(None));
+    }
 
     #[test]
     fn check_and_server_share_repeatable_mapping_arguments() {

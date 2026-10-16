@@ -400,10 +400,11 @@ impl Server {
     pub(crate) fn configuration_changed(&mut self, paths: &[PathBuf]) -> anyhow::Result<()> {
         let mut changed = false;
         let inputs = self.loader.configuration_inputs();
-        let configured = self.config.args.type_interfaces.is_configured()
-            || inputs
+        let configured = self.config.args.type_interfaces.is_configured(
+            inputs
                 .get(&self.workspace.join("sty.toml"))
-                .is_some_and(Option::is_some);
+                .and_then(Option::as_deref),
+        );
         for path in paths {
             let metadata = is_bazel_dependency(path)
                 || (configured && path.extension().is_some_and(|extension| extension == "bzl"))
