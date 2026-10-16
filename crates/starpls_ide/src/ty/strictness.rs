@@ -20,6 +20,8 @@ use ruff_text_size::TextRange;
 use starpls_common::File;
 use ty_python_core::definition::Definition;
 use ty_python_semantic::lint::LintMetadata;
+use ty_python_semantic::types::ide_support::call_input_types;
+use ty_python_semantic::types::ide_support::CallInputError;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::Db as _;
 use ty_python_semantic::HasType;
@@ -108,6 +110,52 @@ impl<'db> Checks<'_, 'db> {
         }
         if let Some(ty) = expression.inferred_type(self.model) {
             self.check_type(expression.range(), ty, subject);
+        }
+    }
+
+    fn check_call_inputs(&mut self, call: &ruff_python_ast::ExprCall) {
+        // Import syntax such as load() is excluded from ordinary call inference.
+        if self.model.scope(call.into()).is_none() {
+            return;
+        }
+        let env = self.model.program_environment();
+        match call_input_types(self.model, call) {
+            Ok(arguments) => {
+                // A checked invocation need only satisfy the selected contracts for supplied
+                // arguments. Subtyping proves that no gradual alternative was needed; the
+                // argument values and the checked result are inspected separately below.
+                for input in arguments.into_iter().flatten() {
+                    if !input
+                        .argument_type
+                        .is_subtype_of(self.db, &env, input.parameter_type)
+                    {
+                        self.report(
+                            call.func.range(),
+                            &NON_STATIC_TYPE,
+                            format!(
+                                "Cannot establish a fully static input contract for called function: `{}` is not a subtype of `{}`",
+                                input.argument_type.display(self.db, &env),
+                                input.parameter_type.display(self.db, &env),
+                            ),
+                        );
+                        break;
+                    }
+                }
+            }
+            Err(CallInputError::Invalid) => {}
+            Err(CallInputError::Incomplete) => {
+                // Some valid calls, including overload expansion, do not retain all matched
+                // inputs. A fully static whole callable is a stronger proof for those calls.
+                if let Some(callee) = call.func.inferred_type(self.model) {
+                    self.check_type(call.func.range(), callee, "called function");
+                } else {
+                    self.report(
+                        call.func.range(),
+                        &NON_STATIC_TYPE,
+                        "Cannot establish fully static input contracts for called function".into(),
+                    );
+                }
+            }
         }
     }
 
@@ -235,10 +283,13 @@ impl<'ast> Visitor<'ast> for Checks<'_, '_> {
                 self.check_expression(expression, "variable");
             }
         }
-        if !self.file.is_type_interface(self.db) {
+        if self.non_static && !self.file.is_type_interface(self.db) {
             if let Expr::Call(call) = expression {
-                self.check_expression(&call.func, "called function");
-                self.check_expression(expression, "call result");
+                let result = expression.inferred_type(self.model);
+                self.check_call_inputs(call);
+                if let Some(result) = result {
+                    self.check_type(expression.range(), result, "call result");
+                }
                 for argument in &call.arguments.args {
                     self.check_expression(argument, "argument");
                 }
@@ -344,6 +395,181 @@ mod tests {
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0].id().as_str(), "unused-ignore-comment");
+    }
+
+    #[test]
+    fn calls_use_refined_results_and_preserve_input_contracts() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        fixture.add_file(
+            &mut analysis.db,
+            "library.bzl",
+            r#"
+def consume(value: Any) -> None:
+    pass
+def mixed(value: int | Any) -> None:
+    pass
+def optional(value: Any = None) -> None:
+    pass
+def key(value: str) -> int:
+    return len(value)
+def gradual_result() -> Any:
+    return 1
+def unknown_result() -> list:
+    return []
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "overloads.bzli",
+            r#"
+@overload
+def complete(value: int) -> int: ...
+@overload
+def complete(value: str) -> str: ...
+def complete(value): ...
+@overload
+def gradual(value: int) -> int: ...
+@overload
+def gradual(value: str, extra: Any = ...) -> str: ...
+def gradual(value, extra=None): ...
+choice: int | str
+"#,
+        );
+        let source = r#"load("library.bzl", "consume", "mixed", "optional", "key", "gradual_result", "unknown_result")
+load("overloads.bzli", "complete", "gradual", "choice")
+selected = select({"//:enabled": ["known"]})
+combined = selected + ["more"]
+sorted(["known"])
+sorted(["known"], key=None)
+sorted(["known"], key=key)
+values: dict[str, int] = {"known": 1}
+values.update({"more": 2})
+optional()
+mixed(1)
+complete(choice)
+"#;
+        let file = fixture.add_file(&mut analysis.db, "caller.bzl", source);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_rules(rules(&["non-static-type"]));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (extra, subject) in [
+            ("consume(1)", "called function"),
+            ("mixed('wrong')", "called function"),
+            ("gradual(choice)", "called function"),
+            ("saved = consume", "variable"),
+            ("saved = gradual_result", "variable"),
+            ("gradual_result()", "call result"),
+            ("mixed(unknown_result())", "argument"),
+            ("select({'//:enabled': gradual_result()})", "call result"),
+            ("select({'//:enabled': unknown_result()})", "call result"),
+        ] {
+            analysis.update_file(file, format!("{source}{extra}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic.headline_message().contains(subject)
+                        && diagnostic.range().unwrap().start().to_usize() >= source.len()
+                }),
+                "{extra}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(file, format!("{source}key(42)\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
+    fn provider_initializers_preserve_static_call_contracts() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        fixture.add_file(
+            &mut analysis.db,
+            "callbacks.bzli",
+            "gradual: Callable[..., Any]\nunknown: Callable\n",
+        );
+        let valid = r#"
+load("callbacks.bzli", "gradual", "unknown")
+Plain = provider(fields=["value"])
+ExplicitNone = provider(fields=["value"], init=None)
+def _init(value, count=0):
+    return {"value": value, "count": count}
+Initialized, raw = provider(fields=["value", "count"], init=_init)
+plain_text: str = Plain(value="plain").value
+none_text: str = ExplicitNone(value="none").value
+initialized_text: str = Initialized("initialized").value
+raw_text: str = raw(value="raw", count=1).value
+"#;
+        let source = fixture.add_file(&mut analysis.db, "info.bzl", valid);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"
+def Plain(*, value: str) -> record[{"value": str}]: ...
+def ExplicitNone(*, value: str) -> record[{"value": str}]: ...
+def _init(value: str, count: int = ...) -> dict[{"value": str, "count": int}]: ...
+def Initialized(value: str, count: int = ...) -> record[{"value": str, "count": int}]: ...
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        analysis.set_rules(rules(&["non-static-type"]));
+        for file in [source, interface] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for invalid in ["Initialized(42)", "raw(value=42, count=1)"] {
+            analysis.update_file(source, format!("{valid}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        }
+        for callback in ["gradual", "unknown"] {
+            let updated = valid.replace("init=_init", &format!("init={callback}"));
+            analysis.update_file(source, updated.clone());
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic.headline_message().contains("argument")
+                        && diagnostic.range().is_some_and(|range| {
+                            &updated[range.start().to_usize()..range.end().to_usize()] == callback
+                        })
+                }),
+                "{callback}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(source, valid.replace("init=_init", "init=42"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
     }
 
     #[test]

@@ -111,7 +111,9 @@ private and nested functions and are disabled by default. Inline annotations,
 type comments, registered `.bzli` annotations, and generated Bazel contracts
 satisfy these rules. Implicit method receivers use ty's inferred receiver type.
 Local variables continue to use inference. Projects that prefer inferred returns
-can enable only the parameter rule.
+can enable only the parameter rule. Generated callback contracts can describe a
+function body without declaring its public callable signature; passing that
+function under `non-static-type` also requires a complete public annotation.
 
 ty's `missing-type-argument` rejects bare generic annotations such as `list`.
 
@@ -131,11 +133,18 @@ aliases that resolve to `Any`.
 `non-static-type` checks parameters, function returns, assigned variables,
 returned values, callees, call arguments, and call results. It reports inferred
 types containing `Any` or `Unknown`, including partially known types such as
-`list[dict[str, Any]]`. This includes inherited protocol requirements: for
-example, `Collection[str]` inherits a membership method accepting `Any` in ty's
-standard library declarations. It also reports types whose recursive structure
-prevents ty from establishing that they are fully static. Both rules are disabled
-by default.
+`list[dict[str, Any]]`. This includes inherited protocol requirements. It also
+reports types whose recursive structure prevents ty from establishing that they
+are fully static. Both rules are disabled by default.
+
+For a call, each supplied argument must satisfy its selected parameter contract
+without relying on `Any` or `Unknown`. The argument values and inferred result
+must also be fully static. Omitted optional parameters and unused overloads do
+not affect calls whose individual input contracts ty can establish. Otherwise,
+the rule conservatively requires the whole callable to be fully static. Storing
+or passing a function also checks its whole callable contract. For example,
+passing `1` to `int | Any` uses the known `int` alternative, while passing it to
+`Any` alone cannot establish a static contract.
 
 An explicit `object` annotation describes an opaque value and satisfies these
 rules. Code can narrow that value before using operations that require a more
