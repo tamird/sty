@@ -230,6 +230,46 @@ collect({"a": 1})
     }
 
     #[test]
+    fn nested_iterable_annotations_preserve_element_types() {
+        let source = r#"
+def nested(values: Iterable[Iterable[str]]) -> None:
+    pass
+def deeper(values: Iterable[Iterable[Iterable[str]]]) -> None:
+    pass
+def specifications(values):
+    # type: (Iterable[tuple[Collection[str], Mapping[str, Collection[str]]]]) -> None
+    pass
+nested([["ok"]])
+nested((("ok",),))
+deeper([[["ok"]]])
+specifications([(["shared"], {"linux": ["dep"]})])
+wrong: list[list[int]] = [[42]]
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(
+            file,
+            format!(
+                "{source}nested(wrong)\ndeeper([wrong])\nspecifications([([\"shared\"], {{\"linux\": [42]}})])\n"
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "invalid-argument-type",
+                "invalid-argument-type",
+                "invalid-argument-type"
+            ],
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn repeated_host_boolean_guards_preserve_boundness() {
         let (analysis, fixture) = native_analysis(
             r#"def inspect(value):
