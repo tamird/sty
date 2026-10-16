@@ -310,6 +310,20 @@ fn declarations(
             doc: "Deferred configuration-dependent alternatives.".to_owned(),
             ..Default::default()
         });
+        if builtins
+            .global
+            .iter()
+            .any(|value| value.name == "exec_group")
+        {
+            // ExecGroupApi has no Starlark fields, so the exporter omits its type.
+            classes
+                .entry("exec_group".to_owned())
+                .or_insert_with(|| Type {
+                    name: "exec_group".to_owned(),
+                    doc: "Execution constraints and toolchains for a rule's actions.".to_owned(),
+                    ..Default::default()
+                });
+        }
     }
     if propagation_context_available {
         classes
@@ -672,6 +686,12 @@ fn declarations(
                             "files_to_run" => Some("_DefaultInfoFilesToRun"),
                             _ => None,
                         }
+                    } else if class.name == "RunEnvironmentInfo" {
+                        match field.name.as_str() {
+                            "environment" => Some("_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]"),
+                            "inherited_environment" => Some("_starpls_builtins.list[_starpls_builtins.str]"),
+                            _ => None,
+                        }
                     } else if class.name == "runfiles" {
                         // RunfilesApi's Java declarations omit these depset
                         // arguments from exported metadata.
@@ -859,7 +879,7 @@ fn declarations(
         body.push_str("    pass\n");
     }
     let mut output = String::from(
-        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\", default=_starpls_typing.Never)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_typing.Any)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n_ContextAttrs = _starpls_typing.TypeVar(\"_ContextAttrs\", default=_starpls_builtins.object, covariant=True)\n\n_starpls_native_rule_available: _starpls_builtins.bool\n\nclass _starpls_types:\n",
+        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\", default=_starpls_typing.Never)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_typing.Any)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n_ContextAttrs = _starpls_typing.TypeVar(\"_ContextAttrs\", default=_starpls_builtins.object, covariant=True)\n\n_starpls_native_rule_available: _starpls_builtins.bool\n\nclass _starpls_types:\n",
     );
     output.push_str(&body);
     output.push('\n');
@@ -1151,6 +1171,13 @@ fn write_function(
                 Some("_starpls_typing.Sequence[_starpls_types.depset[_DepsetInput]] | None")
             }
             (CallableKind::Function, "DefaultInfo", "files") => Some("_DefaultInfoFiles"),
+            (CallableKind::Function, "DefaultInfo", "executable") => classes.contains("File").then_some("_starpls_types.File | None"),
+            (CallableKind::Function, "DefaultInfo", "runfiles" | "data_runfiles" | "default_runfiles") => classes.contains("runfiles").then_some("_starpls_types.runfiles | None"),
+            (CallableKind::Function, "RunEnvironmentInfo", "environment") => Some("_starpls_typing.Mapping[_StringKey, _StringValue]"),
+            (CallableKind::Function, "RunEnvironmentInfo", "inherited_environment") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
+            (CallableKind::Function, "exec_group", "toolchains") => (classes.contains("Label") && classes.contains("toolchain_type")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.toolchain_type]"),
+            (CallableKind::Function, "rule" | "aspect", "exec_groups") => classes.contains("exec_group").then_some("_starpls_typing.Mapping[_StringKey, _starpls_types.exec_group] | None"),
+            (CallableKind::Method("attr"), _, "cfg") => (classes.contains("transition") && classes.contains("ExecTransitionFactory")).then_some("_starpls_builtins.str | _starpls_types.transition | _starpls_types.ExecTransitionFactory | None"),
             (CallableKind::Function, "OutputGroupInfo", "kwargs") => Some("_starpls_typing.Sequence[_starpls_types.File] | _starpls_types.depset[_starpls_types.File]"),
             (CallableKind::Function, "macro", "inherit_attrs") => Some("_starpls_types.rule | _starpls_types.macro | _starpls_typing.Literal[\"common\"] | None"),
             // AspectPropagationEdgesSupplier accepts strings for fixed lists,
@@ -2389,6 +2416,76 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
             assert!(diagnostics.iter().all(|diagnostic| usize::from(
                 diagnostic.range().unwrap().start()
             ) >= source.len()));
+        }
+    }
+
+    #[test]
+    fn execution_declarations_preserve_native_contracts() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())]
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let source = r#"group = exec_group(toolchains=['//:toolchain'], exec_compatible_with=['//:constraint'])
+groups: dict[Literal['tools'], exec_group] = {'tools': group}
+def inspect(context: ctx, file: File, change: transition) -> None:
+    files = context.runfiles(files=[file])
+    default = DefaultInfo(executable=file, runfiles=files)
+    other = DefaultInfo(data_runfiles=files, default_runfiles=files)
+    values: dict[Literal['MODE'], Literal['test']] = {'MODE': 'test'}
+    environment = RunEnvironmentInfo(environment=values, inherited_environment=['HOME'])
+    shaped: dict[{"MODE": str}] = {"MODE": "test"}
+    RunEnvironmentInfo(environment=shaped)
+    value: str = environment.environment['MODE']
+    inherited: str = environment.inherited_environment[0]
+    exec_attr = attr.label(cfg='exec')
+    changed_attr = attr.label_list(cfg=change)
+    native_attr = attr.label(cfg=config.exec())
+    print(default, other, value, inherited, exec_attr, changed_attr, native_attr)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/execution.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_rules(crate::DiagnosticRules::default());
+        analysis.update_file(
+            file,
+            format!("{source}    rule(implementation=lambda ctx: [], exec_groups=groups)\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for call in [
+            "DefaultInfo(executable='tool')",
+            "DefaultInfo(runfiles=[file])",
+            "RunEnvironmentInfo(environment={'MODE': 42})",
+            "RunEnvironmentInfo(environment={42: 'test'})",
+            "RunEnvironmentInfo(inherited_environment=[42])",
+            "exec_group(toolchains=[42])",
+            "attr.label(cfg=42)",
+            "rule(implementation=lambda ctx: [], exec_groups={'tools': 42})",
+        ] {
+            analysis.update_file(file, format!("{source}    {call}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{call}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
         }
     }
 
