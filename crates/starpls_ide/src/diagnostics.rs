@@ -285,15 +285,29 @@ collect(["a"])
 collect(("a",))
 collect(set(["a"]))
 collect({"a": 1})
+def widen(values: Collection[str]) -> Collection[object]:
+    return values
+def contains(values: Collection[str], candidate: object) -> bool:
+    return candidate in values
 "#;
         let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
         let file = fixture.main_file();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        analysis.update_file(file, format!("{source}collect([1])\n"));
+        analysis.update_file(file, format!("{source}collect([1])\ncollect('abc')\n"));
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+        assert_eq!(
+            ids,
+            ["invalid-argument-type", "invalid-argument-type"],
+            "{diagnostics:?}"
+        );
     }
 
     #[test]

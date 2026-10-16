@@ -2,6 +2,10 @@
 # Python-only mixins and collection views are omitted.
 # Generic bases retain the nominal collection constraints used by Ty inference.
 
+class Collection(Iterable[_T_co], Sized, Protocol[_T_co]):
+    @type_check_only
+    def __contains__(self, value: object, /) -> bool: ...
+
 class Sequence(Generic[_T_co]):
     @type_check_only
     def __len__(self) -> int: ...
