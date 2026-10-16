@@ -334,9 +334,17 @@ additional fields. Independently constructed structs satisfy the same shape
 when their fields have compatible types. An open contract does not establish
 that other fields are absent, so it cannot satisfy a closed contract.
 
-Struct fields are required. `NotRequired` applies to dictionary keys. The
-existing `struct[T]` form bounds the values of fields without declaring their
-names.
+Struct fields are required unless annotated with `NotRequired[T]`:
+
+```starlark
+type _CompilerAttrs = struct[{"compiler": NotRequired[str]}, ...]
+```
+
+This contract permits an absent `compiler` field and requires a string when it
+is present. A successful `hasattr(value, "compiler")` check preserves its string
+type; `getattr(value, "compiler", None)` has type `str | None`. Extra fields in an
+open shape do not weaken the types of declared optional fields. The existing
+`struct[T]` form bounds field values without declaring their names.
 
 ## Selectors
 
@@ -407,7 +415,8 @@ def exported(context: ctx[object, _Attrs]) -> Sequence[Target]: ...
 ```
 
 These contexts retain their native methods and work with native functions.
-`ctx` and `ctx[Value]` use the native open struct view for attributes.
+`ctx` and `ctx[Value]` use the native open `struct[object]` view for attributes;
+an attribute without a declared schema has type `object`.
 With context inference enabled, eligible rule and aspect registrations supply
 schemas from their attribute descriptors.
 

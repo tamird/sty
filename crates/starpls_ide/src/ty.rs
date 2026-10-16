@@ -552,13 +552,13 @@ impl ty_python_semantic::Db for Database {
         )
     }
 
-    fn provided_getattr_presence<'db>(
+    fn provided_getattr_result<'db>(
         &'db self,
         definition: Definition<'db>,
         receiver: Type<'db>,
         attribute: &str,
-    ) -> ty_python_semantic::provided::ProvidedGetattrPresence {
-        shapes::getattr_presence(self, definition, receiver, attribute)
+    ) -> ty_python_semantic::provided::ProvidedGetattrResult<'db> {
+        shapes::getattr_result(self, definition, receiver, attribute)
     }
 
     fn provided_type_test<'db>(

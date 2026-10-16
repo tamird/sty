@@ -658,8 +658,8 @@ fn declarations(
                 None => {
                     let field_type = if class.name == "ctx" {
                         match field.name.as_str() {
-                            // Named schemas refine the native struct without adding a descriptor.
-                            "attr" => Some("_starpls_typing.Final[_starpls_ty_extensions.Intersection[_starpls_types.struct, _ContextAttrs]]"),
+                            // Attribute values are opaque unless a named schema refines them.
+                            "attr" => Some("_starpls_typing.Final[_starpls_ty_extensions.Intersection[_starpls_types.struct[_starpls_builtins.object], _ContextAttrs]]"),
                             "file" => Some("_starpls_types.struct[_starpls_types.File]"),
                             "outputs" => Some("_starpls_types.struct[_starpls_types.File]"),
                             "executable" => Some("_starpls_types.struct[_starpls_types.File]"),

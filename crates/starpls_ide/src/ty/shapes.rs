@@ -10,6 +10,7 @@ use ruff_python_ast::Stmt;
 use ruff_text_size::Ranged;
 use ty_python_core::definition::Definition;
 use ty_python_semantic::provided::ProvidedGetattrPresence;
+use ty_python_semantic::provided::ProvidedGetattrResult;
 use ty_python_semantic::provided::ProvidedTypeApplication;
 use ty_python_semantic::provided::TypeExpressionContext;
 use ty_python_semantic::types::IntersectionType;
@@ -38,42 +39,50 @@ pub(super) fn mapping_argument(expression: &Expr) -> Option<(&Expr, &ExprDict, b
     }
 }
 
-pub(super) fn getattr_presence<'db>(
+pub(super) fn getattr_result<'db>(
     db: &'db Database,
     definition: Definition<'db>,
     receiver: Type<'db>,
     attribute: &str,
-) -> ProvidedGetattrPresence {
+) -> ProvidedGetattrResult<'db> {
     if !matches!(
         super::factory::declaration(db, definition),
         Some(super::factory::BuiltinFunction::StructGetattr)
     ) {
-        return ProvidedGetattrPresence::Present;
+        return ProvidedGetattrResult::default();
     }
     let environment = ProgramEnvironment::from_file(definition.program_file(db));
     if let Some(presence) =
         super::providers::getattr_presence(db, receiver, &environment, attribute)
     {
-        return presence;
+        return presence.into();
     }
+    let possibly_missing = ProvidedGetattrPresence::PossiblyMissing.into();
     let Some((class, _)) = super::factory::native_class(db, definition.program_file(db), "struct")
         .and_then(|class| class.to_instance_approximation(db, &environment))
         .and_then(|instance| instance.class_specialization(db, &environment))
     else {
-        return ProvidedGetattrPresence::PossiblyMissing;
+        return possibly_missing;
     };
     let Some(specialization) = receiver.base_class_specialization(db, &environment, class) else {
-        return ProvidedGetattrPresence::PossiblyMissing;
+        return possibly_missing;
     };
-    let Some(Type::TypedDict(shape)) = specialization.types(db).get(1).copied() else {
-        return ProvidedGetattrPresence::PossiblyMissing;
+    let [_, Type::TypedDict(shape)] = specialization.types(db) else {
+        return possibly_missing;
     };
-    if matches!(shape.openness(db), TypedDictOpenness::Closed)
-        && !shape.items(db).contains_key(attribute)
-    {
-        ProvidedGetattrPresence::Absent
+    if let Some(field) = shape.items(db).get(attribute) {
+        ProvidedGetattrResult {
+            presence: if field.is_required() {
+                ProvidedGetattrPresence::Present
+            } else {
+                ProvidedGetattrPresence::PossiblyMissing
+            },
+            return_type: Some(field.declared_type()),
+        }
+    } else if matches!(shape.openness(db), TypedDictOpenness::Closed) {
+        ProvidedGetattrPresence::Absent.into()
     } else {
-        ProvidedGetattrPresence::PossiblyMissing
+        possibly_missing
     }
 }
 
@@ -146,10 +155,10 @@ pub(super) fn type_application<'db>(
                 "Field types support Required, NotRequired, and ReadOnly qualifiers",
             );
         }
-        if (is_struct || is_record) && qualifiers.contains(TypeQualifiers::NOT_REQUIRED) {
+        if is_record && qualifiers.contains(TypeQualifiers::NOT_REQUIRED) {
             context.report_invalid_type_form(
                 item.value.range(),
-                "NotRequired fields are supported in dictionaries; struct and record fields must be present",
+                "Record fields must be present; NotRequired is supported in dictionary and struct field maps",
             );
         }
         let name = Name::new(key.value.to_str());
@@ -235,6 +244,7 @@ pub(super) fn type_application<'db>(
         schema
             .items(db)
             .iter()
+            .filter(|(_, field)| field.is_required())
             .map(|(name, field)| (name.as_str(), field.declared_type())),
     );
     Some(IntersectionType::from_elements(
@@ -406,6 +416,110 @@ def default(value: struct[{"name": str}]) -> int:
                 "{invalid}: {diagnostics:?}"
             );
         }
+    }
+
+    #[test]
+    fn optional_struct_fields_preserve_presence_and_types() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "compiler.bzl",
+            r#"
+def _is_gcc_compiler(compiler):
+    return "gcc" in compiler
+def flags(context):
+    return ["-fprofile-correction"] if hasattr(context.attr, "compiler") and _is_gcc_compiler(context.attr.compiler) else []
+def optional_value(value):
+    return getattr(value, "compiler", None)
+def guarded_value(value):
+    if hasattr(value, "compiler"):
+        return value.compiler
+    return None
+def required_value(value):
+    return value.compiler
+def generic(value):
+    return getattr(value, "item", None)
+"#,
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "compiler.bzli",
+            r#"
+type _CompilerAttrs = struct[{"compiler": NotRequired[str]}, ...]
+def _is_gcc_compiler(compiler: str) -> bool: ...
+def flags(context: ctx[object, _CompilerAttrs]) -> list[str]: ...
+def optional_value(value: _CompilerAttrs) -> str | None: ...
+def guarded_value(value: _CompilerAttrs) -> str | None: ...
+def required_value(value: struct[{"compiler": str}, ...]) -> str: ...
+def generic[T](value: struct[{"item": NotRequired[T]}, ...]) -> T | None: ...
+"#,
+        );
+        let valid = r#"
+load("compiler.bzl", "optional_value", "guarded_value", "required_value", "generic")
+optional_value(struct())
+optional_value(struct(compiler="gcc"))
+optional_value(struct(compiler="clang", extra=42))
+optional_value(struct(extra=42))
+guarded_value(struct())
+guarded_value(struct(compiler="gcc"))
+required_value(struct(compiler="gcc"))
+def closed(value: struct[{"compiler": NotRequired[str]}]) -> str | None:
+    return getattr(value, "compiler", None)
+closed(struct())
+closed(struct(compiler="gcc"))
+text: str | None = generic(struct(item="known", extra=42))
+def forward(value: struct[{"item": str}, ...]) -> str | None:
+    return generic(value)
+def opaque(context: ctx[object]) -> object:
+    return context.attr.unmodeled
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        for file in [source, interface, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (invalid, expected) in [
+            ("optional_value(struct(compiler=42))", "invalid-argument-type"),
+            ("closed(struct(compiler=42))", "invalid-argument-type"),
+            ("closed(struct(extra=42))", "invalid-argument-type"),
+            ("def erased(value: struct[object]) -> None:\n    optional_value(value)", "invalid-argument-type"),
+            ("def optional(value: struct[{'compiler': NotRequired[str]}, ...]) -> None:\n    required_value(value)", "invalid-argument-type"),
+            ("def opaque(context: ctx[object]) -> str:\n    return context.attr.unmodeled", "invalid-return-type"),
+        ] {
+            analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected);
+        }
+        analysis.update_file(
+            interface,
+            "def Info(*, value: str = ...) -> record[{'value': NotRequired[str]}]: ...\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(interface).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-type-form"),
+            "{diagnostics:?}"
+        );
     }
 
     #[test]
