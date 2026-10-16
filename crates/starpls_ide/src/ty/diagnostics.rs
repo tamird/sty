@@ -94,6 +94,17 @@ pub(super) static MISSING_RETURN_ANNOTATION: LintMetadata = LintMetadata {
         "Reports functions without a return type contract.",
     )
 };
+pub(super) static EXPLICIT_ANY: LintMetadata = LintMetadata {
+    default_level: Level::Ignore,
+    ..lint("explicit-any", "Reports explicit Any type annotations.")
+};
+pub(super) static NON_STATIC_TYPE: LintMetadata = LintMetadata {
+    default_level: Level::Ignore,
+    ..lint(
+        "non-static-type",
+        "Reports values whose inferred type cannot be established as fully static.",
+    )
+};
 
 pub(super) fn registry() -> &'static LintRegistry {
     static REGISTRY: LazyLock<LintRegistry> = LazyLock::new(|| {
@@ -109,6 +120,8 @@ pub(super) fn registry() -> &'static LintRegistry {
             &INVALID_FUNCTION_INTERFACE,
             &MISSING_PARAMETER_ANNOTATION,
             &MISSING_RETURN_ANNOTATION,
+            &EXPLICIT_ANY,
+            &NON_STATIC_TYPE,
         ] {
             builder.register_lint(lint);
         }
@@ -221,6 +234,7 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
     diagnostics.extend(load::diagnostics(db, program_file));
     diagnostics.extend(super::interface::diagnostics(db, file));
     diagnostics.extend(super::annotations::diagnostics(db, file));
+    diagnostics.extend(super::strictness::diagnostics(db, file));
     if !options.allow_unused_definitions {
         let index = semantic_index(db, program_file);
         let environment = model.program_environment();

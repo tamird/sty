@@ -35,6 +35,7 @@ pub(crate) mod load;
 mod native;
 mod providers;
 mod shapes;
+mod strictness;
 mod support;
 
 pub(crate) use diagnostics::check;

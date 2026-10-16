@@ -114,8 +114,37 @@ Local variables continue to use inference. Projects that prefer inferred returns
 can enable only the parameter rule.
 
 ty's `missing-type-argument` rejects bare generic annotations such as `list`.
-Explicit `Any` still satisfies an annotation
-requirement; gradual types retain ty's usual compatibility behavior.
+
+Projects can also require fully known types:
+
+```toml
+[rules]
+explicit-any = "error"
+non-static-type = "error"
+unsound-assignment = "error"
+unsound-return-statement = "error"
+```
+
+`explicit-any` rejects `Any` in inline annotations, type comments, and `.bzli`
+declarations, including nested annotations, generic bounds and defaults, and
+aliases that resolve to `Any`.
+`non-static-type` checks parameters, function returns, assigned variables,
+returned values, callees, call arguments, and call results. It reports inferred
+types containing `Any` or `Unknown`, including partially known types such as
+`list[dict[str, Any]]`. This includes inherited protocol requirements: for
+example, `Collection[str]` inherits a membership method accepting `Any` in ty's
+standard library declarations. It also reports types whose recursive structure
+prevents ty from establishing that they are fully static. Both rules are disabled
+by default.
+
+An explicit `object` annotation describes an opaque value and satisfies these
+rules. Code can narrow that value before using operations that require a more
+specific type. Inference retains ty's distinction between `object`, `Any`, and
+`Unknown`.
+
+ty's `unsound-assignment` and `unsound-return-statement` check values crossing
+fully static declared variable and return boundaries. They can be enabled while
+unannotated code still uses gradual types.
 
 Suppressions use `# ty: ignore[rule-name]`. Unused suppressions are errors by
 default, including suppressions made obsolete by adding an annotation.
