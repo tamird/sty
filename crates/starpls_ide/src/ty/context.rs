@@ -30,6 +30,9 @@ use ty_python_semantic::types::DictionaryItem;
 use ty_python_semantic::types::DictionaryItems;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Type;
+use ty_python_semantic::types::TypedDictFieldBuilder;
+use ty_python_semantic::types::TypedDictOpenness;
+use ty_python_semantic::types::TypedDictType;
 use ty_python_semantic::types::UnionType;
 use ty_python_semantic::HasDefinition;
 use ty_python_semantic::HasType;
@@ -355,9 +358,44 @@ pub(super) fn parameter_type<'db>(
                 None => complete = false,
             }
         }
+        let object = KnownClass::Object.to_instance(db, &environment);
+        let schema = TypedDictType::from_schema_items_with_openness(
+            db,
+            fields
+                .iter()
+                .map(|field| {
+                    (
+                        field.name.clone(),
+                        TypedDictFieldBuilder::new(field.ty)
+                            .required(true)
+                            .read_only(true)
+                            .build(),
+                    )
+                })
+                .collect(),
+            if complete {
+                TypedDictOpenness::Closed
+            } else {
+                TypedDictOpenness::extra(db, object, true)
+            },
+        );
+        let values = UnionType::from_elements(
+            db,
+            &environment,
+            fields
+                .iter()
+                .map(|field| field.ty)
+                .chain((!complete).then_some(object)),
+        );
+        let base = factory::specialized_native_class(
+            db,
+            declarations,
+            "struct",
+            vec![values, Type::TypedDict(schema)],
+        )?;
         let ty = make_class(
             view.name(),
-            factory::native_class(db, declarations, "struct")?,
+            base,
             fields.into_boxed_slice(),
             !complete,
             Box::default(),
@@ -945,25 +983,33 @@ example = rule(implementation=implementation, attrs={
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        for (option, replacement, expression, key) in [
+        for (option, replacement, expression, key, errors) in [
             (
                 "allow_single_file=True",
                 "allow_single_file=None",
                 "ctx.file.jar",
                 "\"jar\"",
+                3,
             ),
             (
                 "executable=True",
                 "executable=False",
                 "ctx.executable.tool",
                 "\"tool\"",
+                2,
             ),
         ] {
             let changed = source.replace(option, replacement);
             analysis.update_file(file, changed.clone());
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert!(diagnostics.is_empty(), "{option}: {diagnostics:?}");
-            // Disabled views use the native struct's generic field fallback.
+            assert_eq!(diagnostics.len(), errors, "{option}: {diagnostics:?}");
+            assert!(
+                diagnostics.iter().all(|diagnostic| {
+                    diagnostic.id().as_str() == "unresolved-attribute"
+                        && changed[diagnostic.range().unwrap()].starts_with(expression)
+                }),
+                "{option}: {diagnostics:?}"
+            );
             check_field(
                 &analysis.snapshot(),
                 file,
@@ -1513,14 +1559,14 @@ example_test(name="test", timeout="short", size="small", flaky=True, shard_count
     #[test]
     fn generated_rule_attributes_have_bounded_visibility() {
         for (options, name, field, argument, errors) in [
-            ("", "example", "timeout", "timeout='short'", 1),
-            ("test=False", "example", "timeout", "timeout='short'", 1),
+            ("", "example", "timeout", "timeout='short'", 2),
+            ("test=False", "example", "timeout", "timeout='short'", 2),
             (
                 "test=True",
                 "example_test",
                 "aspect_hints",
                 "timeout='short'",
-                0,
+                1,
             ),
             (
                 "test=unknown()",
@@ -1541,7 +1587,7 @@ example_test(name="test", timeout="short", size="small", flaky=True, shard_count
                 "example_test",
                 "missing",
                 "nonexistent=True",
-                1,
+                2,
             ),
         ] {
             let source = format!("def unknown() -> bool: return True\ndef implementation(ctx):\n    ctx.attr.{field}\n{name} = rule(implementation=implementation, {options})\n{name}(name='test', {argument})\n");
@@ -1722,25 +1768,30 @@ example = make_aspect(implementation=implementation, attrs={
             "//:helper.bzl",
             "def read(value): return value.attr.exports\n",
         );
-        let interface = fixture.add_file(
-            &mut analysis.db,
-            "//:helper.bzli",
-            "class _Attrs(Protocol):\n    @property\n    def exports(self) -> Sequence[Target]: ...\ndef read(value: ctx[object, _Attrs]) -> Sequence[Target]: ...\n",
-        );
+        let interface = fixture.add_file(&mut analysis.db, "//:helper.bzli", "");
         let file = fixture.add_file(&mut analysis.db, "//:defs.bzl", "");
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(helper, interface)]).unwrap();
-        for (attrs, errors) in [
-            ("{'exports': attr.label_list()}", 0),
-            ("{'exports': attr.string()}", 1),
-            ("{}", 1),
-            ("{'exports': attr.label_list()}", 0),
+        for declaration in [
+            "class _Attrs(Protocol):\n    @property\n    def exports(self) -> Sequence[Target]: ...\n",
+            "type _Attrs = struct[{\"exports\": Sequence[Target]}, ...]\n",
         ] {
-            analysis.update_file(file, format!("load(\"//:helper.bzl\", \"read\")\ndef implementation(context):\n    read(context)\n    return []\nexample = rule(implementation=implementation, attrs={attrs})\n"));
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert_eq!(diagnostics.len(), errors, "{attrs}: {diagnostics:?}");
-            if let [diagnostic] = diagnostics.as_slice() {
-                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            analysis.update_file(
+                interface,
+                format!("{declaration}def read(value: ctx[object, _Attrs]) -> Sequence[Target]: ...\n"),
+            );
+            for (attrs, errors) in [
+                ("{'exports': attr.label_list()}", 0),
+                ("{'exports': attr.string()}", 1),
+                ("{}", 1),
+                ("{'exports': attr.label_list()}", 0),
+            ] {
+                analysis.update_file(file, format!("load(\"//:helper.bzl\", \"read\")\ndef implementation(context):\n    read(context)\n    return []\nexample = rule(implementation=implementation, attrs={attrs})\n"));
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert_eq!(diagnostics.len(), errors, "{attrs}: {diagnostics:?}");
+                if let [diagnostic] = diagnostics.as_slice() {
+                    assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+                }
             }
         }
     }
