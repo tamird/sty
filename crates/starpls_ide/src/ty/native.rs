@@ -1252,6 +1252,13 @@ fn write_function(
             // Registration stores a callable; the context owner checks the domain
             // supplied when Bazel invokes each implementation.
             (CallableKind::Function, "rule" | "repository_rule" | "aspect", "implementation") => Some("_starpls_typing.Callable[_ImplementationParameters, _ImplementationResult]"),
+            (CallableKind::Function, "rule" | "aspect", "provides") => {
+                provider_requirement_annotation(r#type, false)
+            }
+            (CallableKind::Function, "aspect", "required_providers" | "required_aspect_providers")
+            | (CallableKind::Method("attr"), _, "providers") => {
+                provider_requirement_annotation(r#type, true)
+            }
             // Encoding accepts any object; unsupported values raise rather than return.
             (CallableKind::Method("json"), "encode", "x") => Some("_starpls_builtins.object"),
             // Rule construction reads each dictionary while preserving its key and value types.
@@ -1406,6 +1413,26 @@ fn write_function(
     writeln!(output, "{indent}    {}", quoted(&documentation))?;
     writeln!(output, "{indent}    ...")?;
     Ok(())
+}
+
+fn provider_requirement_annotation(metadata: &str, nested: bool) -> Option<&'static str> {
+    // Version discovery refines bare sequence metadata. Before discovery, keep
+    // the legacy string domain rather than rejecting valid older workspaces.
+    let (keys_only, nested) = match env::normalize_doc(metadata, true).as_str() {
+        "sequence of ProviderKeys" => (true, false),
+        "sequence of ProviderKeys; or sequence of sequences of ProviderKeys" => (true, true),
+        "sequence of ProviderKeys or strings" => (false, false),
+        "sequence of ProviderKeys or strings; or sequence of sequences of ProviderKeys or strings" => (false, true),
+        "sequence" | "Sequence" | "list" | "List" => (false, nested),
+        // More precise supplied signatures use the ordinary annotation parser.
+        _ => return None,
+    };
+    Some(match (keys_only, nested) {
+        (true, false) => "_starpls_typing.Sequence[_starpls_types.ProviderKey]",
+        (true, true) => "_starpls_typing.Sequence[_starpls_types.ProviderKey] | _starpls_typing.Sequence[_starpls_typing.Sequence[_starpls_types.ProviderKey]]",
+        (false, false) => "_starpls_typing.Sequence[_starpls_types.ProviderKey | _starpls_builtins.str]",
+        (false, true) => "_starpls_typing.Sequence[_starpls_types.ProviderKey | _starpls_builtins.str] | _starpls_typing.Sequence[_starpls_typing.Sequence[_starpls_types.ProviderKey | _starpls_builtins.str]]",
+    })
 }
 
 fn callable_documentation(value: &Value, callable: &Callable) -> anyhow::Result<String> {
@@ -2932,6 +2959,195 @@ def inspect(context: ctx, file: File) -> None:
                 diagnostic.concise_message().to_string().contains("None"),
                 "{name}: {diagnostic:?}"
             );
+        }
+    }
+
+    #[test]
+    fn provider_requirements_preserve_keys_and_versioned_names() {
+        for (release, legacy_names) in [
+            ("development version", true),
+            ("release 8.6.0", true),
+            ("release 9.0.0", false),
+        ] {
+            let (mut analysis, loader) = Analysis::new_for_test();
+            let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+            let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+                "../../../starpls/src/builtin/builtin.pb"
+            ))
+            .unwrap();
+            starpls_bazel::env::apply_versioned_signatures(&mut builtins, release);
+            let attribute_methods: Vec<_> = builtins
+                .r#type
+                .iter()
+                .filter(|class| class.name == "attr")
+                .flat_map(|class| &class.field)
+                .filter(|method| {
+                    method.callable.as_ref().is_some_and(|callable| {
+                        callable
+                            .param
+                            .iter()
+                            .any(|parameter| parameter.name == "providers")
+                    })
+                })
+                .map(|method| method.name.clone())
+                .collect();
+            assert!(attribute_methods.iter().any(|name| name == "label"));
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let source = fixture.add_file(
+                &mut analysis.db,
+                "keys.bzl",
+                r#"
+Info = provider(fields=["value"])
+def _init(value):
+    return {"value": value}
+Initialized, raw = provider(fields=["value"], init=_init)
+"#,
+            );
+            let interface = fixture.add_file(
+                &mut analysis.db,
+                "keys.bzli",
+                r#"
+def Info[T](value: T) -> record[{"value": T}]: ...
+def _init(value: str) -> dict[str, str]: ...
+def Initialized(value: str) -> record[{"value": str}]: ...
+"#,
+            );
+            let mut valid = String::from(
+                r#"
+load("keys.bzl", "Info", "Initialized", "raw")
+keys: list[ProviderKey] = [Info, Initialized, DefaultInfo]
+nested: list[list[ProviderKey]] = [keys, [Info]]
+def implementation(context: ctx) -> None: pass
+def aspect_implementation(target: Target, context: ctx) -> None: pass
+"#,
+            );
+            for method in &attribute_methods {
+                valid.push_str(&format!("attr.{method}(providers=keys)\nattr.{method}(providers=nested)\nattr.{method}(providers=((Info,), (DefaultInfo,)))\n"));
+            }
+            let caller = fixture.add_file(&mut analysis.db, "requirements.bzl", &valid);
+            loader.add_files_from_fixture(&fixture);
+            analysis.set_type_interfaces([(source, interface)]).unwrap();
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("non-static-type".into(), "error".into())]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert!(diagnostics.is_empty(), "{release}: {diagnostics:?}");
+            // Registration callback completeness is tested by its own contract owner.
+            analysis.set_rules(crate::DiagnosticRules::default());
+            valid.push_str("rule(implementation, provides=keys)\naspect(aspect_implementation, provides=keys, required_providers=nested, required_aspect_providers=keys)\n");
+            analysis.update_file(caller, valid.clone());
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert!(diagnostics.is_empty(), "{release}: {diagnostics:?}");
+            for invalid in [
+                "attr.label(providers=[implementation])",
+                "attr.label(providers=[raw])",
+                "attr.label(providers=[Info(value=1)])",
+                "attr.label(providers=[Info, [DefaultInfo]])",
+                "attr.label(providers=[[42]])",
+                "attr.label(providers=None)",
+                "attr.label(providers='legacy')",
+                "rule(implementation, provides='legacy')",
+                "rule(implementation, provides=nested)",
+                "aspect(aspect_implementation, provides=nested)",
+                "aspect(aspect_implementation, required_providers=[Info, [DefaultInfo]])",
+                "aspect(aspect_implementation, required_aspect_providers=[[raw]])",
+            ] {
+                analysis.update_file(caller, format!("{valid}{invalid}\n"));
+                let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{release}, {invalid}: {diagnostics:?}");
+                };
+                assert_eq!(
+                    diagnostic.id().as_str(),
+                    "invalid-argument-type",
+                    "{invalid}"
+                );
+                assert!(diagnostic.range().unwrap().start().to_usize() >= valid.len());
+            }
+            let named = format!("{valid}legacy: list[ProviderKey | str] = [Info, 'legacy']\n");
+            for call in [
+                "attr.label(providers=legacy)",
+                "attr.label(providers=[legacy])",
+                "rule(implementation, provides=legacy)",
+                "aspect(aspect_implementation, provides=legacy)",
+                "aspect(aspect_implementation, required_providers=[legacy])",
+                "aspect(aspect_implementation, required_aspect_providers=legacy)",
+            ] {
+                analysis.update_file(caller, format!("{named}{call}\n"));
+                let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+                if legacy_names {
+                    assert!(diagnostics.is_empty(), "{release}, {call}: {diagnostics:?}");
+                } else {
+                    let [diagnostic] = diagnostics.as_slice() else {
+                        panic!("{release}, {call}: {diagnostics:?}");
+                    };
+                    assert_eq!(diagnostic.id().as_str(), "invalid-argument-type", "{call}");
+                    assert!(diagnostic.range().unwrap().start().to_usize() >= named.len());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn provider_requirements_preserve_supplied_signatures() {
+        for (metadata, valid, invalid) in [
+            ("sequence of strings", "['legacy']", "[DefaultInfo]"),
+            (
+                "sequence of ProviderKeys",
+                "[DefaultInfo]",
+                "[[DefaultInfo]]",
+            ),
+        ] {
+            let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+                "../../../starpls/src/builtin/builtin.pb"
+            ))
+            .unwrap();
+            let parameter = builtins
+                .r#type
+                .iter_mut()
+                .find(|class| class.name == "attr")
+                .unwrap()
+                .field
+                .iter_mut()
+                .find(|method| method.name == "label")
+                .unwrap()
+                .callable
+                .as_mut()
+                .unwrap()
+                .param
+                .iter_mut()
+                .find(|parameter| parameter.name == "providers")
+                .unwrap();
+            parameter.r#type = metadata.to_owned();
+            starpls_bazel::env::apply_versioned_signatures(&mut builtins, "release 9.0.0");
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let file = analysis
+                .open_document(
+                    Path::new("/requirements.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    format!("attr.label(providers={valid})\n"),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{metadata}: {diagnostics:?}");
+            analysis.update_file(file, format!("attr.label(providers={invalid})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{metadata}: {diagnostics:?}")
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
         }
     }
 

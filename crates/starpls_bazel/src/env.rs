@@ -111,6 +111,59 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             });
         }
     }
+    // Provider requirements accepted legacy string names until Bazel 9.
+    // Keep precise supplied metadata; only complete the inventory's bare sequences.
+    // https://github.com/bazelbuild/bazel/commit/8fe29f07c58a74135aee4c9810929142eb91c6af
+    let refine_provider_requirements = |parameter: &mut Param, nested: bool| {
+        if !matches!(
+            normalize_doc(&parameter.r#type, true).as_str(),
+            "sequence" | "Sequence" | "list" | "List"
+        ) {
+            return;
+        }
+        parameter.r#type = match (version < (9, 0), nested) {
+            (false, false) => "sequence of ProviderKeys",
+            (false, true) => "sequence of ProviderKeys; or sequence of sequences of ProviderKeys",
+            (true, false) => "sequence of ProviderKeys or strings",
+            (true, true) => "sequence of ProviderKeys or strings; or sequence of sequences of ProviderKeys or strings",
+        }
+        .to_owned();
+    };
+    for value in &mut builtins.global {
+        if !matches!(value.name.as_str(), "rule" | "aspect") {
+            continue;
+        }
+        let Some(callable) = &mut value.callable else {
+            continue;
+        };
+        for parameter in &mut callable.param {
+            if parameter.name == "provides" {
+                refine_provider_requirements(parameter, false);
+            } else if value.name == "aspect"
+                && matches!(
+                    parameter.name.as_str(),
+                    "required_providers" | "required_aspect_providers"
+                )
+            {
+                refine_provider_requirements(parameter, true);
+            }
+        }
+    }
+    for class in &mut builtins.r#type {
+        if class.name != "attr" {
+            continue;
+        }
+        for value in &mut class.field {
+            let Some(callable) = &mut value.callable else {
+                continue;
+            };
+            for parameter in &mut callable.param {
+                if parameter.name == "providers" {
+                    refine_provider_requirements(parameter, true);
+                }
+            }
+        }
+    }
     if version < (9, 3) {
         return;
     }
@@ -317,6 +370,78 @@ mod tests {
         let unchanged = supplied.clone();
         apply_versioned_signatures(&mut supplied, "release 9.2.0");
         assert_eq!(supplied, unchanged);
+    }
+
+    #[test]
+    fn provider_requirements_follow_bazel_release() {
+        let callable = |name: &str, parameters: &[&str]| Value {
+            name: name.to_owned(),
+            callable: Some(Callable {
+                param: parameters
+                    .iter()
+                    .map(|name| Param {
+                        name: (*name).to_owned(),
+                        r#type: "sequence".to_owned(),
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let original = Builtins {
+            global: vec![
+                callable("rule", &["provides", "unrelated"]),
+                callable(
+                    "aspect",
+                    &[
+                        "provides",
+                        "required_providers",
+                        "required_aspect_providers",
+                    ],
+                ),
+                callable("unrelated", &["provides"]),
+            ],
+            r#type: vec![Type {
+                name: "attr".to_owned(),
+                field: vec![callable("label", &["providers", "unrelated"])],
+                ..Default::default()
+            }],
+        };
+        for (release, flat, nested) in [
+            ("development version", "sequence", "sequence"),
+            ("release 8.6.0", "sequence of ProviderKeys or strings", "sequence of ProviderKeys or strings; or sequence of sequences of ProviderKeys or strings"),
+            ("release 9.0.0", "sequence of ProviderKeys", "sequence of ProviderKeys; or sequence of sequences of ProviderKeys"),
+            ("release 10.0.0", "sequence of ProviderKeys", "sequence of ProviderKeys; or sequence of sequences of ProviderKeys"),
+        ] {
+            let mut builtins = original.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            let rule = builtins.global[0].callable.as_ref().unwrap();
+            assert_eq!(rule.param[0].r#type, flat, "{release}");
+            assert_eq!(rule.param[1].r#type, "sequence");
+            let aspect = builtins.global[1].callable.as_ref().unwrap();
+            assert_eq!(aspect.param[0].r#type, flat, "{release}");
+            assert_eq!(aspect.param[1].r#type, nested, "{release}");
+            assert_eq!(aspect.param[2].r#type, nested, "{release}");
+            let label = builtins.r#type[0].field[0].callable.as_ref().unwrap();
+            assert_eq!(label.param[0].r#type, nested, "{release}");
+            assert_eq!(label.param[1].r#type, "sequence");
+            assert_eq!(builtins.global[2], original.global[2]);
+            let once = builtins.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            assert_eq!(builtins, once);
+            apply_versioned_signatures(&mut builtins, "development version");
+            assert_eq!(builtins, once);
+        }
+        let mut supplied = original;
+        supplied.global[0].callable.as_mut().unwrap().param[0].r#type =
+            "sequence of ProviderKeys".to_owned();
+        apply_versioned_signatures(&mut supplied, "release 8.6.0");
+        assert_eq!(
+            supplied.global[0].callable.as_ref().unwrap().param[0].r#type,
+            "sequence of ProviderKeys"
+        );
+        apply_versioned_signatures(&mut Builtins::default(), "release 9.0.0");
     }
 
     #[test]
