@@ -45,6 +45,7 @@ pub(super) struct DeclarationSource {
 #[derive(Clone, Copy)]
 enum CallableKind<'a> {
     Function,
+    EmptyDepset,
     Method(&'a str),
     Rule(&'a starpls_bazel::build::RuleDefinition),
     Provider(Option<&'a str>),
@@ -912,6 +913,21 @@ fn declarations(
                     value.name
                 )?;
             }
+            if value.name == "depset" {
+                // An empty input proves an empty depset. A type parameter default
+                // cannot distinguish an empty input from an unknown one.
+                writeln!(exports, "@_starpls_typing.overload")?;
+                write_function(
+                    &mut exports,
+                    "",
+                    value,
+                    callable,
+                    CallableKind::EmptyDepset,
+                    input,
+                    &declared_classes,
+                )?;
+                writeln!(exports, "@_starpls_typing.overload")?;
+            }
             write_function(
                 &mut exports,
                 if provider { "    " } else { "" },
@@ -938,7 +954,7 @@ fn declarations(
         body.push_str("    pass\n");
     }
     let mut output = String::from(
-        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\", default=_starpls_typing.Never)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n_ContextAttrs = _starpls_typing.TypeVar(\"_ContextAttrs\", default=_starpls_builtins.object, covariant=True)\n\n_starpls_native_rule_available: _starpls_builtins.bool\n\nclass _starpls_types:\n",
+        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n_ContextAttrs = _starpls_typing.TypeVar(\"_ContextAttrs\", default=_starpls_builtins.object, covariant=True)\n\n_starpls_native_rule_available: _starpls_builtins.bool\n\nclass _starpls_types:\n",
     );
     output.push_str(&body);
     output.push('\n');
@@ -1158,7 +1174,9 @@ fn write_function(
     classes: &BTreeSet<String>,
 ) -> anyhow::Result<()> {
     let provider = matches!(kind, CallableKind::Provider(_));
+    let empty_depset = matches!(kind, CallableKind::EmptyDepset);
     let kind = match kind {
+        CallableKind::EmptyDepset => CallableKind::Function,
         CallableKind::Provider(namespace) => {
             namespace.map_or(CallableKind::Function, CallableKind::Method)
         }
@@ -1238,10 +1256,18 @@ fn write_function(
             (CallableKind::Function, "aspect", "attrs") => Some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]"),
             (CallableKind::Function, "select", "x") => Some("_starpls_typing.Mapping[_SelectCondition, _SelectValue]"),
             (CallableKind::Function, "depset", "direct") => {
-                Some("_starpls_typing.Sequence[_DepsetInput] | None")
+                Some(if empty_depset {
+                    "_starpls_typing.Sequence[_starpls_typing.Never] | None"
+                } else {
+                    "_starpls_typing.Sequence[_DepsetInput] | None"
+                })
             }
             (CallableKind::Function, "depset", "transitive") => {
-                Some("_starpls_typing.Sequence[_starpls_types.depset[_DepsetInput]] | None")
+                Some(if empty_depset {
+                    "_starpls_typing.Sequence[_starpls_types.depset[_starpls_typing.Never]] | None"
+                } else {
+                    "_starpls_typing.Sequence[_starpls_types.depset[_DepsetInput]] | None"
+                })
             }
             (CallableKind::Function, "DefaultInfo", "files") => Some("_DefaultInfoFiles"),
             (CallableKind::Function, "DefaultInfo", "executable") => classes.contains("File").then_some("_starpls_types.File | None"),
@@ -1354,7 +1380,11 @@ fn write_function(
         }
         (CallableKind::Function, "struct") => Some("_starpls_types.struct[_StructField]"),
         (CallableKind::Function, "select") => Some("_starpls_types.select[_SelectValue]"),
-        (CallableKind::Function, "depset") => Some("_starpls_types.depset[_DepsetInput]"),
+        (CallableKind::Function, "depset") => Some(if empty_depset {
+            "_starpls_types.depset[_starpls_typing.Never]"
+        } else {
+            "_starpls_types.depset[_DepsetInput]"
+        }),
         (CallableKind::Function, "DefaultInfo") => {
             Some("_starpls_types.DefaultInfo[_DefaultInfoFiles, None]")
         }
@@ -2676,9 +2706,14 @@ def inspect(context: ctx, file: File, change: transition) -> None:
         );
         let source = r#"empty = depset()
 also_empty = depset(transitive=[empty])
+empty_list = depset([])
+empty_tuple = depset(())
+empty_transitive = depset(transitive=[])
+empty_none = depset(None, transitive=None)
 strings: depset[str] = empty
 def inspect(context: ctx, file: File) -> None:
-    context.runfiles(transitive_files=empty)
+    for value in [empty, also_empty, empty_list, empty_tuple, empty_transitive, empty_none]:
+        context.runfiles(transitive_files=value)
     context.runfiles(transitive_files=depset([file]))
     context.runfiles(transitive_files=depset(transitive=[depset([file])]))
 "#;

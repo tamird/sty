@@ -1460,8 +1460,16 @@ def unknown(target, key, values):
     # type: (Target, Unknown, Unknown) -> None
     gradual = target[key] # type: int
     elements = depset(values).to_list() # type: list[int]
+    transitive = depset(transitive=values).to_list() # type: list[str]
     empty = depset().to_list()
-    print(gradual, elements, empty)
+    print(gradual, elements, transitive, empty)
+def unknown_elements(direct: list[Unknown], transitive: list[depset[Unknown]], dynamic: Any, dynamic_direct: list[Any], dynamic_transitive: list[depset[Any]]) -> None:
+    values = depset(direct).to_list() # type: list[int]
+    children = depset(transitive=transitive).to_list() # type: list[str]
+    dynamic_values = depset(dynamic).to_list() # type: list[int]
+    dynamic_elements = depset(dynamic_direct).to_list() # type: list[str]
+    dynamic_children = depset(transitive=dynamic_transitive).to_list() # type: list[int]
+    print(values, children, dynamic_values, dynamic_elements, dynamic_children)
 "#;
         let (mut analysis, fixture) = native_analysis(source);
         let file = fixture.main_file();
