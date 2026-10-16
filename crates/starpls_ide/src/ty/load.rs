@@ -174,8 +174,8 @@ pub(super) fn resolve<'db>(
                 ));
             }
             ProvidedBindingValue::Export {
-                value: None,
                 file: loaded_file,
+                value: super::providers::key_export(db, loaded_file, &name),
                 name: Name::new(name),
             }
             .into()

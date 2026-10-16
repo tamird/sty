@@ -321,6 +321,7 @@ pub(crate) struct Documentation {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
 pub(super) struct ProviderData {
+    pub(super) name: Name,
     pub(super) documentation: Documentation,
     /// None denotes an unrestricted field namespace.
     pub(super) fields: Option<Box<[Name]>>,
@@ -345,6 +346,10 @@ impl Documentation {
             .or_else(|| {
                 data.downcast_ref::<ProviderData>()
                     .map(|provider| &provider.documentation)
+            })
+            .or_else(|| {
+                let key = data.downcast_ref::<super::providers::ProviderKeyData>()?;
+                Self::from_data(key.constructor_data.as_ref()?)
             })
     }
 }
@@ -1939,9 +1944,11 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
         CheckedArgument::Value { ty, expression: _ } => (!ty.is_none(db)).then_some(ty),
     };
     let name = provider_name(db, call, initializer.is_some());
+    let key_base = declared_class(db, call, "Provider")?;
     if let Some(class) = db.provider_interface(call.file(), call.call().node_index().load()) {
+        let key = super::providers::key_value(db, call.file(), class, key_base, &environment)?;
         if initializer.is_none() {
-            return Some(class);
+            return Some(key);
         }
         let fields = super::interface::provider_fields(db, class, &environment)?;
         let parameters = fields
@@ -1967,7 +1974,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
             }
         };
         let raw = Type::single_callable(db, signature);
-        return Some(Type::heterogeneous_tuple(db, &environment, [class, raw]));
+        return Some(Type::heterogeneous_tuple(db, &environment, [key, raw]));
     }
     let mut fields: Vec<ProvidedField<'_>> = Vec::new();
     let mut open = false;
@@ -2080,6 +2087,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
         )
     };
     let data = ProviderData {
+        name: name.unwrap_or_else(|| Name::new("provider")),
         origin: FileRange::new(call.file().file(db), call.call().range()),
         documentation: documentation.clone(),
         fields: (!open).then(|| fields.iter().map(|field| field.name.clone()).collect()),
@@ -2103,7 +2111,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
     let class = call.class_type(
         db,
         ProvidedClass {
-            name: name.unwrap_or_else(|| Name::new("provider")),
+            name: data.name.clone(),
             bases: Box::default(),
             class_members: Box::from([(Name::new("__init__"), init)]),
             instance_fields: ProvidedInstanceFields {
@@ -2115,6 +2123,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
             .into(),
         },
     );
+    let key = super::providers::key_value(db, call.file(), class, key_base, &environment)?;
     if initializer.is_some() {
         let instance = class.to_instance_approximation(db, &environment)?;
         let raw = Type::single_callable(
@@ -2122,9 +2131,9 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
             Signature::new(Parameters::standard(parameters), instance),
         )
         .with_callable_data(db, ProvidedData::new(data))?;
-        Some(Type::heterogeneous_tuple(db, &environment, [class, raw]))
+        Some(Type::heterogeneous_tuple(db, &environment, [key, raw]))
     } else {
-        Some(class)
+        Some(key)
     }
 }
 

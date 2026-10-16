@@ -241,8 +241,19 @@ impl Database {
                 .map(|class| class.name.as_str())
                 .chain(starpls_bazel::BUILTINS_VALUES_DENY_LIST.iter().copied())
                 .chain([
-                    "str", "string", "Any", "Unknown", "unknown", "NoneType", "Sequence",
-                    "Iterable", "Mapping", "object", "property", "record",
+                    "str",
+                    "string",
+                    "Any",
+                    "Unknown",
+                    "unknown",
+                    "NoneType",
+                    "Sequence",
+                    "Iterable",
+                    "Mapping",
+                    "object",
+                    "property",
+                    "record",
+                    "ProviderKey",
                 ])
                 .chain(native::TYPING_ANNOTATIONS.iter().copied());
             return candidates

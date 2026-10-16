@@ -1207,7 +1207,7 @@ Foo$0Info = provider(doc = "The foo provider")
 "#,
             expect![[r#"
                 ```python
-                (variable) FooInfo: <class 'FooInfo'>
+                (function) (**kwargs: object) -> FooInfo
                 ```
                 The foo provider
             "#]],

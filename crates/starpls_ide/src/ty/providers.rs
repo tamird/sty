@@ -16,6 +16,7 @@ use ruff_python_ast::NodeIndex;
 use ruff_python_ast::Stmt;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_text_size::Ranged;
+use ruff_text_size::TextRange;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use starpls_hir::Db as _;
@@ -26,6 +27,7 @@ use ty_python_core::global_scope;
 use ty_python_core::place_table;
 use ty_python_core::ProgramFile;
 use ty_python_semantic::provided::BuiltinUsage;
+use ty_python_semantic::provided::ProvidedBindingValue;
 use ty_python_semantic::provided::ProvidedClass;
 use ty_python_semantic::provided::ProvidedData;
 use ty_python_semantic::provided::ProvidedField;
@@ -41,6 +43,7 @@ use ty_python_semantic::types::CheckedCall;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::ParameterKind;
+use ty_python_semantic::types::Parameters;
 use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypeDefinition;
@@ -48,6 +51,7 @@ use ty_python_semantic::types::TypedDictFieldBuilder;
 use ty_python_semantic::types::TypedDictOpenness;
 use ty_python_semantic::types::TypedDictSchema;
 use ty_python_semantic::types::TypedDictType;
+use ty_python_semantic::types::UnionType;
 use ty_python_semantic::HasDefinition;
 use ty_python_semantic::HasType;
 use ty_python_semantic::ImportAliasResolution;
@@ -62,6 +66,179 @@ struct RecordDeclaration {
     fields: Box<[Name]>,
     open: bool,
     generic: bool,
+}
+
+/// The constructor and key are the same native value, while its returned record
+/// has a separate nominal identity. Keep the declaration for annotation uses.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) struct ProviderKeyData {
+    declaration: Option<(starpls_common::File, TextRange)>,
+    pub(super) constructor_data: Option<ProvidedData>,
+}
+
+impl get_size2::GetSize for ProviderKeyData {
+    fn get_heap_size(&self) -> usize {
+        let Self {
+            declaration: _,
+            constructor_data,
+        } = self;
+        get_size2::GetSize::get_heap_size(constructor_data)
+    }
+}
+
+pub(super) fn constructor_definition<'db>(
+    db: &'db Database,
+    constructor: Type<'db>,
+    environment: &ProgramEnvironment<'db>,
+) -> Option<TypeDefinition<'db>> {
+    if let Some(data) = constructor.provided_data(db, environment) {
+        if let Some(key) = data.downcast_ref::<ProviderKeyData>() {
+            let (source, range) = key.declaration?;
+            let file = db.starlark_program_file(source);
+            let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+            let node = covering_node(parsed.syntax().into(), range);
+            let model = SemanticModel::new(db, file);
+            return match node.node() {
+                AnyNodeRef::StmtFunctionDef(function) => {
+                    Some(TypeDefinition::Function(function.definition(&model)))
+                }
+                AnyNodeRef::StmtClassDef(class) => {
+                    Some(TypeDefinition::StaticClass(class.definition(&model)))
+                }
+                _ => None,
+            };
+        }
+    }
+    constructor.definition(db, environment)
+}
+
+/// Build the callable key at its original declaration, never at an importing use.
+pub(super) fn key_value<'db>(
+    db: &'db Database,
+    origin_file: ProgramFile<'db>,
+    constructor: Type<'db>,
+    base: Type<'db>,
+    environment: &ProgramEnvironment<'db>,
+) -> Option<Type<'db>> {
+    let data = constructor.provided_data(db, environment);
+    if data
+        .as_ref()
+        .is_some_and(|data| data.downcast_ref::<ProviderKeyData>().is_some())
+    {
+        return Some(constructor);
+    }
+    let declaration = match constructor.definition(db, environment) {
+        Some(TypeDefinition::Function(definition) | TypeDefinition::StaticClass(definition)) => {
+            Some(definition)
+        }
+        _ => None,
+    };
+    let file = declaration.map_or(origin_file, |definition| definition.program_file(db));
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let (name, source) = if let Some(definition) = declaration {
+        match definition.kind(db) {
+            DefinitionKind::Function(function) => {
+                let function = function.node(&parsed);
+                (
+                    function.name.id.clone(),
+                    Some((db.starlark_file(file)?, function.range())),
+                )
+            }
+            DefinitionKind::Class(class) => {
+                let class = class.node(&parsed);
+                (
+                    class.name.id.clone(),
+                    Some((db.starlark_file(file)?, class.range())),
+                )
+            }
+            _ => return None,
+        }
+    } else {
+        let provider = data?.downcast_ref::<super::factory::ProviderData>()?;
+        (provider.name.clone(), None)
+    };
+    let mut results = Vec::new();
+    let callable = constructor.map_callable_signatures(
+        db,
+        environment,
+        CallableTypeKind::FunctionLike,
+        |signature| {
+            results.push(signature.upper_specialized_return_type(db, environment));
+            let parameters = std::iter::once(Parameter::positional_only(Some(Name::new("self"))))
+                .chain(signature.parameters().iter().cloned());
+            let parameters = Parameters::from_annotation(db, parameters);
+            signature.with_parameters(parameters)
+        },
+    )?;
+    // A runtime key identifies all constructor specializations. Its lookup view closes
+    // those binders while the callable above retains them for ordinary construction.
+    let result = UnionType::from_elements(db, environment, results);
+    let base = base.as_class_literal()?;
+    let base =
+        Type::from(base.apply_specialization(db, |context| context.specialize(db, vec![result])));
+    let class = ProvidedClass {
+        name,
+        bases: Box::from([base]),
+        class_members: Box::from([(Name::new("__call__"), callable)]),
+        instance_fields: ProvidedInstanceFields {
+            fields: Box::default(),
+            has_dynamic_fields: false,
+            implications: Box::default(),
+            data: Some(ProvidedData::new(ProviderKeyData {
+                declaration: source,
+                constructor_data: data.cloned().or_else(|| {
+                    let text = declaration?.docstring(db)?;
+                    Some(ProvidedData::new(super::factory::Documentation {
+                        text: Some(text.into()),
+                        parameters: Vec::new(),
+                    }))
+                }),
+            })),
+        }
+        .into(),
+    };
+    let class = if let Some(definition) = declaration {
+        class.into_type_at_definition(db, definition)?
+    } else {
+        let provider = data?.downcast_ref::<super::factory::ProviderData>()?;
+        let node = covering_node(parsed.syntax().into(), provider.origin.range());
+        let AnyNodeRef::ExprCall(call) = node.node() else {
+            return None;
+        };
+        class.into_type_at_expression(db, file, call.into())?
+    };
+    class.to_instance_approximation(db, environment)
+}
+
+pub(super) fn key_export<'db>(
+    db: &'db Database,
+    file: ProgramFile<'db>,
+    name: &str,
+) -> Option<Type<'db>> {
+    let source = db.starlark_file(file)?;
+    if !source.is_type_interface(db) {
+        return None;
+    }
+    let constructor = ProvidedBindingValue::Export {
+        file,
+        name: Name::new(name),
+        value: None,
+    }
+    .resolve_type(db)?;
+    let environment = ProgramEnvironment::from_file(file);
+    let declaration = constructor.definition(db, &environment)?;
+    let is_provider = match declaration {
+        TypeDefinition::Function(definition) => is_declaration(db, definition),
+        TypeDefinition::StaticClass(_) => {
+            super::interface::provider_definition(db, constructor, &environment).is_some()
+        }
+        _ => false,
+    };
+    if !is_provider {
+        return None;
+    }
+    let base = db.annotation_builtin(source, "Provider")?;
+    key_value(db, file, constructor, base, &environment)
 }
 
 /// Selecting a provider declaration must not infer its signature: fields can refer to itself.
@@ -186,7 +363,7 @@ pub(super) fn type_application<'db>(
 ) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(context.program_file());
     let TypeDefinition::Function(definition) =
-        application.value_type.definition(db, &environment)?
+        constructor_definition(db, application.value_type, &environment)?
     else {
         return None;
     };
@@ -206,10 +383,26 @@ pub(super) fn constructor_instance<'db>(
     constructor: Type<'db>,
     environment: &ProgramEnvironment<'db>,
 ) -> Option<Type<'db>> {
-    let TypeDefinition::Function(definition) = constructor.definition(db, environment)? else {
-        return None;
-    };
-    reference(db, definition)
+    if let Some(TypeDefinition::Function(definition)) =
+        constructor_definition(db, constructor, environment)
+    {
+        if let Some(instance) = reference(db, definition) {
+            return Some(instance);
+        }
+    }
+    let data = constructor.provided_data(db, environment)?;
+    data.downcast_ref::<ProviderKeyData>()?;
+    let mut returns = Vec::new();
+    constructor.map_callable_signatures(
+        db,
+        environment,
+        CallableTypeKind::Regular,
+        |signature| {
+            returns.push(signature.default_specialized_return_type(db));
+            signature
+        },
+    )?;
+    Some(UnionType::from_elements(db, environment, returns))
 }
 
 pub(super) fn constructor_fields<'db>(
@@ -217,7 +410,9 @@ pub(super) fn constructor_fields<'db>(
     constructor: Type<'db>,
     environment: &ProgramEnvironment<'db>,
 ) -> Option<Vec<ProvidedField<'db>>> {
-    let TypeDefinition::Function(definition) = constructor.definition(db, environment)? else {
+    let TypeDefinition::Function(definition) =
+        constructor_definition(db, constructor, environment)?
+    else {
         return None;
     };
     if !is_declaration(db, definition) {
@@ -953,6 +1148,121 @@ mod tests {
     use crate::FilePosition;
 
     #[test]
+    fn provider_keys_preserve_constructors_and_reject_unrelated_callables() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "info.bzl",
+            r#"
+Info = provider(fields=["value", "items"])
+def _init(value):
+    return {"value": value}
+Initialized, raw = provider(fields=["value"], init=_init)
+Empty = provider(fields=[])
+def by_key(target, key):
+    return target[key]
+"#,
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"
+def Info[T](*, value: T, items: list[T]) -> record[{"value": T, "items": list[T]}]: ...
+def Initialized(value: str) -> record[{"value": str}]: ...
+def raw(*, value: str) -> Initialized: ...
+class Empty:
+    def __init__(self) -> None: ...
+def by_key[T](target: Target, key: Provider[T]) -> T: ...
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "aliases.bzl",
+            "load('info.bzl', Original='Info')\nAlias = Original\n",
+        );
+        let valid = r#"
+load("info.bzl", "Info", "Initialized", "raw", "Empty", "by_key")
+load("aliases.bzl", Renamed="Alias")
+def forward(target: Target, keys: Sequence[ProviderKey]) -> list[object]:
+    return [target[key] for key in keys if key in target]
+def initialized_key(key: Provider[Initialized]) -> None: pass
+def default_key(key: Provider[DefaultInfo]) -> None: pass
+initialized_key(Initialized)
+default_key(DefaultInfo)
+def inspect(target: Target) -> str:
+    forward(target, [Info, Renamed, Initialized, Empty, DefaultInfo, platform_common.ConstraintSettingInfo])
+    value: Renamed[str] = Info(value="text", items=["text"])
+    text: str = value.items[0]
+    return text + target[Initialized].value + by_key(target, Initialized).value
+def arbitrary(value: str) -> Initialized:
+    return Initialized(value)
+raw(value="text")
+empty: Empty = Empty()
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        {
+            let snapshot = analysis.snapshot();
+            let db = &snapshot.db;
+            let key = super::key_export(db, db.starlark_program_file(interface), "Info").unwrap();
+            let source_key = ty_python_semantic::provided::ProvidedBindingValue::Export {
+                file: db.starlark_program_file(source),
+                name: ruff_python_ast::name::Name::new("Info"),
+                value: None,
+            }
+            .resolve_type(db)
+            .unwrap();
+            assert_eq!(key, source_key);
+        }
+        for file in [source, interface, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())]
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_rules(Default::default());
+        for (invalid, expected) in [
+            ("def bad(target: Target):\n    return target[raw]", "invalid-argument-type"),
+            ("def bad(target: Target):\n    return target[arbitrary]", "invalid-argument-type"),
+            ("def bad(target: Target):\n    return arbitrary in target", "unsupported-operator"),
+            ("def bad(target: Target):\n    return target[str]", "invalid-argument-type"),
+            ("def bad(target: Target):\n    first = target[Info]\n    second = target[Info]\n    first.items.append(second.value)", "invalid-argument-type"),
+            ("Initialized(42)", "invalid-argument-type"),
+            ("raw(value=42)", "invalid-argument-type"),
+            ("initialized_key(arbitrary)", "invalid-argument-type"),
+            ("def concrete(key: Provider[Info[str]]) -> None: pass\nconcrete(Info)", "invalid-argument-type"),
+        ] {
+            analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == expected),
+                "accepted {invalid}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
     fn record_constructors_preserve_recursive_nominal_identity() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
@@ -1109,7 +1419,7 @@ def from_target(target: Target):
                 .unwrap()
                 .unwrap();
             assert!(
-                hover.contents.value.contains("Unknown") && !hover.contents.value.contains("Any"),
+                hover.contents.value.contains("object") && !hover.contents.value.contains("Any"),
                 "{}",
                 hover.contents.value
             );

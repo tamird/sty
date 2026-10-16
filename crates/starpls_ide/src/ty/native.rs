@@ -47,6 +47,7 @@ enum CallableKind<'a> {
     Function,
     Method(&'a str),
     Rule(&'a starpls_bazel::build::RuleDefinition),
+    Provider(Option<&'a str>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -389,6 +390,8 @@ fn declarations(
 "#,
         );
     }
+    body.push_str("    class ProviderKey: ...\n");
+    let mut provider_declarations = String::new();
     for class in classes.values() {
         // These native instance types have no Starlark subclasses. Finality
         // preserves their comparison semantics and excludes unrelated provider
@@ -421,8 +424,13 @@ fn declarations(
         if let Some(parameter) = parameter {
             writeln!(
                 body,
-                "    class {}(_starpls_typing.Generic[{parameter}]):",
-                class.name
+                "    class {}({}_starpls_typing.Generic[{parameter}]):",
+                class.name,
+                if class.name == "Provider" {
+                    "ProviderKey, "
+                } else {
+                    ""
+                },
             )?;
         } else {
             writeln!(body, "    class {}:", class.name)?;
@@ -544,7 +552,7 @@ fn declarations(
             writeln!(body, "        @_starpls_typing.overload")?;
             writeln!(
                 body,
-                "        def __getitem__(self, key: _starpls_types.Provider[_starpls_types.DefaultInfo] | _starpls_typing.Callable[..., _starpls_types.DefaultInfo]) -> _starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], _DefaultInfoFilesToRun]: ..."
+                "        def __getitem__(self, key: _starpls_types.Provider[_starpls_types.DefaultInfo]) -> _starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], _DefaultInfoFilesToRun]: ..."
             )?;
             // Package groups provide PackageSpecificationInfo. Both package
             // and environment groups lack FilesToRunProvider, and their other
@@ -552,22 +560,26 @@ fn declarations(
             writeln!(body, "        @_starpls_typing.overload")?;
             writeln!(
                 body,
-                "        def __getitem__(self, key: _starpls_types.Provider[_starpls_types.PackageSpecificationInfo] | _starpls_typing.Callable[..., _starpls_types.PackageSpecificationInfo]) -> _starpls_types.PackageSpecificationInfo: ..."
+                "        def __getitem__(self, key: _starpls_types.Provider[_starpls_types.PackageSpecificationInfo]) -> _starpls_types.PackageSpecificationInfo: ..."
             )?;
             // A widened key can still identify a provider present on a group.
             writeln!(body, "        @_starpls_typing.overload")?;
             writeln!(
                 body,
-                "        def __getitem__(self: _starpls_types.Target[None], key: _starpls_types.Provider[_ProviderValue] | _starpls_typing.Callable[..., _ProviderValue]) -> _starpls_ty_extensions.Intersection[_ProviderValue, _starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], None] | _starpls_types.PackageSpecificationInfo]: ..."
+                "        def __getitem__(self: _starpls_types.Target[None], key: _starpls_types.Provider[_ProviderValue]) -> _starpls_ty_extensions.Intersection[_ProviderValue, _starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], None] | _starpls_types.PackageSpecificationInfo]: ..."
             )?;
             writeln!(body, "        @_starpls_typing.overload")?;
             writeln!(
                 body,
-                "        def __getitem__(self, key: _starpls_types.Provider[_ProviderValue] | _starpls_typing.Callable[..., _ProviderValue]) -> _ProviderValue: ..."
+                "        def __getitem__(self, key: _starpls_types.Provider[_ProviderValue]) -> _ProviderValue: ..."
             )?;
+            writeln!(body, "        @_starpls_typing.overload")?;
+            writeln!(body, "        def __getitem__(self: _starpls_types.Target[None], key: _starpls_types.ProviderKey) -> _starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], None] | _starpls_types.PackageSpecificationInfo: ...")?;
+            writeln!(body, "        @_starpls_typing.overload")?;
+            writeln!(body, "        def __getitem__(self, key: _starpls_types.ProviderKey) -> _starpls_builtins.object: ...")?;
             writeln!(
                 body,
-                "        def __contains__(self, key: _starpls_types.Provider[_starpls_typing.Any] | _starpls_typing.Callable[..., _starpls_typing.Any]) -> _starpls_builtins.bool: ..."
+                "        def __contains__(self, key: _starpls_types.ProviderKey) -> _starpls_builtins.bool: ..."
             )?;
         }
         if matches!(class.name.as_str(), "rule" | "macro") {
@@ -617,6 +629,29 @@ fn declarations(
             }
             match &field.callable {
                 Some(callable) => {
+                    if starpls_bazel::KNOWN_PROVIDER_TYPES.contains(&field.name.as_str()) {
+                        let provider = format!("_starpls_provider_{}_{}", class.name, field.name);
+                        writeln!(
+                            provider_declarations,
+                            "class {provider}(_starpls_types.Provider[_starpls_types.{}]):",
+                            field.name
+                        )?;
+                        write_function(
+                            &mut provider_declarations,
+                            "    ",
+                            field,
+                            callable,
+                            CallableKind::Provider(Some(&class.name)),
+                            AnnotationUse::Value,
+                            &declared_classes,
+                        )?;
+                        writeln!(
+                            body,
+                            "        {}: _starpls_typing.Final[{provider}]",
+                            field.name
+                        )?;
+                        continue;
+                    }
                     if matches!(class.name.as_str(), "repository_ctx" | "module_ctx")
                         && field.name == "getenv"
                     {
@@ -869,17 +904,33 @@ fn declarations(
                 writeln!(exports, "{export} = {alias}")?;
                 continue;
             }
+            let provider = starpls_bazel::KNOWN_PROVIDER_TYPES.contains(&value.name.as_str());
+            if provider {
+                writeln!(
+                    exports,
+                    "class _starpls_provider{export}(_starpls_types.Provider[_starpls_types.{}]):",
+                    value.name
+                )?;
+            }
             write_function(
                 &mut exports,
-                "",
+                if provider { "    " } else { "" },
                 value,
                 callable,
-                CallableKind::Function,
+                if provider {
+                    CallableKind::Provider(None)
+                } else {
+                    CallableKind::Function
+                },
                 input,
                 &declared_classes,
             )?;
             // Capture this definition before another context reuses its public name.
-            writeln!(exports, "{export} = {}", value.name)?;
+            if provider {
+                writeln!(exports, "{export}: _starpls_provider{export}")?;
+            } else {
+                writeln!(exports, "{export} = {}", value.name)?;
+            }
             previous.push((value.clone(), input, export));
         }
     }
@@ -893,6 +944,7 @@ fn declarations(
     output.push('\n');
     output.push_str("_starpls_annotation_ExactDict = _starpls_allocations.dict\n\n");
     output.push_str("class _starpls_annotation_record:\n    @_starpls_typing.type_check_only\n    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_builtins.object: ...\n\n");
+    output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");
     for name in classes.keys() {
         writeln!(output, "_starpls_annotation_{name} = _starpls_types.{name}")?;
     }
@@ -905,6 +957,7 @@ fn declarations(
             "_starpls_annotation_{name} = _starpls_typing.{name}"
         )?;
     }
+    output.push_str(&provider_declarations);
     output.push_str(&rule_declarations);
     output.push_str(&exports);
     output.push('\n');
@@ -1104,14 +1157,21 @@ fn write_function(
     input: AnnotationUse,
     classes: &BTreeSet<String>,
 ) -> anyhow::Result<()> {
-    let name = if matches!(kind, CallableKind::Rule(_)) {
+    let provider = matches!(kind, CallableKind::Provider(_));
+    let kind = match kind {
+        CallableKind::Provider(namespace) => {
+            namespace.map_or(CallableKind::Function, CallableKind::Method)
+        }
+        kind => kind,
+    };
+    let name = if provider || matches!(kind, CallableKind::Rule(_)) {
         "__call__"
     } else {
         &value.name
     };
     write!(output, "{indent}def {name}(")?;
     let mut separator = "";
-    if !matches!(kind, CallableKind::Function) {
+    if provider || !matches!(kind, CallableKind::Function) {
         output.push_str("_starpls_self");
         separator = ", ";
     }
@@ -2863,7 +2923,7 @@ def inspect(context: ctx, file: File) -> None:
             ),
             (
                 "Target[None]",
-                "Callable[..., object]",
+                "ProviderKey",
                 "target[key]",
                 "DefaultInfo[depset[File], None] | PackageSpecificationInfo",
             ),
@@ -2911,17 +2971,11 @@ def inspect(context: ctx, file: File) -> None:
                 "target[key].files_to_run",
                 "None",
             ),
-            (
-                "Target[None]",
-                "Provider[Info] | Callable[..., DefaultInfo]",
-                "target[key].files_to_run",
-                "None",
-            ),
             ("Target[None]", "Unknown", "target[key]", "Unknown"),
             ("Target[None]", "Any", "target[key]", "Unknown"),
             (
                 "Target[None]",
-                "Callable[..., Any]",
+                "Provider[Any]",
                 "target[key]",
                 "(Unknown & DefaultInfo[depset[File], None]) | (Unknown & PackageSpecificationInfo)",
             ),

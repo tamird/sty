@@ -220,7 +220,16 @@ of an instance; `record[{"files": depset[File]}, ...]` describes a partial
 contract. Additional fields must also satisfy the source provider's `fields`
 declaration. `record[...]` is the return annotation of a provider constructor
 in a stub. Constructor declarations have one signature.
-`Provider[T]` describes a constructor returning `T`.
+`ProviderKey` describes a provider key without specifying its instance type.
+It accepts builtin and source providers, including generic providers. A lookup
+through that opaque view returns `object`. `Provider[T]` describes a key with
+a declared lookup result `T`. Source provider values also retain their exact
+constructor signatures; ordinary functions and raw constructors are not keys.
+
+```starlark
+def forward(target: Target, keys: Sequence[ProviderKey]) -> list[object]:
+    return [target[key] for key in keys if key in target]
+```
 
 Constructor type parameters relate input values to stored fields:
 
@@ -242,8 +251,12 @@ an `invalid-provider-interface` diagnostic.
 
 Omitted type arguments in annotations use the declaration's defaults. A runtime
 provider key identifies every specialization of that provider, so
-`target[Partial].handle` has an unknown type, including when the declaration
-specifies a default for `T`.
+`target[Partial]` does not select a particular `T` or use its default. Its
+fields have a safe opaque view: an unbounded handle can be read as `object`,
+while a bounded handle preserves its bound. Mutable fields retain their
+unknown specialization, so a list field cannot accept arbitrary writes or
+values from a separate generic lookup. Calling the constructor with known
+arguments still produces the corresponding precise specialization.
 
 For `provider(init=...)`, a uniquely associated constructor supplies input
 types to corresponding unannotated initializer parameters. sty checks the
