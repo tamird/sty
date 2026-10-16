@@ -447,7 +447,7 @@
   {
     "directory": "rules_cc",
     "origin": "git@github.com:tamird/rules_cc.git",
-    "commit": "a8e82935c3429a2bfe8a209bd8a5099a15b6b9f0",
+    "commit": "6554f824b63308c98f04a4c9a9e7180356b29fe3",
     "bazel_version": "9.3.0",
     "sources": [
       "cc/cc_toolchain_config_lib.bzl"
@@ -608,7 +608,7 @@
   {
     "directory": "rules_rs",
     "origin": "git@github.com:tamird/rules_rs.git",
-    "commit": "ddfb77e8b5b2b0cfe783382e79bac7cac71832dc",
+    "commit": "e938037cf14ba94768bcecbfccceef00bda4877d",
     "bazel_version": "9.0.0",
     "sources": [
       "rs/private/select_utils.bzl",
@@ -762,7 +762,7 @@
   {
     "directory": "rules_runfiles_group",
     "origin": "https://github.com/bazel-contrib/rules_runfiles_group.git",
-    "commit": "7eac86bf2d8da7094e7ddb3c4b1c9d161bf4be4c",
+    "commit": "4b8dc28db3dea1c9e5382652eb0c4b626ce96b7c",
     "bazel_version": "9.3.0",
     "sources": [
       "runfiles_group/private/lib/content.bzl",
