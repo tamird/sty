@@ -388,6 +388,22 @@ mod tests {
     }
 
     #[test]
+    fn sorted_keys_preserve_comparable_result_types() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(
+            "values = sorted([3, 1])\nkeys = sorted([3, 1], key=lambda value: str(value))\n",
+        );
+        analysis.set_rules(rules(&["non-static-type"]));
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_rules(DiagnosticRules::default());
+        analysis.update_file(file, "sorted([3, 1], key=lambda value: None)\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
     fn parameters_return_contracts_and_nested_values_are_checked() {
         let (mut analysis, fixture) = Analysis::from_single_file_fixture(
             "def unknown(value):\n    return value\ndef gradual(values: list[dict[str, Any]]) -> list[dict[str, Any]]:\n    return values\n",

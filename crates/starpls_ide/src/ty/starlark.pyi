@@ -32,7 +32,7 @@ def reversed(sequence: _typing.Iterable[_T], /) -> _builtins.list[_T]: ...
 def sorted(
     iterable: _typing.Iterable[_T],
     /,
-    key: _typing.Callable[[_T], _typing.Any] | None = None,
+    key: _typing.Callable[[_T], _ComparableT] | None = None,
     *,
     reverse: _builtins.bool = False,
 ) -> _builtins.list[_T]: ...

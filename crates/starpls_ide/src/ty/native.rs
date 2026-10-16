@@ -3604,10 +3604,10 @@ def stop():
 
     #[test]
     fn starlark_intrinsic_parameter_kinds() {
-        for (source, parameter, index) in [
-            ("enumerate(list=[1$0])", "list:", 0),
-            ("sorted([1], None$0)", "key:", 1),
-            ("reversed({1: 2$0})", "sequence:", 0),
+        for (source, parameter, index, signatures) in [
+            ("enumerate(list=[1$0])", "list:", 0, 1),
+            ("sorted([1], None$0)", "key:", 1, 2),
+            ("reversed({1: 2$0})", "sequence:", 0, 1),
         ] {
             let (analysis, fixture) = Analysis::from_single_file_fixture(source);
             let (file_id, pos) = fixture.cursor_pos.unwrap();
@@ -3616,20 +3616,20 @@ def stop():
                 .signature_help(FilePosition { file_id, pos })
                 .unwrap()
                 .unwrap();
-            let [signature] = help.signatures.as_slice() else {
-                panic!("{source}: {help:?}");
-            };
-            assert_eq!(
-                signature.active_parameter,
-                Some(index),
-                "{source}: {help:?}"
-            );
-            assert!(
-                signature.parameters.as_ref().unwrap()[index]
-                    .label
-                    .starts_with(parameter),
-                "{source}: {help:?}"
-            );
+            assert_eq!(help.signatures.len(), signatures, "{source}: {help:?}");
+            for signature in &help.signatures {
+                assert_eq!(
+                    signature.active_parameter,
+                    Some(index),
+                    "{source}: {help:?}"
+                );
+                assert!(
+                    signature.parameters.as_ref().unwrap()[index]
+                        .label
+                        .starts_with(parameter),
+                    "{source}: {help:?}"
+                );
+            }
         }
     }
 }
