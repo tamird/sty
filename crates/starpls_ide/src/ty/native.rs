@@ -1274,6 +1274,7 @@ fn write_function(
             (CallableKind::Function, "DefaultInfo", "runfiles" | "data_runfiles" | "default_runfiles") => classes.contains("runfiles").then_some("_starpls_types.runfiles | None"),
             (CallableKind::Function, "RunEnvironmentInfo", "environment") => Some("_starpls_typing.Mapping[_StringKey, _StringValue]"),
             (CallableKind::Function, "RunEnvironmentInfo", "inherited_environment") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
+            (CallableKind::Method("coverage_common"), "instrumented_files_info", "source_attributes" | "dependency_attributes") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
             (CallableKind::Function, "exec_group", "toolchains") => (classes.contains("Label") && classes.contains("toolchain_type")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.toolchain_type]"),
             (CallableKind::Function, "rule" | "aspect", "exec_groups") => classes.contains("exec_group").then_some("_starpls_typing.Mapping[_StringKey, _starpls_types.exec_group] | None"),
             (CallableKind::Method("attr"), _, "cfg") => (classes.contains("transition") && classes.contains("ExecTransitionFactory")).then_some("_starpls_builtins.str | _starpls_types.transition | _starpls_types.ExecTransitionFactory | None"),
@@ -1284,6 +1285,7 @@ fn write_function(
             (CallableKind::Function, "aspect", "attr_aspects") => classes.contains("propagation_ctx").then_some("_starpls_typing.Sequence[_starpls_builtins.str] | _starpls_typing.Callable[[_starpls_types.propagation_ctx], _starpls_builtins.list[_starpls_builtins.str]]"),
             (CallableKind::Function, "aspect", "toolchains_aspects") => classes.contains("propagation_ctx").then_some("_starpls_typing.Sequence[_starpls_builtins.str] | _starpls_typing.Callable[[_starpls_types.propagation_ctx], _starpls_builtins.list[_starpls_types.Label]]"),
             (CallableKind::Function, "aspect", "propagation_predicate") => classes.contains("propagation_ctx").then_some("_starpls_typing.Callable[[_starpls_types.propagation_ctx], _starpls_builtins.bool] | None"),
+            (CallableKind::Method("actions"), "run" | "run_shell" | "do_nothing", "inputs") => (classes.contains("File") && classes.contains("depset")).then_some("_starpls_typing.Sequence[_starpls_types.File] | _starpls_types.depset[_starpls_types.File]"),
             // Both action constructors inspect each tool, including depset members.
             (CallableKind::Method("actions"), "run" | "run_shell", "tools") => Some("_starpls_typing.Sequence[_starpls_types.File | _starpls_types.FilesToRunProvider | _starpls_types.depset[_starpls_types.File]] | _starpls_types.depset[_starpls_types.File | _starpls_types.FilesToRunProvider | _starpls_types.depset[_starpls_types.File]]"),
             (CallableKind::Method("actions"), "run" | "run_shell" | "map_directory", "resource_set") => {
@@ -3300,6 +3302,67 @@ def inspect(context: ctx, file: File) -> None:
                 usize::from(diagnostic.range().unwrap().start()) >= source.len(),
                 "{invalid}: {diagnostic:?}"
             );
+        }
+    }
+
+    #[test]
+    fn native_input_collections_check_their_elements() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())]
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def check(ctx: ctx, file: File) -> None:
+    files = [file]
+    transitive = depset(files)
+    attributes = ["srcs"]
+    ctx.actions.run(outputs=[], executable="tool", inputs=files)
+    ctx.actions.run(outputs=[], executable="tool", inputs=transitive)
+    ctx.actions.run_shell(outputs=[], command="tool", inputs=(file,))
+    ctx.actions.run_shell(outputs=[], command="tool", inputs=transitive)
+    ctx.actions.do_nothing(mnemonic="Inputs", inputs=files)
+    ctx.actions.do_nothing(mnemonic="Inputs", inputs=transitive)
+    coverage_common.instrumented_files_info(ctx, source_attributes=attributes, dependency_attributes=("deps",))
+"#;
+        let path = Path::new("/inputs.bzl");
+        let file = analysis
+            .open_document(path, Dialect::Bazel, None, source.to_owned(), 1)
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for invalid in [
+            "ctx.actions.run(outputs=[], executable='tool', inputs=['file'])",
+            "ctx.actions.run_shell(outputs=[], command='tool', inputs=depset(['file']))",
+            "ctx.actions.do_nothing(mnemonic='Inputs', inputs=[1])",
+            "coverage_common.instrumented_files_info(ctx, source_attributes=[file])",
+            "coverage_common.instrumented_files_info(ctx, dependency_attributes=[1])",
+        ] {
+            analysis
+                .open_document(
+                    path,
+                    Dialect::Bazel,
+                    None,
+                    format!("{source}    {invalid}\n"),
+                    2,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
         }
     }
 
