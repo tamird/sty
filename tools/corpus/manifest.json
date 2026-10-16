@@ -443,5 +443,490 @@
       }
     ],
     "bazel_version": "9.3.0rc2"
+  },
+  {
+    "directory": "rules_cc",
+    "origin": "git@github.com:tamird/rules_cc.git",
+    "commit": "a8e82935c3429a2bfe8a209bd8a5099a15b6b9f0",
+    "bazel_version": "9.3.0",
+    "sources": [
+      "cc/cc_toolchain_config_lib.bzl"
+    ],
+    "interfaces": {
+      "cc/cc_toolchain_config_lib.bzl": "cc/cc_toolchain_config_lib.bzli"
+    },
+    "cases": [
+      {
+        "name": "positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "cc/__sty_corpus__.bzl",
+            "fixture": "probes/rules-cc.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "cc/__sty_corpus__.bzl",
+            "fixture": "probes/rules-cc-bad-call.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "cc/__sty_corpus__.bzl",
+            "line": 5
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "cc/__sty_corpus__.bzl",
+            "line": 6
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "cc/__sty_corpus__.bzl",
+            "line": 7
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "cc/__sty_corpus__.bzl",
+            "line": 8
+          }
+        ]
+      },
+      {
+        "name": "bad-fields",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "cc/__sty_corpus__.bzl",
+            "fixture": "probes/rules-cc-bad-fields.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "cc/__sty_corpus__.bzl",
+            "line": 6
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "cc/__sty_corpus__.bzl",
+            "line": 7
+          },
+          {
+            "id": "unresolved-attribute",
+            "path": "cc/__sty_corpus__.bzl",
+            "line": 9
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "cc/__sty_corpus__.bzl",
+            "line": 10
+          }
+        ]
+      },
+      {
+        "name": "bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "cc/cc_toolchain_config_lib.bzl",
+            "old": "        flag_groups = flag_groups,\n        iterate_over = iterate_over,",
+            "new": "        flag_groups = [\"wrong\"],\n        iterate_over = iterate_over,"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "cc/cc_toolchain_config_lib.bzl",
+            "line": 322
+          }
+        ]
+      },
+      {
+        "name": "bad-return",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "cc/cc_toolchain_config_lib.bzl",
+            "old": "    return MakeVariableInfo(\n        name = name,\n        value = value,\n        type_name = \"make_variable\",\n    )",
+            "new": "    return VariableWithValueInfo(\n        name = name,\n        value = value,\n        type_name = \"variable_with_value\",\n    )"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "cc/cc_toolchain_config_lib.bzl",
+            "line": 117
+          }
+        ]
+      },
+      {
+        "name": "missing-field",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "cc/cc_toolchain_config_lib.bzl",
+            "old": "    return VariableWithValueInfo(\n        name = name,\n        value = value,",
+            "new": "    return VariableWithValueInfo(\n        name = name,"
+          }
+        ],
+        "expected": [
+          {
+            "id": "missing-argument",
+            "path": "cc/cc_toolchain_config_lib.bzl",
+            "line": 101
+          }
+        ]
+      },
+      {
+        "name": "bad-tag",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "cc/cc_toolchain_config_lib.bzl",
+            "old": "        type_name = \"env_entry\",",
+            "new": "        type_name = \"env_set\","
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "cc/cc_toolchain_config_lib.bzl",
+            "line": 76
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "directory": "rules_rs",
+    "origin": "git@github.com:tamird/rules_rs.git",
+    "commit": "4460d53baa9903682de2752ec0e24cc722bc364d",
+    "bazel_version": "9.0.0",
+    "sources": [
+      "rs/private/select_utils.bzl",
+      "rs/private/all_crate_deps.bzl"
+    ],
+    "interfaces": {
+      "rs/private/all_crate_deps.bzl": "rs/private/all_crate_deps.bzli"
+    },
+    "cases": [
+      {
+        "name": "positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "fixture": "probes/rules-rs.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "fixture": "probes/rules-rs-bad-call.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 5
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 6
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 7
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 7
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 8
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 8
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 9
+          }
+        ]
+      },
+      {
+        "name": "bad-result",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "fixture": "probes/rules-rs-bad-result.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 6
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 7
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 9
+          }
+        ]
+      },
+      {
+        "name": "bad-select-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "rs/private/select_utils.bzl",
+            "old": "branches[platform] = sorted(items)",
+            "new": "branches[platform] = [42]"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "rs/private/select_utils.bzl",
+            "line": 23
+          }
+        ]
+      },
+      {
+        "name": "bad-dependency-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "rs/private/all_crate_deps.bzl",
+            "old": "return deps + select(branches)",
+            "new": "return str(deps)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "rs/private/all_crate_deps.bzl",
+            "line": 69
+          }
+        ]
+      },
+      {
+        "name": "bad-kind-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "rs/private/all_crate_deps.bzl",
+            "old": "dep_data.get(kind + \"_by_platform\", {})",
+            "new": "dep_data.get(kind, {})"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "rs/private/all_crate_deps.bzl",
+            "line": 8
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "directory": "rules_runfiles_group",
+    "origin": "https://github.com/bazel-contrib/rules_runfiles_group.git",
+    "commit": "e979ab99a092c3460e68e42c2bb4ae035b721e14",
+    "bazel_version": "9.3.0",
+    "sources": [
+      "runfiles_group/private/lib/content.bzl",
+      "runfiles_group/private/lib/entry.bzl",
+      "runfiles_group/private/lib/names.bzl",
+      "runfiles_group/private/providers/runfiles_group_info.bzl"
+    ],
+    "interfaces": {
+      "runfiles_group/private/providers/runfiles_group_info.bzl": "runfiles_group/private/providers/runfiles_group_info.bzli",
+      "runfiles_group/private/lib/names.bzl": "runfiles_group/private/lib/names.bzli"
+    },
+    "cases": [
+      {
+        "name": "positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "fixture": "probes/runfiles-positive.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "fixture": "probes/runfiles-bad-call.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 3
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 4
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 5
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 6
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 7
+          }
+        ]
+      },
+      {
+        "name": "bad-fields",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "fixture": "probes/runfiles-bad-fields.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "unsupported-operator",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 7
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 8
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 9
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "runfiles_group/__sty_corpus__.bzl",
+            "line": 10
+          }
+        ]
+      },
+      {
+        "name": "bad-content-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "runfiles_group/private/lib/content.bzl",
+            "old": "    return content.files",
+            "new": "    return content.files.to_list()"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "runfiles_group/private/lib/content.bzl",
+            "line": 61
+          }
+        ]
+      },
+      {
+        "name": "bad-entry-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "runfiles_group/private/lib/entry.bzl",
+            "old": "        rank = rank,",
+            "new": "        rank = str(rank),"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/private/lib/entry.bzl",
+            "line": 101
+          }
+        ]
+      },
+      {
+        "name": "bad-missing-field",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "runfiles_group/private/lib/entry.bzl",
+            "old": "        rank = rank,\n",
+            "new": ""
+          }
+        ],
+        "expected": [
+          {
+            "id": "missing-argument",
+            "path": "runfiles_group/private/lib/entry.bzl",
+            "line": 97
+          }
+        ]
+      },
+      {
+        "name": "bad-name-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "runfiles_group/private/lib/names.bzl",
+            "old": "        return str(value)",
+            "new": "        return value"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "runfiles_group/private/lib/names.bzl",
+            "line": 25
+          }
+        ]
+      }
+    ]
   }
 ]

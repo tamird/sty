@@ -1,8 +1,9 @@
 # Annotated source corpus
 
-This corpus checks real implementations from five Bazel projects and callers of
-their annotated helpers. Type comments live in those projects. The manifest pins
-the reviewed revisions; the probes exercise their public or package-visible APIs.
+This corpus checks real implementations from eight Bazel projects and callers of
+their annotated APIs. Type comments and stubs live in those projects. The manifest
+pins the reviewed revisions; the probes exercise their public or package-visible
+APIs.
 
 Run from the sty checkout with the source checkouts under an explicit directory:
 
@@ -33,17 +34,31 @@ The annotation commits are available on these fork branches:
 | `bazel-skylib` | [tamird/bazel-skylib:path-type-comments](https://github.com/tamird/bazel-skylib/tree/path-type-comments) |
 | `apple_support` | [tamird/apple_support:helper-type-comments](https://github.com/tamird/apple_support/tree/helper-type-comments) |
 | `hermetic-llvm` | [tamird/hermetic-llvm:public-helper-types](https://github.com/tamird/hermetic-llvm/tree/public-helper-types) |
+| `rules_cc` | [tamird/rules_cc:type-contracts](https://github.com/tamird/rules_cc/tree/type-contracts) |
+| `rules_rs` | [tamird/rules_rs:type-contracts](https://github.com/tamird/rules_rs/tree/type-contracts) |
+| `rules_runfiles_group` | [tamird/rules_runfiles_group:type-contracts](https://github.com/tamird/rules_runfiles_group/tree/type-contracts) |
 
-Each case selects every listed implementation file. Positive callers must pass
-with complete coverage and zero diagnostics. Negative cases overlay an incorrect
-caller or replace exactly one source expression, then require the precise
-diagnostic ID, source path, and line. Overlays and reports are written to the output
-directory. Repository contents are read directly from the pinned checkout.
+Each case selects every listed implementation file. The manifest's `interfaces`
+map registers source-owned stubs; their implementations and the stubs themselves
+are checked in every case. Positive callers must pass with complete coverage and
+zero diagnostics. Negative cases overlay an incorrect caller or replace exactly
+one source fragment, then require the precise diagnostic ID, source path, and
+line. Overlays and reports are written to the output directory. Repository
+contents are read directly from the pinned checkout.
 
 The cases cover container element types, fixed tuples, optional results, callable
 inputs, configurable rule attributes, and provider return lists. The `with_cfg`
 frontend's `list[object]` contract checks its outer container; the other provider
 lists constrain their elements. The manifest lists the checked API slices.
+
+The C++ toolchain configuration contracts cover all thirteen constructor helpers
+and their nominal providers, including recursive flag groups. The Rust dependency
+contracts cover lists and tuples of dependency specifications, optional dictionary
+fields, finite key unions, shared dependencies, and platform selectors. Runfiles
+group contracts cover entry construction, content conversion, provider lookup, and
+name rendering. Its packager callbacks remain unannotated: preserving their
+handle type through partials and merge operations
+requires generic provider declarations, which sty currently rejects.
 
 The runner uses sty's coverage report and rendered primary diagnostics. A change
 to either format fails visibly and requires updating this harness. Unit tests for
