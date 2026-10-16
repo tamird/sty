@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "9c545c9ce6f1034e48e6cdb9cab19ef2f219b4da",
+    "commit": "952edda7aa428066f6d201d405bb9e0ede861a0a",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -82,7 +82,7 @@
   {
     "directory": "bazel_features",
     "origin": "https://github.com/bazel-contrib/bazel_features.git",
-    "commit": "5afd95b8cd5270998202e118c7c8b17fd6409ee8",
+    "commit": "f7dc1711fe536dad3cb83d8cc27e48b6ec3933de",
     "sources": [
       "private/parse.bzl",
       "private/util.bzl",
@@ -143,7 +143,7 @@
   {
     "directory": "bazel-skylib",
     "origin": "https://github.com/bazelbuild/bazel-skylib.git",
-    "commit": "537bfc6d6e89663c338cbbefa9b8dd8c16f6f2f7",
+    "commit": "a40dcccfa776bf7702fc991e476f8bdf0d7cb2c0",
     "sources": [
       "lib/paths.bzl",
       "lib/paths.bzli"
@@ -218,7 +218,7 @@
   {
     "directory": "apple_support",
     "origin": "https://github.com/bazelbuild/apple_support.git",
-    "commit": "72cc6b522e86d036f10f7f6c34fdb726af01977c",
+    "commit": "91ef7acfc01f2493e04d4891dd38dca4a08e7d2b",
     "sources": [
       "lib/apple_support.bzl",
       "lib/apple_support.bzli"
@@ -328,7 +328,7 @@
   {
     "directory": "hermetic-llvm",
     "origin": "https://github.com/hermeticbuild/hermetic-llvm.git",
-    "commit": "8c382d9cb6634953e2f886c44e16cdf548dce6ee",
+    "commit": "2e73295ac605a5e4405a6d33c16d28af852d29a5",
     "sources": [
       "defs.bzl",
       "directory.bzl",
@@ -456,7 +456,7 @@
   {
     "directory": "rules_cc",
     "origin": "git@github.com:tamird/rules_cc.git",
-    "commit": "559d82cad766b5bec19c39a6d600e30bea636576",
+    "commit": "d32de02a7a3e8260d4dfc4c95bd526cf089a558a",
     "bazel_version": "9.3.0",
     "sources": [
       "cc/cc_toolchain_config_lib.bzl",
@@ -615,7 +615,7 @@
   {
     "directory": "rules_rs",
     "origin": "git@github.com:tamird/rules_rs.git",
-    "commit": "c95a03c48f72ef2dba5d0d94c13ac687ea21dfc1",
+    "commit": "dec5043635b78452a47ce900d448f63bfb858d42",
     "bazel_version": "9.0.0",
     "sources": [
       "rs/private/select_utils.bzl",
@@ -768,7 +768,7 @@
   {
     "directory": "rules_runfiles_group",
     "origin": "https://github.com/bazel-contrib/rules_runfiles_group.git",
-    "commit": "f4d4d96828e0cf729ff202f85b26b5c445790b02",
+    "commit": "653cefe0050f95453545da9a34c9f3202a577744",
     "bazel_version": "9.3.0",
     "sources": [
       "runfiles_group/private/lib/content.bzl",
