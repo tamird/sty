@@ -2177,6 +2177,7 @@ pub(super) fn native_class<'db>(
     name: &str,
 ) -> Option<Type<'db>> {
     ProvidedBindingValue::Export {
+        value: None,
         file,
         name: Name::new(format!("_starpls_annotation_{name}")),
     }
@@ -2875,6 +2876,7 @@ target("positional")
         );
         for name in ["target", "inherited"] {
             let ty = ProvidedBindingValue::Export {
+                value: None,
                 file: program,
                 name: Name::new(name),
             }

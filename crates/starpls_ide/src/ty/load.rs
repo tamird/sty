@@ -174,6 +174,7 @@ pub(super) fn resolve<'db>(
                 ));
             }
             ProvidedBindingValue::Export {
+                value: None,
                 file: loaded_file,
                 name: Name::new(name),
             }

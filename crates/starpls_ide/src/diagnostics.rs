@@ -944,10 +944,7 @@ example(name="omitted", tool="//:tool", _private=None)
         }
         for (name, expected) in [
             ("srcs", "select[list[Label] | None, object]"),
-            (
-                "combined_private",
-                "select[list[Label | Unknown], Literal[\"list\"]]",
-            ),
+            ("combined_private", "select[list[Label], Literal[\"list\"]]"),
         ] {
             let hover = analysis
                 .snapshot()

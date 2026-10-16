@@ -318,6 +318,7 @@ impl Database {
                     .files
                     .try_virtual_file(&native::path(source_file.dialect))?;
                 let declaration = ProvidedBindingValue::Export {
+                    value: None,
                     file: self.program_file(native_file.file()),
                     name: Name::new(name),
                 };
@@ -405,6 +406,7 @@ impl Database {
             Name::new(native::export_name(context, name))
         };
         Some(ProvidedBindingValue::Export {
+            value: None,
             file: ty_python_semantic::Db::program_file(self, native_file.file()),
             name,
         })
@@ -535,6 +537,7 @@ impl ty_python_semantic::Db for Database {
         declarations.builtins(self);
         let native_file = self.files.try_virtual_file(&native::path(dialect))?;
         Some(ProvidedBindingValue::Export {
+            value: None,
             file: self.program_file(native_file.file()),
             name: Name::new("_starpls_annotation_ExactDict"),
         })
@@ -616,6 +619,7 @@ impl ty_python_semantic::Db for Database {
         let source_file = self.starlark_file(file)?;
         if let Some(prelude) = self.prelude_for_file(source_file) {
             let binding = ProvidedBindingValue::Export {
+                value: None,
                 file: self.starlark_program_file(prelude),
                 name: Name::new(name),
             };
