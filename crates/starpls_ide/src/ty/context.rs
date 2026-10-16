@@ -59,6 +59,7 @@ pub(super) fn parameter_type<'db>(
     if !db.environment().options(db).infer_ctx_attributes {
         return None;
     }
+    let definition = super::interface::source_parameter(db, definition).unwrap_or(definition);
     let file = definition.program_file(db);
     if db.starlark_file(file)?.dialect != Dialect::Bazel {
         return None;
@@ -688,9 +689,11 @@ mod tests {
     use salsa::Setter;
     use starpls_bazel::build::attribute::Discriminator;
     use starpls_hir::Db as _;
+    use starpls_hir::Fixture;
     use ty_python_semantic::types::CallableTypeKind;
     use ty_python_semantic::types::ParameterKind;
     use ty_python_semantic::types::Type;
+    use ty_python_semantic::HasDefinition;
     use ty_python_semantic::HasType;
     use ty_python_semantic::SemanticModel;
 
@@ -716,6 +719,94 @@ mod tests {
                 infer_ctx_attributes: true,
                 ..Default::default()
             });
+    }
+
+    #[test]
+    fn stub_parameters_share_generated_source_context() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        enable_context(&mut analysis);
+        let text = "def implementation(ctx):\n    target: Target = ctx.attr.src\n    print(target)\n    return []\ndef unrelated(value):\n    pass\nexample = rule(implementation=implementation, attrs={'src': attr.label(mandatory=True)})\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", text);
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "def implementation(ctx) -> list[DefaultInfo]: ...\ndef unrelated(value) -> None: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("missing-parameter-annotation".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        for file in [source, stub] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "missing-parameter-annotation");
+            assert!(diagnostics[0].headline_message().contains("`value`"));
+        }
+        let parameter_type = |file| {
+            let program = analysis.db.starlark_program_file(file);
+            let parsed =
+                ruff_db::parsed::parsed_module(&analysis.db, program.python_file(&analysis.db))
+                    .load(&analysis.db);
+            let statement = parsed
+                .suite()
+                .first()
+                .expect("expected implementation statement");
+            let Stmt::FunctionDef(function) = statement else {
+                panic!("expected implementation function");
+            };
+            let [parameter] = function.parameters.args.as_ref() else {
+                panic!("expected one implementation parameter");
+            };
+            let model = SemanticModel::new(&analysis.db, program);
+            model.definition_type(parameter.parameter.definition(&model))
+        };
+        assert_eq!(parameter_type(stub), parameter_type(source));
+
+        // Editing the source schema updates the shared context without weakening its fields.
+        analysis.update_file(source, text.replace("mandatory=True", "mandatory=False"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+        assert_eq!(
+            ids,
+            ["invalid-assignment", "missing-parameter-annotation"],
+            "{diagnostics:?}"
+        );
+
+        // Without a unique, compatible implementation, the omitted stub slot stays untyped.
+        analysis.set_type_interfaces([]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|d| d.id().as_str() == "missing-parameter-annotation"));
+        let other = fixture.add_file(&mut analysis.db, "other.bzl", text);
+        loader.add_files_from_fixture(&fixture);
+        analysis
+            .set_type_interfaces([(source, stub), (other, stub)])
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|d| d.id().as_str() == "missing-parameter-annotation"));
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        analysis.update_file(
+            source,
+            text.replace("implementation(ctx)", "implementation(ctx, extra)"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.id().as_str() == "missing-parameter-annotation"
+                    && d.headline_message().contains("`ctx`")),
+            "{diagnostics:?}"
+        );
     }
 
     #[test]

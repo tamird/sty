@@ -25,6 +25,7 @@ use starpls_common::FileInfo;
 use starpls_hir::Db as _;
 use ty_python_core::definition::Definition;
 use ty_python_core::definition::DefinitionKind;
+use ty_python_core::definition::ParameterDefinitionNodeKind;
 use ty_python_core::global_scope;
 use ty_python_core::place::ScopedPlaceId;
 use ty_python_core::place_table;
@@ -362,6 +363,54 @@ pub(super) fn function_annotation<'db>(
         file: db.starlark_program_file(*interface),
         owner,
     })
+}
+
+/// An omitted stub parameter can share its implementation's generated Bazel contract.
+#[salsa::tracked(returns(copy))]
+pub(super) fn source_parameter<'db>(
+    db: &'db dyn Db,
+    definition: Definition<'db>,
+) -> Option<Definition<'db>> {
+    let program = definition.program_file(db);
+    let file = db.starlark_file(program)?;
+    if !file.is_type_interface(db) {
+        return None;
+    }
+    let DefinitionKind::Parameter(parameter) = definition.kind(db) else {
+        return None;
+    };
+    let ParameterDefinitionNodeKind::Parameter(parameter) = parameter else {
+        return None;
+    };
+    let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+    let parameter = &parameter.node(&parsed).parameter;
+    if parameter.annotation.is_some() {
+        return None;
+    }
+    // One stub may describe several implementations. It then has no unique body schema.
+    let mut sources = db
+        .environment()
+        .type_interfaces(db)
+        .values()
+        .filter_map(|(source, interface)| (*interface == file).then_some(*source));
+    let source = sources.next()?;
+    if sources.next().is_some() {
+        return None;
+    }
+    let annotations = function_annotations(db, source)?;
+    let (&owner, _) = annotations
+        .owners
+        .iter()
+        .find(|(_, owner)| **owner == parameter.node_index().load())?;
+    let program = db.starlark_program_file(source);
+    let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+    let ruff_python_ast::AnyRootNodeRef::Parameter(parameter) = parsed.get_by_index(owner) else {
+        return None;
+    };
+    let [definition] = semantic_index(db, program).try_definitions(parameter.into())? else {
+        return None;
+    };
+    Some(*definition)
 }
 
 fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::Diagnostic> {
