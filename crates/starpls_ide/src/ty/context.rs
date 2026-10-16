@@ -336,28 +336,66 @@ fn registration_context_type<'db>(
     signature: &CallSignatureDetails<'db>,
     context_kind: ContextKind,
 ) -> Option<Type<'db>> {
-    let environment = model.program_environment();
-    let declaration = signature.definition?;
+    context_type(
+        db,
+        Registration {
+            file,
+            declaration: signature.definition?,
+            result: call.inferred_type(model)?,
+            kind: context_kind,
+        },
+        &|name| {
+            Ok(match argument(call, signature, name)? {
+                Some(expression) => model.dictionary_items(expression),
+                None => Some(empty_mapping()),
+            })
+        },
+        &|class| model.provided_class_at_call(call, class),
+    )
+}
+
+fn empty_mapping<'db>() -> DictionaryItems<'db> {
+    DictionaryItems {
+        items: Box::default(),
+        extra_items: DictionaryExtraItems::Closed,
+        first_entry: DictionaryFirstEntry::Empty,
+    }
+}
+
+struct Registration<'db> {
+    file: ProgramFile<'db>,
+    declaration: Definition<'db>,
+    result: Type<'db>,
+    kind: ContextKind,
+}
+
+fn context_type<'db>(
+    db: &'db Database,
+    registration: Registration<'db>,
+    dictionary_argument: &dyn Fn(&str) -> Result<Option<DictionaryItems<'db>>, ()>,
+    class_type: &dyn Fn(ProvidedClass<'db>) -> Option<Type<'db>>,
+) -> Option<Type<'db>> {
+    let Registration {
+        file,
+        declaration,
+        result,
+        kind: context_kind,
+    } = registration;
+    let environment = ProgramEnvironment::from_file(file);
     let declarations = declaration.program_file(db);
-    let result = call.inferred_type(model)?;
     let rule = result
         .provided_data(db, &environment)
         .and_then(|data| data.downcast_ref::<factory::RuleData>());
     let aspect_attributes;
     let mut analyzed_types = TypedDictSchema::default();
     let (attributes, complete) = if context_kind == ContextKind::Aspect {
-        let mapping = match argument(call, signature, "attrs").ok()? {
-            Some(attrs) => model.dictionary_items(attrs).unwrap_or(DictionaryItems {
+        let mapping = dictionary_argument("attrs")
+            .ok()?
+            .unwrap_or(DictionaryItems {
                 items: Box::default(),
                 extra_items: DictionaryExtraItems::Value(Type::unknown()),
                 first_entry: DictionaryFirstEntry::Unknown,
-            }),
-            None => DictionaryItems {
-                items: Box::default(),
-                extra_items: DictionaryExtraItems::Closed,
-                first_entry: DictionaryFirstEntry::Empty,
-            },
-        };
+            });
         let is_complete = mapping.is_complete();
         let DictionaryItems {
             items,
@@ -417,21 +455,18 @@ fn registration_context_type<'db>(
         (rule.attributes.as_ref(), rule.complete)
     };
     let make_class = |name, base, fields, has_dynamic_fields, implications| {
-        let class = model.provided_class_at_call(
-            call,
-            ProvidedClass {
-                name: Name::new(name),
-                bases: vec![base].into_boxed_slice(),
-                class_members: Box::default(),
-                instance_fields: ProvidedInstanceFields {
-                    fields,
-                    has_dynamic_fields,
-                    implications,
-                    data: None,
-                }
-                .into(),
-            },
-        )?;
+        let class = class_type(ProvidedClass {
+            name: Name::new(name),
+            bases: vec![base].into_boxed_slice(),
+            class_members: Box::default(),
+            instance_fields: ProvidedInstanceFields {
+                fields,
+                has_dynamic_fields,
+                implications,
+                data: None,
+            }
+            .into(),
+        })?;
         class.to_instance_approximation(db, &environment)
     };
     let mut context_fields = Vec::new();
@@ -509,37 +544,34 @@ fn registration_context_type<'db>(
         if view == View::Outputs {
             let output = factory::native_class(db, declarations, "File")?
                 .to_instance_approximation(db, &environment)?;
-            if let Some(outputs) = argument(call, signature, "outputs").ok()? {
-                match model.dictionary_items(outputs) {
-                    Some(mapping) => {
-                        let is_complete = mapping.is_complete();
-                        let DictionaryItems {
-                            items,
-                            extra_items: _,
-                            first_entry: _,
-                        } = mapping;
-                        let is_complete =
-                            is_complete && items.iter().all(DictionaryItem::is_required);
-                        complete &= is_complete;
-                        for DictionaryItem {
-                            name,
-                            ty: _,
-                            source,
-                            kind: _,
-                        } in IntoIterator::into_iter(items).filter(DictionaryItem::is_required)
-                        {
-                            insert_field(
-                                &mut fields,
-                                ProvidedField {
-                                    name,
-                                    ty: if is_complete { output } else { Type::unknown() },
-                                    source: Some(FileRange::new(file.file(db), source)),
-                                },
-                            );
-                        }
+            match dictionary_argument("outputs").ok()? {
+                Some(mapping) => {
+                    let is_complete = mapping.is_complete();
+                    let DictionaryItems {
+                        items,
+                        extra_items: _,
+                        first_entry: _,
+                    } = mapping;
+                    let is_complete = is_complete && items.iter().all(DictionaryItem::is_required);
+                    complete &= is_complete;
+                    for DictionaryItem {
+                        name,
+                        ty: _,
+                        source,
+                        kind: _,
+                    } in IntoIterator::into_iter(items).filter(DictionaryItem::is_required)
+                    {
+                        insert_field(
+                            &mut fields,
+                            ProvidedField {
+                                name,
+                                ty: if is_complete { output } else { Type::unknown() },
+                                source: Some(FileRange::new(file.file(db), source)),
+                            },
+                        );
                     }
-                    None => complete = false,
                 }
+                None => complete = false,
             }
             match rule?.executable {
                 Some(true) => insert_field(
