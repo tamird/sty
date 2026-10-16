@@ -32,6 +32,7 @@ use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypedDictFieldBuilder;
 use ty_python_semantic::types::TypedDictOpenness;
+use ty_python_semantic::types::TypedDictSchema;
 use ty_python_semantic::types::TypedDictType;
 use ty_python_semantic::types::UnionType;
 use ty_python_semantic::HasDefinition;
@@ -178,6 +179,7 @@ pub(super) fn parameter_type<'db>(
         .provided_data(db, &environment)
         .and_then(|data| data.downcast_ref::<factory::RuleData>());
     let aspect_attributes;
+    let mut analyzed_types = TypedDictSchema::default();
     let (attributes, complete) = if context_kind == ContextKind::Aspect {
         let mapping = match argument(call, &signature, "attrs").ok()? {
             Some(attrs) => model.dictionary_items(attrs).unwrap_or(DictionaryItems {
@@ -198,6 +200,19 @@ pub(super) fn parameter_type<'db>(
             first_entry: _,
         } = mapping;
         let is_complete = is_complete && items.iter().all(DictionaryItem::is_required);
+        for item in items.iter().filter(|item| item.is_required()) {
+            if let Some(value) =
+                factory::native_type_argument(db, &environment, declarations, item.ty, "Attribute")
+            {
+                analyzed_types.insert(
+                    item.name.clone(),
+                    TypedDictFieldBuilder::new(value)
+                        .required(true)
+                        .read_only(true)
+                        .build(),
+                );
+            }
+        }
         aspect_attributes = items
             .iter()
             .filter(|item| item.is_required())
@@ -220,6 +235,20 @@ pub(super) fn parameter_type<'db>(
         (aspect_attributes.as_slice(), is_complete)
     } else {
         let rule = rule?;
+        if context_kind == ContextKind::Build {
+            analyzed_types = factory::native_type_argument(
+                db,
+                &environment,
+                declarations,
+                result,
+                "_AnalyzedRule",
+            )
+            .and_then(|shape| match shape {
+                Type::TypedDict(shape) => Some(shape.items(db).clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+        }
         (rule.attributes.as_ref(), rule.complete)
     };
     let make_class = |name, base, fields, has_dynamic_fields, implications| {
@@ -297,9 +326,14 @@ pub(super) fn parameter_type<'db>(
                 }
             } else {
                 if view != View::Attr {
+                    // A typed helper can describe ctx.attr without retaining the
+                    // constructor flags that establish other context fields.
+                    complete = false;
                     continue;
                 }
-                Type::unknown()
+                analyzed_types
+                    .get(name)
+                    .map_or_else(Type::unknown, |field| field.declared_type())
             };
             fields.push(ProvidedField {
                 name: name.clone(),
@@ -531,6 +565,19 @@ fn native_file_list<'db>(
     let file = factory::native_class(db, declarations, "File")?
         .to_instance_approximation(db, environment)?;
     Some(KnownClass::List.to_specialized_instance(db, environment, &[file]))
+}
+
+/// The value an attribute produces in an analyzed rule or aspect's `ctx.attr`.
+/// Repository and macro values, flags, and other views remain descriptor-owned.
+pub(super) fn analyzed_attribute_type<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    declarations: ProgramFile<'db>,
+    attribute: &Attribute,
+) -> Option<Type<'db>> {
+    attribute
+        .finite_value_type(db, environment)
+        .or_else(|| field_type(db, environment, declarations, View::Attr, attribute))
 }
 
 fn field_type<'db>(
@@ -1804,6 +1851,214 @@ example = make_aspect(implementation=implementation, attrs={
                 }
             }
         }
+    }
+
+    #[test]
+    fn attribute_contracts_preserve_helper_context_values() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        enable_context(&mut analysis);
+        let helper_text = "def attributes():\n    return {'enabled': attr.bool(), 'dep': attr.label(default='//:dep'), 'tool': attr.label(mandatory=True, executable=True, cfg='exec')}\ndef read(context):\n    return context.attr.enabled\n";
+        let helper = fixture.add_file(&mut analysis.db, "//:helper.bzl", helper_text);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "//:helper.bzli",
+            r#"def attributes() -> dict[{
+    "enabled": Attribute[bool],
+    "dep": Attribute[Target],
+    "tool": Attribute[Target[FilesToRunProvider[File]]],
+}]: ...
+def read(context: ctx[object, struct[{"enabled": bool}, ...]]) -> bool: ...
+"#,
+        );
+        let file = fixture.add_file(&mut analysis.db, "//:defs.bzl", "");
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(helper, interface)]).unwrap();
+        // The source body must establish the declared projection, including presence.
+        for invalid in [
+            helper_text.replace("attr.bool()", "attr.string()"),
+            helper_text.replace("attr.label(default='//:dep')", "attr.bool()"),
+            helper_text.replace("default='//:dep'", "default=None"),
+        ] {
+            analysis.update_file(helper, invalid);
+            let diagnostics = analysis.snapshot().diagnostics(helper).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(
+                ids,
+                ["invalid-argument-type", "invalid-return-type"],
+                "{diagnostics:?}"
+            );
+        }
+        analysis.update_file(helper, helper_text.to_owned());
+        for (factory, parameters) in [("rule", "ctx"), ("aspect", "target, ctx")] {
+            let source = format!("load('//:helper.bzl', 'attributes', 'read')\ndef implementation({parameters}):\n    enabled: bool = read(ctx)\n    dep: Target = ctx.attr.dep\n    tool: File = ctx.attr.tool[DefaultInfo].files_to_run.executable\n    print(enabled, dep, tool, ctx.executable.tool, ctx.file.dep)\n    return []\nexample = {factory}(implementation=implementation, attrs=attributes())\n");
+            analysis.update_file(file, source.clone());
+            for checked in [helper, interface, file] {
+                let diagnostics = analysis.snapshot().diagnostics(checked).unwrap();
+                assert!(diagnostics.is_empty(), "{factory}: {diagnostics:?}");
+            }
+            let snapshot = analysis.snapshot();
+            check_field(
+                &snapshot,
+                file,
+                &source,
+                "ctx.executable.tool",
+                "Unknown",
+                "",
+            );
+            check_field(&snapshot, file, &source, "ctx.file.dep", "Unknown", "");
+            drop(snapshot);
+            analysis.update_file(file, source.replace("dep: Target", "dep: str"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{factory}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
+        }
+    }
+
+    #[test]
+    fn attribute_contracts_follow_inheritance_and_mapping_presence() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        enable_context(&mut analysis);
+        let helper = fixture.add_file(
+            &mut analysis.db,
+            "//:attrs.bzl",
+            "def attributes(): return {'dep': attr.label(default='//:dep'), '_private': attr.label(default='//:private')}\ndef read(context): return context.attr.dep\n",
+        );
+        let contract = "def attributes() -> dict[{'dep': Attribute[Target], '_private': Attribute[Target]}]: ...\ndef read(context: ctx[object, struct[{'dep': Target}, ...]]) -> Target: ...\n";
+        let interface = fixture.add_file(&mut analysis.db, "//:attrs.bzli", contract);
+        let file = fixture.add_file(&mut analysis.db, "//:defs.bzl", "");
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(helper, interface)]).unwrap();
+        let inherited = "load('//:attrs.bzl', 'attributes')\ndef more() -> dict[str, Attribute]: return {}\ndef parent(ctx): return []\nbase = rule(implementation=parent, attrs=attributes(), extendable=True)\ndef implementation(ctx):\n    ctx.attr.dep\n    ctx.attr._private\n    return []\nexample = rule(parent=base, implementation=implementation, attrs=OVERRIDES)\n";
+        let target = "Target[FilesToRunProvider[File | None] | None]";
+        for (overrides, expected) in [("{}", target), ("more()", "Unknown"), ("{}", target)] {
+            let source = inherited.replace("OVERRIDES", overrides);
+            analysis.update_file(file, source.clone());
+            let snapshot = analysis.snapshot();
+            let diagnostics = snapshot.diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{overrides}: {diagnostics:?}");
+            check_field(&snapshot, file, &source, "ctx.attr.dep", expected, "");
+            check_field(&snapshot, file, &source, "ctx.attr._private", target, "");
+        }
+        let direct = "load('//:attrs.bzl', 'attributes', 'read')\ndef more() -> dict[str, Attribute]: return {}\ndef implementation(ctx):\n    read(ctx)\n    return []\nexample = rule(implementation=implementation, attrs=ATTRS)\n";
+        for (attrs, error) in [
+            ("attributes()", None),
+            ("dict(more(), dep=attributes()['dep'])", None),
+            (
+                "{'dep': attributes()['dep']} | more()",
+                Some("invalid-argument-type"),
+            ),
+            ("{}", Some("invalid-argument-type")),
+        ] {
+            let source = direct.replace("ATTRS", attrs);
+            analysis.update_file(file, source.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(
+                ids,
+                error.into_iter().collect::<Vec<_>>(),
+                "{attrs}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(file, direct.replace("ATTRS", "attributes()"));
+        analysis.update_file(
+            interface,
+            contract.replace(
+                "'dep': Attribute[Target]",
+                "'dep': NotRequired[Attribute[Target]]",
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
+    fn attribute_contracts_do_not_describe_other_host_views() {
+        let source = "def typed() -> Attribute[Target]: return attr.label(default='//:dep')\ndef implementation(ctx):\n    ctx.attr.dep\n    return []\nexample = repository_rule(implementation=implementation, attrs={'dep': typed()})\n";
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        let snapshot = analysis.snapshot();
+        let diagnostics = snapshot.diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        check_field(&snapshot, file, source, "ctx.attr.dep", "Unknown", "");
+        drop(snapshot);
+        let source = source.replace("'dep': typed()", "'dep': attr.label(default='//:dep')");
+        analysis.update_file(file, source.clone());
+        let snapshot = analysis.snapshot();
+        let diagnostics = snapshot.diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        check_field(&snapshot, file, &source, "ctx.attr.dep", "Label", "");
+    }
+
+    #[test]
+    fn attribute_contracts_preserve_metadata_without_native_target() {
+        let source = r#"def implementation(ctx): return []
+example = rule(implementation=implementation, attrs={"count": attr.int(mandatory=True)})
+example(name="good", count=1)
+example(name="wrong", count="text")
+example(name="missing")
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let mut builtins = analysis
+            .db
+            .get_builtin_defs(&starpls_common::Dialect::Bazel)
+            .builtins(&analysis.db)
+            .clone();
+        builtins.r#type.retain(|native| native.name != "Target");
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            ["invalid-argument-type", "missing-argument"],
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn attribute_contracts_keep_mapping_inputs_nominal() {
+        let source = r#"def implementation(ctx): return []
+good = rule(implementation=implementation, attrs={"enabled": attr.bool()})
+wrong = rule(implementation=implementation, attrs={"enabled": 42})
+fake = rule(implementation=implementation, attrs=struct(items=lambda: []))
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            ["invalid-argument-type", "invalid-argument-type"],
+            "{diagnostics:?}"
+        );
     }
 
     #[test]

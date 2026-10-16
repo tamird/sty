@@ -362,6 +362,27 @@ on a broadly annotated dictionary retain their ordinary inferred result.
 
 ## Rule contexts
 
+`Attribute[T]` describes the value an attribute produces in a rule or aspect's
+`ctx.attr`. Helpers can preserve named attributes across their return contracts:
+
+```starlark
+def attributes() -> dict[{
+    "enabled": Attribute[bool],
+    "dependency": Attribute[Target],
+}]: ...
+```
+
+ty checks the helper body against these declarations. An `attr.bool()` cannot
+satisfy `Attribute[Target]`; a nullable label requires `Attribute[Target | None]`.
+A required dictionary key establishes the corresponding context field. Optional
+keys establish only possible fields.
+
+Concrete attribute constructors supply rule-call parameter types, defaults,
+flags, and the `ctx.file`, `ctx.files`, and `ctx.executable` views.
+`Attribute[T]` carries only the analyzed `ctx.attr` projection. Repository-rule
+and macro contexts use their host-specific conversions from concrete descriptors.
+Bare `Attribute` leaves its analyzed value unknown.
+
 `ctx[Value, Attrs]` specifies the build-setting value and the fields of
 `ctx.attr`. A protocol describes the attribute fields a helper requires:
 

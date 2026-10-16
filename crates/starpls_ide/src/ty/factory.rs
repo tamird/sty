@@ -149,6 +149,7 @@ struct RuleAttribute<'db> {
     name: Name,
     parameter: Option<Parameter<'db>>,
     descriptor: Option<Attribute>,
+    analyzed_type: Option<Type<'db>>,
     source: Option<FileRange>,
 }
 
@@ -578,11 +579,21 @@ fn descriptor<'db>(
     data: ProvidedData,
 ) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(call.file());
+    let analyzed_base = data.downcast_ref::<Attribute>().and_then(|attribute| {
+        let declaration = call.declaration()?;
+        let declarations = declaration.program_file(db);
+        let value =
+            super::context::analyzed_attribute_type(db, &environment, declarations, attribute)
+                .unwrap_or_else(Type::unknown);
+        specialized_native_class(db, declarations, name, vec![value])
+    });
+    let bases =
+        analyzed_base.map_or_else(|| declared_base(db, call, name), |base| Box::from([base]));
     call.class_type(
         db,
         ProvidedClass {
             name: Name::new(name),
-            bases: declared_base(db, call, name),
+            bases,
             class_members: Box::default(),
             instance_fields: ProvidedInstanceFields {
                 fields: Box::default(),
@@ -818,6 +829,8 @@ enum RuleKind {
 
 fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(call.file());
+    let declaration = call.declaration()?;
+    let declarations = declaration.program_file(db);
     let common = starpls_bazel::attr::make_common_attributes();
     let parent = if matches!(kind, RuleKind::Build) {
         match call.argument("parent") {
@@ -923,6 +936,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 name,
                 parameter: Some(parameter),
                 source: None,
+                analyzed_type: None,
                 descriptor: Some(Attribute {
                     kind: attribute.r#type,
                     single_file: Some(false),
@@ -956,6 +970,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 ),
                 name,
                 descriptor: None,
+                analyzed_type: None,
                 source: None,
             });
         }
@@ -969,6 +984,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 ),
                 name,
                 descriptor: None,
+                analyzed_type: None,
                 source: None,
             });
         }
@@ -981,6 +997,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     &environment,
                     parent,
                     data,
+                    declarations,
                     &mut attributes,
                     &mut documentation,
                 )
@@ -1032,6 +1049,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             name,
             parameter,
             descriptor,
+            analyzed_type,
             source: _,
         } in &mut attributes
         {
@@ -1042,6 +1060,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                         .with_default_type(Type::unknown())
                 });
                 *descriptor = None;
+                *analyzed_type = None;
             }
         }
     }
@@ -1149,6 +1168,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             parameter,
             source: Some(source),
             descriptor: attribute.cloned(),
+            analyzed_type: native_type_argument(db, &environment, declarations, value, "Attribute"),
         };
         if let Some(existing) = attributes
             .iter_mut()
@@ -1161,13 +1181,34 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     }
     let mut parameters = Vec::new();
     let mut descriptors = Vec::new();
+    let mut analyzed_types = TypedDictSchema::default();
     for RuleAttribute {
         name,
         parameter,
         descriptor,
+        analyzed_type,
         source,
     } in attributes
     {
+        if matches!(kind, RuleKind::Build) {
+            let value = match &descriptor {
+                Some(attribute) => super::context::analyzed_attribute_type(
+                    db,
+                    &environment,
+                    declarations,
+                    attribute,
+                ),
+                None => analyzed_type,
+            }
+            .unwrap_or_else(Type::unknown);
+            analyzed_types.insert(
+                name.clone(),
+                TypedDictFieldBuilder::new(value)
+                    .required(true)
+                    .read_only(true)
+                    .build(),
+            );
+        }
         parameters.extend(parameter);
         descriptors.push(RuleAttributeData {
             name,
@@ -1194,11 +1235,27 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         RuleKind::Repository => "repository_rule",
         RuleKind::Macro => "macro",
     };
+    let bases = if matches!(kind, RuleKind::Build) {
+        let openness = if complete {
+            TypedDictOpenness::Closed
+        } else {
+            TypedDictOpenness::ImplicitlyOpen
+        };
+        let shape = Type::TypedDict(TypedDictType::from_schema_items_with_openness(
+            db,
+            analyzed_types,
+            openness,
+        ));
+        let base = specialized_native_class(db, declarations, "_AnalyzedRule", vec![shape])?;
+        Box::from([base])
+    } else {
+        declared_base(db, call, name)
+    };
     call.class_type(
         db,
         ProvidedClass {
             name: Name::new(name),
-            bases: declared_base(db, call, name),
+            bases,
             class_members: Box::from([(Name::new("__call__"), callable)]),
             instance_fields: ProvidedInstanceFields {
                 fields: Box::default(),
@@ -1223,12 +1280,18 @@ fn inherit_rule_attributes<'db>(
     environment: &ProgramEnvironment<'db>,
     parent: Type<'db>,
     data: &RuleData,
+    declarations: ProgramFile<'db>,
     attributes: &mut Vec<RuleAttribute<'db>>,
     documentation: &mut Documentation,
 ) -> bool {
     let Some(signature) = callable_signature(db, environment, parent) else {
         return false;
     };
+    let shape = native_type_argument(db, environment, declarations, parent, "_AnalyzedRule");
+    let shape = shape.and_then(|shape| match shape {
+        Type::TypedDict(shape) => Some(shape),
+        _ => None,
+    });
     attributes.clear();
     documentation
         .parameters
@@ -1261,6 +1324,9 @@ fn inherit_rule_attributes<'db>(
             name: name.clone(),
             parameter,
             descriptor: descriptor.clone(),
+            analyzed_type: shape
+                .and_then(|shape| shape.items(db).get(name))
+                .map(|field| field.declared_type()),
             source: *source,
         });
     }
@@ -1276,9 +1342,13 @@ fn override_rule_attribute(
         name,
         parameter,
         descriptor,
+        analyzed_type,
         source: origin,
     } = inherited;
     let Some(parent) = descriptor else {
+        if !name.starts_with('_') {
+            *analyzed_type = None;
+        }
         return;
     };
     // Bazel permits only public Starlark label attributes to be overridden.
@@ -1455,6 +1525,7 @@ fn inherit_macro_attributes<'db>(
             name: name.clone(),
             parameter: Some(parameter),
             descriptor,
+            analyzed_type: None,
             source: parent_data
                 .and_then(|data| data.attributes.iter().find(|entry| entry.name == *name))
                 .and_then(|entry| entry.source),
@@ -1564,6 +1635,24 @@ fn configurable_input<'db>(
         &environment,
         [value, selected],
     ))
+}
+
+/// Read a native generic projection through ordinary class inheritance.
+pub(super) fn native_type_argument<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    declarations: ProgramFile<'db>,
+    value: Type<'db>,
+    name: &str,
+) -> Option<Type<'db>> {
+    let class = native_class(db, declarations, name)?;
+    let instance = class.to_instance_approximation(db, environment)?;
+    let (class, _) = instance.class_specialization(db, environment)?;
+    let specialization = value.base_class_specialization(db, environment, class)?;
+    let [argument] = specialization.types(db) else {
+        return None;
+    };
+    Some(*argument)
 }
 
 pub(super) fn specialized_native_instance<'db>(
