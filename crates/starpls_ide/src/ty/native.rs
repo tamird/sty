@@ -276,6 +276,9 @@ fn declarations(
             ..Default::default()
         });
     }
+    let propagation_context_available = dialect == Dialect::Bazel
+        && classes.contains_key("Label")
+        && classes.contains_key("struct");
     if dialect == Dialect::Bazel {
         classes
             .entry("repo_metadata".to_owned())
@@ -289,8 +292,39 @@ fn declarations(
             ..Default::default()
         });
     }
+    if propagation_context_available {
+        classes
+            .entry("propagation_ctx".to_owned())
+            .or_insert_with(|| Type {
+                name: "propagation_ctx".to_owned(),
+                doc: "Context passed to aspect propagation callbacks.".to_owned(),
+                ..Default::default()
+            });
+    }
     let declared_classes: BTreeSet<_> = classes.keys().cloned().collect();
     let mut body = String::new();
+    if propagation_context_available {
+        // These nested native types are not exported by Bazel's API inventory.
+        // Their fields come from StarlarkAspectPropagationContextApi (Bazel 9).
+        // Attribute names and values depend on the visited rule; unlike analyzed
+        // rule attributes, dependency values here are Labels, never Targets.
+        body.push_str(
+            r#"    @_starpls_typing.final
+    class _PropagationRuleAttribute:
+        value: _starpls_typing.Final[_starpls_builtins.object]
+        is_tool: _starpls_typing.Final[_starpls_builtins.bool]
+    @_starpls_typing.final
+    class _PropagationRuleKind:
+        file_label: _starpls_typing.Final[_starpls_types.Label | None]
+        rule_name: _starpls_typing.Final[_starpls_builtins.str]
+    @_starpls_typing.final
+    class _PropagationRule:
+        label: _starpls_typing.Final[_starpls_types.Label]
+        qualified_kind: _starpls_typing.Final[_starpls_types._PropagationRuleKind]
+        attr: _starpls_typing.Final[_starpls_types.struct[_starpls_types._PropagationRuleAttribute]]
+"#,
+        );
+    }
     if dialect == Dialect::Bazel {
         // AutoloadSymbols.modifyBuildBzlEnv retains only non-rule autoload
         // globals. Each member can be absent under Bazel's autoload policy.
@@ -368,6 +402,14 @@ fn declarations(
             )?;
         }
         let mut names = BTreeSet::new();
+        if propagation_context_available && class.name == "propagation_ctx" {
+            names.extend(["attr", "rule"]);
+            writeln!(body, "        attr: _starpls_typing.Final[_starpls_types.struct[_starpls_builtins.object]]")?;
+            writeln!(
+                body,
+                "        rule: _starpls_typing.Final[_starpls_types._PropagationRule]"
+            )?;
+        }
         if class.name == "native" && dialect == Dialect::Bazel {
             names.insert("legacy_globals");
             // The namespace can be absent under Bazel's autoload policy.
@@ -996,8 +1038,11 @@ fn write_function(
             (CallableKind::Function, "DefaultInfo", "files") => Some("_DefaultInfoFiles"),
             (CallableKind::Function, "OutputGroupInfo", "kwargs") => Some("_starpls_typing.Sequence[_starpls_types.File] | _starpls_types.depset[_starpls_types.File]"),
             (CallableKind::Function, "macro", "inherit_attrs") => Some("_starpls_types.rule | _starpls_types.macro | _starpls_typing.Literal[\"common\"] | None"),
-            // The inventory omits propagation_ctx, the callback's sole argument.
-            (CallableKind::Function, "aspect", "attr_aspects") => Some("_starpls_typing.Sequence[_starpls_builtins.str] | _starpls_typing.Callable[[_starpls_typing.Any], _starpls_builtins.list[_starpls_builtins.str]]"),
+            // AspectPropagationEdgesSupplier accepts strings for fixed lists,
+            // but toolchain callbacks return resolved Labels rather than strings.
+            (CallableKind::Function, "aspect", "attr_aspects") => classes.contains("propagation_ctx").then_some("_starpls_typing.Sequence[_starpls_builtins.str] | _starpls_typing.Callable[[_starpls_types.propagation_ctx], _starpls_builtins.list[_starpls_builtins.str]]"),
+            (CallableKind::Function, "aspect", "toolchains_aspects") => classes.contains("propagation_ctx").then_some("_starpls_typing.Sequence[_starpls_builtins.str] | _starpls_typing.Callable[[_starpls_types.propagation_ctx], _starpls_builtins.list[_starpls_types.Label]]"),
+            (CallableKind::Function, "aspect", "propagation_predicate") => classes.contains("propagation_ctx").then_some("_starpls_typing.Callable[[_starpls_types.propagation_ctx], _starpls_builtins.bool] | None"),
             // Both action constructors inspect each tool, including depset members.
             (CallableKind::Method("actions"), "run" | "run_shell", "tools") => Some("_starpls_typing.Sequence[_starpls_types.File | _starpls_types.FilesToRunProvider | _starpls_types.depset[_starpls_types.File]] | _starpls_types.depset[_starpls_types.File | _starpls_types.FilesToRunProvider | _starpls_types.depset[_starpls_types.File]]"),
             _ => None,
@@ -2614,7 +2659,15 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
     }
 
     #[test]
-    fn aspect_propagation_accepts_lists_and_callbacks() {
+    fn aspect_propagation_context_and_callback_contracts() {
+        let empty = generate(
+            Dialect::Bazel,
+            &Builtins::default(),
+            &BuildLanguage::default(),
+        )
+        .unwrap();
+        assert!(!empty.contents.contains("_starpls_types.propagation_ctx"));
+        assert!(!empty.contents.contains("class _PropagationRule"));
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
@@ -2625,8 +2678,20 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
             .unwrap();
         let source = r#"def implementation(target, ctx):
     return []
-def propagation(ctx):
+def propagation(ctx: propagation_ctx) -> list[str]:
+    label: Label = ctx.rule.label
+    rule_name: str = ctx.rule.qualified_kind.rule_name
+    definition: Label | None = ctx.rule.qualified_kind.file_label
+    parameter: object = ctx.attr.mode
+    attribute = getattr(ctx.rule.attr, "deps", None)
+    if attribute != None:
+        is_tool: bool = attribute.is_tool
+        value: object = attribute.value
+        (is_tool, value)
+    (label, rule_name, definition, parameter)
     return ["deps"]
+def toolchains(ctx: propagation_ctx) -> list[Label]:
+    return [ctx.rule.label]
 def no_context():
     return ["deps"]
 def extra_context(ctx, other):
@@ -2639,6 +2704,8 @@ callback = propagation
 aspect(implementation=implementation, attr_aspects=["deps"])
 aspect(implementation=implementation, attr_aspects=("deps",))
 aspect(implementation=implementation, attr_aspects=callback)
+aspect(implementation=implementation, toolchains_aspects=["//tools:type"])
+aspect(implementation=implementation, toolchains_aspects=toolchains)
 "#;
         let file = analysis
             .open_document(
@@ -2652,20 +2719,24 @@ aspect(implementation=implementation, attr_aspects=callback)
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         for invalid in [
-            "no_context",
-            "extra_context",
-            "wrong_element",
-            "wrong_container",
-            "[1]",
+            "aspect(implementation=implementation, attr_aspects=no_context)",
+            "aspect(implementation=implementation, attr_aspects=extra_context)",
+            "aspect(implementation=implementation, attr_aspects=wrong_element)",
+            "aspect(implementation=implementation, attr_aspects=wrong_container)",
+            "aspect(implementation=implementation, attr_aspects=[1])",
+            "aspect(implementation=implementation, toolchains_aspects=propagation)",
+            "def bad(ctx: propagation_ctx):\n    wrong: str = ctx.rule.label\n    wrong",
+            "def bad(ctx: propagation_ctx):\n    ctx.rule.qualified_kind.file_label.name",
+            "def bad(ctx: propagation_ctx):\n    ctx.rule.attr.deps.value.files",
+            "def bad(ctx: propagation_ctx):\n    ctx.rule.missing",
+            "def bad(ctx: propagation_ctx):\n    ctx.rule.label = Label('//pkg:target')",
         ] {
             analysis
                 .open_document(
                     Path::new("/main.bzl"),
                     Dialect::Bazel,
                     None,
-                    format!(
-                        "{source}aspect(implementation=implementation, attr_aspects={invalid})\n"
-                    ),
+                    format!("{source}{invalid}\n"),
                     2,
                 )
                 .unwrap();
