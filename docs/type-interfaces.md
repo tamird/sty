@@ -34,6 +34,11 @@ body, including paths through its default arguments, and checks that its
 signature accepts the stub's calls. Source annotations and type comments take
 precedence. Generic annotations retain the stub's type parameters and scope.
 
+Annotation expressions in the implementation can also refer to declarations and
+imports in its registered stub. Source lexical bindings take precedence over
+these names. Stub declarations are available in annotations and type comments;
+runtime expressions use the implementation's own bindings.
+
 This correspondence requires a unique top-level source function with the same
 parameter layout. Overloads, aliases, decorated functions, and partially mixed
 source and stub generic annotations produce an `invalid-function-interface`

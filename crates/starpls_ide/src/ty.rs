@@ -634,6 +634,22 @@ impl ty_python_semantic::Db for Database {
         usage: BuiltinUsage,
     ) -> Option<ProvidedBindingValue<'db>> {
         let source_file = self.starlark_file(file)?;
+        if matches!(usage, BuiltinUsage::Annotation) {
+            if let Some((_, interface)) = self
+                .environment()
+                .type_interfaces(self)
+                .get(&source_file.source)
+            {
+                let binding = ProvidedBindingValue::Export {
+                    file: self.starlark_program_file(*interface),
+                    name: Name::new(name),
+                    value: None,
+                };
+                if binding.clone().resolve_type(self).is_some() {
+                    return Some(binding);
+                }
+            }
+        }
         if let Some(prelude) = self.prelude_for_file(source_file) {
             let binding = ProvidedBindingValue::Export {
                 value: None,

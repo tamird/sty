@@ -1447,6 +1447,103 @@ mod tests {
     }
 
     #[test]
+    fn source_annotations_use_the_paired_stub_namespace() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let types_text = "type Entry = str\n";
+        let types = fixture.add_file(&mut analysis.db, "types.bzli", types_text);
+        let source_text = "def collect(value):\n    values = [value] # type: list[_Entry]\n    values.append('ok')\n    return values\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", source_text);
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "load('types.bzli', _Entry='Entry')\ndef collect(value: _Entry) -> list[_Entry]: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let locations = analysis
+            .snapshot()
+            .goto_definition(
+                FilePosition {
+                    file_id: source,
+                    pos: (source_text.find("_Entry").unwrap() as u32).into(),
+                },
+                false,
+            )
+            .unwrap()
+            .unwrap();
+        let [LocationLink::Local {
+            target_file_id,
+            target_selection_range,
+            origin_selection_range: _,
+            target_range: _,
+        }] = locations.as_slice()
+        else {
+            panic!("{locations:?}");
+        };
+        assert_eq!(*target_file_id, types.source);
+        assert_eq!(&types_text[*target_selection_range], "Entry");
+
+        analysis.update_file(source, source_text.replace("append('ok')", "append(42)"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+        analysis.update_file(types, "type Entry = int\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_type_interfaces([]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "unresolved-reference"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn paired_stub_names_preserve_source_scope_and_runtime_names() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "");
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "type _Entry = str\ndef collect(value: _Entry) -> object: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for (text, expected) in [
+            ("_Entry = int\ndef collect(value):\n    values = [value] # type: list[_Entry]\n    return values\n", "invalid-assignment"),
+            ("def collect(value):\n    _Entry = 42\n    values = [value] # type: list[_Entry]\n    return values\n", "invalid-type-form"),
+            ("def collect(value):\n    return _Entry\n", "unresolved-reference"),
+        ] {
+            analysis.update_file(source, text.into());
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == expected), "{text}: {diagnostics:?}");
+        }
+        analysis.update_file(
+            stub,
+            "type _Entry = str\ndef collect(value: _Entry, _Entry: int) -> object: ...\n".into(),
+        );
+        analysis.update_file(source, "def collect(value, _Entry):\n    values = [value] # type: list[_Entry]\n    return values\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-type-form"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn function_stubs_report_unsupported_correspondence() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
