@@ -1,7 +1,7 @@
 load(":all_crate_deps.bzl", "all_crate_deps", "merge_structured_dep_specs")
 load(":select_utils.bzl", "compute_select")
 
-def dependency_specs():
+def dependency_specs() -> tuple[list[str] | select[list[str], Literal["list"]], list[str] | select[list[str]], list[str]]:
     common, conditional = compute_select(["//:shared"], {"//cfg:linux": ["//:linux"]})
     shared = list(common)  # type: list[str]
     linux = conditional["//cfg:linux"]  # type: list[str]

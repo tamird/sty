@@ -1,6 +1,6 @@
 load(":cc_toolchain_config_lib.bzl", "feature_set", "flag_group", "flag_set", "tool_path", "variable_with_value")
 
-def invalid():
+def invalid() -> None:
     leaf = flag_group(flags = ["-O2"])
     flag_group(flag_groups = [tool_path("compiler", "/usr/bin/cc")])
     flag_group(expand_if_equal = feature_set(["fast"]))

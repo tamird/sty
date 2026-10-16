@@ -1,10 +1,10 @@
 load(":defs.bzl", "exec_test")
 load(":directory.bzl", "headers_directory")
 
-def declare_test(**kwargs):
+def declare_test(**kwargs: object) -> dict[str, object]:
     return kwargs
 
-def consumers():
+def consumers() -> None:
     exec_test(
         declare_test,
         name = "valid",
