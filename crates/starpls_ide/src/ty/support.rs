@@ -344,14 +344,11 @@ fn scalar_members(
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use std::sync::Arc;
 
-    use ruff_db::diagnostic::Severity;
     use ruff_db::vendored::FileType;
     use ruff_db::vendored::VendoredPathBuf;
     use ruff_python_ast as ast;
     use starpls_common::Dialect;
-    use ty_python_semantic::lint::LintSource;
     use ty_python_semantic::Db;
     use ty_python_semantic::HasType;
     use ty_python_semantic::SemanticModel;
@@ -633,13 +630,11 @@ def inspect(flag):
         for strict in [false, true] {
             let (mut analysis, _) = Analysis::new_for_test();
             if strict {
-                let settings = Arc::get_mut(&mut analysis.db.semantic).unwrap();
-                settings.rules.enable(
-                    crate::ty::diagnostics::registry()
-                        .get("redundant-condition-strict")
-                        .unwrap(),
-                    Severity::Warning,
-                    LintSource::Default,
+                analysis.set_rules(
+                    crate::DiagnosticRules::from_settings(
+                        &[("redundant-condition-strict".into(), "warn".into())].into(),
+                    )
+                    .unwrap(),
                 );
             }
             let file = analysis

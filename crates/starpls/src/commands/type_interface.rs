@@ -50,7 +50,18 @@ impl TypeInterfaceOptions {
         loader: &crate::document::DefaultFileLoader,
         workspace: &Path,
     ) -> anyhow::Result<PreparedInterfaces> {
-        let mut registrations = super::stub_package::load(loader, workspace)?;
+        let super::project_config::ProjectConfig {
+            stub_packages,
+            type_interfaces,
+            rules,
+        } = super::project_config::ProjectConfig::load(loader, workspace)?;
+        let rules = starpls_ide::DiagnosticRules::from_settings(&rules).with_context(|| {
+            format!(
+                "invalid configuration {}",
+                workspace.join("sty.toml").display()
+            )
+        })?;
+        let mut registrations = super::stub_package::load(loader, workspace, stub_packages)?;
         let resolve = |path: &Path| -> anyhow::Result<PathBuf> {
             let path = workspace.join(path);
             match loader.repository_for_path(&path)? {
@@ -58,12 +69,31 @@ impl TypeInterfaceOptions {
                 None => starpls_common::absolute_path(&path),
             }
         };
-        for TypeInterfaceMapping { source, interface } in &self.mappings {
-            let origin = format!(
-                "--type_interface {}={}",
-                source.display(),
-                interface.display()
-            );
+        let configured = type_interfaces.iter().map(|(source, interface)| {
+            (
+                source,
+                interface,
+                format!(
+                    "type-interfaces in {}",
+                    workspace.join("sty.toml").display()
+                ),
+            )
+        });
+        let arguments = self
+            .mappings
+            .iter()
+            .map(|TypeInterfaceMapping { source, interface }| {
+                (
+                    source,
+                    interface,
+                    format!(
+                        "--type_interface {}={}",
+                        source.display(),
+                        interface.display()
+                    ),
+                )
+            });
+        for (source, interface, origin) in configured.chain(arguments) {
             let source = resolve(source).with_context(|| {
                 format!("cannot resolve type interface source {}", source.display())
             })?;
@@ -97,13 +127,17 @@ impl TypeInterfaceOptions {
                 }
             }
         }
-        Ok(PreparedInterfaces { registrations })
+        Ok(PreparedInterfaces {
+            registrations,
+            rules,
+        })
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct PreparedInterfaces {
     registrations: Vec<Registration>,
+    rules: starpls_ide::DiagnosticRules,
 }
 
 impl PreparedInterfaces {
@@ -118,7 +152,10 @@ impl PreparedInterfaces {
     }
 
     pub(crate) fn install(self, analysis: &mut Analysis, workspace: &Path) -> anyhow::Result<()> {
-        let Self { registrations } = self;
+        let Self {
+            registrations,
+            rules,
+        } = self;
         let mut mappings = Vec::with_capacity(registrations.len());
         for Registration {
             source,
@@ -145,7 +182,9 @@ impl PreparedInterfaces {
             let interface = open(&interface)?;
             mappings.push((source, interface));
         }
-        analysis.set_type_interfaces(mappings)
+        analysis.set_type_interfaces(mappings)?;
+        analysis.set_rules(rules);
+        Ok(())
     }
 }
 
@@ -206,6 +245,7 @@ mod tests {
                 interface: stub,
                 origin: "test mapping".into(),
             }],
+            rules: Default::default(),
         }
         .install(&mut analysis, &root)
         .unwrap();
@@ -229,6 +269,75 @@ mod tests {
                 .any(|d| d.id().as_str() == "invalid-syntax"),
             "{diagnostics:?}"
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn local_configuration_installs_interfaces_and_diagnostic_policy() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("local-type-configuration");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("source.bzl"),
+            "def convert(value): return value + 1\ndef unchecked(value: list): return value\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("source.bzli"),
+            "def convert(value: str) -> str: ...\n",
+        )
+        .unwrap();
+        let config = "[type-interfaces]\n'source.bzl' = 'source.bzli'\n[rules]\nmissing-type-argument = 'error'\n";
+        std::fs::write(root.join("sty.toml"), config).unwrap();
+        let (sender, _) = crossbeam_channel::unbounded();
+        let loader = std::sync::Arc::new(crate::document::DefaultFileLoader::new(
+            std::sync::Arc::new(crate::document::source_tests::TestBazelClient::default()),
+            root.clone(),
+            None,
+            root.join("external"),
+            sender,
+            true,
+        ));
+        let options = super::TypeInterfaceOptions::default();
+        let prepared = options.prepare(&loader, &root).unwrap();
+        let mut analysis = starpls_ide::Analysis::new(loader.clone(), Default::default()).unwrap();
+        prepared.install(&mut analysis, &root).unwrap();
+        let source = analysis.type_interface_sources()[0];
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let mut ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+        ids.sort_unstable();
+        assert_eq!(
+            ids,
+            ["missing-type-argument", "unsupported-operator"],
+            "{diagnostics:?}"
+        );
+        let duplicate = super::TypeInterfaceOptions {
+            mappings: vec![super::TypeInterfaceMapping {
+                source: "source.bzl".into(),
+                interface: "source.bzli".into(),
+            }],
+        };
+        assert!(duplicate.prepare(&loader, &root).is_err());
+        for invalid in [
+            "[rules]\nmisspelled = 'error'\n",
+            "[rules]\nmissing-type-argument = 'warning'\n",
+            "[unknown]\n",
+        ] {
+            std::fs::write(root.join("sty.toml"), invalid).unwrap();
+            assert!(options.prepare(&loader, &root).is_err());
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        }
+        // The server uses this same prepare/install path when watched config changes.
+        std::fs::write(root.join("sty.toml"), config.replace("'error'", "'ignore'")).unwrap();
+        options
+            .prepare(&loader, &root)
+            .unwrap()
+            .install(&mut analysis, &root)
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
         std::fs::remove_dir_all(root).unwrap();
     }
 

@@ -80,7 +80,6 @@ pub(super) static INVALID_FUNCTION_INTERFACE: LintMetadata = lint(
     "invalid-function-interface",
     "Reports function implementations that cannot satisfy their stub declarations.",
 );
-
 pub(super) fn registry() -> &'static LintRegistry {
     static REGISTRY: LazyLock<LintRegistry> = LazyLock::new(|| {
         let mut builder =
@@ -101,7 +100,70 @@ pub(super) fn registry() -> &'static LintRegistry {
     &REGISTRY
 }
 
-pub(super) fn rules(use_code_flow_analysis: bool) -> RuleSelection {
+/// Validated project policy, using Ty's diagnostic levels and suppression handling.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DiagnosticRules {
+    ordinary: RuleSelection,
+    with_flow: RuleSelection,
+}
+
+impl Default for DiagnosticRules {
+    fn default() -> Self {
+        Self {
+            ordinary: default_rules(false),
+            with_flow: default_rules(true),
+        }
+    }
+}
+
+impl DiagnosticRules {
+    pub fn from_settings(
+        settings: &std::collections::BTreeMap<String, String>,
+    ) -> anyhow::Result<Self> {
+        let mut rules = Self::default();
+        for (name, level) in settings {
+            let lint = registry()
+                .get(name)
+                .map_err(|error| anyhow::anyhow!("invalid rule {name:?}: {error}"))?;
+            let severity = match level.as_str() {
+                "ignore" => None,
+                "warn" => Some(Severity::Warning),
+                "error" => Some(Severity::Error),
+                _ => anyhow::bail!(
+                    "invalid level {level:?} for rule {name:?}: expected ignore, warn, or error"
+                ),
+            };
+            for selection in [&mut rules.ordinary, &mut rules.with_flow] {
+                if let Some(severity) = severity {
+                    selection.enable(lint, severity, LintSource::File);
+                } else {
+                    selection.disable(lint);
+                }
+            }
+        }
+        Ok(rules)
+    }
+
+    pub(super) fn selection(&self, use_code_flow_analysis: bool) -> &RuleSelection {
+        let Self {
+            ordinary,
+            with_flow,
+        } = self;
+        if use_code_flow_analysis {
+            with_flow
+        } else {
+            ordinary
+        }
+    }
+}
+
+#[salsa::input]
+pub(crate) struct DiagnosticSettings {
+    #[returns(ref)]
+    pub rules: DiagnosticRules,
+}
+
+fn default_rules(use_code_flow_analysis: bool) -> RuleSelection {
     let registry = registry();
     let mut rules = RuleSelection::from_registry(registry);
     for name in [

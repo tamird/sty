@@ -1,6 +1,7 @@
 use clap::Args;
 
 pub(crate) mod check;
+mod project_config;
 pub(crate) mod server;
 mod stub_package;
 pub(crate) mod type_interface;

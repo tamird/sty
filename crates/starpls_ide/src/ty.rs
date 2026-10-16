@@ -37,13 +37,13 @@ mod shapes;
 mod support;
 
 pub(crate) use diagnostics::check;
+pub use diagnostics::DiagnosticRules;
+pub(crate) use diagnostics::DiagnosticSettings;
 pub(crate) use factory::Documentation;
 pub(crate) use support::file_system;
 
 pub(crate) struct SemanticSettings {
     program: ProgramSettings,
-    rules: RuleSelection,
-    rules_with_flow_diagnostics: RuleSelection,
     analysis: AnalysisSettings,
 }
 
@@ -54,8 +54,6 @@ impl SemanticSettings {
         program.python_version.version = starpls_common::PARSER_VERSION;
         Self {
             program,
-            rules: diagnostics::rules(false),
-            rules_with_flow_diagnostics: diagnostics::rules(true),
             analysis: AnalysisSettings::default(),
         }
     }
@@ -653,11 +651,10 @@ impl ty_python_semantic::Db for Database {
     }
 
     fn rule_selection(&self, _file: File) -> &RuleSelection {
-        if self.environment().options(self).use_code_flow_analysis {
-            &self.semantic.rules_with_flow_diagnostics
-        } else {
-            &self.semantic.rules
-        }
+        self.diagnostic_settings
+            .expect("database initialization is complete")
+            .rules(self)
+            .selection(self.environment().options(self).use_code_flow_analysis)
     }
 
     fn lint_registry(&self) -> &LintRegistry {

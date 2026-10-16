@@ -76,6 +76,24 @@ load(":shared.bzli", _Builder = "Builder")
 def builder() -> _Builder: ...
 ```
 
+## Project configuration
+
+Projects register their own interfaces in `sty.toml` at the Bazel workspace root:
+
+```toml
+[type-interfaces]
+"lib/paths.bzl" = "lib/paths.bzli"
+"BUILD.bazel" = "BUILD.bzli"
+```
+
+Paths are relative to the configuration file. The CLI and language server use
+these mappings. The CLI also accepts repeatable `--type_interface SOURCE=STUB`
+arguments. Each source requires one registration across local mappings, arguments,
+and selected stub packages; duplicate registrations are configuration errors.
+
+The `[rules]` table accepts ty and sty diagnostic names with levels `ignore`,
+`warn`, or `error`. Unknown names and levels are configuration errors.
+
 ## BUILD annotations
 
 An explicit mapping such as `BUILD.bazel=BUILD.bzli` applies variable annotations

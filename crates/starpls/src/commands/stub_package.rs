@@ -11,16 +11,9 @@ use crate::document::DefaultFileLoader;
 use crate::document::Repository;
 use crate::document::RepositoryFetchResult;
 
-#[derive(Default, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-struct ProjectConfig {
-    #[serde(default)]
-    stub_packages: Vec<StubPackage>,
-}
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-struct StubPackage {
+pub(super) struct StubPackage {
     manifest: String,
     #[serde(default)]
     allow_unversioned: bool,
@@ -68,20 +61,9 @@ pub(super) struct Registration {
 pub(super) fn load(
     loader: &DefaultFileLoader,
     workspace: &Path,
+    stub_packages: Vec<StubPackage>,
 ) -> anyhow::Result<Vec<Registration>> {
     let path = workspace.join("sty.toml");
-    loader.watch_manifest(&path);
-    let contents = match loader.read_manifest(&path) {
-        Ok(contents) => contents,
-        Err(error) => {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                return Ok(Vec::new());
-            }
-            return Err(error).with_context(|| format!("cannot read {}", path.display()));
-        }
-    };
-    let ProjectConfig { stub_packages } = toml::from_str(&contents)
-        .with_context(|| format!("invalid configuration {}", path.display()))?;
     let mut packages = stub_packages
         .into_iter()
         .map(|selection| {
@@ -381,7 +363,9 @@ mod tests {
                 sender,
                 bzlmod,
             );
-            let registrations = super::load(&loader, &workspace).unwrap();
+            let config =
+                crate::commands::project_config::ProjectConfig::load(&loader, &workspace).unwrap();
+            let registrations = super::load(&loader, &workspace, config.stub_packages).unwrap();
             assert_eq!(
                 registrations
                     .iter()
@@ -445,7 +429,9 @@ mod tests {
                 .lock()
                 .unwrap()
                 .insert("rules_two".into(), "source fetch failed".into());
-            let error = super::load(&loader, &workspace).unwrap_err();
+            let config =
+                crate::commands::project_config::ProjectConfig::load(&loader, &workspace).unwrap();
+            let error = super::load(&loader, &workspace, config.stub_packages).unwrap_err();
             let message = format!("{error:#}");
             assert!(message.contains("@@stubs_two//:stubs.toml"), "{message}");
             assert!(message.contains("source fetch failed"), "{message}");

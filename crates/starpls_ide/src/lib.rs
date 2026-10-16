@@ -56,6 +56,7 @@ pub use crate::signature_help::SignatureHelp;
 pub use crate::signature_help::SignatureInfo;
 pub use crate::ty::load::LoadDependency;
 pub use crate::ty::load::LoadResolution;
+pub use crate::ty::DiagnosticRules;
 
 mod build_targets;
 mod completions;
@@ -89,6 +90,7 @@ pub(crate) struct Database {
     loader: Arc<dyn FileLoader>,
     environment: Option<Environment>,
     semantic: Arc<ty::SemanticSettings>,
+    diagnostic_settings: Option<ty::DiagnosticSettings>,
     #[cfg(test)]
     executions: Arc<std::sync::atomic::AtomicUsize>,
     // Drop shared source ownership before Salsa wakes a cancelled writer.
@@ -110,6 +112,7 @@ impl ruff_db::Db for Database {
             loader: _,
             environment: _,
             semantic: _,
+            diagnostic_settings: _,
             #[cfg(test)]
                 executions: _,
         } = self;
@@ -124,6 +127,7 @@ impl ruff_db::Db for Database {
             loader: _,
             environment: _,
             semantic: _,
+            diagnostic_settings: _,
             #[cfg(test)]
                 executions: _,
         } = self;
@@ -138,6 +142,7 @@ impl ruff_db::Db for Database {
             loader: _,
             environment: _,
             semantic: _,
+            diagnostic_settings: _,
             #[cfg(test)]
                 executions: _,
         } = self;
@@ -156,6 +161,7 @@ impl starpls_common::Db for Database {
             loader: _,
             environment: _,
             semantic: _,
+            diagnostic_settings: _,
             #[cfg(test)]
                 executions: _,
         } = self;
@@ -237,6 +243,14 @@ pub struct Analysis {
 }
 
 impl Analysis {
+    pub fn set_rules(&mut self, rules: DiagnosticRules) {
+        self.db
+            .diagnostic_settings
+            .expect("database initialization is complete")
+            .set_rules(&mut self.db)
+            .to(rules);
+    }
+
     pub fn new(loader: Arc<dyn FileLoader>, options: InferenceOptions) -> anyhow::Result<Self> {
         let cwd = std::env::current_dir()?;
         let cwd = starpls_common::system_path(&cwd)?;
@@ -262,6 +276,7 @@ impl Analysis {
             loader,
             environment: None,
             semantic,
+            diagnostic_settings: None,
             #[cfg(test)]
             executions: Default::default(),
         };
@@ -275,6 +290,7 @@ impl Analysis {
             })));
         }
         db.environment = Some(Environment::initialize(&db, options));
+        db.diagnostic_settings = Some(ty::DiagnosticSettings::new(&db, DiagnosticRules::default()));
         for dialect in [Dialect::Standard, Dialect::Bazel] {
             db.set_builtin_defs(dialect, Builtins::default(), Default::default())
                 .expect("bundled native declarations are valid");
