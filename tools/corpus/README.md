@@ -1,9 +1,9 @@
 # Annotated source corpus
 
 This corpus checks real implementations from eight Bazel projects and callers of
-their annotated APIs. Type comments and stubs live in those projects. The manifest
-pins the reviewed revisions; the probes exercise their public or package-visible
-APIs.
+their annotated APIs. Each project owns its `.bzli` files and their mappings in
+`sty.toml`. The manifest pins the reviewed revisions; the probes exercise their
+public or package-visible APIs.
 
 Run from the sty checkout with the source checkouts under an explicit directory:
 
@@ -29,21 +29,20 @@ The annotation commits are available on these fork branches:
 
 | Checkout | Published branch |
 | --- | --- |
-| `with_cfg.bzl` | [tamird/with_cfg.bzl:codex/generic-return-comments](https://github.com/tamird/with_cfg.bzl/tree/codex/generic-return-comments) |
-| `bazel_features` | [tamird/bazel_features:type-comments](https://github.com/tamird/bazel_features/tree/type-comments) |
-| `bazel-skylib` | [tamird/bazel-skylib:path-type-comments](https://github.com/tamird/bazel-skylib/tree/path-type-comments) |
-| `apple_support` | [tamird/apple_support:helper-type-comments](https://github.com/tamird/apple_support/tree/helper-type-comments) |
-| `hermetic-llvm` | [tamird/hermetic-llvm:public-helper-types](https://github.com/tamird/hermetic-llvm/tree/public-helper-types) |
+| `with_cfg.bzl` | [tamird/with_cfg.bzl:type-contracts](https://github.com/tamird/with_cfg.bzl/tree/type-contracts) |
+| `bazel_features` | [tamird/bazel_features:type-contracts](https://github.com/tamird/bazel_features/tree/type-contracts) |
+| `bazel-skylib` | [tamird/bazel-skylib:type-contracts](https://github.com/tamird/bazel-skylib/tree/type-contracts) |
+| `apple_support` | [tamird/apple_support:type-contracts](https://github.com/tamird/apple_support/tree/type-contracts) |
+| `hermetic-llvm` | [tamird/hermetic-llvm:type-contracts](https://github.com/tamird/hermetic-llvm/tree/type-contracts) |
 | `rules_cc` | [tamird/rules_cc:type-contracts](https://github.com/tamird/rules_cc/tree/type-contracts) |
 | `rules_rs` | [tamird/rules_rs:type-contracts](https://github.com/tamird/rules_rs/tree/type-contracts) |
 | `rules_runfiles_group` | [tamird/rules_runfiles_group:type-contracts](https://github.com/tamird/rules_runfiles_group/tree/type-contracts) |
 
-Each case selects every listed implementation file. The manifest's `interfaces`
-map registers source-owned stubs; their implementations and the stubs themselves
-are checked in every case. Positive callers must pass with complete coverage and
-zero diagnostics. Negative cases overlay an incorrect caller or replace exactly
-one source fragment, then require the precise diagnostic ID, source path, and
-line. Overlays and reports are written to the output directory. Repository
+Each case selects every listed implementation and interface file. sty reads their
+associations from the source project's `sty.toml`. Positive callers must pass with
+complete coverage and zero diagnostics. Negative cases overlay an incorrect
+caller or replace exactly one source fragment, then require the precise
+diagnostic ID, source path, and line. Overlays and reports are written to the output directory. Repository
 contents are read directly from the pinned checkout.
 
 The cases cover container element types, fixed tuples, optional results, callable
