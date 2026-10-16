@@ -209,13 +209,10 @@ pub(super) fn parameter_type<'db>(
                      kind: _,
                  }| RuleAttributeData {
                     name: name.clone(),
-                    descriptor: if is_complete {
-                        ty.provided_data(db, &environment)
-                            .and_then(|data| data.downcast_ref::<Attribute>())
-                            .cloned()
-                    } else {
-                        None
-                    },
+                    descriptor: ty
+                        .provided_data(db, &environment)
+                        .and_then(|data| data.downcast_ref::<Attribute>())
+                        .cloned(),
                     source: Some(FileRange::new(file.file(db), *source)),
                 },
             )
@@ -1377,6 +1374,11 @@ example_test(name="selected", own="value", deps=select({"//conditions:default": 
         let parent = "def implementation(ctx): return []\nbase = rule(implementation=implementation, extendable=True, attrs={'dep': attr.label(default='//:input', allow_single_file=True)})\n";
         for (attrs, expected) in [
             ("{'dep': attr.label(default=None)}", "File"),
+            ("dict(more(), dep=attr.label(default='//:new'))", "File"),
+            (
+                "{'dep': attr.label(default='//:new')} | more()",
+                "File | None",
+            ),
             ("{'dep': attr.label(default=computed)}", "File | None"),
             (
                 "{'dep': opaque(attr.label(default=computed))}",
@@ -1390,6 +1392,7 @@ example_test(name="selected", own="value", deps=select({"//conditions:default": 
             let source = format!(
                 r#"load("parent.bzl", "base")
 def opaque(value): return value
+def more() -> dict[str, Attribute]: return {{}}
 def computed(): return None
 def implementation(ctx):
     ctx.file.dep
@@ -1408,7 +1411,12 @@ example(name="test", dep="//:explicit")
             assert!(diagnostics.is_empty(), "{attrs}: {diagnostics:?}");
             check_field(&snapshot, file, &source, "ctx.file.dep", expected, "");
             if expected == "File" {
-                check_field(&snapshot, file, &source, "ctx.file.dep", expected, "'dep'");
+                let key = if attrs.starts_with("dict(") {
+                    "dep"
+                } else {
+                    "'dep'"
+                };
+                check_field(&snapshot, file, &source, "ctx.file.dep", expected, key);
                 let position = FilePosition {
                     file_id: file,
                     pos: (source.rfind("dep=").unwrap() as u32).into(),
@@ -1424,7 +1432,7 @@ example(name="test", dep="//:explicit")
                     panic!("{locations:?}");
                 };
                 assert_eq!(*target_file_id, file.source);
-                assert_eq!(&source[*target_selection_range], "'dep'");
+                assert_eq!(&source[*target_selection_range], key);
             }
         }
     }
@@ -1784,14 +1792,45 @@ example = make_aspect(implementation=implementation, attrs={
                 ("{'exports': attr.label_list()}", 0),
                 ("{'exports': attr.string()}", 1),
                 ("{}", 1),
+                ("dict(more(), exports=attr.label_list())", 0),
+                ("dict(more(), exports=attr.string())", 1),
                 ("{'exports': attr.label_list()}", 0),
             ] {
-                analysis.update_file(file, format!("load(\"//:helper.bzl\", \"read\")\ndef implementation(context):\n    read(context)\n    return []\nexample = rule(implementation=implementation, attrs={attrs})\n"));
+                analysis.update_file(file, format!("load(\"//:helper.bzl\", \"read\")\ndef more() -> dict[str, Attribute]: return {{}}\ndef implementation(context):\n    read(context)\n    return []\nexample = rule(implementation=implementation, attrs={attrs})\n"));
                 let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
                 assert_eq!(diagnostics.len(), errors, "{attrs}: {diagnostics:?}");
                 if let [diagnostic] = diagnostics.as_slice() {
                     assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn partial_attribute_mappings_preserve_definite_overrides() {
+        for (factory, parameters) in [
+            ("rule", "ctx"),
+            ("repository_rule", "ctx"),
+            ("aspect", "target, ctx"),
+        ] {
+            let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+            enable_context(&mut analysis);
+            let file = fixture.main_file();
+            for (attributes, expected) in [
+                ("dict(more(), count=attr.int())", "int"),
+                ("dict(more(), count=attr.string())", "str"),
+                ("{'count': attr.int()} | more()", "Unknown"),
+                ("dict(more(), count=attr.int())", "int"),
+            ] {
+                let source = format!("def more() -> dict[str, Attribute]: return {{}}\ndef implementation({parameters}):\n    ctx.attr.count\n    return []\nexample = {factory}(implementation=implementation, attrs={attributes})\n");
+                analysis.update_file(file, source.clone());
+                let snapshot = analysis.snapshot();
+                let diagnostics = snapshot.diagnostics(file).unwrap();
+                assert!(
+                    diagnostics.is_empty(),
+                    "{factory}, {attributes}: {diagnostics:?}"
+                );
+                check_field(&snapshot, file, &source, "ctx.attr.count", expected, "");
             }
         }
     }

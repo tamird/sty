@@ -1066,9 +1066,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             .and_then(|data| data.downcast_ref::<Attribute>());
         if parent.is_some() {
             if let Some(inherited) = attributes.iter_mut().find(|entry| entry.name == name) {
-                if is_complete {
-                    override_rule_attribute(inherited, attribute, Some(source));
-                }
+                override_rule_attribute(inherited, attribute, Some(source));
                 continue;
             }
         }
@@ -1104,11 +1102,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             continue;
         }
         let mut parameter = Parameter::keyword_only(Name::new(name)).with_source_range(source);
-        if !is_complete {
-            parameter = parameter
-                .with_annotated_type(Type::unknown())
-                .with_default_type(Type::unknown());
-        } else if matches!(kind, RuleKind::Macro) && value == Type::none(db, &environment) {
+        if matches!(kind, RuleKind::Macro) && value == Type::none(db, &environment) {
             // A removed macro attribute can be omitted, but cannot accept a value.
             parameter = parameter
                 .with_annotated_type(Type::Never)
@@ -1154,11 +1148,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             name: Name::new(name),
             parameter,
             source: Some(source),
-            descriptor: if is_complete {
-                attribute.cloned()
-            } else {
-                None
-            },
+            descriptor: attribute.cloned(),
         };
         if let Some(existing) = attributes
             .iter_mut()
@@ -2758,6 +2748,8 @@ def attributes(): return {"exports": attr.label(mandatory=True)}
 target = rule(implementation, attrs=dict(attributes(), count=attr.int()))
 inherited = macro(implementation=macro_impl, inherit_attrs=target)
 inherited($0name="valid", count=1)
+inherited(name="bad", count="wrong")
+target(name="bad", count="wrong")
 target()
 target(name=1)
 target("positional")
@@ -2814,6 +2806,8 @@ target("positional")
         assert_eq!(
             ids,
             [
+                "invalid-argument-type",
+                "invalid-argument-type",
                 "missing-argument",
                 "invalid-argument-type",
                 "too-many-positional-arguments",
