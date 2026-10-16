@@ -2007,7 +2007,7 @@ example = make_aspect(implementation=implementation, attrs={
             file,
             source,
             "        context.rule.attr.deps",
-            "Unknown",
+            "object",
             "",
         );
         check_field(
@@ -2015,7 +2015,7 @@ example = make_aspect(implementation=implementation, attrs={
             file,
             source,
             "        metadata = context.rule.files.package_metadata",
-            "Unknown & ~AlwaysFalsy",
+            "list[File] & ~AlwaysFalsy",
             "",
         );
         check_field(
@@ -2023,7 +2023,7 @@ example = make_aspect(implementation=implementation, attrs={
             file,
             source,
             "        context.rule.files.compile_data",
-            "Unknown",
+            "list[File]",
             "",
         );
         check_field(
@@ -2035,11 +2035,14 @@ example = make_aspect(implementation=implementation, attrs={
             "\"_tool\"",
         );
         let diagnostics = snapshot.diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
-        assert!(
-            diagnostics
-                .iter()
-                .all(|diagnostic| diagnostic.id().as_str() == "invalid-assignment"),
+        let mut ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        ids.sort_unstable();
+        assert_eq!(
+            ids,
+            ["invalid-assignment", "invalid-assignment", "not-iterable"],
             "{diagnostics:?}"
         );
     }

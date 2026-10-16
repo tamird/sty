@@ -714,14 +714,20 @@ fn declarations(
                     }
                 }
                 None => {
-                    let field_type = if class.name == "ctx" {
+                    let field_type = if matches!(class.name.as_str(), "ctx" | "rule_attributes")
+                        && classes.contains_key("struct")
+                    {
                         match field.name.as_str() {
                             // Attribute values are opaque unless a named schema refines them.
-                            "attr" => Some("_starpls_typing.Final[_starpls_ty_extensions.Intersection[_starpls_types.struct[_starpls_builtins.object], _ContextAttrs]]"),
-                            "file" => Some("_starpls_types.struct[_starpls_types.File]"),
-                            "outputs" => Some("_starpls_types.struct[_starpls_types.File]"),
-                            "executable" => Some("_starpls_types.struct[_starpls_types.File]"),
-                            "files" => Some("_starpls_types.struct[_starpls_builtins.list[_starpls_types.File]]"),
+                            "attr" => Some(if class.name == "ctx" {
+                                "_starpls_typing.Final[_starpls_ty_extensions.Intersection[_starpls_types.struct[_starpls_builtins.object], _ContextAttrs]]"
+                            } else {
+                                "_starpls_types.struct[_starpls_builtins.object]"
+                            }),
+                            "file" => classes.contains_key("File").then_some("_starpls_types.struct[_starpls_types.File | None]"),
+                            "outputs" => (class.name == "ctx" && classes.contains_key("File")).then_some("_starpls_types.struct[_starpls_types.File | _starpls_builtins.list[_starpls_types.File] | None]"),
+                            "executable" => classes.contains_key("File").then_some("_starpls_types.struct[_starpls_types.File | None]"),
+                            "files" => classes.contains_key("File").then_some("_starpls_types.struct[_starpls_builtins.list[_starpls_types.File]]"),
                             _ => None,
                         }
                     } else if class.name == "DefaultInfo" {
@@ -1633,6 +1639,122 @@ mod tests {
     use super::*;
     use crate::Analysis;
     use crate::FilePosition;
+
+    #[test]
+    fn context_attribute_views_preserve_native_domains() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        for receiver in ["context", "attributes", "context.rule"] {
+            for (view, expected, invalid) in [
+                ("attr", "object", "str"),
+                ("files", "list[File]", "list[str]"),
+                ("file", "File | None", "File"),
+                ("executable", "File | None", "File"),
+            ] {
+                let source = format!(
+                    "def inspect(context: ctx, attributes: rule_attributes) -> {expected}:\n    return {receiver}.{view}.value\n"
+                );
+                let file = analysis
+                    .open_document(Path::new("/main.bzl"), Dialect::Bazel, None, source, 1)
+                    .unwrap();
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert!(diagnostics.is_empty(), "{receiver}.{view}: {diagnostics:?}");
+                analysis.update_file(
+                    file,
+                    format!("def inspect(context: ctx, attributes: rule_attributes) -> {invalid}:\n    return {receiver}.{view}.value\n"),
+                );
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{receiver}.{view}: {diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+            }
+        }
+        let source = r#"def optional_file(context: ctx) -> str | None:
+    value = context.rule.file.value
+    if value != None:
+        return value.path
+    return None
+def output(context: ctx) -> File | list[File] | None:
+    return context.outputs.value
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                2,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            file,
+            format!("{source}def required_output(context: ctx) -> File:\n    return context.outputs.value\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
+    fn context_attribute_views_preserve_partial_inventory() {
+        for has_struct in [false, true] {
+            let mut builtins = Builtins {
+                r#type: vec![Type {
+                    name: "rule_attributes".into(),
+                    field: ["attr", "file", "files", "executable"]
+                        .into_iter()
+                        .map(|name| Value {
+                            name: name.into(),
+                            r#type: "string".into(),
+                            ..Default::default()
+                        })
+                        .collect(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            if has_struct {
+                builtins.r#type.push(Type {
+                    name: "struct".into(),
+                    ..Default::default()
+                });
+            }
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("unsound-return-statement".into(), "error".into())].into(),
+                )
+                .unwrap(),
+            );
+            let attr = if has_struct { "struct[object]" } else { "str" };
+            let source = format!("def inspect(attributes: rule_attributes) -> tuple[{attr}, str, str, str]:\n    return attributes.attr, attributes.file, attributes.files, attributes.executable\n");
+            let file = analysis
+                .open_document(Path::new("/main.bzl"), Dialect::Bazel, None, source, 1)
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{has_struct}: {diagnostics:?}");
+        }
+    }
 
     #[test]
     fn rule_attributes_accept_literal_keys() {
