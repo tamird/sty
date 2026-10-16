@@ -3389,6 +3389,9 @@ entries = enumerate(list=[1], start=1)
 backwards = reversed({1: 2})
 ordered = sorted([1], None, reverse=True)
 pairs = zip([1], ["text"])
+many = zip([1], ["text"], [True], [2])
+iterables: list[list[str]] = [["text"]]
+unpacked = zip(*iterables)
 printed = print(1)
 def stop():
     fail("stop")
@@ -3428,6 +3431,8 @@ def stop():
                 "list[int]",
                 "list[int]",
                 "list[tuple[int, str]]",
+                "list[tuple[int | str | bool, ...]]",
+                "list[tuple[str, ...]]",
                 "None"
             ]
         );
