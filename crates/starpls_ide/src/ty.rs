@@ -624,7 +624,7 @@ impl ty_python_semantic::Db for Database {
             }
             "set" => KnownClass::Set.to_specialized_instance(self, &environment, &[unknown]),
             "tuple" => Type::homogeneous_tuple(self, &environment, unknown),
-            "File" | "Label" | "rule" | "macro" | "select" | "depset" | "runfiles"
+            "File" | "Label" | "Target" | "rule" | "macro" | "select" | "depset" | "runfiles"
             | "FilesToRunProvider" => {
                 let binding = self.language_builtin(file, tag, BuiltinUsage::Annotation)?;
                 let class = binding.resolve_type(self)?;
@@ -1071,6 +1071,7 @@ def register(name: str, visibility: list[str] | None):
             ),
             ("set[str] | Target", "set", "set[str]", "Target"),
             ("Label | str", "Label", "Label", "str"),
+            ("Target | str", "Target", "Target", "str"),
             ("select[int] | int", "select", "select[int, object]", "int"),
             (
                 "select[list[str]] | list[str]",
@@ -1195,6 +1196,20 @@ def register(name: str, visibility: list[str] | None):
                 "select[int] | int",
                 "select",
                 "select[int, object]",
+            ),
+            (
+                "classify = type",
+                "classify",
+                "Target | str",
+                "Target",
+                "Target",
+            ),
+            (
+                "def type(value): return \"Target\"",
+                "type",
+                "Target | str",
+                "Target",
+                "Target | str",
             ),
             (
                 "def type(value): return \"select\"",
