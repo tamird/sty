@@ -1125,7 +1125,6 @@ fn write_select_operators(output: &mut String) -> anyhow::Result<()> {
             }
             for (kind, receiver, operand, result, native_operation) in domains {
                 let plain_operand = match kind {
-                    "list" => "_starpls_builtins.list[_SelectRight] | _starpls_builtins.tuple[_SelectRight, ...]",
                     // Bazel 9.2 requires the same Java implementation class. The Starlark
                     // dict type covers several implementations, including ctx.var's
                     // tracked dictionary.

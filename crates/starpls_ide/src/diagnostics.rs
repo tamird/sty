@@ -1221,6 +1221,8 @@ left = ["b"] + values # type: select[list[str]]
 pair = values + select({"//:condition": ["b"]}) # type: select[list[str]]
 tuple_values = select({"//:condition": ("a",)}) + ["b"] # type: select[list[str]]
 range_values = select({"//:condition": range(3)}) + [4] # type: select[list[int]]
+range_right = known_values + range(3)
+range_left = range(3) + known_values
 mixed_values = select({"//:condition": ["a"], "//conditions:default": [42]}) + [] # type: select[list[str | int]]
 defaulted = select({"//:condition": ["a"], "//conditions:default": None}) # type: select[list[str] | None]
 defaulted_right = defaulted + ["b"] # type: select[list[str] | None]
@@ -1252,6 +1254,8 @@ mapping_before = {"a": 1} | select({"//:condition": {"b": "c"}}) # type: select[
             ("none_pair", "select[None, Literal[\"none\"]]"),
             ("known_mixed", "select[list[str | int], Literal[\"list\"]]"),
             ("mixed_values", "select[list[str | int], Literal[\"list\"]]"),
+            ("range_right", "select[list[str | int], Literal[\"list\"]]"),
+            ("range_left", "select[list[str | int], Literal[\"list\"]]"),
             (
                 "declared_mixed",
                 "select[list[str | int], Literal[\"list\"]]",
@@ -1341,6 +1345,22 @@ mapping_before = {"a": 1} | select({"//:condition": {"b": "c"}}) # type: select[
             (
                 "bad = mixed_values # type: select[list[str]]",
                 "invalid-assignment",
+            ),
+            (
+                "bad = range_right # type: select[list[str]]",
+                "invalid-assignment",
+            ),
+            (
+                "bad = range_left # type: select[list[str]]",
+                "invalid-assignment",
+            ),
+            (
+                "select({'//:condition': None}) + range(3)",
+                "unsupported-operator",
+            ),
+            (
+                "range(3) + select({'//:condition': None})",
+                "unsupported-operator",
             ),
             (
                 "bad = mapping # type: select[dict[str, str]]",
