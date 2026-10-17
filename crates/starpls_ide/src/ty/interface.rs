@@ -304,12 +304,6 @@ fn function_annotations_query(
         {
             Some("overloads require a final ordinary implementation declaration")
         } else if !overloads.is_empty()
-            && family
-                .iter()
-                .any(|declaration| declaration.type_params.is_some())
-        {
-            Some("generic overload implementation consistency is unsupported")
-        } else if !overloads.is_empty()
             && (declaration.returns.is_none()
                 || declaration
                     .parameters
@@ -581,21 +575,26 @@ fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::D
                 continue;
             };
             let mut actual_count = 1;
-            let mut non_generic = !implementation.signature(db).is_generic();
+            let signature = implementation.signature(db);
+            let mut supported = true;
             for overload in family {
                 actual_count += 1;
-                non_generic &= !overload.signature(db).is_generic();
+                supported &= signature.supports_overload_implementation_consistency_with(
+                    db,
+                    &environment,
+                    &overload.signature(db),
+                );
             }
             if implementation.definition(db) != *stub_definition
                 || actual_count != count
-                || !non_generic
+                || !supported
             {
-                report(source_range, declaration.name.range(), "Only non-generic overload families with an ordinary implementation can check a source body".into());
+                report(source_range, declaration.name.range(), "The overload family requires an ordinary implementation whose consistency can be checked".into());
                 continue;
             }
             // Ty checks the donor family against this implementation. Check the source body
             // against that same broad signature; callers still see only the overloads.
-            expected = Type::single_callable(db, implementation.signature(db));
+            expected = Type::single_callable(db, signature);
         }
         // Function literals identify declarations; compare their callable signatures.
         let (Some(actual), Some(expected)) = (
@@ -1725,6 +1724,61 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
     }
 
     #[test]
+    fn function_stubs_check_generic_overload_implementations() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let body = "def identity(value): return value\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
+        let contract = r#"
+@overload
+def identity(value: str) -> str: ...
+@overload
+def identity(value: list[str]) -> list[str]: ...
+@overload
+def identity[T](value: T) -> T: ...
+def identity[U](value: U) -> U: ...
+"#;
+        let stub = fixture.add_file(&mut analysis.db, "source.bzli", contract);
+        let calls = r#"load("source.bzl", "identity")
+text: str = identity("value")
+items: list[str] = identity(["value"])
+number: int = identity(42)
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "caller.bzl", calls);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for file in [source, stub, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.update_file(caller, format!("{calls}bad: int = identity('value')\n"));
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-assignment");
+
+        analysis.update_file(source, "def identity(value): return 42\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+
+        analysis.update_file(source, body.into());
+        // A complete comparison can reject a promise; it is not unsupported.
+        analysis.update_file(
+            stub,
+            contract.replace("value: str) -> str", "value: str) -> int"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-overload"),
+            "{diagnostics:?}"
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
     fn function_stubs_reject_unsupported_overload_families() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
@@ -1739,7 +1793,7 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
         for contract in [
             "def identity(value: int | str) -> int | str: ...\n@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\n",
             "@overload\ndef identity(value: int) -> int: ...\ndef identity(value: str) -> str: ...\ndef identity(value: int | str) -> int | str: ...\n",
-            "@overload\ndef identity[T](value: T) -> T: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity(value: object) -> object: ...\n",
+            "@overload\ndef identity[T](value: T) -> T: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity[U](value: U | None) -> U | None: ...\n",
             "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity(value) -> int | str: ...\n",
             "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity(value: int | str): ...\n",
         ] {

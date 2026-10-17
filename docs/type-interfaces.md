@@ -71,7 +71,7 @@ and result annotations and may declare type parameters. Overload families must
 contain at least two declarations. ty checks the declarations and resolves calls
 using its ordinary overload rules.
 
-To check a mapped source implementation, follow a non-generic overload family
+To check a mapped source implementation, follow the overload family
 with an ordinary declaration that has complete parameter and return annotations:
 
 ```starlark
@@ -84,12 +84,15 @@ def identity(value: str) -> str: ...
 def identity(value: int | str) -> int | str: ...
 ```
 
-ty checks the overloads against the ordinary implementation signature. Sty uses
+ty checks the overloads against the ordinary implementation signature. sty uses
 that signature to check the source body; source annotations still take
 precedence. Callers see only the overloads. This checks the body's broad input
 and result types, not the correlation between individual overloads and branches
-in the body. Families without an explicit implementation, or with generic
-signatures, produce `invalid-function-interface` when checking mapped source.
+in the body. Generic implementation variables are inferred from each overload's
+inputs. A generic implementation requires a fully static specialization.
+Unresolved inference, generic variadics, and receiver-dependent generics produce
+`invalid-function-interface` when checking mapped source. Families without an
+explicit implementation produce the same diagnostic.
 
 ### Shared declarations
 
