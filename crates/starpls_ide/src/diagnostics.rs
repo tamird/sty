@@ -115,6 +115,62 @@ mod tests {
     }
 
     #[test]
+    fn selector_composition_preserves_heterogeneous_payloads() {
+        for (kind, payload, operation) in [
+            ("none", "list[str] | dict[str, str] | None", "+"),
+            ("list", "Sequence[str] | dict[str, str]", "+"),
+            ("dict", "list[str] | dict[str, str]", "|"),
+            ("str", "str | list[str]", "+"),
+            ("bool", "bool | list[str]", "+"),
+        ] {
+            let selected = format!("select[{payload}, Literal['{kind}']]");
+            let source = format!(
+                "def combine(left: {selected}, right: {selected}) -> {selected}:\n    return left {operation} right\n"
+            );
+            let (mut analysis, fixture) = native_analysis(&source);
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("non-static-type".into(), "error".into())].into(),
+                )
+                .unwrap(),
+            );
+            let file = fixture.main_file();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{kind}: {diagnostics:?}");
+
+            // Composition must retain every payload, not just the first branch's kind.
+            analysis.update_file(
+                file,
+                source.replace(&format!("-> {selected}"), "-> select[list[str]]"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{kind}: {diagnostics:?}");
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                "{kind}: {diagnostics:?}"
+            );
+        }
+
+        // Attribute conversion checks every fragment. Both branches can supply
+        // strings, but a string_dict attribute rejects the list branch.
+        let source = r#"
+mixed = select({"//conditions:default": None, "//:dict": {"key": "value"}}) + select({"//conditions:default": None, "//:list": ["value"]})
+example = rule(implementation=lambda ctx: [], attrs={"srcs": attr.string_list(), "values": attr.string_dict()})
+example(name="ok", srcs=mixed)
+example(name="bad", values=mixed)
+"#;
+        let (analysis, fixture) = native_analysis(source);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
     fn selector_construction_preserves_possible_runtime_kinds() {
         let selected =
             "select[list[str] | None, Literal['list']] | select[list[str] | None, Literal['none']]";
@@ -1247,10 +1303,14 @@ mixed_keys = {"//:condition": ["a"], Label("//:other"): ["b"]}
 values = select(strings)
 known_values = select({"//:condition": ["a"]})
 known_mixed = known_values + [42]
+literal_text = select({"//:condition": "a"}) + select({"//:condition": "b"})
 known_empty = known_values + []
 known_empty_left = [] + known_values
 unknown_elements = [] # type: list[Unknown]
 gradual_elements = known_values + unknown_elements
+gradual_selected = known_values + select({"//conditions:default": unknown_elements})
+any_elements = [] # type: list[Any]
+any_selected = known_values + select({"//conditions:default": any_elements})
 def add_unknown(other):
     gradual_operand = known_values + other
     return gradual_operand
@@ -1300,6 +1360,7 @@ mapping_before = {"a": 1} | select({"//:condition": {"b": "c"}}) # type: select[
             ("none_left", "select[None, Literal[\"none\"]]"),
             ("none_pair", "select[None, Literal[\"none\"]]"),
             ("known_mixed", "select[list[str | int], Literal[\"list\"]]"),
+            ("literal_text", "select[str, Literal[\"str\"]]"),
             ("mixed_values", "select[list[str | int], Literal[\"list\"]]"),
             ("range_right", "select[list[str | int], Literal[\"list\"]]"),
             ("range_left", "select[list[str | int], Literal[\"list\"]]"),
@@ -1335,6 +1396,11 @@ mapping_before = {"a": 1} | select({"//:condition": {"b": "c"}}) # type: select[
                 "gradual_elements",
                 "select[list[str | Unknown], Literal[\"list\"]]",
             ),
+            (
+                "gradual_selected",
+                "select[list[str | Unknown], Literal[\"list\"]]",
+            ),
+            ("any_selected", "select[list[str | Any], Literal[\"list\"]]"),
             ("gradual_operand", "Unknown"),
         ] {
             let hover = analysis

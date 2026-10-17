@@ -1218,6 +1218,27 @@ fn write_select_operators(output: &mut String) -> anyhow::Result<()> {
                     writeln!(output, "        def __{reflected}add__(self: _starpls_types.select[{receiver} | None, _starpls_typing.Literal[\"none\"]], other: {selected}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue | _SelectPeerValue, None], _SelectKind]: ...")?;
                 }
             }
+            // Concatenation stores the pieces without converting their payloads.
+            // Later branches may have different types from the first branch;
+            // attribute conversion (or a macro) checks those values separately.
+            for (kind, _receiver, _operand, _result, native_operation) in domains
+                .into_iter()
+                .chain(std::iter::once(("none", "None", "None", "None", "add")))
+            {
+                if operation != native_operation {
+                    continue;
+                }
+                let required_kind = format!("_starpls_typing.Literal[\"{kind}\"]");
+                let selected = format!("_starpls_types.select[_SelectPeerValue, {required_kind}]");
+                let selected = if kind == "int" {
+                    format!("_starpls_ty_extensions.Intersection[{selected}, _starpls_unknown]")
+                } else {
+                    selected
+                };
+                writeln!(output, "        @_starpls_typing.overload")?;
+                writeln!(output, "        @_starpls_typing.type_check_only")?;
+                writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {selected}, /) -> _starpls_types.select[_SelectValue | _SelectPeerValue, {required_kind}]: ...")?;
+            }
             if operation == "add" {
                 writeln!(output, "        @_starpls_typing.overload")?;
                 writeln!(output, "        @_starpls_typing.type_check_only")?;
