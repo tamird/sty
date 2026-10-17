@@ -242,6 +242,27 @@ fn declarations(
         })
         .map(|class| (class.name.clone(), class.clone()))
         .collect();
+    if classes.get("attr").is_some_and(|class| {
+        class
+            .field
+            .iter()
+            .filter_map(|field| field.callable.as_ref())
+            .flat_map(|callable| &callable.param)
+            .any(|parameter| {
+                env::normalize_doc(&parameter.r#type, true)
+                    .split("; or ")
+                    .any(|member| member == "NativeComputedDefault")
+            })
+    }) {
+        // This fieldless native marker is named by parameter metadata, but its
+        // undocumented declaration is omitted from the exported inventory.
+        classes
+            .entry("NativeComputedDefault".to_owned())
+            .or_insert_with(|| Type {
+                name: "NativeComputedDefault".to_owned(),
+                ..Default::default()
+            });
+    }
     for (name, fields) in env::make_missing_module_members() {
         if let Some(class) = classes.get_mut(&name) {
             for field in fields {
@@ -970,7 +991,7 @@ fn declarations(
         body.push_str("    pass\n");
     }
     let mut output = String::from(
-        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
+        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_AttributeDefaultParameters = _starpls_typing.ParamSpec(\"_AttributeDefaultParameters\")\n_AttributeDefaultResult = _starpls_typing.TypeVar(\"_AttributeDefaultResult\")\n_AttributeMaterializerParameters = _starpls_typing.ParamSpec(\"_AttributeMaterializerParameters\")\n_AttributeMaterializerResult = _starpls_typing.TypeVar(\"_AttributeMaterializerResult\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
     );
     let context_attrs = if classes.contains_key("struct") {
         "_starpls_types.struct[_starpls_unknown]"
@@ -1190,7 +1211,7 @@ fn value_annotation(value: &Value, classes: &BTreeSet<String>) -> String {
     } else {
         &value.r#type
     };
-    let annotation = annotation(value_type, false, classes, AnnotationUse::Value);
+    let annotation = annotation(value_type, false, classes, AnnotationUse::Value, None);
     if known_provider {
         format!("_starpls_types.Provider[{annotation}]")
     } else {
@@ -1328,6 +1349,18 @@ fn write_function(
                 .then_some("_starpls_types.transition | None")
             }
             (CallableKind::Method("attr"), _, "cfg") => (classes.contains("transition") && classes.contains("ExecTransitionFactory")).then_some("_starpls_builtins.str | _starpls_types.transition | _starpls_types.ExecTransitionFactory | None"),
+            (CallableKind::Method("attr"), "label", "allow_single_file") => {
+                let declared = env::normalize_doc(r#type, true);
+                matches!(declared.as_str(), "" | "Unknown" | "unknown" | "Any")
+                    .then_some("_starpls_builtins.bool | _starpls_typing.Sequence[_starpls_builtins.str] | None")
+            }
+            (CallableKind::Method("attr"), _, "for_dependency_resolution") => {
+                let declared = env::normalize_doc(r#type, true);
+                // Native validation tests identity with True and accepts every
+                // other value as an explicitly disabled flag.
+                matches!(declared.as_str(), "" | "Unknown" | "unknown" | "Any")
+                    .then_some("_starpls_builtins.object")
+            }
             (CallableKind::Function, "OutputGroupInfo", "kwargs") => Some("_starpls_typing.Sequence[_starpls_types.File] | _starpls_types.depset[_starpls_types.File]"),
             (CallableKind::Function, "macro", "inherit_attrs") => Some("_starpls_types.rule | _starpls_types.macro | _starpls_typing.Literal[\"common\"] | None"),
             // AspectPropagationEdgesSupplier accepts strings for fixed lists,
@@ -1372,7 +1405,18 @@ fn write_function(
             } else {
                 input
             };
-            annotation(r#type, *is_star_arg || *is_star_star_arg, classes, input)
+            // Construction stores these functions. Invocation and return-value
+            // validation belong to the computed-default/materializer owners.
+            let callback = match (kind, value.name.as_str(), name) {
+                (CallableKind::Method("attr"), "label" | "label_list", "default") => {
+                    Some("_starpls_typing.Callable[_AttributeDefaultParameters, _AttributeDefaultResult]")
+                }
+                (CallableKind::Method("attr"), "label" | "label_list", "materializer") => {
+                    Some("_starpls_typing.Callable[_AttributeMaterializerParameters, _AttributeMaterializerResult]")
+                }
+                _ => None,
+            };
+            annotation(r#type, *is_star_arg || *is_star_star_arg, classes, input, callback)
         });
         let parameter_type = if let CallableKind::Rule(rule) = kind {
             let configurable = rule
@@ -1448,6 +1492,32 @@ fn write_function(
                 ))
             .then_some("_starpls_types.transition[_starpls_typing.Literal['ordinary']]")
         }
+        (CallableKind::Method("attr"), name) => {
+            let declared = env::normalize_doc(&callable.return_type, true);
+            if !classes.contains("Attribute") || declared != "Attribute" {
+                None
+            } else {
+                match name {
+                    "bool" => Some("_starpls_types.Attribute[_starpls_builtins.bool]"),
+                    "int" => Some("_starpls_types.Attribute[_starpls_builtins.int]"),
+                    "int_list" => Some("_starpls_types.Attribute[_starpls_builtins.list[_starpls_builtins.int]]"),
+                    "string" => Some("_starpls_types.Attribute[_starpls_builtins.str]"),
+                    "string_list" => Some("_starpls_types.Attribute[_starpls_builtins.list[_starpls_builtins.str]]"),
+                    // These covariant views include provider-refined targets
+                    // and split-transition lists. Checked descriptors retain
+                    // their exact flags, requiredness, and mutable list types.
+                    "label" => ["Target", "FilesToRunProvider", "File"]
+                        .into_iter()
+                        .all(|class| classes.contains(class))
+                        .then_some("_starpls_types.Attribute[_starpls_types.Target | _starpls_typing.Sequence[_starpls_types.Target] | None]"),
+                    "label_list" => ["Target", "FilesToRunProvider", "File"]
+                        .into_iter()
+                        .all(|class| classes.contains(class))
+                        .then_some("_starpls_types.Attribute[_starpls_typing.Sequence[_starpls_types.Target]]"),
+                    _ => None,
+                }
+            }
+        }
         (CallableKind::Method("apple_common"), "apple_host_system_env" | "target_apple_env") => {
             Some("_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]")
         }
@@ -1466,9 +1536,15 @@ fn write_function(
         }
         _ => None,
     };
-    let return_type = return_type
-        .map(str::to_owned)
-        .unwrap_or_else(|| annotation(&callable.return_type, false, classes, AnnotationUse::Value));
+    let return_type = return_type.map(str::to_owned).unwrap_or_else(|| {
+        annotation(
+            &callable.return_type,
+            false,
+            classes,
+            AnnotationUse::Value,
+            None,
+        )
+    });
     writeln!(output, ") -> {return_type}:")?;
     let documentation = callable_documentation(value, callable)?;
     writeln!(output, "{indent}    {}", quoted(&documentation))?;
@@ -1530,6 +1606,7 @@ fn annotation(
     variadic: bool,
     classes: &BTreeSet<String>,
     usage: AnnotationUse,
+    callback: Option<&str>,
 ) -> String {
     let text = env::normalize_doc(text, true);
     text.split("; or ")
@@ -1539,8 +1616,8 @@ fn annotation(
                 if let Some((key, value)) = mapping.split_once(" -> ") {
                     let label_key = matches!(key.trim(), "Label" | "label")
                         && classes.contains("Label");
-                    let key = annotation(key, false, classes, usage);
-                    let value = annotation(value, false, classes, usage);
+                    let key = annotation(key, false, classes, usage, callback);
+                    let value = annotation(value, false, classes, usage, callback);
                     let mapping = match usage {
                         AnnotationUse::Value => "_starpls_builtins.dict",
                         AnnotationUse::AttributeInput => "_starpls_typing.Mapping",
@@ -1587,7 +1664,7 @@ fn annotation(
                     }
                     _ => container,
                 };
-                let element = annotation(element.unwrap_or("Unknown"), false, classes, usage);
+                let element = annotation(element.unwrap_or("Unknown"), false, classes, usage, callback);
                 if variadic {
                     return element;
                 }
@@ -1630,8 +1707,8 @@ fn annotation(
                 "bytes" => "_starpls_builtins.bytes",
                 "tuple" => "_starpls_builtins.tuple[_starpls_typing.Any, ...]",
                 "range" => "_starpls_builtins.range",
-                "function" => "_starpls_typing.Callable[..., _starpls_typing.Any]",
-                "callable" => "_starpls_typing.Callable[..., _starpls_typing.Any]",
+                "function" => callback.unwrap_or("_starpls_typing.Callable[..., _starpls_typing.Any]"),
+                "callable" => callback.unwrap_or("_starpls_typing.Callable[..., _starpls_typing.Any]"),
                 _ => {
                     let name = match name {
                         "label" => "Label",
@@ -1698,6 +1775,272 @@ mod tests {
     use super::*;
     use crate::Analysis;
     use crate::FilePosition;
+
+    #[test]
+    fn attribute_constructor_values_have_static_contracts() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"print(attr.bool)
+print(attr.int)
+print(attr.int_list)
+print(attr.label)
+print(attr.label_list)
+print(attr.string)
+print(attr.string_list)
+def constructor(name: Literal["bool", "int", "int_list", "label", "label_list", "string", "string_list"]) -> object:
+    return getattr(attr, name)
+def computed(value: str) -> Label:
+    return Label(value)
+def computed_list(value: str) -> list[Label]:
+    return [Label(value)]
+def materialize(context: object) -> None:
+    return None
+attr.label(default=computed)
+attr.label_list(default=computed_list)
+attr.label(materializer=materialize)
+attr.label(allow_single_file=[".txt"], for_dependency_resolution="disabled")
+attr.label(allow_single_file=None, for_dependency_resolution=None)
+def text() -> Attribute[str]:
+    return attr.string(values=["one", "two"])
+def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
+    return attr.label(mandatory=True, executable=True, cfg="exec")
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+        let gradual =
+            "def callback(value: Any) -> Any:\n    return value\nattr.label(default=callback)\n";
+        analysis.update_file(file, gradual.into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let argument_start = gradual.rfind("callback").unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == "non-static-type"
+                    && diagnostic
+                        .range()
+                        .is_some_and(|range| usize::from(range.start()) == argument_start)
+            }),
+            "{diagnostics:#?}"
+        );
+        for (statement, expected) in [
+            ("attr.label(allow_single_file=42)", "invalid-argument-type"),
+            (
+                "attr.label(allow_single_file=[42])",
+                "invalid-argument-type",
+            ),
+            ("attr.label(materializer=42)", "invalid-argument-type"),
+            ("attr.label(materializer=None)", "invalid-argument-type"),
+            ("attr.label(default=42)", "invalid-argument-type"),
+            ("attr.string(default=42)", "invalid-argument-type"),
+            ("attr.string_list(default=[42])", "invalid-argument-type"),
+            (
+                "def wrong() -> Attribute[str]: return attr.bool()",
+                "invalid-return-type",
+            ),
+            (
+                "def wrong() -> Attribute[Target]: return attr.label()",
+                "invalid-return-type",
+            ),
+        ] {
+            analysis.update_file(file, format!("{source}{statement}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{statement}: {diagnostics:#?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{statement}");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
+    fn attribute_constructor_contracts_preserve_metadata() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for (name, declared, accepted, rejected) in [
+            ("allow_single_file", "string", "'file'", "True"),
+            ("for_dependency_resolution", "bool", "False", "'disabled'"),
+            ("materializer", "None", "None", "42"),
+        ] {
+            let mut builtins = builtins.clone();
+            let parameter = builtins
+                .r#type
+                .iter_mut()
+                .find(|class| class.name == "attr")
+                .unwrap()
+                .field
+                .iter_mut()
+                .find(|field| field.name == "label")
+                .unwrap()
+                .callable
+                .as_mut()
+                .unwrap()
+                .param
+                .iter_mut()
+                .find(|parameter| parameter.name == name)
+                .unwrap();
+            parameter.r#type = declared.into();
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let source = |value| format!("attr.label({name}={value})\n");
+            let file = analysis
+                .open_document(
+                    Path::new("/main.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source(accepted),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{name}: {diagnostics:#?}");
+            analysis.update_file(file, source(rejected));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{name}: {diagnostics:#?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type", "{name}");
+        }
+    }
+
+    #[test]
+    fn attribute_constructor_contracts_preserve_declared_types() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        builtins.r#type.push(Type {
+            name: "NativeComputedDefault".into(),
+            field: vec![Value {
+                name: "description".into(),
+                r#type: "string".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "attr")
+            .unwrap()
+            .field
+            .iter_mut()
+            .find(|field| field.name == "string")
+            .unwrap()
+            .callable
+            .as_mut()
+            .unwrap()
+            .return_type = "int".into();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = "def marker(value: NativeComputedDefault) -> str:\n    return value.description\ndef constructor() -> Callable[[], int]:\n    return attr.string\n";
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+        analysis.update_file(
+            file,
+            source.replace("Callable[[], int]", "Callable[[], str]"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:#?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
+    fn attribute_constructor_values_preserve_partial_inventory() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for missing in [None, Some("Attribute"), Some("Target")] {
+            let mut builtins = builtins.clone();
+            builtins
+                .r#type
+                .retain(|class| Some(class.name.as_str()) != missing);
+            let callable = builtins
+                .r#type
+                .iter_mut()
+                .find(|class| class.name == "attr")
+                .unwrap()
+                .field
+                .iter_mut()
+                .find(|field| field.name == "label")
+                .unwrap()
+                .callable
+                .as_mut()
+                .unwrap();
+            callable.param.clear();
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("non-static-type".into(), "error".into())].into(),
+                )
+                .unwrap(),
+            );
+            let file = analysis
+                .open_document(
+                    Path::new("/main.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    "print(attr.label)\n".into(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            if missing.is_none() {
+                assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+            } else {
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{missing:?}: {diagnostics:#?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "non-static-type", "{missing:?}");
+            }
+        }
+    }
 
     #[test]
     fn context_attribute_views_preserve_native_domains() {
