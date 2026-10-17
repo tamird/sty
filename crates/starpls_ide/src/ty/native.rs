@@ -1126,6 +1126,34 @@ fn write_type_overloads(
     Ok(())
 }
 
+fn select_plain_operands<'a>(
+    kind: &str,
+    operand: &'a str,
+) -> impl Iterator<Item = (&'a str, &'a str)> {
+    let (exact, plain, fragment) = match kind {
+        // Bazel requires the same Java implementation class. The general dict
+        // type also covers implementations such as ctx.var's tracked dictionary.
+        // Unknown preserves content inference without proving that requirement.
+        "dict" => (
+            Some("_starpls_allocations.dict[_SelectKeyRight, _SelectRight]"),
+            "_starpls_ty_extensions.Intersection[_starpls_builtins.dict[_SelectKeyRight, _SelectRight], _starpls_unknown]",
+            "_starpls_builtins.dict[_SelectKeyRight, _SelectRight]",
+        ),
+        // Integer values also have several native representations.
+        "int" => (
+            None,
+            "_starpls_ty_extensions.Intersection[_starpls_builtins.int, _starpls_unknown]",
+            operand,
+        ),
+        "list" => (None, operand, "_starpls_builtins.list[_SelectRight]"),
+        _ => (None, operand, operand),
+    };
+    exact
+        .map(|exact| (exact, exact))
+        .into_iter()
+        .chain(std::iter::once((plain, fragment)))
+}
+
 // Bazel accepts concatenation only when first-branch runtime classes agree
 // (with one shared category for Java lists). Payload types describe the later
 // attribute conversion independently of that runtime-kind requirement.
@@ -1184,26 +1212,10 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
                 writeln!(output, "        def __{reflected}add__(self: _starpls_types.select[None, _starpls_typing.Literal[\"none\"]], other: _starpls_types.select[None, _starpls_typing.Literal[\"none\"]], /) -> _starpls_types.select[None, _starpls_typing.Literal[\"none\"]]: ...")?;
             }
             for (kind, receiver, operand, result, native_operation) in domains.clone() {
-                let plain_operand = match kind {
-                    // Bazel 9.2 requires the same Java implementation class. The Starlark
-                    // dict type covers several implementations, including ctx.var's
-                    // tracked dictionary.
-                    // Unknown preserves content inference while refusing proof of this
-                    // unrepresented requirement, including through operator protocols.
-                    "dict" => "_starpls_ty_extensions.Intersection[_starpls_builtins.dict[_SelectKeyRight, _SelectRight], _starpls_unknown]",
-                    // Integer values also have several native representations.
-                    "int" => "_starpls_ty_extensions.Intersection[_starpls_builtins.int, _starpls_unknown]",
-                    _ => operand,
-                };
                 let required_kind = format!("_starpls_typing.Literal[\"{kind}\"]");
                 if operation == native_operation {
                     // Project the receiver's None contribution independently of merged elements.
-                    let exact_operand = (kind == "dict")
-                        .then_some("_starpls_allocations.dict[_SelectKeyRight, _SelectRight]");
-                    for plain_operand in exact_operand
-                        .into_iter()
-                        .chain(std::iter::once(plain_operand))
-                    {
+                    for (plain_operand, _fragment) in select_plain_operands(kind, operand) {
                         writeln!(output, "        @_starpls_typing.overload")?;
                         writeln!(output, "        @_starpls_typing.type_check_only")?;
                         writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[{receiver} | None, {required_kind}], other: {plain_operand}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue, None], _SelectKind]: ...")?;
@@ -1230,7 +1242,7 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
             // Concatenation stores the pieces without converting their payloads.
             // Later branches may have different types from the first branch;
             // attribute conversion (or a macro) checks those values separately.
-            for (kind, _receiver, _operand, _result, native_operation) in domains
+            for (kind, _receiver, operand, _result, native_operation) in domains
                 .clone()
                 .chain(std::iter::once(("none", "None", "None", "None", "add")))
             {
@@ -1238,6 +1250,11 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
                     continue;
                 }
                 let required_kind = format!("_starpls_typing.Literal[\"{kind}\"]");
+                for (plain_operand, fragment) in select_plain_operands(kind, operand) {
+                    writeln!(output, "        @_starpls_typing.overload")?;
+                    writeln!(output, "        @_starpls_typing.type_check_only")?;
+                    writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {plain_operand}, /) -> _starpls_types.select[_SelectValue | {fragment}, {required_kind}]: ...")?;
+                }
                 let selected = format!("_starpls_types.select[_SelectPeerValue, {required_kind}]");
                 let selected = if kind == "int" {
                     format!("_starpls_ty_extensions.Intersection[{selected}, _starpls_unknown]")
@@ -1247,11 +1264,6 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
                 writeln!(output, "        @_starpls_typing.overload")?;
                 writeln!(output, "        @_starpls_typing.type_check_only")?;
                 writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {selected}, /) -> _starpls_types.select[_SelectValue | _SelectPeerValue, {required_kind}]: ...")?;
-            }
-            if operation == "add" {
-                writeln!(output, "        @_starpls_typing.overload")?;
-                writeln!(output, "        @_starpls_typing.type_check_only")?;
-                writeln!(output, "        def __{reflected}add__(self: _starpls_types.select[_SelectValue, _starpls_typing.Literal[\"none\"]], other: None, /) -> _starpls_types.select[_SelectValue | None, _starpls_typing.Literal[\"none\"]]: ...")?;
             }
         }
     }

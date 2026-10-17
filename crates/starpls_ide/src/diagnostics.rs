@@ -116,58 +116,86 @@ mod tests {
 
     #[test]
     fn selector_composition_preserves_heterogeneous_payloads() {
-        for (kind, payload, operation) in [
-            ("none", "list[str] | dict[str, str] | None", "+"),
-            ("list", "Sequence[str] | dict[str, str]", "+"),
-            ("dict", "list[str] | dict[str, str]", "|"),
-            ("str", "str | list[str]", "+"),
-            ("bool", "bool | list[str]", "+"),
+        for (kind, payload, plain, operation) in [
+            ("none", "list[str] | dict[str, str] | None", "None", "+"),
+            (
+                "list",
+                "Sequence[str] | dict[str, str]",
+                "Sequence[str]",
+                "+",
+            ),
+            (
+                "dict",
+                "list[str] | dict[str, str]",
+                "ExactDict[str, str]",
+                "|",
+            ),
+            ("str", "str | list[str]", "str", "+"),
+            ("bool", "bool | list[str]", "bool", "+"),
+            ("label", "Label | list[str]", "Label", "+"),
+            (
+                "dict",
+                "list[str] | ExactDict[str, str]",
+                "ExactDict[str, str]",
+                "|",
+            ),
         ] {
             let selected = format!("select[{payload}, Literal['{kind}']]");
-            let source = format!(
-                "def combine(left: {selected}, right: {selected}) -> {selected}:\n    return left {operation} right\n"
-            );
-            let (mut analysis, fixture) = native_analysis(&source);
-            analysis.set_rules(
-                crate::DiagnosticRules::from_settings(
-                    &[("non-static-type".into(), "error".into())].into(),
-                )
-                .unwrap(),
-            );
-            let file = fixture.main_file();
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert!(diagnostics.is_empty(), "{kind}: {diagnostics:?}");
+            for (left, right) in [
+                (selected.as_str(), selected.as_str()),
+                (selected.as_str(), plain),
+                (plain, selected.as_str()),
+            ] {
+                let source = format!(
+                    "def combine(left: {left}, right: {right}) -> {selected}:\n    return left {operation} right\n"
+                );
+                let (mut analysis, fixture) = native_analysis(&source);
+                analysis.set_rules(
+                    crate::DiagnosticRules::from_settings(
+                        &[("non-static-type".into(), "error".into())].into(),
+                    )
+                    .unwrap(),
+                );
+                let file = fixture.main_file();
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert!(diagnostics.is_empty(), "{source}: {diagnostics:?}");
 
-            // Composition must retain every payload, not just the first branch's kind.
-            analysis.update_file(
-                file,
-                source.replace(&format!("-> {selected}"), "-> select[list[str]]"),
-            );
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert_eq!(diagnostics.len(), 1, "{kind}: {diagnostics:?}");
-            assert!(
-                diagnostics
-                    .iter()
-                    .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
-                "{kind}: {diagnostics:?}"
-            );
+                // Composition must retain every payload, not just the first branch's kind.
+                analysis.update_file(
+                    file,
+                    source.replace(&format!("-> {selected}"), "-> select[list[str]]"),
+                );
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert_eq!(diagnostics.len(), 1, "{source}: {diagnostics:?}");
+                assert!(
+                    diagnostics
+                        .iter()
+                        .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                    "{source}: {diagnostics:?}"
+                );
+            }
         }
 
         // Attribute conversion checks every fragment. Both branches can supply
         // strings, but a string_dict attribute rejects the list branch.
         let source = r#"
 mixed = select({"//conditions:default": None, "//:dict": {"key": "value"}}) + select({"//conditions:default": None, "//:list": ["value"]})
+plain_mixed = select({"//conditions:default": ["value"], "//:dict": {"key": "value"}}) + ["plain"]
 example = rule(implementation=lambda ctx: [], attrs={"srcs": attr.string_list(), "values": attr.string_dict()})
 example(name="ok", srcs=mixed)
 example(name="bad", values=mixed)
+example(name="plain_ok", srcs=plain_mixed)
+example(name="plain_bad", values=plain_mixed)
 "#;
         let (analysis, fixture) = native_analysis(source);
         let diagnostics = analysis
             .snapshot()
             .diagnostics(fixture.main_file())
             .unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"));
     }
 
     #[test]

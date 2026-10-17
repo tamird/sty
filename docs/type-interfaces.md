@@ -426,13 +426,13 @@ whether the receiving attribute supports the combined fragments.
 
 Inferred types display this information as a second parameter, such as
 `select[dict[str, int] | None, Literal["none"]]`. List, tuple, and range branches
-share the `"list"` kind. Combining two selectors preserves their kind and
-every operand's payload contribution, including `None`. Homogeneous list and
-dictionary payloads combine their element types. A combination can contain
-both list and dictionary branches: Bazel stores these fragments and converts
-each one when an attribute consumes it. For example, a string-list attribute accepts
-both lists of strings and dictionaries with string keys; a string-dictionary
-attribute rejects the list branches.
+share the `"list"` kind. Combining a selector with another selector or a compatible
+plain value preserves its kind and every operand's payload contribution, including
+`None`. Homogeneous list and dictionary payloads combine their element types.
+A combination can contain both list and dictionary branches: Bazel stores these
+fragments and converts each one when an attribute consumes it. For example, a
+string-list attribute accepts both lists of strings and dictionaries with string
+keys; a string-dictionary attribute rejects the list branches.
 
 `select[T]` defaults the kind to `object`, accepting every runtime kind while
 preserving the branch-value contract. An operation requiring a particular kind
