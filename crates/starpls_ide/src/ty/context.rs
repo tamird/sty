@@ -1653,6 +1653,39 @@ binary = rule(implementation=implementation, attrs={
     }
 
     #[test]
+    fn shared_rule_contexts_narrow_through_saved_getattr() {
+        let source = r#"
+def implementation(ctx):
+    runtime_version = getattr(ctx.attr, "runtime_jre_version", None)
+    if runtime_version != None:
+        pass
+    else:
+        runtime_version = ctx.attr.jre_version
+    version: str = runtime_version or "default"
+    print(version)
+    return []
+runtime = rule(implementation=implementation, attrs={
+    "runtime_jre_version": attr.string(),
+})
+toolchain = rule(implementation=implementation, attrs={
+    "jre_version": attr.string(),
+})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            file,
+            source.replace("if runtime_version != None:", "if runtime_version == None:"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unresolved-attribute");
+    }
+
+    #[test]
     fn scalar_attribute_values_include_permitted_defaults() {
         let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
         enable_context(&mut analysis);
