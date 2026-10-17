@@ -215,6 +215,54 @@ nullable: select[Label | None, Literal["label"]] = select({"//conditions:default
     }
 
     #[test]
+    fn selector_reflection_preserves_augmented_rebinding() {
+        let source = r#"
+def append(values: list[str], more: select[list[int], Literal["list"]]) -> tuple[list[str], select[list[str | int], Literal["list"]]]:
+    result = values
+    result += more
+    return values, result
+
+def merge(values: ExactDict[str, str], more: select[dict[str, int], Literal["dict"]]) -> tuple[dict[str, str], select[dict[str, str | int], Literal["dict"]]]:
+    result = values
+    result |= more
+    return values, result
+
+def add_union(left: list[str] | select[list[str], Literal["list"]], right: list[str] | select[list[str], Literal["list"]]) -> list[str] | select[list[str], Literal["list"]]:
+    return left + right
+
+def add_nullable(value: list[str], more: select[list[int] | None, Literal["list"]]) -> select[list[str | int] | None, Literal["list"]]:
+    return value + more
+
+def reflected(values: list[str]) -> int:
+    return 42
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for statement in [
+            "['a'] + select({'//conditions:default': 'text'})",
+            "{'a': 1} | select({'//conditions:default': ['text']})",
+            "values = ['a']\nvalues += select({'//conditions:default': 'text'})",
+            "values = {'a': 1}\nvalues |= select({'//conditions:default': ['text']})",
+            "['a'] + struct(__radd__=reflected)",
+            "values = ['a']\nvalues += struct(__radd__=reflected)",
+        ] {
+            analysis.update_file(file, format!("{source}\n{statement}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{statement}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
+        }
+    }
+
+    #[test]
     fn selector_construction_preserves_possible_runtime_kinds() {
         let selected =
             "select[list[str] | None, Literal['list']] | select[list[str] | None, Literal['none']]";
