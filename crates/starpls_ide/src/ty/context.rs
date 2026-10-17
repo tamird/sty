@@ -1619,6 +1619,40 @@ example = rule(implementation=implementation, attrs={'image': attr.label(mandato
     }
 
     #[test]
+    fn shared_rule_contexts_narrow_through_saved_tags() {
+        let source = r#"
+def implementation(ctx):
+    kind = ctx.attr._kind
+    if kind == "library":
+        sources: Sequence[Target] = ctx.attr.sources
+        print(sources)
+    else:
+        version: str = ctx.attr.version
+        print(version)
+    return []
+library = rule(implementation=implementation, attrs={
+    "_kind": attr.string(default="library"),
+    "sources": attr.label_list(),
+})
+binary = rule(implementation=implementation, attrs={
+    "_kind": attr.string(default="binary"),
+    "version": attr.string(),
+})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(file, source.replace("if kind ==", "if kind !="));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute"));
+    }
+
+    #[test]
     fn scalar_attribute_values_include_permitted_defaults() {
         let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
         enable_context(&mut analysis);
