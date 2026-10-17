@@ -2,7 +2,7 @@ load("//runfiles_group:lib.bzl", "runfiles_groups")
 load("//runfiles_group:providers.bzl", "RunfilesGroupInfo")
 
 def collect(context, target):
-    # type: (ctx, Target) -> list[str]
+    # type: (ctx[object, object], Target) -> list[str]
     files = target[DefaultInfo].files
     entry = runfiles_groups.entry(name = target.label, content = files)
     declared = entry  # type: RunfilesGroupInfo

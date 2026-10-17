@@ -22,5 +22,6 @@ def dependency_specs() -> tuple[list[str] | select[list[str], Literal["list"]], 
     compute_select({"//:shared": 0}, {"//cfg:linux": ("//:linux",)})
     merge_structured_dep_specs(((tuple_common, tuple_branches),), set(["//cfg:linux"]), None)
     merge_structured_dep_specs(set(), [], None)
-    merge_structured_dep_specs({}, [], None)
+    empty_specs: dict[tuple[Collection[str], Mapping[str, Collection[str]]], object] = {}
+    merge_structured_dep_specs(empty_specs, [], None)
     return selected, empty, linux

@@ -2,14 +2,28 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "e9ee44de608e9637f4fce45e5fc4e48c36564122",
+    "commit": "18fc0fcb00dc39e492fb5e2e290343d7bca09b42",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
       "examples/dynamic_deps/rules/runfiles_dir.bzl",
       "with_cfg/private/args.bzli",
       "with_cfg/private/frontend.bzli",
-      "examples/dynamic_deps/rules/runfiles_dir.bzli"
+      "examples/dynamic_deps/rules/runfiles_dir.bzli",
+      "with_cfg/private/rewrite.bzl",
+      "with_cfg/private/rewrite.bzli",
+      "with_cfg/private/providers.bzl",
+      "with_cfg/private/providers.bzli",
+      "with_cfg/private/original_settings_rule.bzl",
+      "with_cfg/private/original_settings_rule.bzli",
+      "with_cfg/private/utils.bzl",
+      "with_cfg/private/utils.bzli",
+      "with_cfg/private/transitioning_alias.bzl",
+      "with_cfg/private/transitioning_alias.bzli",
+      "with_cfg/private/setting.bzl",
+      "with_cfg/private/setting.bzli",
+      "with_cfg/private/select.bzl",
+      "with_cfg/private/select.bzli"
     ],
     "cases": [
       {
@@ -34,7 +48,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-argument-type",
+            "id": "no-matching-overload",
             "path": "with_cfg/private/__sty_corpus__.bzl",
             "line": 7
           }
@@ -54,7 +68,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 109
+            "line": 113
           }
         ]
       },
@@ -72,7 +86,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 56
+            "line": 58
           }
         ]
       },
@@ -87,7 +101,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-argument-type",
+            "id": "no-matching-overload",
             "path": "with_cfg/private/__sty_callback_probe__.bzl",
             "line": 6
           }
@@ -110,6 +124,692 @@
             "line": 53
           }
         ]
+      },
+      {
+        "name": "bad-provider-fields",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_provider_probe__.bzl",
+            "fixture": "probes/with-cfg-providers-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_provider_probe__.bzl",
+            "line": 3
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_provider_probe__.bzl",
+            "line": 4
+          }
+        ]
+      },
+      {
+        "name": "bad-provider-field-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "ArgsInfo(template_variable_info = platform_common.TemplateVariableInfo(template_variables))",
+            "new": "ArgsInfo(template_variable_info = \"wrong\")"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 115
+          }
+        ]
+      },
+      {
+        "name": "frontend-key-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_frontend_key__.bzl",
+            "fixture": "probes/with-cfg-frontend-key.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "frontend-key-bad",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_frontend_key__.bzl",
+            "fixture": "probes/with-cfg-frontend-key-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_frontend_key__.bzl",
+            "line": 8
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_frontend_key__.bzl",
+            "line": 13
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_frontend_key__.bzl",
+            "line": 15
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_frontend_key__.bzl",
+            "line": 16
+          }
+        ]
+      },
+      {
+        "name": "frontend-key-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "old": "executable = files_to_run.executable,",
+            "new": "executable = \"wrong\","
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "line": 71
+          }
+        ]
+      },
+      {
+        "name": "helper-bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_helper__.bzl",
+            "fixture": "probes/with-cfg-helper-bad-call.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "no-matching-overload",
+            "path": "with_cfg/private/__sty_helper__.bzl",
+            "line": 3
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "with_cfg/private/__sty_helper__.bzl",
+            "line": 4
+          }
+        ]
+      },
+      {
+        "name": "original-setting-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/original_settings_rule.bzl",
+            "old": "    return [\n        OriginalSettingsInfo(\n            json = ctx.build_setting_value,\n        ),\n    ]",
+            "new": "    return [\"bad\"]"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/original_settings_rule.bzl",
+            "line": 6
+          }
+        ]
+      },
+      {
+        "name": "rewrite-scalar-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_rewrite__.bzl",
+            "fixture": "probes/with-cfg-rewrite-scalar.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "rewrite-scalar-bad",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_rewrite__.bzl",
+            "fixture": "probes/with-cfg-rewrite-scalar-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "with_cfg/private/__sty_rewrite__.bzl",
+            "line": 9
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_rewrite__.bzl",
+            "line": 10
+          }
+        ]
+      },
+      {
+        "name": "rewrite-scalar-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "    return \"\".join(result)",
+            "new": "    return 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 98
+          }
+        ]
+      },
+      {
+        "name": "predicate-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/utils.bzl",
+            "old": "return type(value) == _BOOL_TYPE",
+            "new": "return str(type(value) == _BOOL_TYPE)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/utils.bzl",
+            "line": 4
+          }
+        ]
+      },
+      {
+        "name": "collected-label-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "labels[label] = None",
+            "new": "labels[42] = None"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "with_cfg/private/args.bzl",
+            "line": 102
+          }
+        ]
+      },
+      {
+        "name": "frontend-exports-bad-call",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/frontend.bzl",
+            "old": "        **kwargs\n    )\n",
+            "new": "        **kwargs\n    )\n\ndef __sty_bad_exports() -> None:\n    _frontend_default(name = \"bad\", exports = 42)\n\nprint(__sty_bad_exports)\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 115
+          }
+        ]
+      },
+      {
+        "name": "toolchain-guard-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "if type(toolchain) == \"Target\" and platform_common.TemplateVariableInfo in toolchain:",
+            "new": "if platform_common.TemplateVariableInfo in toolchain:"
+          }
+        ],
+        "expected": [
+          {
+            "id": "unsupported-operator",
+            "path": "with_cfg/private/args.bzl",
+            "line": 93
+          },
+          {
+            "id": "not-subscriptable",
+            "path": "with_cfg/private/args.bzl",
+            "line": 95
+          }
+        ]
+      },
+      {
+        "name": "configurable-args-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "fixture": "probes/with-cfg-configurable-args.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "configurable-args-bad",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "fixture": "probes/with-cfg-configurable-args-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 10
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 11
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 14
+          }
+        ]
+      },
+      {
+        "name": "rewritten-args-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "return rewrite_locations_in_attr(args, rewrite_label), filegroup_labels",
+            "new": "return rewrite_locations_in_attr(args, rewrite_label), 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 59
+          }
+        ]
+      },
+      {
+        "name": "rewrite-list-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "return [rewrite_locations_in_single_value(v, label_rewriter) for v in value]",
+            "new": "return 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 34
+          }
+        ]
+      },
+      {
+        "name": "rewrite-dict-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "return {\n            rewrite_locations_in_single_value(k, label_rewriter): _rewrite_locations_in_list_or_single_value(v, label_rewriter)\n            for k, v in value.items()\n        }",
+            "new": "return 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 24
+          }
+        ]
+      },
+      {
+        "name": "frontend-modes-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_modes__.bzl",
+            "fixture": "probes/with-cfg-frontend-modes.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "frontend-modes-bad-calls",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_modes__.bzl",
+            "fixture": "probes/with-cfg-frontend-modes-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "unknown-argument",
+            "path": "with_cfg/private/__sty_modes__.bzl",
+            "line": 4
+          },
+          {
+            "id": "unknown-argument",
+            "path": "with_cfg/private/__sty_modes__.bzl",
+            "line": 5
+          },
+          {
+            "id": "unknown-argument",
+            "path": "with_cfg/private/__sty_modes__.bzl",
+            "line": 6
+          },
+          {
+            "id": "unknown-argument",
+            "path": "with_cfg/private/__sty_modes__.bzl",
+            "line": 7
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_modes__.bzl",
+            "line": 8
+          },
+          {
+            "id": "missing-argument",
+            "path": "with_cfg/private/__sty_modes__.bzl",
+            "line": 9
+          }
+        ]
+      },
+      {
+        "name": "frontend-executable-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/frontend.bzl",
+            "old": "_frontend_executable = rule(_frontend_impl, attrs = _frontend_attrs, executable = True)",
+            "new": "_frontend_executable = rule(_frontend_impl, attrs = _frontend_attrs, test = True)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-function-interface",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 104
+          }
+        ]
+      },
+      {
+        "name": "frontend-test-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/frontend.bzl",
+            "old": "_frontend_test = rule(_frontend_impl, attrs = _frontend_attrs | _frontend_test_attrs, test = True)",
+            "new": "_frontend_test = rule(_frontend_impl, attrs = _frontend_attrs | _frontend_test_attrs, executable = True)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-function-interface",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 105
+          }
+        ]
+      },
+      {
+        "name": "frontend-provider-key-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "old": "providers = providers,",
+            "new": "providers = [42],"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "line": 72
+          }
+        ]
+      },
+      {
+        "name": "setting-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_setting_probe__.bzl",
+            "fixture": "probes/with-cfg-setting.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "setting-bad-caller",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_setting_probe__.bzl",
+            "fixture": "probes/with-cfg-setting-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_setting_probe__.bzl",
+            "line": 3
+          }
+        ]
+      },
+      {
+        "name": "setting-bad-name-result",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/setting.bzl",
+            "old": "return \"with_cfg_\" + setting",
+            "new": "return 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/setting.bzl",
+            "line": 49
+          }
+        ]
+      },
+      {
+        "name": "setting-bad-constructor-name",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/setting.bzl",
+            "old": "return \"string_list\"",
+            "new": "return \"does_not_exist\""
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/setting.bzl",
+            "line": 69
+          }
+        ]
+      },
+      {
+        "name": "select-helper-bad-return",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "return (False, func(element))",
+            "new": "return (False, 42)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 23
+          }
+        ]
+      },
+      {
+        "name": "select-helper-bad-selected-return",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "k: func(v)",
+            "new": "k: str(func(v))"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 18
+          }
+        ]
+      },
+      {
+        "name": "select-helper-bad-argument",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "return (False, func(element))",
+            "new": "return (False, func(42))"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 23
+          }
+        ]
+      },
+      {
+        "name": "select-parser-bad-list-return",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "return list, pos + 1",
+            "new": "return 42, pos + 1"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 154
+          }
+        ]
+      },
+      {
+        "name": "select-parser-bad-tag",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "items.append((False, element))",
+            "new": "items.append((True, element))"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 61
+          }
+        ]
+      },
+      {
+        "name": "split-transition-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_split_probe__.bzl",
+            "fixture": "probes/with-cfg-split-transition.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "split-transition-bad-kind",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_split_probe__.bzl",
+            "fixture": "probes/with-cfg-split-transition-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_split_probe__.bzl",
+            "line": 8
+          }
+        ]
+      },
+      {
+        "name": "split-transition-bad-callback",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "old": "    return lambda ctx: _transitioning_alias_base_impl(ctx, providers = providers)",
+            "new": "    return lambda ctx: str(_transitioning_alias_base_impl(ctx, providers = providers))"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "line": 41
+          }
+        ]
+      },
+      {
+        "name": "args-expansion-bad-targets",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "ctx.expand_location(\"$(execpaths {})\".format(label), targets.keys())",
+            "new": "ctx.expand_location(\"$(execpaths {})\".format(label), \"bad\")"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 110
+          }
+        ]
       }
     ],
     "bazel_version": "9.2.0"
@@ -117,7 +817,7 @@
   {
     "directory": "bazel_features",
     "origin": "https://github.com/bazel-contrib/bazel_features.git",
-    "commit": "92d39e30e86e64de912531d95fd199fca0155822",
+    "commit": "cc2a1e97b853244098efe2d4874e160c80323577",
     "sources": [
       "private/parse.bzl",
       "private/util.bzl",
@@ -178,10 +878,16 @@
   {
     "directory": "bazel-skylib",
     "origin": "https://github.com/bazelbuild/bazel-skylib.git",
-    "commit": "05937dd07fbab1ca885c2be91f1e6367694b1201",
+    "commit": "bb72a6b3bc17dc2b642fa005c344c1f157b670f4",
     "sources": [
       "lib/paths.bzl",
-      "lib/paths.bzli"
+      "lib/paths.bzli",
+      "rules/directory/providers.bzl",
+      "rules/directory/providers.bzli",
+      "rules/directory/private/paths.bzl",
+      "rules/directory/private/paths.bzli",
+      "rules/directory/private/glob.bzl",
+      "rules/directory/private/glob.bzli"
     ],
     "cases": [
       {
@@ -246,6 +952,100 @@
             "line": 36
           }
         ]
+      },
+      {
+        "name": "directory-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "fixture": "probes/skylib-directory.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "directory-bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "fixture": "probes/skylib-directory-bad-call.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "line": 4
+          },
+          {
+            "id": "missing-argument",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "line": 5
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "line": 6
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "line": 7
+          },
+          {
+            "id": "unknown-argument",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "line": 8
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "line": 9
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "rules/directory/__sty_directory__.bzl",
+            "line": 10
+          }
+        ]
+      },
+      {
+        "name": "directory-bad-callback-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "rules/directory/providers.bzl",
+            "old": "get_file = lambda path: get_file(self, path),",
+            "new": "get_file = lambda path: get_path(self, path),"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "rules/directory/providers.bzl",
+            "line": 25
+          }
+        ]
+      },
+      {
+        "name": "directory-bad-path-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "rules/directory/private/paths.bzl",
+            "old": "    if type(entry) == \"File\":",
+            "new": "    if False:"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "rules/directory/private/paths.bzl",
+            "line": 58
+          }
+        ]
       }
     ],
     "bazel_version": "8.8.1"
@@ -253,10 +1053,12 @@
   {
     "directory": "apple_support",
     "origin": "https://github.com/bazelbuild/apple_support.git",
-    "commit": "87588aff9d108e4ef0d1b6e6b76365d7daa0d094",
+    "commit": "fa498b69d092959626704d2ba8a68888bdfa09e9",
     "sources": [
       "lib/apple_support.bzl",
-      "lib/apple_support.bzli"
+      "lib/apple_support.bzli",
+      "lib/private/providers.bzl",
+      "lib/private/providers.bzli"
     ],
     "cases": [
       {
@@ -283,7 +1085,7 @@
           {
             "id": "invalid-argument-type",
             "path": "lib/sty_type_probe.bzl",
-            "line": 5
+            "line": 4
           }
         ]
       },
@@ -335,7 +1137,7 @@
           {
             "id": "invalid-return-type",
             "path": "lib/apple_support.bzl",
-            "line": 200
+            "line": 199
           }
         ]
       },
@@ -353,7 +1155,106 @@
           {
             "id": "invalid-return-type",
             "path": "lib/apple_support.bzl",
-            "line": 620
+            "line": 617
+          }
+        ]
+      },
+      {
+        "name": "actions-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/apple-actions-positive.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "actions-bad-call",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/apple-actions-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "missing-argument",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 4
+          },
+          {
+            "id": "missing-argument",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 5
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 6
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 7
+          },
+          {
+            "id": "missing-argument",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 8
+          },
+          {
+            "id": "unknown-argument",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 9
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 19
+          }
+        ]
+      },
+      {
+        "name": "actions-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "lib/apple_support.bzl",
+            "old": "    kwargs[\"env\"] = merged_env",
+            "new": "    kwargs[\"env\"] = {\"BROKEN\": 42}"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "lib/apple_support.bzl",
+            "line": 252
+          }
+        ]
+      },
+      {
+        "name": "bad-attribute-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "lib/apple_support.bzl",
+            "old": "\"_ios_constraint\": attr.label(\n            default = Label(\"@platforms//os:ios\"),\n        ),",
+            "new": "\"_ios_constraint\": attr.bool(\n            default = False,\n        ),"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "lib/apple_support.bzl",
+            "line": 290
+          },
+          {
+            "id": "invalid-return-type",
+            "path": "lib/apple_support.bzl",
+            "line": 289
           }
         ]
       }
@@ -363,7 +1264,7 @@
   {
     "directory": "hermetic-llvm",
     "origin": "https://github.com/hermeticbuild/hermetic-llvm.git",
-    "commit": "57c4c17c1d420f3202327b03015c2a36160ac969",
+    "commit": "4e8ebd60a0584edeaf8485873506042df18a4145",
     "sources": [
       "defs.bzl",
       "directory.bzl",
@@ -484,6 +1385,34 @@
             "line": 40
           }
         ]
+      },
+      {
+        "name": "forwarded-keywords",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_forwarded_keywords.bzl",
+            "fixture": "probes/llvm-forwarded-keywords.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-forwarded-keywords",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_forwarded_keywords.bzl",
+            "fixture": "probes/llvm-bad-forwarded-keywords.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_forwarded_keywords.bzl",
+            "line": 16
+          }
+        ]
       }
     ],
     "bazel_version": "9.3.0rc2"
@@ -491,7 +1420,7 @@
   {
     "directory": "rules_cc",
     "origin": "git@github.com:tamird/rules_cc.git",
-    "commit": "60e8a51d7383fc63cc327f69618863b2db389504",
+    "commit": "1d4be625520f983131e73318255d4c09c571371b",
     "bazel_version": "9.3.0",
     "sources": [
       "cc/cc_toolchain_config_lib.bzl",
@@ -650,7 +1579,7 @@
   {
     "directory": "rules_rs",
     "origin": "git@github.com:tamird/rules_rs.git",
-    "commit": "d947c67bcf3e48f325ee69fbf5030cda17d1271e",
+    "commit": "de8e6696cf97f3cbbff41ef1dceef3e2c97eb488",
     "bazel_version": "9.0.0",
     "sources": [
       "rs/private/select_utils.bzl",
@@ -714,6 +1643,11 @@
             "id": "invalid-argument-type",
             "path": "rs/private/__sty_corpus__.bzl",
             "line": 9
+          },
+          {
+            "id": "non-static-type",
+            "path": "rs/private/__sty_corpus__.bzl",
+            "line": 8
           }
         ]
       },
@@ -795,6 +1729,26 @@
             "id": "invalid-return-type",
             "path": "rs/private/all_crate_deps.bzl",
             "line": 7
+          },
+          {
+            "id": "non-static-type",
+            "path": "rs/private/all_crate_deps.bzl",
+            "line": 7
+          },
+          {
+            "id": "non-static-type",
+            "path": "rs/private/all_crate_deps.bzl",
+            "line": 9
+          },
+          {
+            "id": "non-static-type",
+            "path": "rs/private/all_crate_deps.bzl",
+            "line": 9
+          },
+          {
+            "id": "non-static-type",
+            "path": "rs/private/all_crate_deps.bzl",
+            "line": 9
           }
         ]
       }
@@ -803,7 +1757,7 @@
   {
     "directory": "rules_runfiles_group",
     "origin": "https://github.com/bazel-contrib/rules_runfiles_group.git",
-    "commit": "c6b56a6e2852800938b919acbbbb876b264e30f2",
+    "commit": "b4b7fec819ac02cc9542cac7c398c09cdc1dd929",
     "bazel_version": "9.3.0",
     "sources": [
       "runfiles_group/private/lib/content.bzl",
@@ -1063,7 +2017,35 @@
           {
             "id": "invalid-return-type",
             "path": "runfiles_group/private/lib/resolve.bzl",
-            "line": 115
+            "line": 118
+          }
+        ]
+      },
+      {
+        "name": "custom-context",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "runfiles_group/__sty_context_probe__.bzl",
+            "fixture": "probes/runfiles-custom-context.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-context",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "runfiles_group/__sty_context_probe__.bzl",
+            "fixture": "probes/runfiles-bad-context.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "runfiles_group/__sty_context_probe__.bzl",
+            "line": 15
           }
         ]
       }

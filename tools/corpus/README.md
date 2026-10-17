@@ -42,13 +42,28 @@ Each case selects every listed implementation and interface file. sty reads thei
 associations from the source project's `sty.toml`. Positive callers must pass with
 complete coverage and zero diagnostics. Negative cases overlay an incorrect
 caller or replace exactly one source fragment, then require the precise
-diagnostic ID, source path, and line. Overlays and reports are written to the output directory. Repository
-contents are read directly from the pinned checkout.
+diagnostic ID, source path, and line. Overlays and reports are written to the
+output directory. Repository contents are read directly from the pinned checkout.
 
 The cases cover container element types, fixed tuples, optional results, callable
 inputs, configurable rule attributes, and provider return lists. The `with_cfg`
-frontend's `list[object]` contract checks its outer container; the other provider
-lists constrain their elements. The manifest lists the checked API slices.
+frontend and transition-alias callbacks use `list[object]` contracts that check
+the outer container. Other provider lists constrain their elements. The manifest
+lists the checked API slices.
+
+The `with_cfg` cases follow attribute values through constructor helpers,
+split-transition registrations, argument rewriting, and frontend modes. Parser
+cases check tagged selector pieces and the generic per-piece callback helper.
+`map_attr` and `compose_select_value` still lack complete contracts for selector
+decoding and composition: parsing a selector's representation loses its original
+element type, and concatenation can widen the callback's result type. Source
+overlays change provider fields and callback results; callers exercise label types
+and configuration modes.
+
+The LLVM wrapper cases check its constraint keyword while forwarding other
+values as opaque data. The wrapper injects `name`, `data`, and `tags` into an
+arbitrary rule's keyword arguments. Its callback contract remains gradual because
+the remaining keyword shape and the injected values' compatibility are unproved.
 
 The C++ toolchain configuration contracts cover all thirteen constructor helpers
 and their nominal providers, including recursive flag groups. The Rust dependency
@@ -56,8 +71,9 @@ contracts cover iterable dependency specifications, optional dictionary
 fields, finite key unions, shared dependencies, and platform selectors. Runfiles
 group contracts cover entry construction, content conversion, provider lookup, name
 rendering, and generic packagers. The packager cases preserve one handle type
-through materialization, partial transformations, and merging; incompatible
-callbacks and implementations that change that type are rejected.
+through materialization, partial transformations, and merging. A separate context
+parameter preserves attributes required by those callbacks. Incompatible handles,
+context schemas, and implementations that change the handle type are rejected.
 
 The runner uses sty's coverage report and rendered primary diagnostics. A change
 to either format fails visibly and requires updating this harness. Unit tests for
