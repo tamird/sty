@@ -1367,6 +1367,12 @@ fn write_function(
             (CallableKind::Function, "DefaultInfo", "runfiles" | "data_runfiles" | "default_runfiles") => classes.contains("runfiles").then_some("_starpls_types.runfiles | None"),
             (CallableKind::Function, "RunEnvironmentInfo", "environment") => Some("_starpls_typing.Mapping[_StringKey, _StringValue]"),
             (CallableKind::Function, "RunEnvironmentInfo", "inherited_environment") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
+            (CallableKind::Method("coverage_common"), "instrumented_files_info", "ctx") => {
+                // Coverage consumes the native context, independently of its
+                // build-setting value and generated attribute schema.
+                (classes.contains("ctx") && env::normalize_doc(r#type, true) == "ctx")
+                    .then_some("_starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object]")
+            }
             (CallableKind::Method("coverage_common"), "instrumented_files_info", "source_attributes" | "dependency_attributes") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
             (CallableKind::Function, "exec_group", "toolchains") => (classes.contains("Label") && classes.contains("toolchain_type")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.toolchain_type]"),
             (CallableKind::Function, "rule" | "aspect", "exec_groups") => classes.contains("exec_group").then_some("_starpls_typing.Mapping[_StringKey, _starpls_types.exec_group] | None"),
@@ -4466,6 +4472,145 @@ def constructed() -> dict[str, str]:
                 usize::from(diagnostic.range().unwrap().start()) >= source.len(),
                 "{invalid}: {diagnostic:?}"
             );
+        }
+    }
+
+    #[test]
+    fn coverage_accepts_generated_contexts_without_erasing_attributes() {
+        use salsa::Setter;
+
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis
+            .db
+            .environment()
+            .set_options(&mut analysis.db)
+            .to(crate::InferenceOptions {
+                infer_ctx_attributes: true,
+                ..Default::default()
+            });
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def implementation(ctx) -> list[InstrumentedFilesInfo]:
+    sources: Sequence[Target] = ctx.attr.srcs
+    coverage = coverage_common.instrumented_files_info(ctx, source_attributes=["srcs"])
+    print(sources)
+    return [coverage]
+first = rule(implementation=implementation, attrs={"srcs": attr.label_list()})
+second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "extra": attr.bool()})
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/coverage.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (before, after, expected) in [
+            (
+                "instrumented_files_info(ctx,",
+                "instrumented_files_info(ctx.attr,",
+                "invalid-argument-type",
+            ),
+            ("ctx.attr.srcs", "ctx.attr.missing", "unresolved-attribute"),
+            (
+                "sources: Sequence[Target]",
+                "sources: Sequence[str]",
+                "invalid-assignment",
+            ),
+        ] {
+            analysis.update_file(file, source.replace(before, after));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == expected),
+                "{after}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(
+            file,
+            "def unknown_attributes(context: ctx) -> object:\n    return context.attr.missing\n"
+                .into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn coverage_context_preserves_supplied_metadata() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for (declared, has_context, accepted, rejected) in [
+            ("str", true, "'precise'", Some("42")),
+            ("ctx", false, "42", None),
+        ] {
+            let mut builtins = builtins.clone();
+            if !has_context {
+                builtins.r#type.retain(|class| class.name != "ctx");
+            }
+            let parameter = builtins
+                .r#type
+                .iter_mut()
+                .find(|class| class.name == "coverage_common")
+                .unwrap()
+                .field
+                .iter_mut()
+                .find(|field| field.name == "instrumented_files_info")
+                .unwrap()
+                .callable
+                .as_mut()
+                .unwrap()
+                .param
+                .iter_mut()
+                .find(|parameter| parameter.name == "ctx")
+                .unwrap();
+            parameter.r#type = declared.into();
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let source = |context| format!("coverage_common.instrumented_files_info({context})\n");
+            let file = analysis
+                .open_document(
+                    Path::new("/coverage.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source(accepted),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{declared}: {diagnostics:?}");
+            if let Some(rejected) = rejected {
+                analysis.update_file(file, source(rejected));
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            }
         }
     }
 
