@@ -516,13 +516,28 @@ impl ty_python_semantic::Db for Database {
         Some(ty_python_semantic::provided::ProvidedReturnType { ty, source })
     }
 
+    fn provided_contextual_parameters(&self, definition: Definition<'_>) -> Box<[Name]> {
+        context::contextual_parameters(self, definition)
+    }
+
+    fn provided_call_argument_context<'db>(
+        &'db self,
+        call: &ty_python_semantic::types::CheckedCall<'_, 'db>,
+        parameter: &str,
+    ) -> Option<Type<'db>> {
+        context::argument_context(self, call, parameter)
+    }
+
     fn provided_call_result<'db>(
         &'db self,
         call: &ty_python_semantic::types::CheckedCall<'_, 'db>,
     ) -> ty_python_semantic::provided::ProvidedCallResult<'db> {
         ty_python_semantic::provided::ProvidedCallResult {
             return_type: factory::result(self, call),
-            diagnostics: providers::call_diagnostics(self, call),
+            diagnostics: providers::call_diagnostics(self, call)
+                .into_iter()
+                .chain(context::call_diagnostics(self, call))
+                .collect(),
         }
     }
 

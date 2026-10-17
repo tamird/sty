@@ -1285,8 +1285,8 @@ fn write_function(
             // Encoding accepts any object; unsupported values raise rather than return.
             (CallableKind::Method("json"), "encode", "x") => Some("_starpls_builtins.object"),
             // Rule construction reads each dictionary while preserving its key and value types.
-            (CallableKind::Function, "rule", "attrs") => Some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]"),
-            (CallableKind::Function, "aspect", "attrs") => Some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]"),
+            (CallableKind::Function, "rule" | "aspect", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]"),
+            (CallableKind::Function, "repository_rule", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute] | None"),
             (CallableKind::Function, "select", "x") => Some("_starpls_typing.Mapping[_SelectCondition, _SelectValue]"),
             (CallableKind::Function, "depset", "direct") => {
                 Some(if empty_depset {

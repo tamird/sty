@@ -1028,10 +1028,17 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             extra_items: DictionaryExtraItems::Closed,
             first_entry: DictionaryFirstEntry::Empty,
         }),
-        CheckedArgument::Value {
-            ty: _,
-            expression: _,
-        } => call.dictionary_argument(db, "attrs"),
+        CheckedArgument::Value { ty, expression: _ } => {
+            if matches!(kind, RuleKind::Repository) && ty.is_none(db) {
+                Some(DictionaryItems {
+                    items: Box::default(),
+                    extra_items: DictionaryExtraItems::Closed,
+                    first_entry: DictionaryFirstEntry::Empty,
+                })
+            } else {
+                call.dictionary_argument(db, "attrs")
+            }
+        }
         CheckedArgument::Indeterminate => None,
     };
     let own_attributes = own_attributes.unwrap_or(DictionaryItems {
