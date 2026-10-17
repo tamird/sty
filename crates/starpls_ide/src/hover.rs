@@ -782,7 +782,7 @@ example = {factory}(
             (
                 "attrs = {'_tool': attr.label()}\nattrs.update({'_tool': attr.string()})\n",
                 "attrs",
-                "str",
+                "Literal[\"\"]",
             ),
         ] {
             let source = format!(

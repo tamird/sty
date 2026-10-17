@@ -634,7 +634,7 @@ fn context_type<'db>(
             }
             let ty = if let Some(attribute) = descriptor {
                 let finite = if view == View::Attr {
-                    attribute.finite_value_type(db, &environment)
+                    attribute.finite_value_type(db, &environment, name.starts_with('_'))
                 } else {
                     None
                 };
@@ -909,7 +909,7 @@ pub(super) fn analyzed_attribute_type<'db>(
     attribute: &Attribute,
 ) -> Option<Type<'db>> {
     attribute
-        .finite_value_type(db, environment)
+        .finite_value_type(db, environment, false)
         .or_else(|| field_type(db, environment, declarations, View::Attr, attribute))
 }
 
@@ -1591,6 +1591,35 @@ example = rule(implementation=implementation, attrs={'image': attr.label(mandato
     }
 
     #[test]
+    fn private_scalar_attributes_preserve_default_literals() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        for (descriptor, private, public) in [
+            ("attr.string(default='fast')", "Literal[\"fast\"]", "str"),
+            ("attr.string()", "Literal[\"\"]", "str"),
+            ("attr.int(default=42)", "Literal[42]", "int"),
+            ("attr.int()", "Literal[0]", "int"),
+            ("attr.bool(default=True)", "Literal[True]", "bool"),
+            ("attr.bool()", "Literal[False]", "bool"),
+            ("attr.string(default=dynamic())", "str", "str"),
+            (
+                "attr.label(default='//:tool')",
+                "Target[FilesToRunProvider[File | None]] | Target[None]",
+                "Target[FilesToRunProvider[File | None]] | Target[None]",
+            ),
+        ] {
+            let source = format!("def dynamic() -> str: return 'fast'\ndef implementation(ctx):\n    ctx.attr._private\n    ctx.attr.public\nexample = rule(implementation=implementation, attrs={{'_private': {descriptor}, 'public': {descriptor}}})\n");
+            analysis.update_file(file, source.clone());
+            let snapshot = analysis.snapshot();
+            let diagnostics = snapshot.diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{descriptor}: {diagnostics:?}");
+            check_field(&snapshot, file, &source, "ctx.attr._private", private, "");
+            check_field(&snapshot, file, &source, "ctx.attr.public", public, "");
+        }
+    }
+
+    #[test]
     fn scalar_attribute_values_include_permitted_defaults() {
         let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
         enable_context(&mut analysis);
@@ -1770,7 +1799,7 @@ example_test(name="selected", own="value", deps=select({"//conditions:default": 
             ("ctx.executable.tool", "File", "\"tool\""),
             ("ctx.file.single", "File", ""),
             ("ctx.outputs.executable", "File", ""),
-            ("ctx.attr._private", "Literal[\"private\", \"other\"]", ""),
+            ("ctx.attr._private", "Literal[\"private\"]", ""),
         ] {
             check_field(&snapshot, file, source, expression, expected, key);
         }

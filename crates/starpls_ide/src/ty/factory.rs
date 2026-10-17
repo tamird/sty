@@ -64,10 +64,13 @@ enum ScalarValues {
     Int(Box<[i32]>),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
 enum DefaultValue {
     None,
     NonNone,
+    String(Box<str>),
+    Int(i32),
+    Bool(bool),
     Unknown,
 }
 
@@ -175,7 +178,20 @@ impl Attribute {
         &self,
         db: &'db Database,
         environment: &ProgramEnvironment<'db>,
+        private: bool,
     ) -> Option<Type<'db>> {
+        if private {
+            // Private attributes cannot be supplied by the rule caller. A known
+            // scalar default therefore identifies their analyzed value exactly.
+            match &self.default_value {
+                DefaultValue::String(value) => {
+                    return Some(Type::string_literal(db, value.as_ref()))
+                }
+                DefaultValue::Int(value) => return Some(Type::int_literal(i64::from(*value))),
+                DefaultValue::Bool(value) => return Some(Type::bool_literal(*value)),
+                DefaultValue::None | DefaultValue::NonNone | DefaultValue::Unknown => {}
+            }
+        }
         let Self {
             kind: _,
             single_file: _,
@@ -208,7 +224,11 @@ impl Attribute {
     }
 
     pub(super) fn has_non_none_value(&self) -> bool {
-        self.mandatory || self.default_value == DefaultValue::NonNone
+        self.mandatory
+            || !matches!(
+                self.default_value,
+                DefaultValue::None | DefaultValue::Unknown
+            )
     }
 
     fn configurable(&self) -> Option<bool> {
@@ -304,12 +324,13 @@ impl get_size2::GetSize for Attribute {
             configurability: _,
             mandatory: _,
             default: _,
-            default_value: _,
+            default_value,
             values,
             documentation,
         } = self;
         documentation.as_ref().map_or(0, |doc| doc.len())
             + get_size2::GetSize::get_heap_size(values)
+            + get_size2::GetSize::get_heap_size(default_value)
     }
 }
 
@@ -669,10 +690,12 @@ fn attribute<'db>(
     let (default, default_value) = match default {
         CheckedArgument::Omitted => (
             None,
-            if matches!(kind, AttributeKind::Label | AttributeKind::Output) {
-                DefaultValue::None
-            } else {
-                DefaultValue::NonNone
+            match kind {
+                AttributeKind::Label | AttributeKind::Output => DefaultValue::None,
+                AttributeKind::String => DefaultValue::String(Box::from("")),
+                AttributeKind::Int => DefaultValue::Int(0),
+                AttributeKind::Bool => DefaultValue::Bool(false),
+                _ => DefaultValue::NonNone,
             },
         ),
         CheckedArgument::Value { ty, expression } => {
@@ -696,7 +719,21 @@ fn attribute<'db>(
             } else if Type::none(db, &environment).is_assignable_to(db, &environment, ty) {
                 DefaultValue::Unknown
             } else if ty.is_assignable_to(db, &environment, input) {
-                DefaultValue::NonNone
+                match kind {
+                    AttributeKind::String => ty
+                        .string_literal_value(db)
+                        .map_or(DefaultValue::NonNone, |value| {
+                            DefaultValue::String(Box::from(value))
+                        }),
+                    AttributeKind::Int => ty
+                        .as_int_literal()
+                        .and_then(|value| i32::try_from(value).ok())
+                        .map_or(DefaultValue::NonNone, DefaultValue::Int),
+                    AttributeKind::Bool => ty
+                        .as_bool_literal()
+                        .map_or(DefaultValue::NonNone, DefaultValue::Bool),
+                    _ => DefaultValue::NonNone,
+                }
             } else {
                 // Computed and late-bound defaults do not expose their value here.
                 DefaultValue::Unknown
@@ -1423,7 +1460,7 @@ fn override_rule_attribute(
             return;
         }
         parent.default = attribute.default;
-        parent.default_value = attribute.default_value;
+        parent.default_value = attribute.default_value.clone();
     } else {
         // An unknown descriptor may supply a computed default returning None.
         parent.default = None;
