@@ -1019,7 +1019,7 @@ fn declarations(
         body.push_str("    pass\n");
     }
     let mut output = String::from(
-        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_AttributeDefaultParameters = _starpls_typing.ParamSpec(\"_AttributeDefaultParameters\")\n_AttributeMaterializerParameters = _starpls_typing.ParamSpec(\"_AttributeMaterializerParameters\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute[_starpls_builtins.object]\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
+        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n_ExecutionRequirementKey = _starpls_typing.TypeVar(\"_ExecutionRequirementKey\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_AttributeDefaultParameters = _starpls_typing.ParamSpec(\"_AttributeDefaultParameters\")\n_AttributeMaterializerParameters = _starpls_typing.ParamSpec(\"_AttributeMaterializerParameters\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute[_starpls_builtins.object]\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
     );
     let context_attrs = if classes.contains_key("struct") {
         "_starpls_types.struct[_starpls_unknown]"
@@ -1403,6 +1403,24 @@ fn write_function(
             (CallableKind::Function, "aspect", "toolchains_aspects") => classes.contains("propagation_ctx").then_some("_starpls_typing.Sequence[_starpls_builtins.str] | _starpls_typing.Callable[[_starpls_types.propagation_ctx], _starpls_builtins.list[_starpls_types.Label]]"),
             (CallableKind::Function, "aspect", "propagation_predicate") => classes.contains("propagation_ctx").then_some("_starpls_typing.Callable[[_starpls_types.propagation_ctx], _starpls_builtins.bool] | None"),
             (CallableKind::Method("actions"), "run" | "run_shell" | "do_nothing", "inputs") => (classes.contains("File") && classes.contains("depset")).then_some("_starpls_typing.Sequence[_starpls_types.File] | _starpls_types.depset[_starpls_types.File]"),
+            (CallableKind::Method("actions"), "run" | "run_shell", "arguments") => {
+                (classes.contains("Args") && env::normalize_doc(r#type, true) == "sequence")
+                    .then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Args]")
+            }
+            // Spawn actions copy each dictionary independently into string maps.
+            (CallableKind::Method("actions"), "run" | "run_shell", "env") => {
+                (env::normalize_doc(r#type, true) == "dict; or None")
+                    .then_some("_starpls_typing.Mapping[_StringKey, _starpls_builtins.str] | None")
+            }
+            (CallableKind::Method("actions"), "run" | "run_shell", "execution_requirements") => {
+                (env::normalize_doc(r#type, true) == "dict; or None")
+                    .then_some("_starpls_typing.Mapping[_ExecutionRequirementKey, _starpls_builtins.str] | None")
+            }
+            // Kept for compatibility; Bazel ignores the manifest elements.
+            (CallableKind::Method("actions"), "run" | "run_shell", "input_manifests") => {
+                (env::normalize_doc(r#type, true) == "sequence; or None")
+                    .then_some("_starpls_typing.Sequence[_starpls_builtins.object] | None")
+            }
             // Both action constructors inspect each tool, including depset members.
             (CallableKind::Method("actions"), "run" | "run_shell", "tools") => Some("_starpls_typing.Sequence[_starpls_types.File | _starpls_types.FilesToRunProvider | _starpls_types.depset[_starpls_types.File]] | _starpls_types.depset[_starpls_types.File | _starpls_types.FilesToRunProvider | _starpls_types.depset[_starpls_types.File]]"),
             (CallableKind::Method("actions"), "run" | "run_shell" | "map_directory", "resource_set") => {
@@ -4727,6 +4745,131 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
             };
             assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
             assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
+    fn action_execution_inputs_have_static_domains() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def check(context: ctx[object, object], output: File) -> None:
+    arguments = context.actions.args()
+    env: dict[Literal["MODE"], Literal["test"]] = {"MODE": "test"}
+    requirements: dict[Literal["no-remote"], Literal["1"]] = {"no-remote": "1"}
+    context.actions.run(outputs=[output], executable="tool", arguments=["text", arguments], env=env, execution_requirements=requirements, input_manifests=[42, output])
+    context.actions.run_shell(outputs=[output], command="tool", arguments=(arguments, "text"), env=env, execution_requirements=requirements, input_manifests=None)
+    methods = struct(run=context.actions.run, run_shell=context.actions.run_shell)
+    print(methods)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/actions.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for invalid in [
+            "arguments=[42]",
+            "env={'MODE': 42}",
+            "env={42: 'test'}",
+            "execution_requirements={'no-remote': False}",
+            "input_manifests=42",
+            "shadowed_action=output",
+            "shadowed_action=None",
+        ] {
+            for (method, required) in [
+                ("run", "executable='tool'"),
+                ("run_shell", "command='tool'"),
+            ] {
+                analysis.update_file(
+                    file,
+                    format!("{source}    context.actions.{method}(outputs=[output], {required}, {invalid})\n"),
+                );
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{method}, {invalid}: {diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+                assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+            }
+        }
+    }
+
+    #[test]
+    fn action_execution_inputs_preserve_supplied_metadata() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for method in ["run", "run_shell"] {
+            for name in [
+                "arguments",
+                "env",
+                "execution_requirements",
+                "input_manifests",
+            ] {
+                let mut supplied = builtins.clone();
+                supplied
+                    .r#type
+                    .iter_mut()
+                    .find(|class| class.name == "actions")
+                    .unwrap()
+                    .field
+                    .iter_mut()
+                    .find(|field| field.name == method)
+                    .unwrap()
+                    .callable
+                    .as_mut()
+                    .unwrap()
+                    .param
+                    .iter_mut()
+                    .find(|parameter| parameter.name == name)
+                    .unwrap()
+                    .r#type = "int".into();
+                let (mut analysis, _) = Analysis::new_for_test();
+                analysis
+                    .set_builtin_defs(supplied, Default::default())
+                    .unwrap();
+                let required = if method == "run" {
+                    "executable='tool'"
+                } else {
+                    "command='tool'"
+                };
+                let source = format!("def check(context: ctx[object, object]) -> None:\n    context.actions.{method}(outputs=[], {required}, {name}=42)\n");
+                let file = analysis
+                    .open_document(
+                        Path::new("/metadata.bzl"),
+                        Dialect::Bazel,
+                        None,
+                        source.clone(),
+                        1,
+                    )
+                    .unwrap();
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert!(diagnostics.is_empty(), "{method}, {name}: {diagnostics:?}");
+                analysis.update_file(file, source.replace("=42", "='wrong'"));
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{method}, {name}: {diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            }
         }
     }
 
