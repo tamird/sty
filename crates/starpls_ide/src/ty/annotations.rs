@@ -130,14 +130,17 @@ impl AnnotationChecks<'_> {
             {
                 continue;
             }
-            // Ty supplies implicit method receivers. An unannotated static method's first
-            // parameter remains gradual and still requires an annotation.
+            // ty supplies implicit method receivers. Their members can be gradual without
+            // making the receiver annotation missing. Static and variadic parameters still
+            // require annotations of their own.
             if method
                 && position == 0
-                && self
-                    .model
-                    .definition_type(*definition)
-                    .is_fully_static(db, &self.model.program_environment())
+                && !function.parameters.args.is_empty()
+                && !matches!(
+                    self.model.definition_type(*definition),
+                    ty_python_semantic::types::Type::Dynamic(_)
+                        | ty_python_semantic::types::Type::Divergent(_)
+                )
             {
                 continue;
             }
@@ -362,18 +365,28 @@ mod tests {
                 .collect();
             assert_eq!(missing, [expected], "{diagnostics:?}");
         }
-        analysis.update_file(stub, "class Visitor[T](Protocol):\n    def visit(self, value: T) -> T: ...\ndef convert(self) -> int: ...\n".into());
+        analysis.update_file(stub, "class Visitor[T](Protocol):\n    def visit(self, value: T) -> T: ...\nclass Callback[T](Protocol):\n    def __call__(self, *args: Unknown, data: T, **kwargs: Unknown) -> None: ...\nclass Variadic(Protocol):\n    def __call__(*args) -> None: ...\ndef convert(self) -> int: ...\n".into());
         let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() != "invalid-syntax"),
+            "{diagnostics:?}"
+        );
         let missing: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.id().as_str() == "missing-parameter-annotation")
             .map(|d| d.headline_message())
             .collect();
-        assert_eq!(missing.len(), 1, "{diagnostics:?}");
-        assert!(
-            missing.iter().any(|message| message.contains("`self`")),
-            "{diagnostics:?}"
-        );
+        assert_eq!(missing.len(), 2, "{diagnostics:?}");
+        for name in ["self", "args"] {
+            assert!(
+                missing
+                    .iter()
+                    .any(|message| message.contains(&format!("`{name}`"))),
+                "{diagnostics:?}"
+            );
+        }
         analysis.update_file(stub, "class Invalid:\n    def unfinished(\n".into());
         let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
         assert!(!diagnostics.is_empty());
