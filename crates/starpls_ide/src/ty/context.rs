@@ -436,7 +436,6 @@ fn registration_parameter_type<'db>(
         BuiltinFunction::StructGetattr => return None,
         BuiltinFunction::Getattr => return None,
         BuiltinFunction::Provider => return None,
-        BuiltinFunction::Transition => return None,
         BuiltinFunction::Select => return None,
     };
     let parameter_count = if context_kind == ContextKind::Aspect {
@@ -984,7 +983,7 @@ fn field_type<'db>(
         View::Attr => {
             if attribute.kind == AttributeKind::Label {
                 match attribute.configuration {
-                    AttributeConfiguration::Starlark => return Some(list(target()?)),
+                    AttributeConfiguration::Split => return Some(list(target()?)),
                     AttributeConfiguration::Unknown => return Some(Type::unknown()),
                     AttributeConfiguration::Ordinary => return Some(present(target()?)),
                 }
@@ -1017,7 +1016,7 @@ fn field_type<'db>(
             match attribute.configuration {
                 AttributeConfiguration::Ordinary => return None,
                 AttributeConfiguration::Unknown => return Some(Type::unknown()),
-                AttributeConfiguration::Starlark => {}
+                AttributeConfiguration::Split => {}
             }
             let string = KnownClass::Str.to_instance(db, environment);
             let target = target()?;
@@ -3872,6 +3871,78 @@ example = rule(implementation=implementation, executable=True, outputs={"implici
     }
 
     #[test]
+    fn transition_contracts_preserve_attribute_configuration() {
+        let source = r#"def implementation(settings: dict[str, object], attrs: object) -> dict[str, object]:
+    return {}
+def create() -> transition[Literal['split']]:
+    return transition(implementation=implementation, inputs=[], outputs=[])
+def split_attribute(change: transition[Literal['split']]) -> Attribute[Sequence[Target]]:
+    return attr.label(cfg=change)
+def erased_attribute(change: transition) -> Attribute:
+    return attr.label(cfg=change)
+def unknown() -> transition:
+    return config.target()
+def rule_impl(ctx):
+    ctx.attr.split
+    ctx.attr.helper
+    ctx.attr.ordinary
+    ctx.attr.unknown
+    ctx.split_attr.split
+example = rule(implementation=rule_impl, attrs={
+    'split': attr.label(cfg=create()),
+    'helper': split_attribute(create()),
+    'ordinary': attr.label(cfg=config.none()),
+    'unknown': erased_attribute(create()),
+})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        let snapshot = analysis.snapshot();
+        let diagnostics = snapshot.diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (expression, expected) in [
+            (
+                "ctx.attr.split",
+                "list[Target[FilesToRunProvider[File | None]] | Target[None]]",
+            ),
+            (
+                "ctx.attr.ordinary",
+                "Target[FilesToRunProvider[File | None]] | Target[None] | None",
+            ),
+            (
+                "ctx.attr.helper",
+                "Sequence[Target[FilesToRunProvider[File | None] | None]]",
+            ),
+            ("ctx.attr.unknown", "Unknown"),
+        ] {
+            check_field(&snapshot, file, source, expression, expected, "");
+        }
+        drop(snapshot);
+        for statement in [
+            "split_attribute(config.none())",
+            "split_attribute(config.target())",
+            "split_attribute(unknown())",
+        ] {
+            analysis.update_file(file, format!("{source}{statement}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{statement}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+        analysis.update_file(
+            file,
+            source
+                .replace("return {}", "return [{}]")
+                .replace("-> dict[str, object]:", "-> list[dict[str, object]]:"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
     fn uncertain_flags_keep_unrelated_context_fields_precise() {
         let source = r#"def unknown(): pass
 def implementation(ctx):
@@ -3904,8 +3975,14 @@ example = rule(implementation=implementation, outputs=unknown(), executable=unkn
             ("ctx.file.dep", "Unknown"),
             ("ctx.executable.dep", "Unknown"),
             ("ctx.split_attr.dep", "Unknown"),
-            ("ctx.attr.native", "Unknown"),
-            ("ctx.attr.none_transition", "Unknown"),
+            (
+                "ctx.attr.native",
+                "Target[FilesToRunProvider[File | None]] | Target[None] | None",
+            ),
+            (
+                "ctx.attr.none_transition",
+                "Target[FilesToRunProvider[File | None]] | Target[None] | None",
+            ),
             ("ctx.outputs.dynamic", "Unknown"),
         ] {
             check_field(&snapshot, file, source, expression, expected, "");

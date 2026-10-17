@@ -162,7 +162,7 @@ struct RuleAttribute<'db> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum AttributeConfiguration {
     Ordinary,
-    Starlark,
+    Split,
     Unknown,
 }
 
@@ -242,9 +242,6 @@ impl Attribute {
         }
     }
 }
-
-#[derive(Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
-struct StarlarkTransition;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
 pub(super) enum BuildSetting {
@@ -393,7 +390,6 @@ pub(super) enum BuiltinFunction {
     StructGetattr,
     Getattr,
     Provider,
-    Transition,
     Select,
 }
 
@@ -464,7 +460,6 @@ pub(super) fn declaration<'db>(
         "struct" => BuiltinFunction::Struct,
         "getattr" => BuiltinFunction::Getattr,
         "provider" => BuiltinFunction::Provider,
-        "transition" => BuiltinFunction::Transition,
         "select" => BuiltinFunction::Select,
         _ => return None,
     })
@@ -501,12 +496,6 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
             .getattr_return_type(db)
             .or_else(|| super::shapes::getattr_call_result(db, call)),
         BuiltinFunction::Provider => provider(db, call),
-        BuiltinFunction::Transition => descriptor(
-            db,
-            call,
-            "transition",
-            ProvidedData::new(StarlarkTransition),
-        ),
     }
 }
 
@@ -674,6 +663,7 @@ fn attribute<'db>(
     kind: AttributeKind,
 ) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(call.file());
+    let declarations = call.declaration()?.program_file(db);
     let mandatory = match call.argument("mandatory") {
         CheckedArgument::Omitted => false,
         CheckedArgument::Value { ty, expression: _ } => ty.as_bool_literal()?,
@@ -785,13 +775,16 @@ fn attribute<'db>(
                 || matches!(ty.string_literal_value(db), Some("target" | "exec"))
             {
                 AttributeConfiguration::Ordinary
-            } else if ty
-                .provided_data(db, &environment)
-                .is_some_and(|data| data.downcast_ref::<StarlarkTransition>().is_some())
-            {
-                AttributeConfiguration::Starlark
             } else {
-                AttributeConfiguration::Unknown
+                match native_type_argument(db, &environment, declarations, ty, "transition")
+                    .and_then(|kind| {
+                        kind.expand_top_level_aliases(db, &environment)
+                            .string_literal_value(db)
+                    }) {
+                    Some("split") => AttributeConfiguration::Split,
+                    Some("ordinary") => AttributeConfiguration::Ordinary,
+                    _ => AttributeConfiguration::Unknown,
+                }
             }
         }
         CheckedArgument::Indeterminate => AttributeConfiguration::Unknown,

@@ -471,6 +471,16 @@ flags, and the `ctx.file`, `ctx.files`, and `ctx.executable` views.
 and macro contexts use their host-specific conversions from concrete descriptors.
 Bare `Attribute` leaves its analyzed value unknown.
 
+`transition[Kind]` preserves how a transition exposes label dependencies.
+`transition()` produces `transition[Literal["split"]]`: Starlark-defined
+attribute transitions expose a list of targets, including when the transition
+implementation returns one settings dictionary. `config.none()` and
+`config.target()` produce `transition[Literal["ordinary"]]`, which preserves
+the ordinary target or optional-target view. A helper can require the split
+kind explicitly. Bare `transition` accepts either kind and leaves the analyzed
+label value unknown. The kind describes the dependency view, not the number
+of outgoing configurations.
+
 `ctx[Value, Attrs]` specifies the build-setting value and the fields of
 `ctx.attr`. A protocol describes the attribute fields a helper requires:
 

@@ -420,6 +420,7 @@ fn declarations(
             "DefaultInfo" => Some("_DefaultInfoFiles, _DefaultInfoFilesToRun"),
             "ctx" => Some("_BuildSettingValue, _ContextAttrs"),
             "Attribute" => Some("_AttributeValue"),
+            "transition" => Some("_TransitionKind"),
             _ => None,
         };
         if let Some(parameter) = parameter {
@@ -969,7 +970,7 @@ fn declarations(
         body.push_str("    pass\n");
     }
     let mut output = String::from(
-        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
+        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
     );
     let context_attrs = if classes.contains_key("struct") {
         "_starpls_types.struct[_starpls_unknown]"
@@ -1429,6 +1430,24 @@ fn write_function(
         output.push_str(", stripPrefix: _starpls_builtins.str = ''");
     }
     let return_type = match (kind, value.name.as_str()) {
+        (CallableKind::Function, "transition") => {
+            let declared = env::normalize_doc(&callable.return_type, true);
+            (classes.contains("transition")
+                && matches!(
+                    declared.as_str(),
+                    "" | "unknown" | "Unknown" | "Any" | "transition"
+                ))
+            .then_some("_starpls_types.transition[_starpls_typing.Literal['split']]")
+        }
+        (CallableKind::Method("config"), "none" | "target") => {
+            let declared = env::normalize_doc(&callable.return_type, true);
+            (classes.contains("transition")
+                && matches!(
+                    declared.as_str(),
+                    "" | "unknown" | "Unknown" | "Any" | "transition"
+                ))
+            .then_some("_starpls_types.transition[_starpls_typing.Literal['ordinary']]")
+        }
         (CallableKind::Method("apple_common"), "apple_host_system_env" | "target_apple_env") => {
             Some("_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]")
         }
@@ -2955,6 +2974,79 @@ def inspect(context: ctx[object, object], file: File, change: transition) -> Non
                 assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
             }
         }
+    }
+
+    #[test]
+    fn transition_returns_preserve_supplied_metadata() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for (name, expression) in [
+            (
+                "transition",
+                "transition(implementation=lambda settings, attrs: {}, inputs=[], outputs=[])",
+            ),
+            ("none", "config.none()"),
+            ("target", "config.target()"),
+        ] {
+            let mut builtins = builtins.clone();
+            let value = if name == "transition" {
+                builtins.global.iter_mut().find(|value| value.name == name)
+            } else {
+                builtins
+                    .r#type
+                    .iter_mut()
+                    .find(|class| class.name == "config")
+                    .unwrap()
+                    .field
+                    .iter_mut()
+                    .find(|value| value.name == name)
+            }
+            .unwrap();
+            value.callable.as_mut().unwrap().return_type = "None".into();
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let file = analysis
+                .open_document(
+                    Path::new("/main.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    format!("def value() -> None: return {expression}\n"),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{name}: {diagnostics:?}");
+        }
+        let mut builtins = builtins;
+        builtins.r#type.retain(|class| class.name != "transition");
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = analysis
+            .open_document(
+                Path::new("/partial.bzl"),
+                Dialect::Bazel,
+                None,
+                "def value() -> int: return config.none()\n".into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "unsound-return-statement");
     }
 
     #[test]
