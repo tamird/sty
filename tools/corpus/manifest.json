@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "cd86603b39308597da249179ecb2d8848174b993",
+    "commit": "feaf43ff7d7be449e6443429720b9b3a59ff6340",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -86,7 +86,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 58
+            "line": 78
           }
         ]
       },
@@ -367,7 +367,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 115
+            "line": 135
           }
         ]
       },
@@ -578,7 +578,7 @@
           {
             "id": "invalid-function-interface",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 104
+            "line": 124
           }
         ]
       },
@@ -596,7 +596,7 @@
           {
             "id": "invalid-function-interface",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 105
+            "line": 125
           }
         ]
       },
@@ -688,7 +688,7 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return {key: func(value) for key, value in branches.items()}",
+            "old": "return {_condition(key): func(value) for key, value in branches.items()}",
             "new": "return 42"
           }
         ],
@@ -706,8 +706,8 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return {key: func(value) for key, value in branches.items()}",
-            "new": "return {key: str(func(value)) for key, value in branches.items()}"
+            "old": "return {_condition(key): func(value) for key, value in branches.items()}",
+            "new": "return {_condition(key): str(func(value)) for key, value in branches.items()}"
           }
         ],
         "expected": [
@@ -724,8 +724,8 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return {key: func(value) for key, value in branches.items()}",
-            "new": "return {key: func(key) for key in branches}"
+            "old": "return {_condition(key): func(value) for key, value in branches.items()}",
+            "new": "return {_condition(key): func(key) for key in branches}"
           }
         ],
         "expected": [
@@ -750,7 +750,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 192
+            "line": 201
           }
         ]
       },
@@ -768,7 +768,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 106
+            "line": 115
           }
         ]
       },
@@ -886,7 +886,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 40
+            "line": 49
           }
         ]
       },
@@ -904,7 +904,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 40
+            "line": 49
           }
         ]
       },
@@ -959,6 +959,152 @@
             "id": "invalid-assignment",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 49
+          }
+        ]
+      },
+      {
+        "name": "exec-properties-positive",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_exec_properties_probe__.bzl",
+            "fixture": "probes/with-cfg-exec-properties.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "exec-properties-bad-calls",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_exec_properties_probe__.bzl",
+            "fixture": "probes/with-cfg-exec-properties-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_exec_properties_probe__.bzl",
+            "line": 10
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_exec_properties_probe__.bzl",
+            "line": 11
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "with_cfg/private/__sty_exec_properties_probe__.bzl",
+            "line": 12
+          }
+        ]
+      },
+      {
+        "name": "exec-properties-bad-return",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/frontend.bzl",
+            "old": "    return result\n",
+            "new": "    return 42\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 24
+          }
+        ]
+      },
+      {
+        "name": "exec-properties-bad-value",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/frontend.bzl",
+            "old": "            result[key] = item\n",
+            "new": "            result[key] = 42\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 23
+          }
+        ]
+      },
+      {
+        "name": "exec-properties-bad-key",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/frontend.bzl",
+            "old": "            result[key] = item\n",
+            "new": "            result[42] = item\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-assignment",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 23
+          }
+        ]
+      },
+      {
+        "name": "dict-selected-bad-return",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "    return select(_map_selected(func, branches))\n",
+            "new": "    return _map_selected(func, branches)\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 27
+          }
+        ]
+      },
+      {
+        "name": "dict-compose-bad-operator",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "    return _compose(items, lambda item: item[1], lambda _anchor, left, right: left | right)\n",
+            "new": "    return _compose(items, lambda item: item[1], lambda _anchor, left, right: left + right)\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "unsupported-operator",
+            "path": "with_cfg/private/select.bzl",
+            "line": 30
+          }
+        ]
+      },
+      {
+        "name": "dict-strategy-bad-result",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "    return _map_attr(func, attribute, _map_dict_selected, _compose_dict)\n",
+            "new": "    return [_map_attr(func, attribute, _map_dict_selected, _compose_dict)]\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 24
           }
         ]
       }

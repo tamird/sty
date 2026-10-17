@@ -65,6 +65,11 @@ callback arguments.
 General `map_attr` and `compose_select_value` remain gradual: representation
 decoding loses the original element type, and composition can widen the callback's
 result type.
+Frontend execution properties use a checked dictionary mapper. Its callback
+validates property names and retained values before constructing a dictionary;
+the generic mapper preserves key and value types through selected branches and
+composition. Probes reject callbacks returning an ordinary `dict` or a list, and
+source overlays check incorrect dictionary keys, values, and composition.
 Other overlays change provider fields and callback results; callers exercise
 label types and configuration modes.
 
