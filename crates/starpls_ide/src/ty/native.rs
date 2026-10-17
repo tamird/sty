@@ -718,11 +718,12 @@ fn declarations(
                         && classes.contains_key("struct")
                     {
                         match field.name.as_str() {
-                            // Attribute values are opaque unless a named schema refines them.
+                            // Missing host schemas remain gradual; registered rules supply
+                            // their attribute types through the context specialization.
                             "attr" => Some(if class.name == "ctx" {
-                                "_starpls_typing.Final[_starpls_ty_extensions.Intersection[_starpls_types.struct[_starpls_builtins.object], _ContextAttrs]]"
+                                "_starpls_typing.Final[_ContextAttrs]"
                             } else {
-                                "_starpls_types.struct[_starpls_builtins.object]"
+                                "_starpls_types.struct[_starpls_unknown]"
                             }),
                             "file" => classes.contains_key("File").then_some("_starpls_types.struct[_starpls_types.File | None]"),
                             "outputs" => (class.name == "ctx" && classes.contains_key("File")).then_some("_starpls_types.struct[_starpls_types.File | _starpls_builtins.list[_starpls_types.File] | None]"),
@@ -968,7 +969,16 @@ fn declarations(
         body.push_str("    pass\n");
     }
     let mut output = String::from(
-        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n_ContextAttrs = _starpls_typing.TypeVar(\"_ContextAttrs\", default=_starpls_builtins.object, covariant=True)\n\n_starpls_native_rule_available: _starpls_builtins.bool\n\nclass _starpls_types:\n",
+        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
+    );
+    let context_attrs = if classes.contains_key("struct") {
+        "_starpls_types.struct[_starpls_unknown]"
+    } else {
+        "_starpls_unknown"
+    };
+    writeln!(output, "_ContextAttrs = _starpls_typing.TypeVar(\"_ContextAttrs\", default=\"{context_attrs}\", covariant=True)\n")?;
+    output.push_str(
+        "_starpls_native_rule_available: _starpls_builtins.bool\n\nclass _starpls_types:\n",
     );
     output.push_str(&body);
     output.push('\n');
@@ -1688,7 +1698,6 @@ mod tests {
         );
         for receiver in ["context", "attributes", "context.rule"] {
             for (view, expected, invalid) in [
-                ("attr", "object", "str"),
                 ("files", "list[File]", "list[str]"),
                 ("file", "File | None", "File"),
                 ("executable", "File | None", "File"),
@@ -1743,6 +1752,58 @@ def output(context: ctx) -> File | list[File] | None:
     }
 
     #[test]
+    fn context_attributes_without_schemas_remain_gradual() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                String::new(),
+                1,
+            )
+            .unwrap();
+        for receiver in ["context", "attributes", "context.rule"] {
+            let source = format!(
+                "def inspect(context: ctx, attributes: rule_attributes) -> list[str]:\n    return {receiver}.attr.tags + ['manual']\n"
+            );
+            analysis.set_rules(crate::DiagnosticRules::default());
+            analysis.update_file(file, source);
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{receiver}: {diagnostics:?}");
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("unsound-return-statement".into(), "error".into())].into(),
+                )
+                .unwrap(),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| { diagnostic.id().as_str() == "unsound-return-statement" }),
+                "{receiver}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(
+            file,
+            "def inspect(attributes: struct[object]) -> str:\n    return attributes.value\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
     fn context_attribute_views_preserve_partial_inventory() {
         for has_struct in [false, true] {
             let mut builtins = Builtins {
@@ -1776,13 +1837,23 @@ def output(context: ctx) -> File | list[File] | None:
                 )
                 .unwrap(),
             );
-            let attr = if has_struct { "struct[object]" } else { "str" };
-            let source = format!("def inspect(attributes: rule_attributes) -> tuple[{attr}, str, str, str]:\n    return attributes.attr, attributes.file, attributes.files, attributes.executable\n");
+            let source = "def inspect(attributes: rule_attributes) -> tuple[str, str, str]:\n    return attributes.file, attributes.files, attributes.executable\n".to_owned();
             let file = analysis
                 .open_document(Path::new("/main.bzl"), Dialect::Bazel, None, source, 1)
                 .unwrap();
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{has_struct}: {diagnostics:?}");
+            let attr = if has_struct { "attr.unknown" } else { "attr" };
+            analysis.update_file(file, format!("def inspect(attributes: rule_attributes) -> str:\n    return attributes.{attr}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            if has_struct {
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "unsound-return-statement");
+            } else {
+                assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            }
         }
     }
 
@@ -2780,7 +2851,7 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
 groups: dict[Literal['tools'], exec_group] = {'tools': group}
 def implementation(context: object) -> None:
     pass
-def inspect(context: ctx, file: File, change: transition) -> None:
+def inspect(context: ctx[object, object], file: File, change: transition) -> None:
     files = context.runfiles(files=[file])
     default = DefaultInfo(executable=file, runfiles=files)
     other = DefaultInfo(data_runfiles=files, default_runfiles=files)
@@ -2957,7 +3028,7 @@ empty_tuple = depset(())
 empty_transitive = depset(transitive=[])
 empty_none = depset(None, transitive=None)
 strings: depset[str] = empty
-def inspect(context: ctx, file: File) -> None:
+def inspect(context: ctx[object, object], file: File) -> None:
     for value in [empty, also_empty, empty_list, empty_tuple, empty_transitive, empty_none]:
         context.runfiles(transitive_files=value)
     context.runfiles(transitive_files=depset([file]))
@@ -3233,8 +3304,8 @@ def Initialized(value: str) -> record[{"value": str}]: ...
 load("keys.bzl", "Info", "Initialized", "raw")
 keys: list[ProviderKey] = [Info, Initialized, DefaultInfo]
 nested: list[list[ProviderKey]] = [keys, [Info]]
-def implementation(context: ctx) -> None: pass
-def aspect_implementation(target: Target, context: ctx) -> None: pass
+def implementation(context: ctx[object, object]) -> None: pass
+def aspect_implementation(target: Target, context: ctx[object, object]) -> None: pass
 "#,
             );
             for method in &attribute_methods {
@@ -3796,7 +3867,7 @@ def constructed() -> dict[str, str]:
             )
             .unwrap(),
         );
-        let source = r#"def check(ctx: ctx, file: File) -> None:
+        let source = r#"def check(ctx: ctx[object, object], file: File) -> None:
     files = [file]
     transitive = depset(files)
     attributes = ["srcs"]

@@ -566,7 +566,7 @@ mod tests {
     #[test]
     fn native_record_contracts_and_documentation() {
         for (expression, expected) in [
-            ("context.attr.arbitrary", "object"),
+            ("context.attr.arbitrary", "Unknown"),
             ("context.file.input", "File | None"),
             ("context.files.input[0].path", "str"),
             ("record.arbitrary", "str"),

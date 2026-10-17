@@ -2354,7 +2354,7 @@ example = make_aspect(implementation=implementation, attrs={
             file,
             source,
             "        context.rule.attr.deps",
-            "object",
+            "Unknown",
             "",
         );
         check_field(
@@ -2389,7 +2389,7 @@ example = make_aspect(implementation=implementation, attrs={
         ids.sort_unstable();
         assert_eq!(
             ids,
-            ["invalid-assignment", "invalid-assignment", "not-iterable"],
+            ["invalid-assignment", "invalid-assignment"],
             "{diagnostics:?}"
         );
     }
@@ -3078,7 +3078,7 @@ second = rule(implementation=implementation, attrs={"enabled": attr.string()})
         enable_context(&mut analysis);
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("non-static-type".into(), "error".into())].into(),
+                &[("unsound-return-statement".into(), "error".into())].into(),
             )
             .unwrap(),
         );

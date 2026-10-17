@@ -646,7 +646,7 @@ closed(struct(compiler="gcc"))
 text: str | None = generic(struct(item="known", extra=42))
 def forward(value: struct[{"item": str}, ...]) -> str | None:
     return generic(value)
-def opaque(context: ctx[object]) -> object:
+def opaque(context: ctx[object, struct[object]]) -> object:
     return context.attr.unmodeled
 "#;
         let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid);
@@ -668,7 +668,7 @@ def opaque(context: ctx[object]) -> object:
             ("closed(struct(extra=42))", "invalid-argument-type"),
             ("def erased(value: struct[object]) -> None:\n    optional_value(value)", "invalid-argument-type"),
             ("def optional(value: struct[{'compiler': NotRequired[str]}, ...]) -> None:\n    required_value(value)", "invalid-argument-type"),
-            ("def opaque(context: ctx[object]) -> str:\n    return context.attr.unmodeled", "invalid-return-type"),
+            ("def opaque(context: ctx[object, struct[object]]) -> str:\n    return context.attr.unmodeled", "invalid-return-type"),
         ] {
             analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
