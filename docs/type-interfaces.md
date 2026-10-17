@@ -402,14 +402,12 @@ open shape do not weaken the types of declared optional fields. The existing
 ## Selectors
 
 `select[T]` describes configurable values whose branches have type `T`.
-sty also tracks the first branch's runtime kind when its value is a
-supported literal and the dictionary keys are distinct string literals. It
-also recognizes mappings whose values all have one runtime category: strings,
-booleans, `None`, or lists, tuples, and ranges. For these mappings, every possible
-first branch has the same kind. The kind determines which selector operations Bazel
-accepts. For example, selectors whose first branch is `None` combine with `+`,
-including when later branches are
-dictionaries; selectors whose first branch is a dictionary combine with `|`.
+sty also tracks the first branch's runtime kind when the dictionary's first
+entry is known. Otherwise, the mapping's value types bound the possible kinds.
+The kind determines which selector operations Bazel accepts. For example,
+selectors whose first branch is `None` combine with `+`, including when later
+branches are dictionaries; selectors whose first branch is a dictionary
+combine with `|`.
 
 Inferred types display this information as a second parameter, such as
 `select[dict[str, int] | None, Literal["none"]]`. List, tuple, and range branches
@@ -419,8 +417,13 @@ nullable contributions of both operands in their branch type.
 `select[T]` defaults the kind to `object`, accepting every runtime kind while
 preserving the branch-value contract. An operation requiring a particular kind
 uses an explicit annotation, such as `select[list[str], Literal["list"]]`.
-Mappings with unknown or mixed value categories retain an unspecified kind,
-as do integer and dictionary value types with several native representations.
+A mapping with a finite set of known value categories retains the possible
+selector types. For example, `dict[str, list[str] | None]` produces
+`select[list[str] | None, Literal["list"]] | select[list[str] | None, Literal["none"]]`.
+Each alternative retains every branch's payload type. Independent selectors
+with uncertain kinds still require proof of compatible kinds before combining.
+Mappings with unknown or unclassified value categories retain an unspecified
+kind, as do integer and dictionary value types with several native representations.
 Integer literals retain the `"int"` category, and literal dictionary branches
 retain the `"dict"` kind. Bazel uses
 several native integer representations, so integer operands carry an `Unknown`

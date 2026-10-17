@@ -115,6 +115,64 @@ mod tests {
     }
 
     #[test]
+    fn selector_construction_preserves_possible_runtime_kinds() {
+        let selected =
+            "select[list[str] | None, Literal['list']] | select[list[str] | None, Literal['none']]";
+        let source = format!("def embed(branches: dict[str, list[str] | None]) -> {selected}:\n    value = select(branches)\n    return value\n");
+        let (mut analysis, mut fixture) = native_analysis(&source);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let hover = analysis
+            .snapshot()
+            .hover(crate::FilePosition {
+                file_id: file,
+                pos: (source.find("value =").unwrap() as u32).into(),
+            })
+            .unwrap()
+            .unwrap();
+        // Kind is determined by the first branch; each alternative keeps every branch's payload.
+        assert!(hover.contents.value.contains("value: select[list[str] | None, Literal[\"list\"]] | select[list[str] | None, Literal[\"none\"]]\n"), "{}", hover.contents.value);
+
+        for value in ["object", "list[str] | Unknown", "list[str] | Any"] {
+            analysis.update_file(file, format!("def embed(branches: dict[str, {value}]) -> {selected}:\n    return select(branches)\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{value}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        }
+        // A known first branch wins over unrelated kinds in later branches.
+        analysis.update_file(file, "def first(first: list[str]) -> select[list[str] | None, Literal['list']]:\n    return select({'//:first': first, '//conditions:default': None})\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        // Splitting an uncertain first branch must not discard later payloads.
+        analysis.update_file(file, format!("def first(first: list[str] | None) -> {selected}:\n    return select({{'//:first': first, '//conditions:default': 42}})\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+
+        for (left, right) in [("list", "none"), ("none", "list")] {
+            analysis.update_file(file, format!("def combine(left: select[list[str] | None, Literal['{left}']], right: select[list[str] | None, Literal['{right}']]) -> object:\n    return left + right\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
+        }
+        analysis.update_file(file, "def combine(left: dict[str, list[str] | None], right: dict[str, list[str] | None]) -> object:\n    return select(left) + select(right)\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
+
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "selector.bzli",
+            &format!("type Value = list[str] | None\ntype Nested = Value\ndef embed(branches: dict[str, Value]) -> {selected}: ...\ndef nested(branches: dict[str, Nested]) -> {selected}: ...\n"),
+        );
+        analysis.update_file(file, "def embed(branches):\n    return select(branches)\ndef nested(branches):\n    return select(branches)\n".into());
+        analysis.set_type_interfaces([(file, interface)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
     fn selector_annotations_preserve_static_forwarding() {
         let source = r#"
 def forward(values: Sequence[str] | select[Sequence[str]]) -> Sequence[str] | select[Sequence[str]]:

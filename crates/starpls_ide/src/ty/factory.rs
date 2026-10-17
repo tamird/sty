@@ -518,14 +518,12 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
         return None;
     };
     let environment = ProgramEnvironment::from_file(call.file());
-    let kind = match call
+    let value = match call
         .dictionary_argument(db, "x")
         .map(|dictionary| dictionary.first_entry)
     {
-        Some(DictionaryFirstEntry::Entry { key: _, value }) => {
-            selector_value_kind(db, &environment, value)
-        }
-        Some(DictionaryFirstEntry::Empty) => None,
+        Some(DictionaryFirstEntry::Entry { key: _, value }) => value,
+        Some(DictionaryFirstEntry::Empty) => return None,
         Some(DictionaryFirstEntry::Unknown) | None => {
             let (class, specialization) = ty.class_specialization(db, &environment)?;
             if ![KnownClass::Dict, KnownClass::Mapping]
@@ -538,23 +536,35 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
             let [_key, value] = specialization.types(db) else {
                 return None;
             };
-            // A successful select has a first branch. Uniform outer value types
-            // establish its native category without depending on dictionary order.
-            selector_value_kind(db, &environment, *value)
+            // A successful select has a first branch. Its type bounds the possible
+            // native categories even when the dictionary order is unknown.
+            *value
         }
-    }?;
+    };
     let (_, specialization) = call.return_type().class_specialization(db, &environment)?;
     let [payload, _kind] = specialization.types(db) else {
         return None;
     };
     let declaration = call.declaration()?;
-    specialized_native_instance(
-        db,
-        &environment,
-        declaration.program_file(db),
-        "select",
-        vec![*payload, Type::string_literal(db, kind)],
-    )
+    let value = value.expand_top_level_aliases(db, &environment);
+    let values = match value {
+        Type::Union(union) => union.elements(db),
+        _ => std::slice::from_ref(&value),
+    };
+    let alternatives = values
+        .iter()
+        .map(|value| {
+            let kind = selector_value_kind(db, &environment, *value)?;
+            specialized_native_instance(
+                db,
+                &environment,
+                declaration.program_file(db),
+                "select",
+                vec![*payload, Type::string_literal(db, kind)],
+            )
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(UnionType::from_elements(db, &environment, alternatives))
 }
 
 fn selector_value_kind<'db>(
