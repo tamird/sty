@@ -14,3 +14,7 @@ def union_args(args: list[str] | None) -> tuple[list[str] | None, list[Label]]:
     return rewrite_args("union", args, make_filegroup)
 
 print(none, nullable, union_args)
+
+dictionary: tuple[select[list[str] | None], list[Label]] = rewrite_args("dictionary", select({"//conditions:default": {"--flag": "$(location :value)"}}), make_filegroup)
+mixed: tuple[select[list[str] | None], list[Label]] = rewrite_args("mixed", select({"//conditions:default": None, ":condition": {"--flag": None}}), make_filegroup)
+print(dictionary, mixed)

@@ -57,16 +57,26 @@ variadic parameters, including incompatible executable types.
 The `with_cfg` cases follow attribute values through constructor helpers,
 split-transition registrations, argument rewriting, and frontend modes. Parser
 cases check tagged selector pieces and the generic per-piece callback helper.
-`map_attr` and `compose_select_value` still lack complete contracts for selector
-decoding and composition: parsing a selector's representation loses its original
-element type, and concatenation can widen the callback's result type. Source
-overlays change provider fields and callback results; callers exercise label types
-and configuration modes.
+The checked args path validates decoded values and returns string lists or `None`,
+directly or through `select`, together with generated labels. Selected dictionaries
+contribute their keys, following Bazel's string-list attribute conversion. Source
+overlays reject incorrect leaf results, selector kinds, and callback arguments.
+General `map_attr` and `compose_select_value` remain gradual: representation
+decoding loses the original element type, and composition can widen the callback's
+result type.
+Other overlays change provider fields and callback results; callers exercise
+label types and configuration modes.
 
-The LLVM wrapper cases check its constraint keyword while forwarding other
-values as opaque data. The wrapper injects `name`, `data`, and `tags` into an
-arbitrary rule's keyword arguments. Its callback contract remains gradual because
-the remaining keyword shape and the injected values' compatibility are unproved.
+Plain dictionary and tuple inputs to `rewrite_args` are accepted at runtime but
+still lack interface contracts. The attempted generic dictionary overload is
+currently rejected by interface validation.
+
+The LLVM wrapper cases relate explicit `inner_data` to the callback's `data`
+parameter. Omitted data uses the empty-list default; list and sequence callbacks
+accept it, while tuple-only and selector-only callbacks require explicit data.
+The cases also check the constraint keyword. The implementation callback remains
+gradual; its forwarding of `data` and compatibility with injected `name`/`tags`
+and other keywords remain unproved.
 
 The C++ toolchain configuration contracts cover all thirteen constructor helpers
 and their nominal providers, including recursive flag groups. The Rust dependency

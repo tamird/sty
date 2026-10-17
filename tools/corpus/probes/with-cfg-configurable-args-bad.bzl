@@ -12,3 +12,5 @@ rewrite_args("bad", select({"//conditions:default": [42]}), make_filegroup)
 print(wrong)
 
 rewrite_args("bad_nullable", select({"//conditions:default": None, ":condition": [42]}), make_filegroup)
+
+rewrite_args("bad_dictionary", select({"//conditions:default": {42: "ignored"}}), make_filegroup)

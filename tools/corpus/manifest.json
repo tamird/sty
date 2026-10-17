@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "ad6c0f6e292522fd56b40cc24d5cafc401c86b7c",
+    "commit": "804ea203d85d8d4c328204f57075b2ea2593ad4c",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -68,7 +68,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 113
+            "line": 127
           }
         ]
       },
@@ -121,7 +121,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 53
+            "line": 55
           }
         ]
       },
@@ -161,7 +161,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 115
+            "line": 129
           }
         ]
       },
@@ -313,7 +313,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 102
+            "line": 125
           }
         ]
       },
@@ -349,7 +349,7 @@
           {
             "id": "invalid-assignment",
             "path": "with_cfg/private/args.bzl",
-            "line": 102
+            "line": 116
           }
         ]
       },
@@ -385,12 +385,12 @@
           {
             "id": "unsupported-operator",
             "path": "with_cfg/private/args.bzl",
-            "line": 93
+            "line": 107
           },
           {
             "id": "not-subscriptable",
             "path": "with_cfg/private/args.bzl",
-            "line": 95
+            "line": 109
           }
         ]
       },
@@ -429,6 +429,11 @@
             "id": "no-matching-overload",
             "path": "with_cfg/private/__sty_args_probe__.bzl",
             "line": 14
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 16
           }
         ]
       },
@@ -438,15 +443,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/args.bzl",
-            "old": "return rewrite_locations_in_attr(args, rewrite_label), filegroup_labels",
-            "new": "return rewrite_locations_in_attr(args, rewrite_label), 42"
+            "old": "return map_string_list_attr(rewrite_list, args), filegroup_labels",
+            "new": "return map_string_list_attr(rewrite_list, args), 42"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 59
+            "line": 73
           }
         ]
       },
@@ -464,7 +469,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 38
+            "line": 61
           }
         ]
       },
@@ -482,7 +487,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 28
+            "line": 51
           }
         ]
       },
@@ -663,15 +668,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return (False, func(element))",
-            "new": "return (False, 42)"
+            "old": "return {key: func(value) for key, value in branches.items()}",
+            "new": "return 42"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 23
+            "line": 10
           }
         ]
       },
@@ -681,15 +686,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "k: func(v)",
-            "new": "k: str(func(v))"
+            "old": "return {key: func(value) for key, value in branches.items()}",
+            "new": "return {key: str(func(value)) for key, value in branches.items()}"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 18
+            "line": 10
           }
         ]
       },
@@ -699,15 +704,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return (False, func(element))",
-            "new": "return (False, func(42))"
+            "old": "return {key: func(value) for key, value in branches.items()}",
+            "new": "return {key: func(key) for key in branches}"
           }
         ],
         "expected": [
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 23
+            "line": 10
           }
         ]
       },
@@ -725,7 +730,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 154
+            "line": 192
           }
         ]
       },
@@ -743,7 +748,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 61
+            "line": 106
           }
         ]
       },
@@ -807,7 +812,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 110
+            "line": 124
           }
         ]
       },
@@ -826,6 +831,60 @@
             "id": "invalid-argument-type",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 20
+          }
+        ]
+      },
+      {
+        "name": "finite-list-bad-return",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "    return result\n\ndef _rewrite_locations_in_value",
+            "new": "    return [42]\n\ndef _rewrite_locations_in_value"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 45
+          }
+        ]
+      },
+      {
+        "name": "finite-select-bad-kind",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "return (\"none\", select(mapped))",
+            "new": "return (\"list\", select(mapped))"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 40
+          }
+        ]
+      },
+      {
+        "name": "finite-select-bad-result",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "return (\"none\", select(mapped))",
+            "new": "return (\"none\", [\"plain\"])"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 40
           }
         ]
       }
@@ -1314,7 +1373,7 @@
   {
     "directory": "hermetic-llvm",
     "origin": "https://github.com/hermeticbuild/hermetic-llvm.git",
-    "commit": "4e8ebd60a0584edeaf8485873506042df18a4145",
+    "commit": "9b48d9a1edf4a0f46cca873801af23f61efdce3d",
     "sources": [
       "defs.bzl",
       "directory.bzl",
@@ -1374,7 +1433,7 @@
             "line": 13
           },
           {
-            "id": "invalid-argument-type",
+            "id": "no-matching-overload",
             "path": "_sty_contract_test.bzl",
             "line": 14
           },
@@ -1461,6 +1520,79 @@
             "id": "invalid-argument-type",
             "path": "_sty_forwarded_keywords.bzl",
             "line": 16
+          }
+        ]
+      },
+      {
+        "name": "callback-data",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_callback_data.bzl",
+            "fixture": "probes/llvm-callback-data.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-callback-data",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_callback_data.bzl",
+            "fixture": "probes/llvm-bad-callback-data.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "no-matching-overload",
+            "path": "_sty_callback_data.bzl",
+            "line": 19
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "_sty_callback_data.bzl",
+            "line": 20
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "_sty_callback_data.bzl",
+            "line": 21
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "_sty_callback_data.bzl",
+            "line": 22
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "_sty_callback_data.bzl",
+            "line": 23
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "_sty_callback_data.bzl",
+            "line": 24
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "_sty_callback_data.bzl",
+            "line": 25
+          },
+          {
+            "id": "no-matching-overload",
+            "path": "_sty_callback_data.bzl",
+            "line": 26
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 27
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 28
           }
         ]
       }
