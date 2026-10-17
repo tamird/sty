@@ -268,47 +268,6 @@ pub(super) fn has_record_return(function: &StmtFunctionDef) -> bool {
     matches!(application.value.as_ref(), Expr::Name(name) if name.id == "record")
 }
 
-/// The native raw constructor has a checked callable signature and no Starlark body.
-pub(super) fn is_raw_constructor(db: &Database, definition: Definition<'_>) -> bool {
-    let DefinitionKind::Assignment(assignment) = definition.kind(db) else {
-        return false;
-    };
-    if assignment.unpack().is_none() {
-        return false;
-    }
-    let file = definition.program_file(db);
-    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
-    let Expr::Call(call) = assignment.value(&parsed) else {
-        return false;
-    };
-    let node = covering_node(parsed.syntax().into(), call.range());
-    let Some(AnyNodeRef::StmtAssign(statement)) = node.parent() else {
-        return false;
-    };
-    let [Expr::Tuple(target)] = statement.targets.as_slice() else {
-        return false;
-    };
-    let [_, raw] = target.elts.as_slice() else {
-        return false;
-    };
-    if raw.range() != assignment.target(&parsed).range() {
-        return false;
-    }
-    let model = SemanticModel::new(db, file);
-    let Some(callee) = call.func.inferred_type(&model) else {
-        return false;
-    };
-    let Some(TypeDefinition::Function(callee)) =
-        callee.definition(db, &model.program_environment())
-    else {
-        return false;
-    };
-    matches!(
-        super::factory::declaration(db, callee),
-        Some(super::factory::BuiltinFunction::Provider)
-    )
-}
-
 pub(super) fn reference<'db>(db: &'db Database, definition: Definition<'db>) -> Option<Type<'db>> {
     if !is_declaration(db, definition) {
         return None;

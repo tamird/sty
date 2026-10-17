@@ -39,12 +39,19 @@ imports in its registered stub. Source lexical bindings take precedence over
 these names. Stub declarations are available in annotations and type comments;
 runtime expressions use the implementation's own bindings.
 
-This correspondence requires a unique top-level source function with the same
-parameter layout. Aliases, decorated functions, and partially mixed source
-and stub generic annotations produce an `invalid-function-interface`
-diagnostic when checking the implementation. Generic signatures require complete
-annotations in either source or stub. Missing annotations in ordinary signatures
-retain gradual typing semantics.
+This body correspondence requires a unique top-level source function with the
+same parameter layout. Decorated functions and partially mixed source and stub
+generic annotations produce an `invalid-function-interface` diagnostic when
+checking the implementation. Generic signatures require complete annotations
+in either source or stub. Missing annotations in ordinary signatures retain
+gradual typing semantics.
+
+A function declaration can also describe a unique source binding whose value is
+callable, such as a generated rule or a function alias. sty compares the value's
+inferred signature with the declaration, including its parameter and return
+types. The aliased implementation is inferred using its own annotations.
+Incomplete source signatures remain gradual; `non-static-type` can require
+them to be fully known.
 
 ### Overloaded functions
 

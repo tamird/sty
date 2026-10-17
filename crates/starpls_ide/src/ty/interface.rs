@@ -538,15 +538,13 @@ fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::D
         };
         let definitions = export_definitions(db, program, &declaration.name.id);
         if let [definition] = definitions.as_slice() {
-            if super::providers::is_raw_constructor(db, *definition) {
-                functions.push((*definition, declaration));
-                continue;
-            }
+            functions.push((*definition, declaration));
+            continue;
         }
         report(
             definitions.first().map_or(TextRange::default(), |definition| definition.kind(db).target_range(&parsed)),
             declaration.name.range(),
-            format!("Cannot check `{}` against its stub: the source binding must be a direct function declaration or native raw provider constructor", declaration.name.id),
+            format!("Cannot check `{}` against its stub: the source binding must resolve to one definition", declaration.name.id),
         );
     }
     for (definition, declaration) in functions {
@@ -1638,7 +1636,6 @@ mod tests {
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(source, stub)]).unwrap();
         for (text, contract) in [
-            ("def helper(value): return value\nidentity = helper\n", "def identity(value: int) -> int: ...\n"),
             ("def identity(value): return value\n", "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\n"),
             ("def identity(value, other): return value + other\n", "def identity(value: int) -> int: ...\n"),
             ("def identity(other): return other\n", "def identity(value: int) -> int: ...\n"),
@@ -1753,7 +1750,7 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
         analysis.update_file(stub, "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity(value: int | str) -> int | str: ...\n".into());
         analysis.update_file(
             source,
-            "def helper(value): return value\nidentity = helper\n".into(),
+            "def helper(value: int) -> int: return value\nidentity = helper\n".into(),
         );
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
         assert!(
@@ -1762,6 +1759,120 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
                 .any(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"),
             "{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn function_stubs_check_generated_callable_values() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "");
+        let stub = fixture.add_file(&mut analysis.db, "source.bzli", "");
+        loader.add_files_from_fixture(&fixture);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for (mode, other_mode, extra) in [
+            ("executable", "test", "output_licenses: list[str] = ..."),
+            ("test", "executable", "size: str = ..."),
+        ] {
+            let body = format!("def _impl(ctx) -> None: return None\ntarget = rule(implementation=_impl, {mode}=True, attrs={{'exports': attr.label(mandatory=True)}})\nalias = target\n");
+            let contract = format!("def target(*, name: str, exports: str | Label, {extra}) -> None: ...\ndef alias(*, name: str, exports: str | Label, {extra}) -> None: ...\n");
+            analysis.update_file(source, body.clone());
+            analysis.update_file(stub, contract.clone());
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(diagnostics.is_empty(), "{mode}: {diagnostics:?}");
+
+            // The same declaration must reject another rule mode, including through an alias.
+            analysis.update_file(
+                source,
+                body.replace(&format!("{mode}=True"), &format!("{other_mode}=True")),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert_eq!(diagnostics.len(), 2, "{mode}: {diagnostics:?}");
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"),
+                "{diagnostics:?}"
+            );
+            analysis.update_file(source, body);
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+            for invalid in [
+                contract.replace("exports: str | Label", "exports: int"),
+                contract.replace("-> None", "-> int"),
+            ] {
+                analysis.update_file(stub, invalid);
+                let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+                assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+                assert!(
+                    diagnostics
+                        .iter()
+                        .all(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"),
+                    "{diagnostics:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn function_stubs_preserve_callable_value_inference() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "");
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "def identity(value: int) -> int: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for body in [
+            "def helper(value: str) -> str: return value\nidentity = helper\n",
+            "identity = 42\n",
+            "def helper(value: int) -> int: return value\nidentity = helper\nidentity = helper\n",
+        ] {
+            analysis.update_file(source, body.into());
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-function-interface");
+        }
+        let body = "def helper(value): return value\nidentity = helper\n";
+        analysis.update_file(source, body.into());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())]
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == "non-static-type"
+                    && diagnostic
+                        .range()
+                        .is_some_and(|range| &body[range] == "identity")
+            }),
+            "{diagnostics:?}"
+        );
+        analysis.update_file(
+            source,
+            "def helper(value: int) -> int: return value\nidentity = helper\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
@@ -1800,7 +1911,7 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
             }
         }
         analysis.update_file(stub, "def raw(*, value: str) -> object: ...\n".into());
-        analysis.update_file(source, "def provider(**kwargs) -> tuple[object, Callable[..., object]]:\n    return (kwargs, lambda **values: values)\nInfo, raw = provider(fields=['value'])\n".into());
+        analysis.update_file(source, "def provider(**kwargs) -> tuple[object, Callable[[int], int]]:\n    return (kwargs, lambda value: value)\nInfo, raw = provider(fields=['value'])\n".into());
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
         assert!(
             diagnostics
