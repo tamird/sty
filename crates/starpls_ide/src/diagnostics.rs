@@ -252,6 +252,8 @@ def reflected(values: list[str]) -> int:
             "{'a': 1} | select({'//conditions:default': ['text']})",
             "values = ['a']\nvalues += select({'//conditions:default': 'text'})",
             "values = {'a': 1}\nvalues |= select({'//conditions:default': ['text']})",
+            "values: list[str] = ['a']\nvalues += [1]",
+            "values: dict[str, str] = {'a': 'b'}\nvalues |= {'a': 1}",
             "['a'] + struct(__radd__=reflected)",
             "values = ['a']\nvalues += struct(__radd__=reflected)",
         ] {

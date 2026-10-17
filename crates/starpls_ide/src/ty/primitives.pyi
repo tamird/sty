@@ -3,6 +3,7 @@
 # https://github.com/bazelbuild/starlark/blob/master/spec.md#built-in-methods
 # Special methods encode operations for Ty and are omitted from completion.
 
+from types import NotImplementedType
 from typing import Collection, TYPE_CHECKING
 from typing_extensions import Never
 from _starpls_allocations import dict as _AllocatedDict
@@ -196,13 +197,13 @@ class list(Sequence[_T]):
     def __setitem__(self, index: int, value: _T, /) -> None: ...
     @type_check_only
     def __add__(self, other: list[_S], /) -> list[_T | _S]: ...
-    # Only list/list mutates; native reflected addition rebinds the target.
+    # Only list/list mutates; native peers use ordinary binary dispatch.
     @overload
     @type_check_only
     def __iadd__(self, other: list[_T], /) -> Self: ...
     @overload
     @type_check_only
-    def __iadd__(self, other: SupportsRAdd[list[_T], _S], /) -> _S: ...
+    def __iadd__(self, other: SupportsRAdd[list[_T], object], /) -> NotImplementedType: ...
     @type_check_only
     def __mul__(self, count: int, /) -> list[_T]: ...
     @type_check_only
@@ -347,7 +348,7 @@ class dict(Mapping[_KT, _VT]):
     def __ior__(self, other: dict[_KT, _VT], /) -> Self: ...
     @overload
     @type_check_only
-    def __ior__(self, other: _SupportsROr[Self, _S], /) -> _S: ...
+    def __ior__(self, other: _SupportsROr[Self, object], /) -> NotImplementedType: ...
     def clear(self) -> None:
         """Remove every dictionary entry."""
     @overload
