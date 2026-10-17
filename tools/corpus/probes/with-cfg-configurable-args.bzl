@@ -18,3 +18,13 @@ print(none, nullable, union_args)
 dictionary: tuple[select[list[str] | None], list[Label]] = rewrite_args("dictionary", select({"//conditions:default": {"--flag": "$(location :value)"}}), make_filegroup)
 mixed: tuple[select[list[str] | None], list[Label]] = rewrite_args("mixed", select({"//conditions:default": None, ":condition": {"--flag": None}}), make_filegroup)
 print(dictionary, mixed)
+
+prebound: dict[str, str] = {"$(location :key)": "$(location :value)"}
+plain_dictionary: tuple[Mapping[str, object], list[Label]] = rewrite_args("plain_dictionary", prebound, make_filegroup)
+empty_dictionary: tuple[Mapping[str, object], list[Label]] = rewrite_args("empty_dictionary", {}, make_filegroup)
+plain_tuple: tuple[tuple[str, ...], list[Label]] = rewrite_args("plain_tuple", ("$(location :unchanged)",), make_filegroup)
+
+def mapping_args(args: Mapping[str, object]) -> tuple[Mapping[str, object], list[Label]]:
+    return rewrite_args("mapping", args, make_filegroup)
+
+print(plain_dictionary, empty_dictionary, plain_tuple, mapping_args)

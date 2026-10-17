@@ -57,19 +57,22 @@ variadic parameters, including incompatible executable types.
 The `with_cfg` cases follow attribute values through constructor helpers,
 split-transition registrations, argument rewriting, and frontend modes. Parser
 cases check tagged selector pieces and the generic per-piece callback helper.
-The checked args path validates decoded values and returns string lists or `None`,
-directly or through `select`, together with generated labels. Selected dictionaries
-contribute their keys, following Bazel's string-list attribute conversion. Source
-overlays reject incorrect leaf results, selector kinds, and callback arguments.
+The list and selector args paths validate decoded values and return string lists
+or `None`, directly or through `select`, together with generated labels. Selected
+dictionaries contribute their keys, following Bazel's string-list attribute
+conversion. Source overlays reject incorrect leaf results, selector kinds, and
+callback arguments.
 General `map_attr` and `compose_select_value` remain gradual: representation
 decoding loses the original element type, and composition can widen the callback's
 result type.
 Other overlays change provider fields and callback results; callers exercise
 label types and configuration modes.
 
-Plain dictionary and tuple inputs to `rewrite_args` are accepted at runtime but
-still lack interface contracts. The attempted generic dictionary overload is
-currently rejected by interface validation.
+Plain dictionary inputs to `rewrite_args` return mappings with string keys;
+tuple inputs retain their string elements. Their cases check prebound dictionaries,
+empty inputs, mapping parameters, and incorrect keys, elements, and result types.
+The dictionary helper checks keys while sharing value rewriting and collision
+order with selected dictionaries.
 
 The LLVM wrapper cases relate explicit `inner_data` to the callback's `data`
 parameter. Omitted data uses the empty-list default; list and sequence callbacks
