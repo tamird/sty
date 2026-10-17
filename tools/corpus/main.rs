@@ -455,6 +455,7 @@ fn main() -> Result<()> {
     let path =
         std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&inherited_path)))?;
     let started = Instant::now();
+    let mut failures = 0;
     for Repository {
         directory,
         origin,
@@ -484,17 +485,19 @@ fn main() -> Result<()> {
         println!("{} at {commit}", directory.display());
         for case in cases {
             let name = case.name.clone();
-            run_case(&checker, &checkout, &output, &sources, case).with_context(|| {
-                format!(
-                    "{} / {name}; evidence: {}",
+            if let Err(error) = run_case(&checker, &checkout, &output, &sources, case) {
+                failures += 1;
+                eprintln!(
+                    "{} / {name}: {error:#}; evidence: {}",
                     directory.display(),
                     output.display()
-                )
-            })?;
+                );
+            }
         }
         repository_identity(&checkout, &origin, &commit)?;
     }
     println!("Complete in {:.3}s", started.elapsed().as_secs_f64());
+    ensure!(failures == 0, "{failures} corpus cases failed");
     Ok(())
 }
 
