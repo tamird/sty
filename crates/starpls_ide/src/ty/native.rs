@@ -263,6 +263,32 @@ fn declarations(
                 ..Default::default()
             });
     }
+    if classes.get("attr").is_some_and(|class| {
+        class.field.iter().any(|field| {
+            matches!(field.name.as_str(), "dormant_label" | "dormant_label_list")
+                || (matches!(field.name.as_str(), "label" | "label_list")
+                    && field.callable.as_ref().is_some_and(|callable| {
+                        callable
+                            .param
+                            .iter()
+                            .any(|parameter| parameter.name == "materializer")
+                    }))
+        })
+    }) {
+        // DormantDependency has no StarlarkBuiltin annotation, so the exporter
+        // omits this immutable native record even when materializers accept it.
+        classes
+            .entry("DormantDependency".to_owned())
+            .or_insert_with(|| Type {
+                name: "DormantDependency".to_owned(),
+                field: vec![Value {
+                    name: "label".to_owned(),
+                    r#type: "Label".to_owned(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            });
+    }
     for (name, fields) in env::make_missing_module_members() {
         if let Some(class) = classes.get_mut(&name) {
             for field in fields {
@@ -422,6 +448,7 @@ fn declarations(
             class.name.as_str(),
             "File"
                 | "Label"
+                | "DormantDependency"
                 | "DefaultInfo"
                 | "PackageSpecificationInfo"
                 | "FilesToRunProvider"
@@ -807,6 +834,7 @@ fn declarations(
                         .unwrap_or_else(|| value_annotation(field, &declared_classes));
                     let field_type = if class.name == "_ApplePlatformTypes"
                         || (class.name == "apple_common" && field.name == "platform_type")
+                        || (class.name == "DormantDependency" && field.name == "label")
                     {
                         format!("_starpls_typing.Final[{field_type}]")
                     } else {
@@ -991,7 +1019,7 @@ fn declarations(
         body.push_str("    pass\n");
     }
     let mut output = String::from(
-        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_AttributeDefaultParameters = _starpls_typing.ParamSpec(\"_AttributeDefaultParameters\")\n_AttributeDefaultResult = _starpls_typing.TypeVar(\"_AttributeDefaultResult\")\n_AttributeMaterializerParameters = _starpls_typing.ParamSpec(\"_AttributeMaterializerParameters\")\n_AttributeMaterializerResult = _starpls_typing.TypeVar(\"_AttributeMaterializerResult\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
+        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_AttributeDefaultParameters = _starpls_typing.ParamSpec(\"_AttributeDefaultParameters\")\n_AttributeMaterializerParameters = _starpls_typing.ParamSpec(\"_AttributeMaterializerParameters\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
     );
     let context_attrs = if classes.contains_key("struct") {
         "_starpls_types.struct[_starpls_unknown]"
@@ -1405,15 +1433,30 @@ fn write_function(
             } else {
                 input
             };
-            // Construction stores these functions. Invocation and return-value
-            // validation belong to the computed-default/materializer owners.
+            // Construction stores these functions, whose parameter names depend on
+            // the surrounding rule. The native invocation owners validate results
+            // without the string-to-Label conversion used for direct defaults.
             let callback = match (kind, value.name.as_str(), name) {
-                (CallableKind::Method("attr"), "label" | "label_list", "default") => {
-                    Some("_starpls_typing.Callable[_AttributeDefaultParameters, _AttributeDefaultResult]")
-                }
-                (CallableKind::Method("attr"), "label" | "label_list", "materializer") => {
-                    Some("_starpls_typing.Callable[_AttributeMaterializerParameters, _AttributeMaterializerResult]")
-                }
+                (CallableKind::Method("attr"), "label", "default") => Some(if classes.contains("Label") {
+                    "_starpls_typing.Callable[_AttributeDefaultParameters, _starpls_types.Label | None]"
+                } else {
+                    "_starpls_typing.Callable[_AttributeDefaultParameters, _starpls_unknown]"
+                }),
+                (CallableKind::Method("attr"), "label_list", "default") => Some(if classes.contains("Label") {
+                    "_starpls_typing.Callable[_AttributeDefaultParameters, _starpls_typing.Sequence[_starpls_types.Label] | None]"
+                } else {
+                    "_starpls_typing.Callable[_AttributeDefaultParameters, _starpls_unknown]"
+                }),
+                (CallableKind::Method("attr"), "label", "materializer") => Some(if classes.contains("DormantDependency") {
+                    "_starpls_typing.Callable[_AttributeMaterializerParameters, _starpls_types.DormantDependency | None]"
+                } else {
+                    "_starpls_typing.Callable[_AttributeMaterializerParameters, _starpls_unknown]"
+                }),
+                (CallableKind::Method("attr"), "label_list", "materializer") => Some(if classes.contains("DormantDependency") {
+                    "_starpls_typing.Callable[_AttributeMaterializerParameters, _starpls_typing.Sequence[_starpls_types.DormantDependency]]"
+                } else {
+                    "_starpls_typing.Callable[_AttributeMaterializerParameters, _starpls_unknown]"
+                }),
                 _ => None,
             };
             annotation(r#type, *is_star_arg || *is_star_star_arg, classes, input, callback)
@@ -1807,9 +1850,20 @@ def computed_list(value: str) -> list[Label]:
     return [Label(value)]
 def materialize(context: object) -> None:
     return None
+def materialize_list(context: struct[{"dependency": DormantDependency}]) -> tuple[DormantDependency, ...]:
+    return (context.dependency,)
+def dormant_label(value: DormantDependency) -> Label:
+    return value.label
+def materialize_empty(context: object) -> list[DormantDependency]:
+    return []
 attr.label(default=computed)
 attr.label_list(default=computed_list)
+attr.label(default=lambda: None)
+attr.label_list(default=lambda: None)
+attr.label_list(default=lambda: (Label("//:dep"),))
 attr.label(materializer=materialize)
+attr.label_list(materializer=materialize_list)
+attr.label_list(materializer=materialize_empty)
 attr.label(allow_single_file=[".txt"], for_dependency_resolution="disabled")
 attr.label(allow_single_file=None, for_dependency_resolution=None)
 def text() -> Attribute[str]:
@@ -1842,6 +1896,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
             }),
             "{diagnostics:#?}"
         );
+        analysis.set_rules(crate::DiagnosticRules::default());
         for (statement, expected) in [
             ("attr.label(allow_single_file=42)", "invalid-argument-type"),
             (
@@ -1851,6 +1906,36 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
             ("attr.label(materializer=42)", "invalid-argument-type"),
             ("attr.label(materializer=None)", "invalid-argument-type"),
             ("attr.label(default=42)", "invalid-argument-type"),
+            ("attr.label(default=lambda: 42)", "invalid-argument-type"),
+            (
+                "attr.label(default=lambda: '//:dep')",
+                "invalid-argument-type",
+            ),
+            (
+                "attr.label_list(default=lambda: [42])",
+                "invalid-argument-type",
+            ),
+            (
+                "attr.label_list(default=lambda: ['//:dep'])",
+                "invalid-argument-type",
+            ),
+            (
+                "attr.label(materializer=lambda context: Label('//:dep'))",
+                "invalid-argument-type",
+            ),
+            (
+                "attr.label_list(materializer=lambda context: None)",
+                "invalid-argument-type",
+            ),
+            (
+                "attr.label_list(materializer=lambda context: [Label('//:dep')])",
+                "invalid-argument-type",
+            ),
+            (
+                "def wrong(value: DormantDependency) -> str: return value.label",
+                "invalid-return-type",
+            ),
+            ("DormantDependency()", "unresolved-reference"),
             ("attr.string(default=42)", "invalid-argument-type"),
             ("attr.string_list(default=[42])", "invalid-argument-type"),
             (
@@ -1881,7 +1966,8 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
         for (name, declared, accepted, rejected) in [
             ("allow_single_file", "string", "'file'", "True"),
             ("for_dependency_resolution", "bool", "False", "'disabled'"),
-            ("materializer", "None", "None", "42"),
+            ("materializer", "None", "None", "lambda: None"),
+            ("default", "None", "None", "lambda: None"),
         ] {
             let mut builtins = builtins.clone();
             let parameter = builtins
@@ -1941,6 +2027,15 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
             }],
             ..Default::default()
         });
+        builtins.r#type.push(Type {
+            name: "DormantDependency".into(),
+            field: vec![Value {
+                name: "label".into(),
+                r#type: "int".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
         builtins
             .r#type
             .iter_mut()
@@ -1964,7 +2059,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
             )
             .unwrap(),
         );
-        let source = "def marker(value: NativeComputedDefault) -> str:\n    return value.description\ndef constructor() -> Callable[[], int]:\n    return attr.string\n";
+        let source = "def marker(value: NativeComputedDefault) -> str:\n    return value.description\ndef dormant(value: DormantDependency) -> int:\n    return value.label\ndef constructor() -> Callable[[], int]:\n    return attr.string\n";
         let file = analysis
             .open_document(
                 Path::new("/main.bzl"),
@@ -2038,6 +2133,77 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
                     panic!("{missing:?}: {diagnostics:#?}");
                 };
                 assert_eq!(diagnostic.id().as_str(), "non-static-type", "{missing:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn dormant_dependency_contracts_follow_available_inventory() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for (capable, label) in [(true, true), (true, false), (false, true)] {
+            let mut builtins = builtins.clone();
+            if !label {
+                builtins.r#type.retain(|class| class.name != "Label");
+            }
+            if !capable {
+                let attr = builtins
+                    .r#type
+                    .iter_mut()
+                    .find(|class| class.name == "attr")
+                    .unwrap();
+                attr.field.retain(|field| {
+                    !matches!(field.name.as_str(), "dormant_label" | "dormant_label_list")
+                });
+                for field in &mut attr.field {
+                    if let Some(callable) = &mut field.callable {
+                        callable
+                            .param
+                            .retain(|parameter| parameter.name != "materializer");
+                    }
+                }
+            }
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("unsound-return-statement".into(), "error".into())].into(),
+                )
+                .unwrap(),
+            );
+            let source = if label {
+                "def label(value: DormantDependency) -> Label:\n    return value.label\n"
+            } else {
+                "def label(value: DormantDependency) -> str:\n    return value.label\n"
+            };
+            let file = analysis
+                .open_document(
+                    Path::new("/main.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source.into(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            if capable && label {
+                assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+            } else if capable {
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{diagnostics:#?}")
+                };
+                assert_eq!(diagnostic.id().as_str(), "unsound-return-statement");
+            } else {
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.id().as_str() == "unresolved-reference"),
+                    "{diagnostics:#?}"
+                );
             }
         }
     }
