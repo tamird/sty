@@ -50,6 +50,27 @@ pub(super) fn getattr_call_result<'db>(
     if call.has_binding_errors() {
         return None;
     }
+    let CheckedArgument::Value {
+        ty: names,
+        expression: _,
+    } = call.argument("name")
+    else {
+        return None;
+    };
+    let environment = ProgramEnvironment::from_file(call.file());
+    let names = names.expand_top_level_aliases(db, &environment);
+    let finite_names = match names {
+        Type::Union(union) => union
+            .elements(db)
+            .iter()
+            .all(|name| name.string_literal_value(db).is_some()),
+        name => name.string_literal_value(db).is_some(),
+    };
+    // Ty owns finite lookups, including gradual recovery. A declined lookup
+    // must not replace the selected field with unrelated fields' types.
+    if finite_names {
+        return None;
+    }
     let file = db.starlark_file(call.file())?;
     let definitions = db.get_builtin_defs(&file.dialect);
     let structure = definitions
@@ -68,7 +89,6 @@ pub(super) fn getattr_call_result<'db>(
     else {
         return None;
     };
-    let environment = ProgramEnvironment::from_file(call.file());
     let instance = db
         .annotation_builtin(file, "struct")?
         .to_instance_approximation(db, &environment)?;
@@ -405,6 +425,97 @@ def wrong(a: dict[{"name": str}], b: dict[{"name": int}]):
             diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn finite_struct_lookup_preserves_gradual_fields() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let features = fixture.add_file(
+            &mut analysis.db,
+            "features.bzl",
+            r#"globals = struct(
+    ProtoInfo = getattr(getattr(native, "legacy_globals", None), "ProtoInfo", None),
+    macro = macro,
+    set = set,
+    DefaultInfo = DefaultInfo,
+)
+bazel_features = struct(globals = globals)
+"#,
+        );
+        let provider = fixture.add_file(
+            &mut analysis.db,
+            "proto.bzl",
+            r#"load("features.bzl", "bazel_features")
+_ProtoInfo = provider(fields = ["sources"])
+ProtoInfo = getattr(bazel_features.globals, "ProtoInfo", None) or _ProtoInfo
+"#,
+        );
+        let source = r#"load("proto.bzl", "ProtoInfo")
+load("features.bzl", "bazel_features")
+def sources(target: Target):
+    return target[ProtoInfo].sources
+def by_name(target: Target, name: Name):
+    return target[getattr(bazel_features.globals, name)].sources
+def missing(value: struct[{"count": int}]) -> str:
+    return getattr(value, "missing", "fallback")
+def mixed(value: struct[{"count": int}], name: Literal["count", "missing"]) -> int | str:
+    return getattr(value, name, "fallback")
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", source);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "main.bzli",
+            "type Name = Literal['ProtoInfo', 'missing']\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(caller, interface)]).unwrap();
+        for file in [features, provider, caller, interface] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.update_file(
+            caller,
+            format!("{source}\ndef invalid(target: Target):\n    return target[macro]\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let gradual = r#"load("features.bzl", "bazel_features")
+def unresolved() -> object:
+    return getattr(bazel_features.globals, "ProtoInfo", None)
+"#;
+        analysis.update_file(caller, gradual.to_owned());
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == "non-static-type"
+                    && diagnostic.headline_message().contains("call result")
+                    && diagnostic.range().is_some_and(|range| {
+                        &gradual[range] == "getattr(bazel_features.globals, \"ProtoInfo\", None)"
+                    })
+            }),
             "{diagnostics:?}"
         );
     }
