@@ -173,6 +173,53 @@ mod tests {
     }
 
     #[test]
+    fn selector_construction_preserves_setdefault_first_branch() {
+        let source = r#"
+def embed(key: str, first: list[str], rest: dict[str, list[str] | None]) -> select[list[str] | None, Literal["list"]]:
+    branches: dict[str, list[str] | None] = {}
+    branches[key] = first
+    for other_key, value in rest.items():
+        branches.setdefault(other_key, value)
+    return select(branches)
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        // Assignment can replace the first value; setdefault cannot.
+        analysis.update_file(
+            file,
+            source.replace(
+                "branches.setdefault(other_key, value)",
+                "branches[other_key] = value",
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
+    fn none_equality_narrows_native_lists() {
+        let source = r#"
+def absent(value: list[str] | None) -> None:
+    if value == None:
+        return value
+    return None
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(file, source.replace("== None", "!= None"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
     fn selector_annotations_preserve_static_forwarding() {
         let source = r#"
 def forward(values: Sequence[str] | select[Sequence[str]]) -> Sequence[str] | select[Sequence[str]]:
