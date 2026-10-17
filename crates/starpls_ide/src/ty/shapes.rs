@@ -149,6 +149,7 @@ pub(super) fn getattr_result<'db>(
                 ProvidedGetattrPresence::PossiblyMissing
             },
             return_type: Some(field.declared_type()),
+            immutable_storage: field.is_required(),
         }
     } else if matches!(shape.openness(db), TypedDictOpenness::Closed) {
         ProvidedGetattrPresence::Absent.into()
@@ -670,10 +671,28 @@ tagged(struct(kind="name", name="ok"))
 tagged(struct(kind="count", count=1))
 def default(value: struct[{"name": str}]) -> int:
     return getattr(value, "absent", 42)
+def saved_optional(
+    value: struct[{"attr": struct[{"runtime_jre_version": str}]}] | struct[{"attr": struct[{"jre_version": str}]}],
+    jdk_version: str,
+) -> str:
+    runtime_version = getattr(value.attr, "runtime_jre_version", None)
+    if runtime_version != None:
+        pass
+    else:
+        runtime_version = value.attr.jre_version
+    runtime_version = runtime_version or jdk_version
+    return runtime_version
 "#;
         let file = fixture.add_file(&mut analysis.db, "main.bzl", valid);
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            file,
+            valid.replace("if runtime_version != None:", "if runtime_version == None:"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unresolved-attribute");
         for invalid in [
             "closed(struct())",
             "closed(struct(name=1))",
