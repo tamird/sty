@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "18fc0fcb00dc39e492fb5e2e290343d7bca09b42",
+    "commit": "ad6c0f6e292522fd56b40cc24d5cafc401c86b7c",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -313,7 +313,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 98
+            "line": 102
           }
         ]
       },
@@ -464,7 +464,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 34
+            "line": 38
           }
         ]
       },
@@ -482,7 +482,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 24
+            "line": 28
           }
         ]
       },
@@ -808,6 +808,24 @@
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
             "line": 110
+          }
+        ]
+      },
+      {
+        "name": "rewrite-callback-bad-argument",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "return _rewrite_locations_in_value(value, label_rewriter)",
+            "new": "return _rewrite_locations_in_value(label_rewriter(value), label_rewriter)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 20
           }
         ]
       }
@@ -1255,6 +1273,38 @@
             "id": "invalid-return-type",
             "path": "lib/apple_support.bzl",
             "line": 289
+          }
+        ]
+      },
+      {
+        "name": "gradual-callback-bad-parameter",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "lib/sty_type_probe.bzl",
+            "fixture": "probes/apple-gradual-callback-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 12
+          },
+          {
+            "id": "non-static-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 4
+          },
+          {
+            "id": "non-static-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 4
+          },
+          {
+            "id": "non-static-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 10
           }
         ]
       }

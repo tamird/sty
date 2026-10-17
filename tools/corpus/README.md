@@ -51,6 +51,9 @@ frontend and transition-alias callbacks use `list[object]` contracts that check
 the outer container. Other provider lists constrain their elements. The manifest
 lists the checked API slices.
 
+The Apple action cases check explicit callback parameters alongside gradual
+variadic parameters, including incompatible executable types.
+
 The `with_cfg` cases follow attribute values through constructor helpers,
 split-transition registrations, argument rewriting, and frontend modes. Parser
 cases check tagged selector pieces and the generic per-piece callback helper.
