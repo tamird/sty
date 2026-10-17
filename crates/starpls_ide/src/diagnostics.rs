@@ -171,6 +171,50 @@ example(name="bad", values=mixed)
     }
 
     #[test]
+    fn selector_label_kind_and_concatenation() {
+        let source = r#"
+def embed(branches: dict[str, Label]) -> select[Label, Literal["label"]]:
+    return select(branches)
+
+def mixed(first: Label) -> select[Label | str, Literal["label"]]:
+    return select({"//conditions:default": first, "//:other": "text"})
+
+label = Label("//:target")
+selected = select({"//conditions:default": label})
+pair: select[Label, Literal["label"]] = selected + selected
+right: select[Label, Literal["label"]] = selected + label
+left: select[Label, Literal["label"]] = label + selected
+nullable: select[Label | None, Literal["label"]] = select({"//conditions:default": label, "//:other": None}) + label
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for expression in [
+            "selected + 'text'",
+            "selected + select({'//conditions:default': 'text'})",
+            "selected | label",
+        ] {
+            analysis.update_file(file, format!("{source}\n{expression}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{expression}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
+        }
+
+        analysis.update_file(file, source.replace("select[Label | str,", "select[Label,"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
     fn selector_construction_preserves_possible_runtime_kinds() {
         let selected =
             "select[list[str] | None, Literal['list']] | select[list[str] | None, Literal['none']]";

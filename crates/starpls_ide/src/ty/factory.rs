@@ -118,10 +118,11 @@ impl RuleData {
             } else {
                 UnionType::from_elements(db, environment, [value, none])
             };
-            let kind = selector_value_kind(db, environment, alternatives).map_or_else(
-                || KnownClass::Object.to_instance(db, environment),
-                |kind| Type::string_literal(db, kind),
-            );
+            let kind = selector_value_kind(db, environment, declarations, alternatives)
+                .map_or_else(
+                    || KnownClass::Object.to_instance(db, environment),
+                    |kind| Type::string_literal(db, kind),
+                );
             specialized_native_instance(
                 db,
                 environment,
@@ -546,7 +547,7 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
     let alternatives = values
         .iter()
         .map(|value| {
-            let kind = selector_value_kind(db, &environment, *value)?;
+            let kind = selector_value_kind(db, &environment, declaration.program_file(db), *value)?;
             specialized_native_instance(
                 db,
                 &environment,
@@ -562,6 +563,7 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
 fn selector_value_kind<'db>(
     db: &'db Database,
     environment: &ProgramEnvironment<'db>,
+    declarations: ProgramFile<'db>,
     value: Type<'db>,
 ) -> Option<&'static str> {
     if value.as_int_literal().is_some() {
@@ -569,10 +571,10 @@ fn selector_value_kind<'db>(
     }
     if let Type::Union(union) = value {
         let (first, rest) = union.elements(db).split_first()?;
-        let kind = selector_value_kind(db, environment, *first)?;
+        let kind = selector_value_kind(db, environment, declarations, *first)?;
         return rest
             .iter()
-            .all(|value| selector_value_kind(db, environment, *value) == Some(kind))
+            .all(|value| selector_value_kind(db, environment, declarations, *value) == Some(kind))
             .then_some(kind);
     }
     for (class, kind) in [
@@ -585,14 +587,21 @@ fn selector_value_kind<'db>(
             return Some(kind);
         }
     }
-    let (class, _specialization) = value.class_specialization(db, environment)?;
-    if is_exact_dictionary_class(db, environment, Type::from(class)) {
-        return Some("dict");
+    if let Some((class, _specialization)) = value.class_specialization(db, environment) {
+        if is_exact_dictionary_class(db, environment, Type::from(class)) {
+            return Some("dict");
+        }
+        if [KnownClass::List, KnownClass::Tuple]
+            .into_iter()
+            .any(|known| Type::from(class) == known.to_class_literal(db, environment))
+        {
+            return Some("list");
+        }
     }
-    [KnownClass::List, KnownClass::Tuple]
-        .into_iter()
-        .any(|known| Type::from(class) == known.to_class_literal(db, environment))
-        .then_some("list")
+    // Bazel's Label is final and has one native implementation class.
+    let label = native_class(db, declarations, "Label")?;
+    let label = label.to_instance_approximation(db, environment)?;
+    (value == label).then_some("label")
 }
 
 fn is_exact_dictionary_class<'db>(

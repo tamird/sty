@@ -420,7 +420,9 @@ entry is known. Otherwise, the mapping's value types bound the possible kinds.
 The kind determines which selector operations Bazel accepts. For example,
 selectors whose first branch is `None` combine with `+`, including when later
 branches are dictionaries; selectors whose first branch is a dictionary
-combine with `|`.
+combine with `|`. Label branches have the `"label"` kind and combine with
+other Label values or selectors using `+`. Attribute conversion determines
+whether the receiving attribute supports the combined fragments.
 
 Inferred types display this information as a second parameter, such as
 `select[dict[str, int] | None, Literal["none"]]`. List, tuple, and range branches

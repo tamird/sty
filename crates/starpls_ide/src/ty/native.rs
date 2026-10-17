@@ -585,7 +585,7 @@ fn declarations(
         }
         if class.name == "select" {
             names.extend(["__add__", "__radd__", "__or__", "__ror__"]);
-            write_select_operators(&mut body)?;
+            write_select_operators(&mut body, declared_classes.contains("Label"))?;
         }
         if class.name == "Target" {
             names.extend(["label", "files", "__getitem__", "__contains__"]);
@@ -1129,7 +1129,7 @@ fn write_type_overloads(
 // Bazel accepts concatenation only when first-branch runtime classes agree
 // (with one shared category for Java lists). Payload types describe the later
 // attribute conversion independently of that runtime-kind requirement.
-fn write_select_operators(output: &mut String) -> anyhow::Result<()> {
+fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Result<()> {
     let domains = [
         (
             "bool",
@@ -1153,6 +1153,13 @@ fn write_select_operators(output: &mut String) -> anyhow::Result<()> {
             "add",
         ),
         (
+            "label",
+            "_starpls_types.Label",
+            "_starpls_types.Label",
+            "_starpls_types.Label",
+            "add",
+        ),
+        (
             "list",
             "_starpls_typing.Sequence[_SelectLeft]",
             "_starpls_typing.Sequence[_SelectRight]",
@@ -1166,7 +1173,9 @@ fn write_select_operators(output: &mut String) -> anyhow::Result<()> {
             "_starpls_builtins.dict[_SelectKeyLeft | _SelectKeyRight, _SelectLeft | _SelectRight]",
             "or",
         ),
-    ];
+    ]
+    .into_iter()
+    .filter(|(kind, _receiver, _operand, _result, _operation)| *kind != "label" || has_label);
     for operation in ["add", "or"] {
         for reflected in ["", "r"] {
             if operation == "add" {
@@ -1174,7 +1183,7 @@ fn write_select_operators(output: &mut String) -> anyhow::Result<()> {
                 writeln!(output, "        @_starpls_typing.type_check_only")?;
                 writeln!(output, "        def __{reflected}add__(self: _starpls_types.select[None, _starpls_typing.Literal[\"none\"]], other: _starpls_types.select[None, _starpls_typing.Literal[\"none\"]], /) -> _starpls_types.select[None, _starpls_typing.Literal[\"none\"]]: ...")?;
             }
-            for (kind, receiver, operand, result, native_operation) in domains {
+            for (kind, receiver, operand, result, native_operation) in domains.clone() {
                 let plain_operand = match kind {
                     // Bazel 9.2 requires the same Java implementation class. The Starlark
                     // dict type covers several implementations, including ctx.var's
@@ -1222,7 +1231,7 @@ fn write_select_operators(output: &mut String) -> anyhow::Result<()> {
             // Later branches may have different types from the first branch;
             // attribute conversion (or a macro) checks those values separately.
             for (kind, _receiver, _operand, _result, native_operation) in domains
-                .into_iter()
+                .clone()
                 .chain(std::iter::once(("none", "None", "None", "None", "add")))
             {
                 if operation != native_operation {
@@ -2193,6 +2202,14 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
             if !label {
                 builtins.r#type.retain(|class| class.name != "Label");
             }
+            let declarations =
+                super::generate(Dialect::Bazel, &builtins, &Default::default()).unwrap();
+            assert_eq!(
+                declarations.contents.lines().any(|line| {
+                    line.contains("def __add__(self: _starpls_types.select[_starpls_types.Label")
+                }),
+                label,
+            );
             if !capable {
                 let attr = builtins
                     .r#type
