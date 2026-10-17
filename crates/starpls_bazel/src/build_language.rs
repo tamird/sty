@@ -21,21 +21,28 @@ pub fn rule_value(rule: &RuleDefinition) -> Value {
                 .attribute
                 .iter()
                 .filter(|attribute| !attribute.name.starts_with(['$', ':']))
-                .map(|attribute| Param {
-                    name: attribute.name.clone(),
-                    // Bazel exports nondependency label lists as STRING_LIST.
-                    // Rule admission still converts their elements to labels.
-                    r#type: if matches!(
-                        attribute.name.as_str(),
-                        "visibility" | "transitive_configs"
-                    ) {
-                        "List of Labels".to_owned()
-                    } else {
-                        attribute_type_string_from_discriminator(attribute.r#type())
-                    },
-                    doc: attribute.documentation().to_owned(),
-                    is_mandatory: attribute.mandatory(),
-                    ..Default::default()
+                .flat_map(|attribute| {
+                    let parameter = Param {
+                        name: attribute.name.clone(),
+                        // Bazel exports nondependency label lists as STRING_LIST.
+                        // Rule admission still converts their elements to labels.
+                        r#type: if matches!(
+                            attribute.name.as_str(),
+                            "visibility" | "transitive_configs"
+                        ) {
+                            "List of Labels".to_owned()
+                        } else {
+                            attribute_type_string_from_discriminator(attribute.r#type())
+                        },
+                        doc: attribute.documentation().to_owned(),
+                        is_mandatory: attribute.mandatory(),
+                        ..Default::default()
+                    };
+                    let alias = crate::attr::input_alias(&attribute.name).map(|name| Param {
+                        name: name.to_owned(),
+                        ..parameter.clone()
+                    });
+                    std::iter::once(parameter).chain(alias)
                 })
                 .collect(),
             return_type: "None".to_owned(),
@@ -55,7 +62,7 @@ pub fn attribute_type_string_from_discriminator(value: Discriminator) -> String 
         LabelList | OutputList => "List of Labels",
         Boolean => "boolean",
         IntegerList => "List of ints",
-        LabelListDict => "Dict of Labels",
+        LabelListDict => "Dictionary: string -> list of Labels",
         StringDict => "Dict of strings",
         StringListDict => "Dictionary: string -> list of strings",
         LabelKeyedStringDict => "Dictionary: Label -> string",

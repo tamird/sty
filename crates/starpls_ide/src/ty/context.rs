@@ -627,7 +627,9 @@ fn context_type<'db>(
         } in attributes
         {
             // Bazel accepts hints at rule call sites but hides them from ctx.attr.
-            if context_kind == ContextKind::Build && name == "aspect_hints" {
+            if context_kind == ContextKind::Build
+                && !starpls_bazel::attr::visible_in_rule_context(name)
+            {
                 continue;
             }
             let ty = if let Some(attribute) = descriptor {
@@ -1964,6 +1966,185 @@ example(name="ok", own="value", unseen=True)
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
         }
+    }
+
+    #[test]
+    fn common_rule_attributes_preserve_inputs_contexts_and_inheritance() {
+        use starpls_bazel::build::attribute::Discriminator;
+        let source = r#"def implementation(ctx):
+    metadata: Sequence[Target] = ctx.attr.package_metadata
+    generated: str = ctx.attr.generator_name
+    expected: str = ctx.attr.expect_failure
+    configs: list[Label] = ctx.attr.transitive_configs
+    visibility: list[Label] = ctx.attr.visibility
+    print(metadata, generated, expected, configs, visibility)
+example = rule(implementation=implementation, extendable=True)
+child = rule(implementation=implementation, parent=example)
+def macro_impl(name, visibility, package_metadata, **kwargs):
+    value: list[Label] | None = package_metadata
+    print(name, visibility, value, kwargs)
+wrapper = macro(implementation=macro_impl, inherit_attrs=example)
+common_wrapper = macro(implementation=macro_impl, inherit_attrs="common")
+example(name="ok", package_metadata=["//:metadata"], applicable_licenses=[Label("//:old")], transitive_configs=["//:config"], generator_name="generated", generator_function="macro", generator_location="defs.bzl:1", expect_failure="expected", exec_group_compatible_with={"tools": ["//:constraint"]})
+child(name="child", applicable_licenses=["//:metadata"])
+wrapper(name="wrapper", applicable_licenses=["//:metadata"])
+common_wrapper(name="common", applicable_licenses=["//:metadata"])
+def repo_impl(ctx): pass
+repo = repository_rule(implementation=repo_impl, attrs={"package_metadata": attr.string()})
+repo(name="repository", package_metadata="value")
+native.inventory(package_metadata=["//:metadata"], applicable_licenses=[Label("//:old")], exec_group_compatible_with={"tools": ["//:constraint"]})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let builtins = analysis
+            .db
+            .get_builtin_defs(&starpls_common::Dialect::Bazel)
+            .builtins(&analysis.db)
+            .clone();
+        let inventory = starpls_bazel::build::BuildLanguage {
+            rule: vec![starpls_bazel::build::RuleDefinition {
+                name: "inventory".to_owned(),
+                attribute: [
+                    ("package_metadata", Discriminator::LabelList),
+                    ("exec_group_compatible_with", Discriminator::LabelListDict),
+                ]
+                .into_iter()
+                .map(|(name, kind)| starpls_bazel::build::AttributeDefinition {
+                    name: name.to_owned(),
+                    r#type: kind as i32,
+                    configurable: Some(false),
+                    ..Default::default()
+                })
+                .collect(),
+                ..Default::default()
+            }],
+        };
+        analysis
+            .set_builtin_defs(builtins.clone(), inventory.clone())
+            .unwrap();
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (field, expected) in [
+            ("ctx.attr.transitive_configs", "list[Label]"),
+            ("ctx.attr.visibility", "list[Label]"),
+            ("ctx.attr.generator_name", "str"),
+            ("ctx.attr.expect_failure", "str"),
+        ] {
+            check_field(&analysis.snapshot(), file, source, field, expected, "");
+        }
+        for (invalid, expected) in [
+            (
+                "example(name='bad', generator_name=1)",
+                "invalid-argument-type",
+            ),
+            (
+                "example(name='bad', transitive_configs=[1])",
+                "invalid-argument-type",
+            ),
+            (
+                "example(name='bad', applicable_licenses=[1])",
+                "invalid-argument-type",
+            ),
+            (
+                "example(name='bad', applicable_licenses=select({'//conditions:default': []}))",
+                "invalid-argument-type",
+            ),
+            (
+                "native.inventory(applicable_licenses=select({'//conditions:default': []}))",
+                "invalid-argument-type",
+            ),
+            (
+                "example(name='bad', exec_group_compatible_with={'tools': [1]})",
+                "invalid-argument-type",
+            ),
+            (
+                "example(name='bad', distribs=['internal'])",
+                "unknown-argument",
+            ),
+            (
+                "repo(name='bad', applicable_licenses='value')",
+                "unknown-argument",
+            ),
+            (
+                "wrapper(name='bad', generator_name='hidden')",
+                "unknown-argument",
+            ),
+            (
+                "common_wrapper(name='bad', generator_name='hidden')",
+                "unknown-argument",
+            ),
+        ] {
+            analysis.update_file(file, format!("{source}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected, "{invalid}");
+        }
+        for field in ["applicable_licenses", "exec_group_compatible_with"] {
+            let updated = source.replace(
+                "generated: str = ctx.attr.generator_name",
+                &format!("generated: str = ctx.attr.{field}"),
+            );
+            analysis.update_file(file, updated);
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute"),
+                "{field}: {diagnostics:?}"
+            );
+        }
+        // Only the canonical field is inherited; removing it also removes its input alias.
+        let updated = source.replace(
+            "inherit_attrs=example)",
+            "inherit_attrs=example, attrs={'package_metadata': None})",
+        );
+        analysis.update_file(file, updated);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "unknown-argument"),
+            "{diagnostics:?}"
+        );
+        // A metadata replacement invalidates the generated declaration and its schema.
+        analysis.update_file(file, source.to_owned());
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        assert!(!analysis.snapshot().diagnostics(file).unwrap().is_empty());
+        analysis.set_builtin_defs(builtins, inventory).unwrap();
+        assert!(analysis.snapshot().diagnostics(file).unwrap().is_empty());
+    }
+
+    #[test]
+    fn executable_rule_attributes_do_not_leak_into_other_rule_kinds() {
+        let source = r#"def implementation(ctx):
+    args: list[str] = ctx.attr.args
+    licenses: list[str] = ctx.attr.output_licenses
+    print(args, licenses)
+example = rule(implementation=implementation, executable=True)
+example(name="ok", args=["flag"], output_licenses=["notice"])
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        assert!(analysis.snapshot().diagnostics(file).unwrap().is_empty());
+        for invalid in ["args=[1]", "output_licenses=[1]", "timeout='short'"] {
+            analysis.update_file(file, format!("{source}example(name='bad', {invalid})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+        }
+        for options in ["", "test=True", "analysis_test=True"] {
+            let source = format!("def implementation(ctx): pass\nexample = rule(implementation=implementation, {options})\nexample(name='bad', output_licenses=['notice'])\n");
+            analysis.update_file(file, source);
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{options}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "unknown-argument");
+        }
+        let source = "def flag() -> bool: return True\ndef implementation(ctx): print(ctx.attr.output_licenses)\nexample = rule(implementation=implementation, executable=flag())\nexample(name='ok', output_licenses=['notice'])\n";
+        analysis.update_file(file, source.to_owned());
+        assert!(analysis.snapshot().diagnostics(file).unwrap().is_empty());
     }
 
     #[test]

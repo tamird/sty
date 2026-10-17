@@ -842,7 +842,10 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     let environment = ProgramEnvironment::from_file(call.file());
     let declaration = call.declaration()?;
     let declarations = declaration.program_file(db);
-    let common = starpls_bazel::attr::make_common_attributes();
+    let rules = db
+        .get_builtin_defs(&starpls_common::Dialect::Bazel)
+        .rules(db);
+    let common = starpls_bazel::attr::make_common_attributes(rules);
     let parent = if matches!(kind, RuleKind::Build) {
         match call.argument("parent") {
             CheckedArgument::Omitted => None,
@@ -876,7 +879,17 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     } else {
         Some(false)
     };
+    let binary = if parent.is_none() && matches!(kind, RuleKind::Build) {
+        match (test, boolean_argument(call, "executable")) {
+            (Some(true), _) | (_, Some(false)) => Some(false),
+            (Some(false), Some(true)) => Some(true),
+            _ => None,
+        }
+    } else {
+        Some(false)
+    };
     let mut test_attributes = common.test;
+    let mut binary_attributes = common.binary;
     let inherit_common = matches!(call.argument("inherit_attrs"), CheckedArgument::Value { ty, expression: _ }
         if ty.string_literal_value(db) == Some("common"));
     let mut common = match kind {
@@ -886,7 +899,8 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             .build
             .into_iter()
             .filter(|attribute| {
-                inherit_common || matches!(attribute.name.as_str(), "name" | "visibility")
+                (inherit_common && !starpls_bazel::attr::is_undocumented(&attribute.name))
+                    || matches!(attribute.name.as_str(), "name" | "visibility")
             })
             .collect(),
     };
@@ -908,6 +922,9 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     }
     if test == Some(true) {
         common.append(&mut test_attributes);
+    }
+    if binary == Some(true) {
+        common.append(&mut binary_attributes);
     }
     let mut documentation = Documentation {
         text: doc_string(db, call),
@@ -986,8 +1003,15 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             });
         }
     }
-    if test.is_none() {
-        for attribute in test_attributes {
+    let uncertain_attributes = test_attributes
+        .into_iter()
+        .filter(|_| test.is_none())
+        .chain(binary_attributes.into_iter().filter(|_| binary.is_none()));
+    for attribute in uncertain_attributes {
+        if !attributes
+            .iter()
+            .any(|existing| existing.name == attribute.name)
+        {
             let name = Name::new(attribute.name);
             attributes.push(RuleAttribute {
                 parameter: Some(
@@ -1208,7 +1232,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         source,
     } in attributes
     {
-        if matches!(kind, RuleKind::Build) {
+        if matches!(kind, RuleKind::Build) && starpls_bazel::attr::visible_in_rule_context(&name) {
             let value = match &descriptor {
                 Some(attribute) => super::context::analyzed_attribute_type(
                     db,
@@ -1225,6 +1249,16 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     .required(true)
                     .read_only(true)
                     .build(),
+            );
+        }
+        if let Some((parameter, alias)) = parameter.as_ref().zip(
+            starpls_bazel::attr::input_alias(&name)
+                .filter(|_| matches!(kind, RuleKind::Build | RuleKind::Macro)),
+        ) {
+            parameters.push(
+                Parameter::keyword_only(Name::new(alias))
+                    .with_annotated_type(parameter.annotated_type())
+                    .with_default_type(Type::unknown()),
             );
         }
         parameters.extend(parameter);
@@ -1498,13 +1532,15 @@ fn inherit_macro_attributes<'db>(
             continue;
         }
         // Bazel's build-language metadata omits is_documented. These three
-        // native bookkeeping attributes are explicitly undocumented in Bazel.
-        if native
-            && matches!(
-                name.as_str(),
-                "generator_name" | "generator_function" | "generator_location"
-            )
-        {
+        // bookkeeping attributes are explicitly undocumented in Bazel.
+        if (native || parent_data.is_some()) && starpls_bazel::attr::is_undocumented(name) {
+            continue;
+        }
+        if signature.parameters().iter().any(|parameter| {
+            parameter.name().is_some_and(|canonical| {
+                starpls_bazel::attr::input_alias(canonical) == Some(name.as_str())
+            })
+        }) {
             continue;
         }
         let parameter = if default_type.is_some() {
@@ -1606,11 +1642,18 @@ fn inherited_native_attribute(
         Discriminator::Integer => AttributeKind::Int,
         Discriminator::IntegerList => AttributeKind::IntList,
         Discriminator::String => AttributeKind::String,
-        Discriminator::StringList => AttributeKind::StringList,
+        Discriminator::StringList => {
+            if matches!(name, "visibility" | "transitive_configs") {
+                AttributeKind::NodepLabelList
+            } else {
+                AttributeKind::StringList
+            }
+        }
         Discriminator::StringDict => AttributeKind::StringDict,
         Discriminator::StringListDict => AttributeKind::StringListDict,
         Discriminator::Label => AttributeKind::Label,
         Discriminator::LabelList => AttributeKind::LabelList,
+        Discriminator::LabelListDict => AttributeKind::StringKeyedLabelListDict,
         Discriminator::LabelKeyedStringDict => AttributeKind::LabelKeyedStringDict,
         Discriminator::Output => AttributeKind::Output,
         Discriminator::OutputList => AttributeKind::OutputList,
@@ -1815,6 +1858,17 @@ pub(super) fn attribute_value_type<'db>(
             }
         }
         AttributeKind::LabelList => list(label()?),
+        AttributeKind::NodepLabelList => {
+            let label = native_class(db, declarations, "Label")?
+                .to_instance_approximation(db, environment)?;
+            let element = match usage {
+                AttributeUse::Input => UnionType::from_elements(db, environment, [label, string]),
+                AttributeUse::BuildContext(_)
+                | AttributeUse::RepositoryContext
+                | AttributeUse::MacroContext => label,
+            };
+            list(element)
+        }
         AttributeKind::LabelKeyedStringDict => {
             let keys = label()?;
             match usage {
@@ -1838,6 +1892,7 @@ pub(super) fn attribute_value_type<'db>(
             }
         }
         AttributeKind::StringKeyedLabelDict => dict(string, label()?),
+        AttributeKind::StringKeyedLabelListDict => dict(string, list(label()?)),
         AttributeKind::Output => {
             let output = output()?;
             match usage {

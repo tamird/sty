@@ -1367,7 +1367,10 @@ fn write_function(
             let configurable = rule
                 .attribute
                 .iter()
-                .find(|attribute| attribute.name == name)
+                .find(|attribute| {
+                    attribute.name == name
+                        || starpls_bazel::attr::input_alias(&attribute.name) == Some(name)
+                })
                 .and_then(|attribute| {
                     use starpls_bazel::build::attribute::Discriminator;
                     if matches!(
