@@ -1139,12 +1139,6 @@ fn select_plain_operands<'a>(
             "_starpls_ty_extensions.Intersection[_starpls_builtins.dict[_SelectKeyRight, _SelectRight], _starpls_unknown]",
             "_starpls_builtins.dict[_SelectKeyRight, _SelectRight]",
         ),
-        // Integer values also have several native representations.
-        "int" => (
-            None,
-            "_starpls_ty_extensions.Intersection[_starpls_builtins.int, _starpls_unknown]",
-            operand,
-        ),
         "list" => (None, operand, "_starpls_builtins.list[_SelectRight]"),
         _ => (None, operand, operand),
     };
@@ -1221,12 +1215,7 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
                         writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[{receiver} | None, {required_kind}], other: {plain_operand}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue, None], _SelectKind]: ...")?;
                     }
                     // The peer supplies both the element shape and its whole nullable payload.
-                    let native_requirement = if kind == "int" {
-                        ", _starpls_unknown"
-                    } else {
-                        ""
-                    };
-                    let selected = format!("_starpls_ty_extensions.Intersection[_starpls_types.select[{operand} | None, {required_kind}], _starpls_types.select[_SelectPeerValue, {required_kind}]{native_requirement}]");
+                    let selected = format!("_starpls_ty_extensions.Intersection[_starpls_types.select[{operand} | None, {required_kind}], _starpls_types.select[_SelectPeerValue, {required_kind}]]");
                     writeln!(output, "        @_starpls_typing.overload")?;
                     writeln!(output, "        @_starpls_typing.type_check_only")?;
                     writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[{receiver} | None, {required_kind}], other: {selected}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue | _SelectPeerValue, None], _SelectKind]: ...")?;
@@ -1256,11 +1245,6 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
                     writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {plain_operand}, /) -> _starpls_types.select[_SelectValue | {fragment}, {required_kind}]: ...")?;
                 }
                 let selected = format!("_starpls_types.select[_SelectPeerValue, {required_kind}]");
-                let selected = if kind == "int" {
-                    format!("_starpls_ty_extensions.Intersection[{selected}, _starpls_unknown]")
-                } else {
-                    selected
-                };
                 writeln!(output, "        @_starpls_typing.overload")?;
                 writeln!(output, "        @_starpls_typing.type_check_only")?;
                 writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {selected}, /) -> _starpls_types.select[_SelectValue | _SelectPeerValue, {required_kind}]: ...")?;

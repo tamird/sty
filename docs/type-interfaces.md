@@ -443,11 +443,11 @@ selector types. For example, `dict[str, list[str] | None]` produces
 Each alternative retains every branch's payload type. Independent selectors
 with uncertain kinds still require proof of compatible kinds before combining.
 Mappings with unknown or unclassified value categories retain an unspecified
-kind, as do integer and dictionary value types with several native representations.
-Integer literals retain the `"int"` category, and literal dictionary branches
-retain the `"dict"` kind. Bazel uses
-several native integer representations, so integer operands carry an `Unknown`
-compatibility requirement.
+kind, as do dictionary value types with several native representations.
+Integer values retain the `"int"` category, and literal dictionary branches
+retain the `"dict"` kind. Bazel can reject integer concatenation when operands
+use different internal representations, which depend on numeric range.
+Successful concatenations retain their `int` payloads.
 
 A predicate testing for any selector uses `TypeIs[select[object, object]]`.
 The second `object` covers every kind, so both outcomes of the predicate can

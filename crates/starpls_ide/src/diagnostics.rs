@@ -76,7 +76,7 @@ mod tests {
     fn selector_runtime_kind_ordinary_diagnostics() {
         let mut failures = Vec::new();
         for (body, parameters, ordinary_error) in [
-            // Integer construction leaves kind unknown because int hides Java representation.
+            // Native integer representations can impose additional value restrictions.
             ("select({'//:a': 1}) + 2", "", false),
             ("2 + select({'//:a': 1})", "", false),
             ("select({'//:a': 1}) + 2147483648", "", false),
@@ -290,6 +290,52 @@ def reflected(values: list[str]) -> int:
             assert_eq!(diagnostics.len(), 1, "{statement}: {diagnostics:?}");
             assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
         }
+    }
+
+    #[test]
+    fn selector_integer_kind_and_concatenation() {
+        let source = r#"
+def embed(value: int) -> select[int, Literal["int"]]:
+    return select({"//conditions:default": value})
+
+def mapping(values: dict[str, int]) -> select[int, Literal["int"]]:
+    return select(values)
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for expression in [
+            "def combine() -> select[int, Literal['int']]:\n    return embed(1) + 2",
+            "def combine() -> select[int, Literal['int']]:\n    return 2 + embed(1)",
+            "def combine() -> select[int, Literal['int']]:\n    return embed(1) + 1099511627776",
+            "def combine() -> select[int, Literal['int']]:\n    return embed(1) + embed(1099511627776)",
+            "value = embed(1)\nvalue += 2",
+            "value = 2\nvalue += embed(1)",
+        ] {
+            analysis.update_file(file, format!("{source}\n{expression}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{expression}: {diagnostics:?}");
+        }
+
+        analysis.update_file(file, format!("{source}\nembed(True)\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+
+        analysis.update_file(file, source.replace("-> select[int,", "-> select[str,"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
     }
 
     #[test]

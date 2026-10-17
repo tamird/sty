@@ -566,9 +566,6 @@ fn selector_value_kind<'db>(
     declarations: ProgramFile<'db>,
     value: Type<'db>,
 ) -> Option<&'static str> {
-    if value.as_int_literal().is_some() {
-        return Some("int");
-    }
     if let Type::Union(union) = value {
         let (first, rest) = union.elements(db).split_first()?;
         let kind = selector_value_kind(db, environment, declarations, *first)?;
@@ -580,6 +577,7 @@ fn selector_value_kind<'db>(
     for (class, kind) in [
         (KnownClass::Str, "str"),
         (KnownClass::Bool, "bool"),
+        (KnownClass::Int, "int"),
         (KnownClass::NoneType, "none"),
         (KnownClass::Range, "list"),
     ] {
