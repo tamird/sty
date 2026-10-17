@@ -985,6 +985,7 @@ fn declarations(
     output.push_str("_starpls_annotation_ExactDict = _starpls_allocations.dict\n\n");
     output.push_str("class _starpls_annotation_record:\n    @_starpls_typing.type_check_only\n    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_builtins.object: ...\n\n");
     output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");
+    output.push_str("_starpls_annotation_Intersection = _starpls_ty_extensions.Intersection\n");
     for name in classes.keys() {
         writeln!(output, "_starpls_annotation_{name} = _starpls_types.{name}")?;
     }

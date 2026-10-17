@@ -1155,6 +1155,10 @@ load("aliases.bzl", Renamed="Alias")
 def forward(target: Target, keys: Sequence[ProviderKey]) -> list[object]:
     return [target[key] for key in keys if key in target]
 def initialized_key(key: Provider[Initialized]) -> None: pass
+def construct_and_lookup(target: Target, key: Intersection[Provider[Initialized], Callable[[str], Initialized]]) -> str:
+    return key("constructed").value + target[key].value
+def initialized_constructor(key: Intersection[Provider[Initialized], Callable[[str], Initialized]]) -> None: pass
+initialized_constructor(Initialized)
 def default_key(key: Provider[DefaultInfo]) -> None: pass
 initialized_key(Initialized)
 default_key(DefaultInfo)
@@ -1208,6 +1212,9 @@ empty: Empty = Empty()
             ("Initialized(42)", "invalid-argument-type"),
             ("raw(value=42)", "invalid-argument-type"),
             ("initialized_key(arbitrary)", "invalid-argument-type"),
+            ("initialized_constructor(arbitrary)", "invalid-argument-type"),
+            ("initialized_constructor(raw)", "invalid-argument-type"),
+            ("def wrong_call(key: Intersection[Provider[Initialized], Callable[[str], Initialized]]) -> None:\n    key(42)", "invalid-argument-type"),
             ("def concrete(key: Provider[Info[str]]) -> None: pass\nconcrete(Info)", "invalid-argument-type"),
         ] {
             analysis.update_file(caller, format!("{valid}\n{invalid}\n"));

@@ -261,6 +261,16 @@ through that opaque view returns `object`. `Provider[T]` describes a key with
 a declared lookup result `T`. Source provider values also retain their exact
 constructor signatures; ordinary functions and raw constructors are not keys.
 
+`Intersection[A, B]` requires both contracts, using ty's intersection type.
+For example, a value used both as a provider key and a constructor can declare
+its lookup result and call signature together:
+
+```starlark
+type FilesConstructor = Intersection[Provider[FilesInfo], Callable[[list[File]], FilesInfo]]
+```
+
+This annotation is a sty extension to the proposed Starlark type syntax.
+
 ```starlark
 def forward(target: Target, keys: Sequence[ProviderKey]) -> list[object]:
     return [target[key] for key in keys if key in target]

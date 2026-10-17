@@ -254,6 +254,7 @@ impl Database {
                     "property",
                     "record",
                     "ProviderKey",
+                    "Intersection",
                 ])
                 .chain(native::TYPING_ANNOTATIONS.iter().copied());
             return candidates
