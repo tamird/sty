@@ -266,6 +266,9 @@ impl Validator<'_> {
             Stmt::ClassDef(class) => {
                 if self.annotation_mode == AnnotationMode::Interface {
                     self.visit_identifier(&class.name);
+                    if let Some(type_params) = &class.type_params {
+                        self.visit_type_params(type_params);
+                    }
                     if let Some(arguments) = &class.arguments {
                         self.visit_arguments(arguments);
                     }
@@ -275,7 +278,7 @@ impl Validator<'_> {
                     self.in_interface_class = class
                         .arguments
                         .as_ref()
-                        .is_some_and(|arguments| !arguments.is_empty());
+                        .is_some_and(|arguments| !arguments.args.is_empty());
                     self.visit_body(&class.body);
                     self.in_interface_class = previous;
                 } else {
@@ -588,9 +591,9 @@ fn interface_statement(statement: &Stmt) -> bool {
             let has_bases = class
                 .arguments
                 .as_ref()
-                .is_some_and(|arguments| !arguments.is_empty());
+                .is_some_and(|arguments| !arguments.args.is_empty());
             class.decorator_list.is_empty()
-                && class.type_params.is_none()
+                && (has_bases || class.type_params.is_none())
                 && class.arguments.as_ref().is_none_or(|arguments| {
                     arguments.args.iter().all(Expr::is_name_expr)
                         && arguments.keywords.iter().all(|keyword| {
@@ -797,6 +800,15 @@ mod tests {
             ),
             ("class Info:\n    value: Info | None", true),
             ("class Info(Base):\n    value: int", true),
+            ("class Info[T]:\n    value: T", false),
+            ("class Info[T](closed=True): pass", false),
+            ("class Row[T](TypedDict):\n    value: T", true),
+            (
+                "class Builder[T: str](Protocol):\n    def build(self) -> T: ...",
+                true,
+            ),
+            ("class Builder[T: load](Protocol): pass", false),
+            ("class Builder[T: int ** str](Protocol): pass", false),
             (
                 "class Row(TypedDict, extra_items=ReadOnly[object]):\n    name: str",
                 true,

@@ -517,6 +517,8 @@ Protocol bases are names resolved in the stub's scope. Method signatures use
 ordinary function annotations and declaration bodies. ty checks compatibility
 structurally. Private helper protocols describe return values and parameters
 without declaring a corresponding source export.
+Protocols and TypedDicts accept type parameters using the same syntax as generic
+functions, for example `class _Consumer[T](Protocol)`.
 
 Readonly properties describe fields that callers can read but cannot assign.
 A named callback protocol preserves the keyword parameters of a callable field:

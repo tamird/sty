@@ -2236,6 +2236,37 @@ number: int = identity(42)
     }
 
     #[test]
+    fn generic_protocols_check_callback_arguments() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source_text = "def invoke(callback, value):\n    callback(data=value)\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", source_text);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "class _Consumer[T](Protocol):\n    def __call__(self, *, data: T) -> None: ...\ndef invoke[T](callback: _Consumer[T], value: T) -> None: ...\n",
+        );
+        let caller_text = "load('source.bzl', 'invoke')\ndef consume(*, data: list[str]) -> None:\n    print(data)\ninvoke(consume, ['ok'])\n";
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", caller_text);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [source, interface, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+
+        analysis.update_file(caller, caller_text.replace("['ok']", "[42]"));
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+
+        analysis.update_file(source, source_text.replace("data=value", "data=42"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
     fn protocol_methods_use_ordinary_types_and_editor_origins() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
