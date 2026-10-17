@@ -1544,6 +1544,8 @@ fn annotation(
                 _ => None,
             };
             if let Some(container) = container {
+                let list_input = container == "_starpls_builtins.list"
+                    && matches!(usage, AnnotationUse::AttributeInput);
                 let container = match (container, usage) {
                     ("_starpls_builtins.list", AnnotationUse::AttributeInput) => {
                         "_starpls_typing.Iterable"
@@ -1564,6 +1566,8 @@ fn annotation(
                     format!("{container}[_starpls_typing.Any, {element}]")
                 } else if container == "_starpls_builtins.tuple" {
                     format!("{container}[{element}, ...]")
+                } else if list_input && classes.contains("depset") {
+                    format!("{container}[{element}] | _starpls_types.depset[{element}]")
                 } else {
                     format!("{container}[{element}]")
                 };
@@ -2594,11 +2598,14 @@ selected(name="shell", srcs=["//:input"], use_bash_launcher=True)
 package(default_visibility=labels, default_package_metadata=[Label('//:license')])
 example(name='first', visibility=labels)
 example(name='second', visibility=[Label('//visibility:public')])
+example(name='sets', visibility=depset([Label('//visibility:public')]), transitive_configs=depset([Label('//:setting')]))
 "#,
                 vec![
                     "package(default_visibility=[42])",
                     "package(features=[Label('//:feature')])",
                     "example(name='bad', visibility=[42])",
+                    "example(name='bad', visibility=depset([42]))",
+                    "example(name='bad', transitive_configs=depset([42]))",
                 ],
             ),
             (
@@ -2629,6 +2636,7 @@ example(name='second', visibility=[Label('//visibility:public')])
                     attribute: vec![
                         AttributeDefinition { name: "name".to_owned(), r#type: Discriminator::String as i32, mandatory: Some(true), configurable: Some(false), ..Default::default() },
                         AttributeDefinition { name: "visibility".to_owned(), r#type: Discriminator::StringList as i32, configurable: Some(false), ..Default::default() },
+                        AttributeDefinition { name: "transitive_configs".to_owned(), r#type: Discriminator::StringList as i32, configurable: Some(false), ..Default::default() },
                     ],
                     ..Default::default()
                 }],

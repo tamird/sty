@@ -1732,7 +1732,15 @@ pub(super) fn attribute_value_type<'db>(
             AttributeUse::RepositoryContext => KnownClass::List,
             AttributeUse::MacroContext => KnownClass::List,
         };
-        class.to_specialized_instance(db, environment, &[element])
+        let values = class.to_specialized_instance(db, environment, &[element]);
+        if matches!(usage, AttributeUse::Input) {
+            if let Some(depset) =
+                specialized_native_instance(db, environment, declarations, "depset", vec![element])
+            {
+                return UnionType::from_elements(db, environment, [values, depset]);
+            }
+        }
+        values
     };
     let dict = |key, value| {
         let class = match usage {
@@ -2205,6 +2213,41 @@ mod tests {
     use crate::FilePosition;
 
     #[test]
+    fn list_attribute_inputs_accept_depsets() {
+        let source = r#"def implementation(ctx): return []
+example = rule(implementation=implementation, attrs={
+    'names': attr.string_list(),
+    'numbers': attr.int_list(),
+    'groups': attr.string_list_dict(),
+})
+example(name='valid', names=depset(['a']), numbers=depset([1]), groups={'g': depset(['b'])})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for argument in [
+            "names=depset([1])",
+            "numbers=depset(['a'])",
+            "groups={'g': depset([1])}",
+        ] {
+            analysis.update_file(file, format!("{source}example(name='bad', {argument})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{argument}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        }
+    }
+
+    #[test]
     fn loaded_build_settings_check_defaults_after_edits() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
@@ -2402,7 +2445,10 @@ inherited(name="signature", build_setting_default=$0[])
             .iter()
             .find(|parameter| parameter.label.starts_with("build_setting_default:"))
             .unwrap();
-        assert_eq!(default.label, "build_setting_default: Iterable[str]");
+        assert_eq!(
+            default.label,
+            "build_setting_default: Iterable[str] | depset[str]"
+        );
         assert_eq!(
             default.documentation.as_deref(),
             Some("Default value of this build setting.")

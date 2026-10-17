@@ -23,9 +23,12 @@ pub fn rule_value(rule: &RuleDefinition) -> Value {
                 .filter(|attribute| !attribute.name.starts_with(['$', ':']))
                 .map(|attribute| Param {
                     name: attribute.name.clone(),
-                    // Bazel exports visibility as STRING_LIST, but converts
-                    // its values through NODEP_LABEL_LIST at rule admission.
-                    r#type: if attribute.name == "visibility" {
+                    // Bazel exports nondependency label lists as STRING_LIST.
+                    // Rule admission still converts their elements to labels.
+                    r#type: if matches!(
+                        attribute.name.as_str(),
+                        "visibility" | "transitive_configs"
+                    ) {
                         "List of Labels".to_owned()
                     } else {
                         attribute_type_string_from_discriminator(attribute.r#type())
