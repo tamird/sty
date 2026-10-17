@@ -271,13 +271,20 @@ fn check_report(
         excluded_inputs.is_empty() && input_errors.is_empty() && unresolved_loads.is_empty(),
         "source check excluded inputs or failed to resolve them"
     );
+    let reported_selected = checked_paths(selected_files);
     ensure!(
-        checked_paths(selected_files) == *selected,
-        "report selected files differ from requested sources"
+        selected.is_subset(&reported_selected),
+        "report selected files omit requested sources"
     );
     ensure!(
-        checked_paths(checked_files) == *selected,
-        "report checked files differ from requested sources"
+        reported_selected
+            .difference(selected)
+            .all(|path| path.is_absolute() && path.extension() == Some(OsStr::new("bzli"))),
+        "report extra selected files must be absolute .bzli paths"
+    );
+    ensure!(
+        checked_paths(checked_files) == reported_selected,
+        "report checked files differ from selected files"
     );
     ensure!(actual_errors == errors && warnings == 0 && infos == 0, "report counts: {actual_errors} errors, {warnings} warnings, {infos} infos; expected {errors} errors");
     Ok(())
@@ -394,7 +401,7 @@ fn run_case(
         "expected exit {expected_exit}, got {status}"
     );
     println!(
-        "{name}: {} files, {} expected errors, {:.3}s",
+        "{name}: {} requested files, {} expected errors, {:.3}s",
         selected.len(),
         expected.len(),
         elapsed.as_secs_f64()
@@ -545,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    fn coverage_must_include_the_implementation() {
+    fn coverage_checks_requested_sources_and_configured_interfaces() {
         let checkout = Path::new("/repo");
         let selected = BTreeSet::from([checkout.join("source.bzl"), checkout.join("probe.bzl")]);
         let report = || Report {
@@ -577,5 +584,37 @@ mod tests {
             .checked_files
             .retain(|file| file.path.ends_with("probe.bzl"));
         assert!(check_report(fixture_only, checkout, &selected, 0, "9.2.0").is_err());
+
+        let mut missing_source = report();
+        missing_source
+            .selected_files
+            .retain(|file| file.path.ends_with("probe.bzl"));
+        missing_source
+            .checked_files
+            .retain(|file| file.path.ends_with("probe.bzl"));
+        assert!(check_report(missing_source, checkout, &selected, 0, "9.2.0").is_err());
+
+        let donor = Path::new("/external/dependency/source.bzli");
+        let mut configured = report();
+        configured
+            .selected_files
+            .push(ReportFile { path: donor.into() });
+        configured
+            .checked_files
+            .push(ReportFile { path: donor.into() });
+        check_report(configured, checkout, &selected, 0, "9.2.0").unwrap();
+
+        let mut unchecked_donor = report();
+        unchecked_donor
+            .selected_files
+            .push(ReportFile { path: donor.into() });
+        assert!(check_report(unchecked_donor, checkout, &selected, 0, "9.2.0").is_err());
+
+        for path in ["/external/dependency/source.bzl", "relative.bzli"] {
+            let mut extra = report();
+            extra.selected_files.push(ReportFile { path: path.into() });
+            extra.checked_files.push(ReportFile { path: path.into() });
+            assert!(check_report(extra, checkout, &selected, 0, "9.2.0").is_err());
+        }
     }
 }
