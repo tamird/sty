@@ -2895,17 +2895,19 @@ nested_missing = getattr(getattr(native, "legacy_globals", None), "missing", Fal
         for actual in [nested_py, nested_runtime, direct_default] {
             assert_eq!(*actual, optional);
         }
-        for actual in [
-            cc,
-            java,
-            nested_java,
-            java_default,
-            other_default,
-            computed,
-            no_default,
-        ] {
-            assert_eq!(*actual, TyType::Dynamic(DynamicType::Any));
+        let gradual = TyType::Dynamic(DynamicType::Any);
+        for actual in [cc, java, no_default] {
+            assert_eq!(*actual, gradual);
         }
+        let optional_gradual =
+            UnionType::from_two_elements(db, &environment, gradual, TyType::none(db, &environment));
+        for actual in [nested_java, other_default, computed] {
+            assert_eq!(*actual, optional_gradual);
+        }
+        assert_eq!(
+            *java_default,
+            UnionType::from_two_elements(db, &environment, gradual, TyType::int_literal(42))
+        );
         for actual in [missing, native_rule, nested_missing] {
             assert_eq!(*actual, TyType::bool_literal(false));
         }
@@ -3069,7 +3071,24 @@ selected(name="shell", srcs=["//:input"], use_bash_launcher=True)
                 let [selected] = types.as_slice() else {
                     panic!("expected the selected rule value: {types:?}")
                 };
-                if path != "/getter.bzl" || !precise {
+                if path == "/getter.bzl" && !precise {
+                    let fallback = parsed
+                        .suite()
+                        .iter()
+                        .find_map(Stmt::as_function_def_stmt)
+                        .unwrap()
+                        .inferred_type(&model)
+                        .unwrap();
+                    assert_eq!(
+                        *selected,
+                        UnionType::from_two_elements(
+                            db,
+                            &env,
+                            TyType::Dynamic(DynamicType::Any),
+                            fallback,
+                        )
+                    );
+                } else if path != "/getter.bzl" {
                     assert_eq!(
                         selected.display(db, &env).to_string(),
                         if precise { "sh_binary" } else { "Any" },

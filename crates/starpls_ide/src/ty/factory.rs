@@ -400,6 +400,12 @@ pub(super) fn declaration<'db>(
     definition: Definition<'db>,
 ) -> Option<BuiltinFunction> {
     let file = definition.program_file(db);
+    if matches!(file.file(db).path(db), FilePath::Vendored(path) if path.as_str() == "stdlib/builtins.pyi")
+        && matches!(definition.scope(db).node(db), NodeWithScopeKind::Module)
+        && definition.name(db).as_deref() == Some("getattr")
+    {
+        return Some(BuiltinFunction::Getattr);
+    }
     let FilePath::SystemVirtual(path) = file.file(db).path(db) else {
         return None;
     };
@@ -458,7 +464,6 @@ pub(super) fn declaration<'db>(
         "aspect" => BuiltinFunction::Aspect,
         "macro" => BuiltinFunction::Macro,
         "struct" => BuiltinFunction::Struct,
-        "getattr" => BuiltinFunction::Getattr,
         "provider" => BuiltinFunction::Provider,
         "select" => BuiltinFunction::Select,
         _ => return None,
@@ -492,9 +497,7 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
         BuiltinFunction::Struct => structure(db, call),
         BuiltinFunction::Select => selector(db, call),
         BuiltinFunction::StructGetattr => None,
-        BuiltinFunction::Getattr => call
-            .getattr_return_type(db)
-            .or_else(|| super::shapes::getattr_call_result(db, call)),
+        BuiltinFunction::Getattr => super::shapes::getattr_call_result(db, call),
         BuiltinFunction::Provider => provider(db, call),
     }
 }

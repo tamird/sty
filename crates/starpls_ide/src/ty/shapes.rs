@@ -53,7 +53,7 @@ pub(super) fn getattr_call_result<'db>(
     let CheckedArgument::Value {
         ty: names,
         expression: _,
-    } = call.argument("name")
+    } = call.argument_at(1)
     else {
         return None;
     };
@@ -85,7 +85,7 @@ pub(super) fn getattr_call_result<'db>(
     let CheckedArgument::Value {
         ty: receiver,
         expression: _,
-    } = call.argument("x")
+    } = call.argument_at(0)
     else {
         return None;
     };
@@ -97,7 +97,7 @@ pub(super) fn getattr_call_result<'db>(
     let [value, _shape] = specialization.types(db) else {
         return None;
     };
-    let default = match call.argument("default") {
+    let default = match call.argument_at(2) {
         CheckedArgument::Omitted => Type::Never,
         CheckedArgument::Value { ty, expression: _ } => ty,
         CheckedArgument::Indeterminate => return None,
@@ -722,6 +722,10 @@ def guarded_value(value):
     if hasattr(value, "compiler"):
         return value.compiler
     return None
+def truthy_value(value):
+    if getattr(value, "compiler", None):
+        return value.compiler
+    return None
 def required_value(value):
     return value.compiler
 def generic(value):
@@ -737,18 +741,21 @@ def _is_gcc_compiler(compiler: str) -> bool: ...
 def flags(context: ctx[object, _CompilerAttrs]) -> list[str]: ...
 def optional_value(value: _CompilerAttrs) -> str | None: ...
 def guarded_value(value: _CompilerAttrs) -> str | None: ...
+def truthy_value(value: _CompilerAttrs) -> str | None: ...
 def required_value(value: struct[{"compiler": str}, ...]) -> str: ...
 def generic[T](value: struct[{"item": NotRequired[T]}, ...]) -> T | None: ...
 "#,
         );
         let valid = r#"
-load("compiler.bzl", "optional_value", "guarded_value", "required_value", "generic")
+load("compiler.bzl", "optional_value", "guarded_value", "truthy_value", "required_value", "generic")
 optional_value(struct())
 optional_value(struct(compiler="gcc"))
 optional_value(struct(compiler="clang", extra=42))
 optional_value(struct(extra=42))
 guarded_value(struct())
 guarded_value(struct(compiler="gcc"))
+truthy_value(struct())
+truthy_value(struct(compiler="gcc"))
 required_value(struct(compiler="gcc"))
 def closed(value: struct[{"compiler": NotRequired[str]}]) -> str | None:
     return getattr(value, "compiler", None)
@@ -759,6 +766,10 @@ def forward(value: struct[{"item": str}, ...]) -> str | None:
     return generic(value)
 def opaque(context: ctx[object, struct[object]]) -> object:
     return context.attr.unmodeled
+def selected(value: struct[{"compiler": str}] | struct[{}]) -> str | None:
+    return value.compiler if getattr(value, "compiler", None) else None
+def present(value: struct[{"compiler": str}] | struct[{}]) -> str | None:
+    return value.compiler if hasattr(value, "compiler") else None
 "#;
         let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid);
         loader.add_files_from_fixture(&fixture);
@@ -773,6 +784,20 @@ def opaque(context: ctx[object, struct[object]]) -> object:
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
         }
+        let aliased = format!(
+            r#"{valid}
+lookup = getattr
+def selected_alias(value: struct[{{"compiler": str}}] | struct[{{}}]) -> str | None:
+    return value.compiler if lookup(value, "compiler", None) else None
+"#
+        );
+        analysis.update_file(caller, aliased.clone());
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        // The builtin's general callable signature is gradual. Its checked
+        // finite lookup still narrows the receiver through the saved callable.
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "non-static-type");
+        assert_eq!(&aliased[diagnostics[0].range().unwrap()], "lookup");
         for (invalid, expected) in [
             ("optional_value(struct(compiler=42))", "invalid-argument-type"),
             ("closed(struct(compiler=42))", "invalid-argument-type"),
@@ -780,6 +805,8 @@ def opaque(context: ctx[object, struct[object]]) -> object:
             ("def erased(value: struct[object]) -> None:\n    optional_value(value)", "invalid-argument-type"),
             ("def optional(value: struct[{'compiler': NotRequired[str]}, ...]) -> None:\n    required_value(value)", "invalid-argument-type"),
             ("def opaque(context: ctx[object, struct[object]]) -> str:\n    return context.attr.unmodeled", "invalid-return-type"),
+            ("def unchecked(value: struct[{}]) -> None:\n    if getattr(value, 'compiler', True):\n        value.compiler", "unresolved-attribute"),
+            ("def shadowed(value: struct[{}], getattr: Callable[[object, str, object], bool]) -> None:\n    if getattr(value, 'compiler', None):\n        value.compiler", "unresolved-attribute"),
         ] {
             analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
