@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "c162bd6e52c9d22d3df4b725a099a60cad5ebf0d",
+    "commit": "67b10d0edef288749e488cb4a2c9bd32c6e5e6f8",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
