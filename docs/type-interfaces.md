@@ -160,6 +160,13 @@ retain all possible outcomes. `size_bytes` is possibly absent because the
 native inventory does not distinguish hosts before Bazel 9.3; use `hasattr`
 or `getattr(result, "size_bytes", default)` when reading it.
 
+### JSON values
+
+`json.decode` preserves string keys in decoded objects at every nesting level.
+Schema-dependent values and writes retain gradual typing behavior, and
+`non-static-type` continues to report unconstrained decoder results. A supplied
+default retains its own type, including dictionaries with non-string keys.
+
 ## Project configuration
 
 Projects register their own interfaces in `sty.toml` at the Bazel workspace root:
