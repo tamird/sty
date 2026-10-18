@@ -25,6 +25,16 @@ use zip::CompressionMethod;
 const PRIMITIVES: &str = include_str!("primitives.pyi");
 const COLLECTIONS: &str = include_str!("collections.pyi");
 const ALLOCATIONS: &str = include_str!("allocations.pyi");
+const TYPES: &str = r#"
+from typing import type_check_only
+
+@final
+class NoneType:
+    @type_check_only
+    def __hash__(self) -> int: ...
+    @type_check_only
+    def __bool__(self) -> Literal[False]: ...
+"#;
 const SCALARS: [&str; 4] = ["int", "float", "tuple", "range"];
 
 /// Members used by Starlark syntax and builtins. Attribute interception,
@@ -33,6 +43,7 @@ pub(super) fn is_operation_member(name: &str) -> bool {
     matches!(
         name,
         "__call__"
+            | "__hash__"
             | "__len__"
             | "__iter__"
             | "__next__"
@@ -158,6 +169,7 @@ fn build(base: &VendoredFileSystem) -> anyhow::Result<VendoredFileSystem> {
     for (path, declarations, scalars) in [
         ("stdlib/builtins.pyi", PRIMITIVES, SCALARS.as_slice()),
         ("stdlib/typing.pyi", COLLECTIONS, [].as_slice()),
+        ("stdlib/types.pyi", TYPES, [].as_slice()),
     ] {
         let original = base.read_to_string(path)?;
         let contents = assemble(&original, declarations, scalars).with_context(|| path)?;
@@ -386,6 +398,10 @@ mod tests {
                                 replacements += 1;
                                 assemble(&original, super::COLLECTIONS, &[]).unwrap()
                             }
+                            "stdlib/types.pyi" => {
+                                replacements += 1;
+                                assemble(&original, super::TYPES, &[]).unwrap()
+                            }
                             "stdlib/VERSIONS" => {
                                 replacements += 1;
                                 format!("{original}\n_starpls_allocations: 3.0-\n")
@@ -397,7 +413,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(replacements, 3);
+        assert_eq!(replacements, 4);
     }
 
     #[test]

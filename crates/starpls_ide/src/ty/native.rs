@@ -29,6 +29,7 @@ pub(super) const TYPING_ANNOTATIONS: &[&str] = &[
     "Final",
     "Callable",
     "Collection",
+    "Hashable",
     "Protocol",
     "TypedDict",
     "TypeGuard",
@@ -530,8 +531,21 @@ fn declarations(
                 body,
                 "        def __getattr__(self, name: _starpls_builtins.str) -> _StructField: ..."
             )?;
+            writeln!(body, "        @_starpls_typing.type_check_only")?;
+            writeln!(body, "        def __hash__(self: _starpls_types.struct[_starpls_typing.Hashable]) -> _starpls_builtins.int: ...")?;
         }
         let mut names = BTreeSet::new();
+        if matches!(
+            class.name.as_str(),
+            "Label" | "File" | "DottedVersion" | "depset"
+        ) {
+            names.insert("__hash__");
+            writeln!(body, "        @_starpls_typing.type_check_only")?;
+            writeln!(
+                body,
+                "        def __hash__(self) -> _starpls_builtins.int: ..."
+            )?;
+        }
         if matches!(class.name.as_str(), "Label" | "DottedVersion") {
             // Comparable<Self> supplies Starlark ordering, including nested sorting.
             for method in ["__lt__", "__le__", "__gt__", "__ge__"] {
@@ -4636,6 +4650,104 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
             panic!("{diagnostics:?}");
         };
         assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
+    fn hashable_annotations_preserve_bounded_inputs() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = r#"def keep(value):
+    return value
+def text() -> str:
+    return keep('text')
+def label() -> Label:
+    return keep(Label('//:target'))
+def boolean() -> bool:
+    return keep(True)
+def integer() -> int:
+    return keep(1)
+def floating() -> float:
+    return keep(1.5)
+def pair() -> tuple[str, int]:
+    return keep(('text', 1))
+def file(value: File) -> File:
+    return keep(value)
+def version(value: DottedVersion) -> DottedVersion:
+    return keep(value)
+def files(value: depset[File]) -> depset[File]:
+    return keep(value)
+def empty() -> None:
+    return keep(None)
+def record() -> struct[int]:
+    return keep(struct(value = 1))
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/hashable.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let interface = analysis
+            .open_document(
+                Path::new("/hashable.bzli"),
+                Dialect::Bazel,
+                None,
+                "def keep[T: Hashable](value: T) -> T: ...\n".into(),
+                1,
+            )
+            .unwrap();
+        analysis.set_type_interfaces([(file, interface)]).unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        for checked in [file, interface] {
+            let diagnostics = analysis.snapshot().diagnostics(checked).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for invalid in ["[1]", "{'key': 1}", "struct(value = [1])"] {
+            analysis.update_file(file, format!("{source}keep({invalid})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic, result] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            assert_eq!(result.id().as_str(), "non-static-type");
+            assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
+        }
+        analysis.update_file(
+            file,
+            source.replace("def text() -> str", "def text() -> int"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        analysis.set_rules(crate::DiagnosticRules::default());
+        analysis.update_file(
+            file,
+            format!("{source}'text'.__hash__\nLabel('//:target').__hash__\nNone.__hash__\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(ids, ["unresolved-attribute"; 3], "{diagnostics:?}");
     }
 
     #[test]

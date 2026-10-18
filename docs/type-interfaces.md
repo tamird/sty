@@ -582,6 +582,14 @@ without declaring a corresponding source export.
 Protocols and TypedDicts accept type parameters using the same syntax as generic
 functions, for example `class _Consumer[T](Protocol)`.
 
+`Hashable` is available for bounded inputs, such as
+`def unique[T: Hashable](values: Iterable[T]) -> list[T]: ...`.
+It rejects lists and dictionaries and retains the concrete input type. Struct
+fields must themselves satisfy `Hashable`; this conservatively excludes frozen
+structs containing lists. The canonical tuple protocol does not check nested
+elements, so a tuple containing a list can satisfy this annotation even though
+Bazel rejects it as a dictionary key.
+
 Readonly properties describe fields that callers can read but cannot assign.
 A named callback protocol preserves the keyword parameters of a callable field:
 

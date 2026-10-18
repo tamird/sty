@@ -20,6 +20,8 @@ class object:
 @disjoint_base
 class bool:
     @type_check_only
+    def __hash__(self) -> int: ...
+    @type_check_only
     def __new__(cls, value: object = False, /) -> Self: ...
     @type_check_only
     def __bool__(self) -> bool: ...
@@ -46,6 +48,8 @@ class str:
     if TYPE_CHECKING:
         # Disable implicit iteration through the indexing protocol.
         __iter__: ClassVar[None]
+    @type_check_only
+    def __hash__(self) -> int: ...
     @type_check_only
     def __new__(cls, object: object = "", /) -> Self: ...
     @type_check_only
