@@ -1513,6 +1513,8 @@ fn write_function(
             (CallableKind::Method("json"), "encode", "x") => Some("_starpls_builtins.object"),
             // Rule construction reads each dictionary while preserving its key and value types.
             (CallableKind::Function, "rule" | "aspect", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]"),
+            // The host validates export and extension permissions after the rule type.
+            (CallableKind::Function, "rule", "parent") => classes.contains("rule").then_some("_starpls_types.rule | None"),
             (CallableKind::Function, "repository_rule", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute] | None"),
             (CallableKind::Function, "select", "x") => Some("_starpls_typing.Mapping[_SelectCondition, _SelectValue]"),
             (CallableKind::Function, "depset", "direct") => {
@@ -4615,6 +4617,60 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
                 "{statement}: {diagnostic:?}"
             );
             assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
+    fn rule_parent_requires_a_starlark_rule() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"
+def implementation(ctx: ctx[object, object]) -> list[ProviderInstance]:
+    return []
+base = rule(implementation, attrs={"value": attr.string(mandatory=True)}, extendable=True)
+without_parent = rule(implementation)
+none_parent = rule(implementation, parent=None)
+child = rule(implementation, parent=base)
+child(name="child", value="inherited")
+unpacked = rule(implementation, **{"parent": base})
+unpacked(name="unpacked", value="inherited")
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/parent.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for statement in [
+            "rule(implementation, parent=implementation)",
+            "rule(implementation, parent=42)",
+            "rule(implementation, **{'parent': implementation})",
+            "child(name='wrong', value=42)",
+        ] {
+            analysis.update_file(file, format!("{source}{statement}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{statement}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
         }
     }
 
