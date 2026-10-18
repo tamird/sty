@@ -88,7 +88,10 @@ Plain dictionary inputs to `rewrite_args` return mappings with string keys;
 tuple inputs retain their string elements. Their cases check prebound dictionaries,
 empty inputs, mapping parameters, and incorrect keys, elements, and result types.
 The dictionary helper checks keys while sharing value rewriting and collision
-order with selected dictionaries.
+order with selected dictionaries. The argument rewriter's factory owns its callback
+state; each overload checks the resulting branch independently. Mutations return
+a value allowed by the shared signature but forbidden by the affected overload,
+covering strings, mappings, tuples, lists, selectors, and `None`.
 
 The LLVM wrapper cases relate explicit `inner_data` to the callback's `data`
 parameter. Omitted data uses the empty-list default; list and sequence callbacks
@@ -96,8 +99,19 @@ accept it, while tuple-only and selector-only callbacks require explicit data.
 The cases also check the constraint keyword and tag element types, including
 callbacks that accept only specific string literals. The implementation copies
 the supplied tags and adds `"manual"` when absent; source overlays check both the
-added value and the list passed to the callback. The callback's `data`, generated
-`name`, and other forwarded keywords remain gradual in the implementation.
+added value and the list passed to the callback. Separate mutations check explicit
+data and omitted defaults against the callback's data parameter. The omitted list
+is allocated at the call, while explicitly supplied values retain their identity.
+
+All seven strictness rules are enabled for LLVM's selected implementations.
+Residual callback keywords and the generated name remain gradual: a ParamSpec
+forwards an intact signature but cannot describe replacing these keywords, and the
+name suffix relationship is unrepresented. The source declarations and callback
+invocation have local `non-static-type` ignores. Positive caller fixtures also
+mark that boundary; each ignore covers the entire call's diagnostics for that ID.
+An unsuppressed callback case documents the remaining error, and an unrelated
+Unknown parameter must still fail. Known incompatible data, tags, and return
+types still reject; unused ignores remain errors.
 
 The C++ toolchain configuration contracts cover all thirteen constructor helpers
 and their nominal providers, including recursive flag groups. The Rust dependency

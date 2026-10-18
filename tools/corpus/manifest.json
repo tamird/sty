@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "04f2f12a2af938a27a6a4da2ad1625f6f6df3923",
+    "commit": "1e4167246e332f1be18b76d932ab0eab834ddc1f",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -73,7 +73,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 136
+            "line": 140
           }
         ]
       },
@@ -167,7 +167,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 55
+            "line": 73
           }
         ]
       },
@@ -207,7 +207,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 138
+            "line": 142
           }
         ]
       },
@@ -405,7 +405,7 @@
           {
             "id": "invalid-assignment",
             "path": "with_cfg/private/args.bzl",
-            "line": 125
+            "line": 129
           }
         ]
       },
@@ -441,22 +441,22 @@
           {
             "id": "unsupported-operator",
             "path": "with_cfg/private/args.bzl",
-            "line": 116
+            "line": 120
           },
           {
             "id": "not-subscriptable",
             "path": "with_cfg/private/args.bzl",
-            "line": 118
+            "line": 122
           },
           {
             "id": "non-static-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 117
+            "line": 121
           },
           {
             "id": "non-static-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 118
+            "line": 122
           }
         ]
       },
@@ -559,15 +559,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/args.bzl",
-            "old": "return map_string_list_select(rewrite_list, args), filegroup_labels",
-            "new": "return map_string_list_select(rewrite_list, args), 42"
+            "old": "return map_string_list_select(rewriter.selected_list, args), rewriter.labels",
+            "new": "return map_string_list_select(rewriter.selected_list, args), 42"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 82
+            "line": 59
           }
         ]
       },
@@ -621,7 +621,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 79
+            "line": 83
           }
         ]
       },
@@ -1028,7 +1028,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 133
+            "line": 137
           }
         ]
       },
@@ -1110,15 +1110,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/args.bzl",
-            "old": "return rewrite_locations_in_string_dict(args, rewrite_label), filegroup_labels",
-            "new": "return 42, filegroup_labels"
+            "old": "return rewrite_locations_in_string_dict(args, rewriter.label), rewriter.labels",
+            "new": "return [], rewriter.labels"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 66
+            "line": 50
           }
         ]
       },
@@ -1128,15 +1128,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/args.bzl",
-            "old": "        if type(args) != \"list\":\n            return args, filegroup_labels",
-            "new": "        if type(args) != \"list\":\n            return 42, filegroup_labels"
+            "old": "        if type(args) != \"list\":\n            return args, rewriter.labels",
+            "new": "        if type(args) != \"list\":\n            return None, rewriter.labels"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 72
+            "line": 56
           }
         ]
       },
@@ -1554,6 +1554,78 @@
             "id": "invalid-argument-type",
             "path": "with_cfg/private/__sty_checked_helpers__.bzl",
             "line": 20
+          }
+        ]
+      },
+      {
+        "name": "plain-list-wrong-overload",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "return rewrite_locations_in_string_list(args, rewriter.label), rewriter.labels",
+            "new": "return None, rewriter.labels"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 57
+          }
+        ]
+      },
+      {
+        "name": "plain-string-wrong-overload",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "return rewrite_locations_in_single_value(args, rewriter.label), rewriter.labels",
+            "new": "return [], rewriter.labels"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 52
+          }
+        ]
+      },
+      {
+        "name": "selected-args-wrong-overload",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "return map_string_list_select(rewriter.selected_list, args), rewriter.labels",
+            "new": "return [], rewriter.labels"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 59
+          }
+        ]
+      },
+      {
+        "name": "none-wrong-overload",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "    rewriter = _make_arg_rewriter(name, make_filegroup)",
+            "new": "    rewriter = _make_arg_rewriter(name, make_filegroup)\n    if args == None:\n        return [], rewriter.labels"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 46
           }
         ]
       }
@@ -2042,7 +2114,7 @@
   {
     "directory": "hermetic-llvm",
     "origin": "https://github.com/hermeticbuild/hermetic-llvm.git",
-    "commit": "596bc7b1b044ce1c85b6e5d0f43b9c5431ad42e0",
+    "commit": "e1cdb89f2f72cfc4b78c0a683c26ff58c1a8a1a6",
     "sources": [
       "defs.bzl",
       "directory.bzl",
@@ -2125,6 +2197,46 @@
             "id": "invalid-argument-type",
             "path": "_sty_contract_test.bzl",
             "line": 18
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 8
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 9
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 10
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 11
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 12
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 13
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 14
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_contract_test.bzl",
+            "line": 15
           }
         ]
       },
@@ -2142,7 +2254,7 @@
           {
             "id": "unsupported-operator",
             "path": "defs.bzl",
-            "line": 11
+            "line": 25
           }
         ]
       },
@@ -2160,7 +2272,7 @@
           {
             "id": "invalid-return-type",
             "path": "defs.bzl",
-            "line": 44
+            "line": 58
           }
         ]
       },
@@ -2188,7 +2300,12 @@
           {
             "id": "invalid-argument-type",
             "path": "_sty_forwarded_keywords.bzl",
-            "line": 16
+            "line": 10
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_forwarded_keywords.bzl",
+            "line": 7
           }
         ]
       },
@@ -2262,6 +2379,56 @@
             "id": "invalid-argument-type",
             "path": "_sty_callback_data.bzl",
             "line": 28
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 19
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 20
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 21
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 22
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 23
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 24
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 25
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 26
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 27
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_data.bzl",
+            "line": 28
           }
         ]
       },
@@ -2305,6 +2472,26 @@
             "id": "invalid-argument-type",
             "path": "_sty_callback_tags.bzl",
             "line": 16
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_tags.bzl",
+            "line": 13
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_tags.bzl",
+            "line": 14
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_tags.bzl",
+            "line": 15
+          },
+          {
+            "id": "non-static-type",
+            "path": "_sty_callback_tags.bzl",
+            "line": 16
           }
         ]
       },
@@ -2322,7 +2509,7 @@
           {
             "id": "invalid-argument-type",
             "path": "defs.bzl",
-            "line": 4
+            "line": 13
           }
         ]
       },
@@ -2340,7 +2527,114 @@
           {
             "id": "invalid-argument-type",
             "path": "defs.bzl",
-            "line": 13
+            "line": 27
+          }
+        ]
+      },
+      {
+        "name": "tags-as-data",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "data = kwargs[\"inner_data\"] if \"inner_data\" in kwargs else []",
+            "new": "data = inner_tags"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "defs.bzl",
+            "line": 26
+          }
+        ]
+      },
+      {
+        "name": "empty-data",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "data = kwargs[\"inner_data\"] if \"inner_data\" in kwargs else []",
+            "new": "data = []"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "defs.bzl",
+            "line": 26
+          }
+        ]
+      },
+      {
+        "name": "bad-default",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "data = kwargs[\"inner_data\"] if \"inner_data\" in kwargs else []",
+            "new": "data = kwargs[\"inner_data\"] if \"inner_data\" in kwargs else [42]"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "defs.bzl",
+            "line": 26
+          }
+        ]
+      },
+      {
+        "name": "wrong-data",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "data = kwargs[\"inner_data\"] if \"inner_data\" in kwargs else []",
+            "new": "data = 42"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "defs.bzl",
+            "line": 26
+          }
+        ]
+      },
+      {
+        "name": "unproved-callback",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_unproved_callback.bzl",
+            "fixture": "probes/llvm-unproved-callback.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "non-static-type",
+            "path": "_sty_unproved_callback.bzl",
+            "line": 7
+          }
+        ]
+      },
+      {
+        "name": "unrelated-unknown",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "def _exec_test_impl(ctx):",
+            "new": "def unrelated(value: Unknown) -> None:\n    pass\n\ndef _exec_test_impl(ctx):"
+          }
+        ],
+        "expected": [
+          {
+            "id": "non-static-type",
+            "path": "defs.bzl",
+            "line": 42
           }
         ]
       }
