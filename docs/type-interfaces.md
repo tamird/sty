@@ -93,16 +93,20 @@ Unresolved inference, generic variadics, and receiver-dependent generics produce
 `invalid-function-interface` when checking mapped source. Families without an
 explicit implementation produce the same diagnostic.
 
-When the source adopts its entire signature from the stub and has fixed,
-required, nongeneric parameters, ty also checks its body under each overload.
-This covers straight-line assignments and returns of names or literals, and
-return trees guarded by unchanged boolean parameters. Straight-line bodies may
-also call nongeneric, non-overloaded module functions whose return type is other
-than `Never`. For example, an overload promising `str` when a flag is `True`
-rejects `return 42` in that branch even when the broad signature allows
-`int | str`. Source-authored signature annotations and bodies using defaults,
-generics, collections, captures, or other control flow receive the
-broad-signature check; their individual overload promises remain unproved.
+When the source adopts its entire signature from the stub, ty also checks
+supported bodies under each overload's parameter and result types. This includes
+assignments, conditionals, callback calls, builtin list and dictionary
+construction, supported collection methods, and typed `**kwargs`. Generic inputs
+must yield a complete static implementation specialization. Optional parameters retain the actual source default wherever
+the overload permits omission.
+
+For example, an overload promising `str` when a flag is `True` rejects `return 42`
+in that branch even when the shared implementation permits `int | str`. Captures,
+loops, comprehensions, and unsupported mutation or escape paths retain checking
+under the shared implementation signature; the affected overload's individual
+promise remains unproved. The original `**kwargs` dictionary supports reads,
+copies, and keyword expansion. Direct mutation, storage in another variable or
+container, and returning that dictionary require the shared-signature check.
 
 ### Shared declarations
 
