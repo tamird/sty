@@ -1106,11 +1106,17 @@ fn declarations(
             previous.push((value.clone(), input, export));
         }
     }
+    if classes.contains_key("struct") {
+        body.push_str("    class _PendingDownload(_starpls_typing.Generic[_DownloadResult]):\n        def wait(self) -> _DownloadResult: ...\n\n");
+    }
     if body.is_empty() {
         body.push_str("    pass\n");
     }
     let mut output = String::from(
         "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n_DownloadAuth = _starpls_typing.TypeVar(\"_DownloadAuth\", bound=_starpls_ty_extensions.Top[_starpls_typing.Mapping[_starpls_typing.Any, _starpls_typing.Any]])\n_ExecutionRequirementKey = _starpls_typing.TypeVar(\"_ExecutionRequirementKey\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_AttributeDefaultParameters = _starpls_typing.ParamSpec(\"_AttributeDefaultParameters\")\n_AttributeMaterializerParameters = _starpls_typing.ParamSpec(\"_AttributeMaterializerParameters\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute[_starpls_builtins.object]\", default=\"_starpls_types.Attribute\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
+    );
+    output.push_str(
+        "_DownloadResult = _starpls_typing.TypeVar(\"_DownloadResult\", covariant=True)\n",
     );
     let context_attrs = if classes.contains_key("struct") {
         "_starpls_types.struct[_starpls_unknown]"
@@ -1123,6 +1129,9 @@ fn declarations(
     );
     output.push_str(&body);
     output.push('\n');
+    if classes.contains_key("struct") {
+        output.push_str("_starpls_annotation__PendingDownload = _starpls_types._PendingDownload\n");
+    }
     output.push_str("_starpls_annotation_ExactDict = _starpls_allocations.dict\n\n");
     output.push_str("class _starpls_annotation_record(_starpls_types.ProviderInstance):\n    @_starpls_typing.type_check_only\n    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_builtins.object: ...\n\n");
     output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");
@@ -1681,6 +1690,12 @@ fn write_function(
         output.push_str(", stripPrefix: _starpls_builtins.str = ''");
     }
     let return_type = match (kind, value.name.as_str()) {
+        (CallableKind::Method("repository_ctx" | "module_ctx"), "download") => {
+            classes.contains("struct").then_some("_starpls_types.struct[_starpls_builtins.bool | _starpls_builtins.str | _starpls_builtins.int] | _starpls_types._PendingDownload[_starpls_types.struct[_starpls_builtins.bool | _starpls_builtins.str | _starpls_builtins.int]]")
+        }
+        (CallableKind::Method("repository_ctx" | "module_ctx"), "download_and_extract") => {
+            classes.contains("struct").then_some("_starpls_types.struct[_starpls_builtins.bool | _starpls_builtins.str | _starpls_builtins.int]")
+        }
         (CallableKind::Function, "transition") => {
             let declared = env::normalize_doc(&callable.return_type, true);
             (classes.contains("transition")

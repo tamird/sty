@@ -392,6 +392,7 @@ pub(super) enum BuiltinFunction {
     Getattr,
     Provider,
     Select,
+    Download { always_blocking: bool },
 }
 
 // Keep parse and lexical-owner dependencies behind a small, backdated declaration identity.
@@ -435,6 +436,15 @@ pub(super) fn declaration<'db>(
             return None;
         }
         return match class.node(&parsed).name.as_str() {
+            "repository_ctx" | "module_ctx" => match function.name.as_str() {
+                "download" => Some(BuiltinFunction::Download {
+                    always_blocking: false,
+                }),
+                "download_and_extract" => Some(BuiltinFunction::Download {
+                    always_blocking: true,
+                }),
+                _ => None,
+            },
             // The legacy namespace is also a struct with optional fields.
             "struct" | "_LegacyGlobals" => {
                 (function.name.as_str() == "__getattr__").then_some(BuiltinFunction::StructGetattr)
@@ -500,7 +510,101 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
         BuiltinFunction::StructGetattr => None,
         BuiltinFunction::Getattr => super::shapes::getattr_call_result(db, call),
         BuiltinFunction::Provider => provider(db, call),
+        BuiltinFunction::Download { always_blocking } => download(db, call, always_blocking),
     }
+}
+
+fn download<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    always_blocking: bool,
+) -> Option<Type<'db>> {
+    if call.has_binding_errors() {
+        return None;
+    }
+    let environment = ProgramEnvironment::from_file(call.file());
+    let declarations = call.declaration()?.program_file(db);
+    let string = KnownClass::Str.to_instance(db, &environment);
+    let integer = KnownClass::Int.to_instance(db, &environment);
+    let checksum = |name| match call.argument(name) {
+        CheckedArgument::Omitted => Some(""),
+        CheckedArgument::Value { ty, expression: _ } => ty.string_literal_value(db),
+        CheckedArgument::Indeterminate => None,
+    };
+    // A successful download retains the supplied checksum algorithm, or computes
+    // SHA-256 when neither checksum is supplied. Invalid checksums still throw.
+    let sha256 = if checksum("sha256").is_some_and(|checksum| !checksum.is_empty()) {
+        Some(true)
+    } else {
+        checksum("integrity")
+            .map(|integrity| integrity.is_empty() || integrity.starts_with("sha256-"))
+    };
+    let result = |success: bool| {
+        let mut schema = TypedDictSchema::default();
+        let mut values = Vec::new();
+        let mut field = |name: &str, ty, required| {
+            values.push(ty);
+            schema.insert(
+                Name::new(name),
+                TypedDictFieldBuilder::new(ty)
+                    .required(required)
+                    .read_only(true)
+                    .build(),
+            );
+        };
+        field("success", Type::bool_literal(success), true);
+        if success {
+            field("integrity", string, true);
+            if sha256 != Some(false) {
+                field("sha256", string, sha256 == Some(true));
+            }
+            // Bazel added this field in 9.3. The inventory has no result-field
+            // version capability, so older hosts must retain possible absence.
+            field("size_bytes", integer, false);
+        }
+        let shape = Type::TypedDict(TypedDictType::from_schema_items_with_openness(
+            db,
+            schema,
+            TypedDictOpenness::Closed,
+        ));
+        specialized_native_instance(
+            db,
+            &environment,
+            declarations,
+            "struct",
+            vec![UnionType::from_elements(db, &environment, values), shape],
+        )
+    };
+    let success = result(true)?;
+    let completed = if boolean_argument(call, "allow_fail") == Some(false) {
+        success
+    } else {
+        UnionType::from_two_elements(db, &environment, success, result(false)?)
+    };
+    let block = if always_blocking {
+        Some(true)
+    } else {
+        match call.argument("block") {
+            CheckedArgument::Omitted => Some(true),
+            CheckedArgument::Value { ty, expression: _ } => ty.as_bool_literal(),
+            CheckedArgument::Indeterminate => None,
+        }
+    };
+    if block == Some(true) {
+        return Some(completed);
+    }
+    let pending = specialized_native_instance(
+        db,
+        &environment,
+        declarations,
+        "_PendingDownload",
+        vec![completed],
+    )?;
+    Some(if block == Some(false) {
+        pending
+    } else {
+        UnionType::from_two_elements(db, &environment, completed, pending)
+    })
 }
 
 fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<'db>> {
@@ -2385,6 +2489,174 @@ mod tests {
     use super::*;
     use crate::Analysis;
     use crate::FilePosition;
+
+    #[test]
+    fn download_results_preserve_flags_and_checksums() {
+        for host in ["repository_ctx", "module_ctx"] {
+            for method in ["download", "download_and_extract"] {
+                let source = format!(
+                    r#"def text(value: str) -> None:
+    pass
+def yes(value: Literal[True]) -> None:
+    pass
+def integer(value: int) -> None:
+    pass
+def inspect(ctx: {host}, allow: bool, checksum: str, options: dict[{{'allow_fail': NotRequired[bool]}}]) -> None:
+    result = ctx.{method}(url='https://example.com')
+    yes(result.success)
+    text(result.integrity)
+    text(result.sha256)
+    text(ctx.{method}(url='https://example.com', sha256='0000000000000000000000000000000000000000000000000000000000000000').sha256)
+    unpacked = ctx.{method}(url='https://example.com', **{{'allow_fail': False}})
+    if unpacked.success:
+        text(unpacked.sha256)
+    unpacked = ctx.{method}(url='https://example.com', **options)
+    if unpacked.success:
+        text(unpacked.integrity)
+    result = ctx.{method}(url='https://example.com', allow_fail=allow)
+    if result.success:
+        text(result.integrity)
+        text(result.sha256)
+    text(ctx.{method}(url='https://example.com', integrity='sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=').sha256)
+    text(ctx.{method}(url='https://example.com', integrity='sha384-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA').integrity)
+    result = ctx.{method}(url='https://example.com', integrity=checksum)
+    if hasattr(result, 'sha256'):
+        text(result.sha256)
+    if hasattr(result, 'size_bytes'):
+        integer(result.size_bytes)
+"#
+                );
+                let (mut analysis, fixture) = Analysis::from_single_file_fixture(&source);
+                analysis
+                    .set_builtin_defs(
+                        starpls_bazel::decode_builtins(include_bytes!(
+                            "../../../starpls/src/builtin/builtin.pb"
+                        ))
+                        .unwrap(),
+                        Default::default(),
+                    )
+                    .unwrap();
+                analysis.set_rules(
+                    crate::DiagnosticRules::from_settings(
+                        &[
+                            ("non-static-type".into(), "error".into()),
+                            ("possibly-missing-attribute".into(), "error".into()),
+                        ]
+                        .into(),
+                    )
+                    .unwrap(),
+                );
+                let file = fixture.main_file();
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert!(diagnostics.is_empty(), "{host}.{method}: {diagnostics:?}");
+                for (extra, expected) in [
+                    ("text(result.success)", "invalid-argument-type"),
+                    ("text(result.sha256)", "possibly-missing-attribute"),
+                    ("result.missing", "unresolved-attribute"),
+                    ("result.size_bytes", "possibly-missing-attribute"),
+                    ("unpacked.integrity", "unresolved-attribute"),
+                    (
+                        "ctx.METHOD(url='https://example.com', integrity='sha384-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA').sha256",
+                        "unresolved-attribute",
+                    ),
+                    (
+                        "failed = ctx.METHOD(url='https://example.com', allow_fail=True)\n    if not failed.success:\n        failed.integrity",
+                        "unresolved-attribute",
+                    ),
+                    (
+                        "ctx.METHOD(url='https://example.com', allow_fail=42)",
+                        "invalid-argument-type",
+                    ),
+                ] {
+                    let extra = extra.replace("METHOD", method);
+                    analysis.update_file(file, format!("{source}    {extra}\n"));
+                    let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                    let [diagnostic] = diagnostics.as_slice() else {
+                        panic!("{host}.{method}, {extra}: {diagnostics:?}");
+                    };
+                    assert_eq!(diagnostic.id().as_str(), expected, "{extra}: {diagnostic:?}");
+                    assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pending_downloads_preserve_completed_results() {
+        let source = r#"def text(value: str) -> None:
+    pass
+def inspect(ctx: repository_ctx, allow: bool, block: bool) -> None:
+    pending = ctx.download(url='https://example.com', block=False)
+    text(pending.wait().sha256)
+    unpacked = ctx.download(url='https://example.com', **{'block': False, 'allow_fail': allow})
+    if hasattr(unpacked, 'wait'):
+        completed = unpacked.wait()
+        if completed.success:
+            text(completed.integrity)
+    pending = ctx.download(url='https://example.com', block=False, integrity='sha384-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+    text(pending.wait().integrity)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for extra in [
+            "pending.integrity",
+            "pending.wait().sha256",
+            "ctx.download(url='https://example.com').wait",
+            "ctx.download(url='https://example.com', block=block).integrity",
+        ] {
+            analysis.update_file(file, format!("{source}    {extra}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{extra}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "unresolved-attribute", "{extra}");
+            assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
+        }
+    }
+
+    #[test]
+    fn bound_download_methods_preserve_result_precision() {
+        let source = r#"def inspect(ctx: repository_ctx) -> str:
+    download = ctx.download
+    return download(url='https://example.com').sha256
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(file, source.replace("-> str", "-> int"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+    }
 
     #[test]
     fn common_rule_keyword_schemas_match_factories() {

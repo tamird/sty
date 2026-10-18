@@ -147,6 +147,19 @@ inventory determines available attributes and accepted aliases.
 including compilation inputs and keyword-only options. Source-owned interfaces
 use this annotation for Bazel's internal Java namespace.
 
+### Download results
+
+`repository_ctx` and `module_ctx` download methods retain their success and
+checksum fields. With `allow_fail = True` or an unknown flag, check `success`
+before using `integrity` or `sha256`. A non-SHA256 integrity checksum omits
+`sha256`; an unknown algorithm requires an attribute-presence check.
+
+`download(block = False)` returns a pending download whose `wait()` returns
+the same completed result type. Flags supplied through `**kwargs` currently
+retain all possible outcomes. `size_bytes` is possibly absent because the
+native inventory does not distinguish hosts before Bazel 9.3; use `hasattr`
+or `getattr(result, "size_bytes", default)` when reading it.
+
 ## Project configuration
 
 Projects register their own interfaces in `sty.toml` at the Bazel workspace root:
