@@ -66,9 +66,10 @@ Location rewriting checks the finite values produced by the parser. Its selected
 accumulator combines prefixes and suffixes through the same generic fold as the
 list and dictionary mappers. Source overlays check parsed dictionary values,
 callback arguments, and the shared list rewriter.
-General `map_attr` and `_compose_compat` remain gradual: representation decoding
-loses the original element type, and arbitrary callback results determine the
-runtime operator family used by composition.
+Setting-value copying and dependency resets use these checked mappers. The reset
+cases check callback keyword types, Label narrowing, dictionary value types, and
+parsed results; copy cases reject changes to plain and parsed value types. All
+seven strictness checks are errors for the selected `with_cfg` implementations.
 Frontend execution properties use a checked dictionary mapper. Its callback
 validates property names and retained values before constructing a dictionary;
 the generic mapper preserves key and value types through selected branches and

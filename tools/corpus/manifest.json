@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "acd636c7c2a674eb011322c169ef61b3d668e561",
+    "commit": "5df44fc06b2df126d50681affa28163b5eb5a2dc",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -696,7 +696,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 12
+            "line": 6
           }
         ]
       },
@@ -714,7 +714,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 12
+            "line": 6
           }
         ]
       },
@@ -732,7 +732,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 12
+            "line": 6
           }
         ]
       },
@@ -750,7 +750,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 293
+            "line": 272
           }
         ]
       },
@@ -768,7 +768,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 209
+            "line": 199
           }
         ]
       },
@@ -886,7 +886,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 57
+            "line": 47
           }
         ]
       },
@@ -904,7 +904,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 57
+            "line": 47
           }
         ]
       },
@@ -1068,7 +1068,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 35
+            "line": 25
           }
         ]
       },
@@ -1086,7 +1086,7 @@
           {
             "id": "unsupported-operator",
             "path": "with_cfg/private/select.bzl",
-            "line": 38
+            "line": 28
           }
         ]
       },
@@ -1104,7 +1104,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 32
+            "line": 22
           }
         ]
       },
@@ -1159,6 +1159,165 @@
             "id": "invalid-argument-type",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 142
+          }
+        ]
+      },
+      {
+        "name": "clone-bad-parsed",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/setting.bzl",
+            "old": "    # Setting lists must not share mutable state with the builder's caller.\n    if type(value) == \"list\":\n        return list(value)\n    return value\n",
+            "new": "    # Setting lists must not share mutable state with the builder's caller.\n    if type(value) == \"list\":\n        return struct(value = value)\n    return value\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/setting.bzl",
+            "line": 105
+          }
+        ]
+      },
+      {
+        "name": "clone-bad-plain",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/setting.bzl",
+            "old": "    if type(value) == \"list\":\n        return list(value)\n    return value\n\ndef _clone_parsed_setting_value(value):\n",
+            "new": "    if type(value) == \"list\":\n        return list(value)\n    return 42\n\ndef _clone_parsed_setting_value(value):\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/setting.bzl",
+            "line": 100
+          }
+        ]
+      },
+      {
+        "name": "reset-bad-name",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "        target_name = name_prefix + \"_\" + str(mutable_num_calls[0])\n        reset_target(\n            name = target_name,\n            exports = label,\n        )\n",
+            "new": "        target_name = name_prefix + \"_\" + str(mutable_num_calls[0])\n        reset_target(\n            name = 42,\n            exports = label,\n        )\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 224
+          }
+        ]
+      },
+      {
+        "name": "reset-bad-exports",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "        reset_target(\n            name = target_name,\n            exports = label,\n        )\n        target_label_string = \":\" + target_name\n",
+            "new": "        reset_target(\n            name = target_name,\n            exports = 42,\n        )\n        target_label_string = \":\" + target_name\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 225
+          }
+        ]
+      },
+      {
+        "name": "reset-bad-dictionary",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "\ndef _replace_dep_dict(items, replace):\n    return {replace(key): item for key, item in items}\n\ndef _replace_single_dep(\n",
+            "new": "\ndef _replace_dep_dict(items, replace):\n    return {replace(key): [item] for key, item in items}\n\ndef _replace_single_dep(\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 205
+          }
+        ]
+      },
+      {
+        "name": "reset-bad-parsed",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "    def replace_parsed(dep):\n        # type: (_ParsedElement) -> _ParsedElement\n        return _replace_parsed_dep_value(dep, replace)\n\n    return map_parsed_select(replace_parsed, value)\n",
+            "new": "    def replace_parsed(dep):\n        # type: (_ParsedElement) -> _ParsedElement\n        return struct(value = _replace_parsed_dep_value(dep, replace))\n\n    return map_parsed_select(replace_parsed, value)\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 179
+          }
+        ]
+      },
+      {
+        "name": "label-bad-predicate-result",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/utils.bzl",
+            "old": "\ndef is_label(value):\n    return type(value) == _LABEL_TYPE\n\ndef is_list(value):\n",
+            "new": "\ndef is_label(value):\n    return int(type(value) == _LABEL_TYPE)\n\ndef is_list(value):\n"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/utils.bzl",
+            "line": 13
+          }
+        ]
+      },
+      {
+        "name": "checked-helpers",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_checked_helpers__.bzl",
+            "fixture": "probes/with-cfg-checked-helpers.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "checked-helpers-bad",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "with_cfg/private/__sty_checked_helpers__.bzl",
+            "fixture": "probes/with-cfg-checked-helpers-bad.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_checked_helpers__.bzl",
+            "line": 10
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/__sty_checked_helpers__.bzl",
+            "line": 20
           }
         ]
       }
