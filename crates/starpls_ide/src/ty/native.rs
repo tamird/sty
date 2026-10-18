@@ -1377,6 +1377,9 @@ fn write_function(
             output.push('*');
         }
         let parameter_type = match (kind, value.name.as_str(), name) {
+            // LABEL_LIST accepts label strings and Label values; the inventory
+            // omits the element type for this optional sequence.
+            (CallableKind::Function | CallableKind::Method("native"), "exports_files", "visibility") => classes.contains("Label").then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label] | None"),
             // Bazel reads string-keyed dictionaries. Mapping also admits dictionary
             // schemas without promising mutation through their required fields.
             (CallableKind::Method("repository_ctx" | "module_ctx"), "download" | "download_and_extract", "auth") => Some("_starpls_typing.Mapping[_StringKey, _DownloadAuth]"),
@@ -4381,6 +4384,55 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
                 "{statement}: {diagnostic:?}"
             );
             assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
+    fn exported_files_check_visibility_labels() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        for (path, context, callee) in [
+            ("/BUILD.bazel", APIContext::Build, "exports_files"),
+            ("/exports.bzl", APIContext::Bzl, "native.exports_files"),
+        ] {
+            let source = format!(
+                "{callee}(['input'], visibility=['//visibility:public', Label('//:group')])\n{callee}(['input'], visibility=None)\n"
+            );
+            let file = analysis
+                .open_document(
+                    Path::new(path),
+                    Dialect::Bazel,
+                    Some(FileInfo::Bazel {
+                        api_context: context,
+                        is_external: false,
+                    }),
+                    source.clone(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{path}: {diagnostics:?}");
+            analysis.update_file(
+                file,
+                format!("{source}{callee}(['input'], visibility=[42])\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{path}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
         }
     }
 
