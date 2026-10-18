@@ -1480,6 +1480,8 @@ fn write_function(
             output.push('*');
         }
         let parameter_type = match (kind, value.name.as_str(), name) {
+            // The host's unbound default is internal; supplied values must be Boolean.
+            (CallableKind::Function | CallableKind::Method("native"), "glob", "allow_empty") => Some("_starpls_builtins.bool"),
             // LABEL_LIST accepts label strings and Label values; the inventory
             // omits the element type for this optional sequence.
             (CallableKind::Function | CallableKind::Method("native"), "exports_files", "visibility") => classes.contains("Label").then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label] | None"),
@@ -4533,6 +4535,58 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
                 "{statement}: {diagnostic:?}"
             );
             assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
+    fn glob_checks_optional_allow_empty_flag() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        for (path, context, callee) in [
+            ("/BUILD.bazel", APIContext::Build, "glob"),
+            ("/glob.bzl", APIContext::Bzl, "native.glob"),
+        ] {
+            let source = format!(
+                "{callee}(['*.txt'])\n{callee}(['*.txt'], allow_empty=True)\n{callee}(['*.txt'], allow_empty=False)\n{callee}(['*.txt'], **{{'allow_empty': True}})\n"
+            );
+            let file = analysis
+                .open_document(
+                    Path::new(path),
+                    Dialect::Bazel,
+                    Some(FileInfo::Bazel {
+                        api_context: context,
+                        is_external: false,
+                    }),
+                    source.clone(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{path}: {diagnostics:?}");
+            for invalid in ["None", "1", "'yes'"] {
+                analysis.update_file(
+                    file,
+                    format!("{source}{callee}(['*.txt'], allow_empty={invalid})\n"),
+                );
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{path} {invalid}: {diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+                assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
+            }
         }
     }
 
