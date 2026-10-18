@@ -1497,12 +1497,21 @@ mod tests {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
         fixture.add_file(&mut analysis.db, "types.bzli", "type Value = str\n");
-        let source = fixture.add_file(&mut analysis.db, "source.bzl", "Value = int\ndef identity(value):\n    return value\ndef upper(value):\n    return value.upper()\n");
+        let source_text = "Value = int\ndef identity(value):\n    copied = value # type: T\n    return copied\ndef upper(value):\n    return value.upper()\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", source_text);
         let stub = fixture.add_file(&mut analysis.db, "source.bzli", "load('types.bzli', 'Value')\ndef identity[T](value: T) -> T: ...\ndef upper(value: Value) -> Value: ...\n");
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(source, stub)]).unwrap();
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(source, source_text.replace("copied = value", "copied = 42"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-assignment"),
+            "{diagnostics:?}"
+        );
         analysis.update_file(source, "Value = int\ndef identity(value):\n    return 1\ndef upper(value):\n    return value.upper()\n".into());
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
         assert!(
