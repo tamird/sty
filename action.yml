@@ -11,6 +11,12 @@ inputs:
   bazel-version:
     description: Bazel version for the checked workspace; defaults to its .bazelversion.
     default: ''
+  code-flow-analysis:
+    description: Report possibly unbound names and unreachable code.
+    default: 'true'
+  audit-loads:
+    description: Resolve every transitive load and check load cycles.
+    default: 'false'
   artifact-name:
     description: Name of the artifact containing build logs, diagnostics, and the coverage report.
     default: sty
@@ -61,6 +67,8 @@ runs:
         REPORT_DIRECTORY: ${{ steps.reports.outputs.directory }}
         CHECK_FILES: ${{ inputs.files }}
         CHECK_BAZEL_VERSION: ${{ inputs.bazel-version }}
+        CODE_FLOW_ANALYSIS: ${{ inputs.code-flow-analysis }}
+        AUDIT_LOADS: ${{ inputs.audit-loads }}
       run: |
         if [[ -z "${CHECK_FILES//[[:space:]]/}" ]]; then
           echo 'The files input must select at least one implementation.' >&2
@@ -71,8 +79,19 @@ runs:
         else
           unset USE_BAZEL_VERSION
         fi
+        options=(--experimental_infer_ctx_attributes)
+        case "$CODE_FLOW_ANALYSIS" in
+          true) options+=(--experimental_use_code_flow_analysis) ;;
+          false) ;;
+          *) echo 'code-flow-analysis must be true or false.' >&2; exit 1 ;;
+        esac
+        case "$AUDIT_LOADS" in
+          true) options+=(--audit-loads) ;;
+          false) ;;
+          *) echo 'audit-loads must be true or false.' >&2; exit 1 ;;
+        esac
         printf '%s\n' "$CHECK_FILES" > "$REPORT_DIRECTORY/files.txt"
-        "$REPORT_DIRECTORY/sty" check --experimental_infer_ctx_attributes \
+        "$REPORT_DIRECTORY/sty" check "${options[@]}" \
           --files-from "$REPORT_DIRECTORY/files.txt" \
           --progress --report "$REPORT_DIRECTORY/coverage.json" \
           2>&1 | tee "$REPORT_DIRECTORY/diagnostics.log"

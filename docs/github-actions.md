@@ -25,7 +25,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: tamird/sty@FULL_COMMIT_SHA
-        continue-on-error: true
         with:
           files: |
             foo/defs.bzl
@@ -43,18 +42,31 @@ interfaces in `sty.toml` at the Bazel workspace root:
 
 The check reads this configuration, validates the stubs and their implementations,
 and follows their loads. It enables inference of `ctx.attr` fields from Bazel rule
-declarations. Run the corresponding local check with:
+declarations, and reports possibly unbound names and unreachable code. Run the
+corresponding local check with:
 
 ```sh
-sty check --experimental_infer_ctx_attributes foo/defs.bzl foo/private/helpers.bzl
+sty check --experimental_infer_ctx_attributes --experimental_use_code_flow_analysis foo/defs.bzl foo/private/helpers.bzl
 ```
 
 See the [stub specification](type-interfaces.md) for supported declarations and
 external stub packages.
 
-`continue-on-error: true` makes the step advisory while retaining its failing
-outcome in the job log. Remove it when the project is ready to require a passing
-check. Each run uploads build logs, rendered diagnostics, the selected file list,
+The step fails on type errors. Set diagnostic severities in `sty.toml`:
+
+```toml
+[rules]
+blanket-ignore-comment = "error"
+possibly-unresolved-reference = "error"
+division-by-zero = "error"
+```
+
+`code-flow-analysis: false` disables the additional flow diagnostics supplied by
+the flag; explicitly configured rules retain their configured severity. Set
+`audit-loads: true` to resolve every transitive load and check cycles. Each source
+body to check must appear in `files` or a selected directory.
+
+Each run uploads build logs, rendered diagnostics, the selected file list,
 and a JSON coverage report as the `sty` artifact, including after a failed check.
 Build failures appear in the build step and its log; a successful type check
 requires successful dependency resolution and complete selected-file coverage.
