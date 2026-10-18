@@ -339,6 +339,9 @@ fn declarations(
     let propagation_context_available = dialect == Dialect::Bazel
         && classes.contains_key("Label")
         && classes.contains_key("struct");
+    let java_common_available = dialect == Dialect::Bazel
+        && classes.contains_key("java_common")
+        && classes.contains_key("struct");
     let xcode_config_available = dialect == Dialect::Bazel
         && classes.contains_key("apple_common")
         && classes.contains_key("apple_platform")
@@ -573,10 +576,7 @@ fn declarations(
                 "            legacy_globals: _starpls_types._LegacyGlobals = ..."
             )?;
         }
-        if class.name == "java_common"
-            && dialect == Dialect::Bazel
-            && classes.contains_key("struct")
-        {
+        if class.name == "java_common" && java_common_available {
             names.insert("internal_DO_NOT_USE");
             // Autoloads can replace the original native Java namespace.
             writeln!(body, "        if _starpls_native_rule_available:")?;
@@ -910,14 +910,77 @@ fn declarations(
             "    class _AnalyzedRule(rule, _starpls_typing.Generic[_AnalyzedAttributes]): ...\n",
         );
     }
-    if dialect == Dialect::Bazel
-        && classes.contains_key("java_common")
-        && classes.contains_key("struct")
-    {
+    if java_common_available {
+        // common/java/java_common.bzl exports this fixed struct. JavaCommonApi
+        // defines the call modes; JavaStarlarkCommon validates collection elements.
         body.push_str(
-            r#"    class _JavaCommonInternal(struct[_starpls_typing.Any]):
-        @_starpls_builtins.property
-        def google_legacy_api_enabled(self) -> _starpls_typing.Callable[[], _starpls_builtins.bool]: ...
+            r#"    class _JavaCommonInternal(struct[_starpls_builtins.object]):
+        def create_compilation_action(
+            self,
+            ctx: _starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object],
+            java_toolchain: _starpls_types.ProviderInstance,
+            output: _starpls_types.File,
+            manifest_proto: _starpls_types.File,
+            plugin_info: _starpls_types.ProviderInstance,
+            compilation_classpath: _starpls_types.depset[_starpls_types.File],
+            direct_jars: _starpls_types.depset[_starpls_types.File],
+            bootclasspath: _starpls_builtins.object,
+            javabuilder_jvm_flags: _starpls_types.depset[_starpls_builtins.str],
+            compile_time_java_deps: _starpls_types.depset[_starpls_types.File],
+            javac_opts: _starpls_types.depset[_starpls_builtins.str],
+            strict_deps_mode: _starpls_builtins.str,
+            target_label: _starpls_types.Label,
+            /,
+            deps_proto: _starpls_types.File | None = ...,
+            gen_class: _starpls_types.File | None = ...,
+            gen_source: _starpls_types.File | None = ...,
+            native_header_jar: _starpls_types.File | None = ...,
+            sources: _starpls_types.depset[_starpls_types.File] | None = ...,
+            source_jars: _starpls_typing.Sequence[_starpls_types.File] = ...,
+            resources: _starpls_typing.Sequence[_starpls_types.File] = ...,
+            resource_jars: _starpls_types.depset[_starpls_types.File] | None = ...,
+            classpath_resources: _starpls_typing.Sequence[_starpls_types.File] = ...,
+            sourcepath: _starpls_typing.Sequence[_starpls_types.File] = ...,
+            injecting_rule_kind: _starpls_builtins.str | None = ...,
+            enable_jspecify: _starpls_builtins.bool = ...,
+            enable_direct_classpath: _starpls_builtins.bool = ...,
+            additional_inputs: _starpls_typing.Sequence[_starpls_types.File] = ...,
+            additional_outputs: _starpls_typing.Sequence[_starpls_types.File] = ...,
+            *,
+            extra_args: _starpls_typing.Sequence[_starpls_types.Args] = ...,
+        ) -> None: ...
+        def create_header_compilation_action(
+            self,
+            ctx: _starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object],
+            java_toolchain: _starpls_types.ProviderInstance,
+            compile_jar: _starpls_types.File,
+            compile_deps_proto: _starpls_types.File,
+            plugin_info: _starpls_types.ProviderInstance,
+            source_files: _starpls_types.depset[_starpls_types.File],
+            source_jars: _starpls_typing.Sequence[_starpls_types.File],
+            compilation_classpath: _starpls_types.depset[_starpls_types.File],
+            direct_jars: _starpls_types.depset[_starpls_types.File],
+            bootclasspath: _starpls_builtins.object,
+            compile_time_java_deps: _starpls_types.depset[_starpls_types.File],
+            javac_opts: _starpls_types.depset[_starpls_builtins.str],
+            strict_deps_mode: _starpls_builtins.str,
+            target_label: _starpls_types.Label,
+            injecting_rule_kind: _starpls_builtins.str | None,
+            enable_direct_classpath: _starpls_builtins.bool,
+            additional_inputs: _starpls_typing.Sequence[_starpls_types.File],
+            /,
+            header_compilation_jar: _starpls_types.File,
+            header_compilation_direct_deps: _starpls_types.depset[_starpls_types.File],
+        ) -> None: ...
+        def check_java_toolchain_is_declared_on_rule(self, actions: _starpls_types.actions, /) -> None: ...
+        def check_provider_instances(self, providers: _starpls_typing.Sequence[_starpls_builtins.object], what: _starpls_builtins.str, provider_type: _starpls_types.ProviderKey, /) -> None: ...
+        def collect_native_deps_dirs(self, libraries: _starpls_types.depset[_starpls_types.LibraryToLink], /) -> _starpls_builtins.list[_starpls_builtins.str]: ...
+        def expand_java_opts(self, ctx: _starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object], attr: _starpls_builtins.str, /, *, tokenize: _starpls_builtins.bool, exec_paths: _starpls_builtins.bool = ...) -> _starpls_builtins.list[_starpls_builtins.str]: ...
+        def get_runtime_classpath_for_archive(self, jars: _starpls_types.depset[_starpls_types.File], excluded_jars: _starpls_types.depset[_starpls_types.File], /) -> _starpls_types.depset[_starpls_types.File]: ...
+        def google_legacy_api_enabled(self) -> _starpls_builtins.bool: ...
+        def incompatible_disable_non_executable_java_binary(self) -> _starpls_builtins.bool: ...
+        def incompatible_java_info_merge_runtime_module_flags(self) -> _starpls_builtins.bool: ...
+        def target_kind(self, target: _starpls_builtins.object, /) -> _starpls_builtins.str: ...
 "#,
         );
     }
@@ -1065,6 +1128,11 @@ fn declarations(
     output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");
     output.push_str("_starpls_annotation_ProviderInstance = _starpls_types.ProviderInstance\n");
     output.push_str("_starpls_annotation_Intersection = _starpls_ty_extensions.Intersection\n");
+    if java_common_available {
+        output.push_str(
+            "_starpls_annotation_JavaCommonInternal = _starpls_types._JavaCommonInternal\n",
+        );
+    }
     if dialect == Dialect::Bazel {
         for (name, _) in COMMON_RULE_ATTRS {
             writeln!(output, "class _starpls_annotation_{name}: ...")?;
@@ -4756,6 +4824,115 @@ def constructed() -> dict[str, str]:
         assert!(diagnostics
             .iter()
             .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+    }
+
+    #[test]
+    fn java_internal_namespace_preserves_native_contracts() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def obtain() -> JavaCommonInternal | None:
+    if hasattr(java_common, 'internal_DO_NOT_USE'):
+        return java_common.internal_DO_NOT_USE()
+    return None
+def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: ProviderInstance, key: ProviderKey, file: File, files: depset[File], strings: depset[str], libraries: depset[LibraryToLink], command: Args) -> None:
+    _carrier: struct[object] = internal
+    _tag: str = type(internal)
+    _legacy: bool = internal.google_legacy_api_enabled()
+    _disable: bool = internal.incompatible_disable_non_executable_java_binary()
+    _merge: bool = internal.incompatible_java_info_merge_runtime_module_flags()
+    _callback: Callable[[], bool] = internal.google_legacy_api_enabled
+    _getattr_callback: Callable[[], bool] = getattr(internal, 'google_legacy_api_enabled')
+    _from_callback: bool = _callback()
+    _kind: str = internal.target_kind(42)
+    _dirs: list[str] = internal.collect_native_deps_dirs(libraries)
+    _options: list[str] = internal.expand_java_opts(context, 'javacopts', tokenize=True)
+    _paths: list[str] = internal.expand_java_opts(context, 'javacopts', tokenize=False, exec_paths=True)
+    _classpath: depset[File] = internal.get_runtime_classpath_for_archive(files, files)
+    internal.check_provider_instances([info], 'providers', key)
+    internal.check_java_toolchain_is_declared_on_rule(context.actions)
+    internal.create_compilation_action(context, info, file, file, info, files, files, None, strings, files, strings, 'ERROR', Label('//:target'))
+    internal.create_compilation_action(context, info, file, file, info, files, files, 42, strings, files, strings, 'ERROR', Label('//:target'), file, source_jars=(file,), resources=[file], sources=files, resource_jars=files, injecting_rule_kind='java_library', extra_args=[command])
+    internal.create_header_compilation_action(context, info, file, file, info, files, [file], files, files, None, files, strings, 'ERROR', Label('//:target'), None, True, [file], file, files)
+    internal.create_header_compilation_action(context, info, file, file, info, files, [file], files, files, 42, files, strings, 'ERROR', Label('//:target'), 'java_library', True, [file], header_compilation_jar=file, header_compilation_direct_deps=files)
+    (_carrier, _tag, _legacy, _disable, _merge, _getattr_callback, _from_callback, _kind, _dirs, _options, _paths, _classpath)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/java.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert!(analysis
+            .db
+            .builtin_completion_names(file, ty_python_semantic::provided::BuiltinUsage::Annotation)
+            .contains_key("JavaCommonInternal"));
+        assert!(!analysis
+            .db
+            .builtin_completion_names(file, ty_python_semantic::provided::BuiltinUsage::Runtime)
+            .contains_key("JavaCommonInternal"));
+        for (invalid, expected) in [
+            ("_wrong: str = internal.missing; _wrong", "invalid-assignment"),
+            ("internal.target_kind(target=42)", "positional-only-parameter-as-kwarg"),
+            ("internal.google_legacy_api_enabled(42)", "too-many-positional-arguments"),
+            ("internal.expand_java_opts(context, 'javacopts')", "missing-argument"),
+            ("internal.expand_java_opts(context, 'javacopts', tokenize=42)", "invalid-argument-type"),
+            ("internal.get_runtime_classpath_for_archive(strings, files)", "invalid-argument-type"),
+            ("internal.collect_native_deps_dirs(files)", "invalid-argument-type"),
+            ("internal.check_provider_instances([info], 'providers', info)", "invalid-argument-type"),
+            ("internal.check_java_toolchain_is_declared_on_rule(context)", "invalid-argument-type"),
+            ("_wrong: str = internal.google_legacy_api_enabled(); _wrong", "invalid-assignment"),
+            ("_wrong: list[int] = internal.expand_java_opts(context, 'javacopts', tokenize=True); _wrong", "invalid-assignment"),
+            ("internal.create_compilation_action(context, info, file, file, info, strings, files, None, strings, files, strings, 'ERROR', Label('//:target'))", "invalid-argument-type"),
+            ("internal.create_compilation_action(context, info, file, file, info, files, files, None, strings, files, strings, 'ERROR', Label('//:target'), extra_args=['wrong'])", "invalid-argument-type"),
+            ("internal.create_compilation_action(context, info, file, file, info, files, files, None, strings, files, strings, 'ERROR', Label('//:target'), source_jars=[42])", "invalid-argument-type"),
+            ("internal.create_header_compilation_action(context, info, file, file, info, files, [file], files, files, None, files, strings, 'ERROR', Label('//:target'), None, True, [file], file, strings)", "invalid-argument-type"),
+        ] {
+            analysis.update_file(file, format!("{source}    {invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{invalid}: {diagnostic:?}");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+        analysis.update_file(file, format!("{source}    internal.missing()\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>(),
+            ["call-non-callable", "non-static-type"],
+            "{diagnostics:?}"
+        );
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| usize::from(diagnostic.range().unwrap().start()) >= source.len()));
+        analysis.update_file(file, format!("{source}JavaCommonInternal\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "unresolved-reference");
     }
 
     #[test]

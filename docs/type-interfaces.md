@@ -140,6 +140,13 @@ Every key is optional. Values follow the corresponding rule's attribute
 contract, including `None` and configurable inputs. The selected Bazel
 inventory determines available attributes and accepted aliases.
 
+### Internal Java namespace
+
+`JavaCommonInternal` names the fixed namespace returned by Bazel's
+`java_common.internal_DO_NOT_USE()`. It checks the eleven exported methods,
+including compilation inputs and keyword-only options. Source-owned interfaces
+use this annotation for Bazel's internal Java namespace.
+
 ## Project configuration
 
 Projects register their own interfaces in `sty.toml` at the Bazel workspace root:
