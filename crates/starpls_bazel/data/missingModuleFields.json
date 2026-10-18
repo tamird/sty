@@ -235,6 +235,11 @@
   ],
   "native": [
     {
+      "name": "bazel_version",
+      "type": "string",
+      "doc": "The version of the Bazel invocation."
+    },
+    {
       "name": "package_default_visibility",
       "doc": "Returns the default visibility of the current package.",
       "callable": {
