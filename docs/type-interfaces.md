@@ -238,6 +238,11 @@ providers are not checked. Return annotations remain required for a fully static
 callback. The function's public signature is unchanged: storing it or passing it elsewhere
 still requires a complete callable contract.
 
+`rule(initializer=...)` registers the initializer's own callable signature,
+independently of the implementation signature. Bazel additionally requires a
+function defined in Starlark source. It validates the generated per-target
+arguments and returned attribute updates when it invokes the initializer.
+
 ty's `missing-type-argument` rejects bare generic annotations such as `list`.
 
 Projects can also require fully known types:
