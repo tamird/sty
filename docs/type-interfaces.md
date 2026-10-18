@@ -652,9 +652,11 @@ Bazel's selected module name must equal `source.module`, and its selected
 version must appear in `source.versions`. Bazel dependency declarations specify
 minimum versions; compatibility is checked against the resolved module graph.
 
-For a source with no selected module version, a `stub-packages` entry may set
-`allow-unversioned = true`. Any available module name must match `source.module`.
-Otherwise, an unverifiable version is a configuration error.
+When Bazel reports no source version, stubs shipped in the same canonical
+repository as their source are accepted as part of that selected artifact.
+A separate stub package requires `allow-unversioned = true` in its consumer's
+`stub-packages` entry. Any available module name must match `source.module`,
+and every available version must match `source.versions`.
 
 Incompatible versions, unsupported manifest schemas, unknown fields, unresolved
 repositories, unreadable files, and failed Bazel queries are configuration errors.

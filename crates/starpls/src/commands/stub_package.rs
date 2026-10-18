@@ -231,7 +231,9 @@ fn source_repository(
             }
         }
         None => {
-            if !package.selection.allow_unversioned {
+            // Co-located source and stubs belong to the same selected artifact,
+            // including Git overrides for which Bazel omits the module version.
+            if source_repository != package.repository && !package.selection.allow_unversioned {
                 bail!("repository @@{} has no selected module version; set allow-unversioned = true for this stub package to accept it", source_repository.name);
             }
         }
@@ -300,6 +302,75 @@ mod tests {
 
     use crate::document::source_tests::TestBazelClient;
     use crate::document::DefaultFileLoader;
+
+    #[test]
+    fn unversioned_stubs_require_the_same_repository() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("stub-package-version-identity");
+        for (source, version, module, allow_unversioned, expected_error) in [
+            ("rules+", None, "rules", false, None),
+            (
+                "other+",
+                None,
+                "rules",
+                false,
+                Some("has no selected module version"),
+            ),
+            ("other+", None, "rules", true, None),
+            (
+                "rules+",
+                Some("2"),
+                "rules",
+                false,
+                Some("selected version 2"),
+            ),
+            ("rules+", None, "other", false, Some("requires \"rules\"")),
+        ] {
+            let external = root.join("external");
+            let mut client = TestBazelClient::default();
+            client.repository_mappings.insert(
+                "rules+".into(),
+                Arc::new([("renamed".into(), source.into())].into()),
+            );
+            client.selected_modules.insert(
+                source.into(),
+                SelectedModule {
+                    name: module.into(),
+                    version: version.map(str::to_owned),
+                },
+            );
+            let (sender, _) = crossbeam_channel::unbounded();
+            let loader = DefaultFileLoader::new(
+                Arc::new(client),
+                root.clone(),
+                None,
+                external,
+                sender,
+                true,
+            );
+            let package = super::Package {
+                selection: super::StubPackage {
+                    manifest: "@@rules+//:stubs.toml".into(),
+                    allow_unversioned,
+                },
+                path: root.join("external/rules+/stubs.toml"),
+                repository: loader.canonical_repository("rules+".into()).unwrap(),
+            };
+            let source = super::Source {
+                repository: "@renamed".into(),
+                module: "rules".into(),
+                versions: vec!["1".into()],
+            };
+            let result = super::source_repository(&loader, &package, &source);
+            match expected_error {
+                Some(expected) => {
+                    let error = result.unwrap_err().to_string();
+                    assert!(error.contains(expected), "{error}");
+                }
+                None => assert!(result.is_ok(), "{result:?}"),
+            }
+        }
+    }
 
     #[test]
     fn packages_batch_fetches_and_resolve_each_manifest_namespace() {
