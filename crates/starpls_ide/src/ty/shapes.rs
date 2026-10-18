@@ -727,6 +727,12 @@ def saved_optional(
                 Default::default(),
             )
             .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
         let valid = "def directory():\n    directories = {}  # type: dict[str, Metadata]\n    return struct(directories=directories)\n";
         let source = fixture.add_file(&mut analysis.db, "directory.bzl", valid);
         let interface = fixture.add_file(
