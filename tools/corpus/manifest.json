@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "5df44fc06b2df126d50681affa28163b5eb5a2dc",
+    "commit": "c162bd6e52c9d22d3df4b725a099a60cad5ebf0d",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -83,8 +83,8 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/frontend.bzl",
-            "old": "    return [\n        DefaultInfo(\n            executable = executable,\n            files = target[DefaultInfo].files,\n            data_runfiles = data_runfiles,\n            default_runfiles = default_runfiles,\n        ),\n        coverage_common.instrumented_files_info(\n            ctx = ctx,\n            dependency_attributes = [\"exports\"],\n        ),\n    ] + [\n        target[provider]\n        for provider in target[FrontendInfo].providers\n        if provider in target\n    ] + (\n        [run_environment_info] if run_environment_info else []\n    )",
-            "new": "    return str([\n        DefaultInfo(\n            executable = executable,\n            files = target[DefaultInfo].files,\n            data_runfiles = data_runfiles,\n            default_runfiles = default_runfiles,\n        ),\n        coverage_common.instrumented_files_info(\n            ctx = ctx,\n            dependency_attributes = [\"exports\"],\n        ),\n    ] + [\n        target[provider]\n        for provider in target[FrontendInfo].providers\n        if provider in target\n    ] + (\n        [run_environment_info] if run_environment_info else []\n    ))"
+            "old": "    return [\n        DefaultInfo(",
+            "new": "    return [\n        42,\n        DefaultInfo("
           }
         ],
         "expected": [
@@ -92,6 +92,42 @@
             "id": "invalid-return-type",
             "path": "with_cfg/private/frontend.bzl",
             "line": 78
+          }
+        ]
+      },
+      {
+        "name": "bad-alias-factory-provider-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "old": "return lambda ctx: _transitioning_alias_base_impl(ctx, providers = providers)",
+            "new": "return lambda ctx: _transitioning_alias_base_impl(ctx, providers = providers) + [42]"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "line": 41
+          }
+        ]
+      },
+      {
+        "name": "bad-alias-base-provider-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "old": "    return returned_providers",
+            "new": "    return returned_providers + [42]"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/transitioning_alias.bzl",
+            "line": 77
           }
         ]
       },

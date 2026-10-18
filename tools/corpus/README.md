@@ -47,9 +47,9 @@ output directory. Repository contents are read directly from the pinned checkout
 
 The cases cover container element types, fixed tuples, optional results, callable
 inputs, configurable rule attributes, and provider return lists. The `with_cfg`
-frontend and transition-alias callbacks use `list[object]` contracts that check
-the outer container. Other provider lists constrain their elements. The manifest
-lists the checked API slices.
+frontend and transition-alias callbacks preserve provider instances through
+opaque key lookups. Source overlays insert invalid elements in each callback's
+result. The manifest lists the checked API slices.
 
 The Apple action cases check explicit callback parameters alongside gradual
 variadic parameters, including incompatible executable types.
