@@ -523,12 +523,11 @@ fn declarations(
             )?;
         }
         let mut names = BTreeSet::new();
-        if class.name == "Label" {
-            // Label implements Comparable<Label>; Starlark uses that ordering
-            // for comparisons and lexicographic sorting of nested collections.
+        if matches!(class.name.as_str(), "Label" | "DottedVersion") {
+            // Comparable<Self> supplies Starlark ordering, including nested sorting.
             for method in ["__lt__", "__le__", "__gt__", "__ge__"] {
                 names.insert(method);
-                writeln!(body, "        def {method}(self, other: _starpls_types.Label, /) -> _starpls_builtins.bool: ...")?;
+                writeln!(body, "        def {method}(self, other: _starpls_types.{}, /) -> _starpls_builtins.bool: ...", class.name)?;
             }
         }
         if xcode_config_available && class.name == "XcodeVersionConfig" {
@@ -4382,6 +4381,43 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
                 "{statement}: {diagnostic:?}"
             );
             assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
+    fn dotted_versions_use_native_ordering() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        for operator in ["<", "<=", ">", ">="] {
+            let source = format!(
+                "def supported(current: DottedVersion) -> bool:\n    return current {operator} apple_common.dotted_version('15.0')\n"
+            );
+            let file = analysis
+                .open_document(
+                    Path::new("/version.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source.clone(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{operator}: {diagnostics:?}");
+            analysis.update_file(
+                file,
+                source.replace("apple_common.dotted_version('15.0')", "'15.0'"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{operator}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "unsupported-operator");
         }
     }
 
