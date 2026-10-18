@@ -31,6 +31,7 @@ mod context;
 mod diagnostics;
 mod factory;
 pub(crate) mod interface;
+mod keywords;
 pub(crate) mod load;
 mod native;
 mod providers;
@@ -256,6 +257,7 @@ impl Database {
                     "ProviderKey",
                     "JavaCommonInternal",
                     "Intersection",
+                    "KeywordArgs",
                 ])
                 .chain(native::TYPING_ANNOTATIONS.iter().copied())
                 .chain(native::COMMON_RULE_ATTRS.iter().map(|(name, _)| *name));
@@ -501,7 +503,8 @@ impl ty_python_semantic::Db for Database {
         application: ty_python_semantic::provided::ProvidedTypeApplication<'_, 'db>,
         context: &mut dyn ty_python_semantic::provided::TypeExpressionContext<'db>,
     ) -> Option<Type<'db>> {
-        providers::type_application(self, &application, context)
+        keywords::type_application(self, &application, context)
+            .or_else(|| providers::type_application(self, &application, context))
             .or_else(|| shapes::type_application(self, application, context))
     }
 

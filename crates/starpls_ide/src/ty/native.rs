@@ -1147,6 +1147,7 @@ fn declarations(
     if classes.contains_key("struct") {
         output.push_str("_starpls_annotation__PendingDownload = _starpls_types._PendingDownload\n");
     }
+    output.push_str("class _starpls_annotation_KeywordArgs: ...\n");
     output.push_str("_starpls_annotation_ExactDict = _starpls_allocations.dict\n\n");
     output.push_str("class _starpls_annotation_record(_starpls_types.ProviderInstance):\n    @_starpls_typing.type_check_only\n    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_builtins.object: ...\n\n");
     output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");

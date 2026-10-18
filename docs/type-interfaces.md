@@ -140,6 +140,30 @@ Every key is optional. Values follow the corresponding rule's attribute
 contract, including `None` and configurable inputs. The selected Bazel
 inventory determines available attributes and accepted aliases.
 
+`KeywordArgs[callable, "excluded"]` projects the remaining keyword
+parameters of an existing callable into a closed dictionary schema. It
+preserves parameter types and whether each keyword is required:
+
+```starlark
+load(":tool.bzl", _tool = "tool")
+
+def wrapper(name: str, **kwargs: Unpack[KeywordArgs[_tool, "name"]]) -> None: ...
+```
+
+A sidecar can import a public rule from its paired source file. The callable
+expression follows ordinary lexical binding, including aliases and shadowing.
+The supported contract is one nongeneric signature with fully known input
+kinds and types. Positional-only parameters, variadic or open keyword tails,
+overloads, and gradual inputs produce `invalid-type-form`. Excluded names
+must be unique string literals naming existing keyword parameters; additional
+exclusions can follow as more string arguments. Excluding a name describes the
+residual keyword row; the wrapper body must still supply any required argument.
+Wrapper-specific inputs belong in the wrapper's own signature.
+
+A generated rule can remain incomplete when its attributes arrive through a
+mutable mapping stored in another object. Such values are rejected until the
+ordinary rule inference establishes their complete keyword contract.
+
 ### Internal Java namespace
 
 `JavaCommonInternal` names the fixed namespace returned by Bazel's

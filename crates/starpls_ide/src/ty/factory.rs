@@ -1668,13 +1668,7 @@ fn callable_signature<'db>(
     environment: &ProgramEnvironment<'db>,
     parent: Type<'db>,
 ) -> Option<Signature<'db>> {
-    let mut signatures = Vec::new();
-    parent.map_callable_signatures(db, environment, CallableTypeKind::Regular, |signature| {
-        signatures.push(signature.clone());
-        signature
-    });
-    let [signature] = signatures.try_into().ok()?;
-    Some(signature)
+    parent.single_callable_signature(db, environment).cloned()
 }
 
 fn boolean_argument(call: &CheckedCall<'_, '_>, name: &str) -> Option<bool> {
