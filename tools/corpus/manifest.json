@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "7d9c6a18c6515870901392c3779c421c45a4bc23",
+    "commit": "04f2f12a2af938a27a6a4da2ad1625f6f6df3923",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -545,6 +545,11 @@
             "id": "non-static-type",
             "path": "with_cfg/private/__sty_args_probe__.bzl",
             "line": 19
+          },
+          {
+            "id": "invalid-assignment",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 24
           }
         ]
       },

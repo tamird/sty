@@ -20,3 +20,6 @@ rewrite_args("bad_plain_tuple", (42,), make_filegroup)
 wrong_keys: tuple[Mapping[int, object], list[Label]] = rewrite_args("wrong_keys", {"key": "value"}, make_filegroup)
 wrong_tuple: tuple[tuple[int, ...], list[Label]] = rewrite_args("wrong_tuple", ("text",), make_filegroup)
 print(wrong_keys, wrong_tuple)
+
+wrong_string: tuple[list[str], list[Label]] = rewrite_args("wrong_string", "$(location :dep)", make_filegroup)
+print(wrong_string)

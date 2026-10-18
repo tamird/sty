@@ -28,3 +28,11 @@ def mapping_args(args: Mapping[str, object]) -> tuple[Mapping[str, object], list
     return rewrite_args("mapping", args, make_filegroup)
 
 print(plain_dictionary, empty_dictionary, plain_tuple, mapping_args)
+
+plain_string: tuple[str, list[Label]] = rewrite_args("string", "$(location :dep)", make_filegroup)
+empty_string: tuple[str, list[Label]] = rewrite_args("empty_string", "", make_filegroup)
+
+def string_or_list_args(args: str | list[str]) -> tuple[str | list[str], list[Label]]:
+    return rewrite_args("string_or_list", args, make_filegroup)
+
+print(plain_string, empty_string, string_or_list_args)
