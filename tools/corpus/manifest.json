@@ -51,6 +51,11 @@
             "id": "no-matching-overload",
             "path": "with_cfg/private/__sty_corpus__.bzl",
             "line": 7
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_corpus__.bzl",
+            "line": 7
           }
         ]
       },
@@ -102,6 +107,11 @@
         "expected": [
           {
             "id": "no-matching-overload",
+            "path": "with_cfg/private/__sty_callback_probe__.bzl",
+            "line": 6
+          },
+          {
+            "id": "non-static-type",
             "path": "with_cfg/private/__sty_callback_probe__.bzl",
             "line": 6
           }
@@ -243,6 +253,16 @@
           },
           {
             "id": "no-matching-overload",
+            "path": "with_cfg/private/__sty_helper__.bzl",
+            "line": 4
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_helper__.bzl",
+            "line": 3
+          },
+          {
+            "id": "non-static-type",
             "path": "with_cfg/private/__sty_helper__.bzl",
             "line": 4
           }
@@ -391,6 +411,16 @@
             "id": "not-subscriptable",
             "path": "with_cfg/private/args.bzl",
             "line": 114
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 113
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 114
           }
         ]
       },
@@ -454,6 +484,31 @@
             "id": "invalid-assignment",
             "path": "with_cfg/private/__sty_args_probe__.bzl",
             "line": 21
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 11
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 14
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 16
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 18
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_args_probe__.bzl",
+            "line": 19
           }
         ]
       },
@@ -997,6 +1052,16 @@
             "id": "invalid-assignment",
             "path": "with_cfg/private/__sty_exec_properties_probe__.bzl",
             "line": 12
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_exec_properties_probe__.bzl",
+            "line": 10
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/__sty_exec_properties_probe__.bzl",
+            "line": 11
           }
         ]
       },
@@ -1085,6 +1150,36 @@
         "expected": [
           {
             "id": "unsupported-operator",
+            "path": "with_cfg/private/select.bzl",
+            "line": 28
+          },
+          {
+            "id": "unsound-return-statement",
+            "path": "with_cfg/private/select.bzl",
+            "line": 28
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 28
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 28
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 28
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 28
+          },
+          {
+            "id": "non-static-type",
             "path": "with_cfg/private/select.bzl",
             "line": 28
           }

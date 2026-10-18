@@ -5,4 +5,4 @@ def probe(config: transition[Literal["split"]], strings: dict[str, int], labels:
     make_transitioning_alias(providers=(DefaultInfo,), transition=config, values=labels, original_settings_label=Label("//:settings"))
 
 def ordinary() -> None:
-    make_transitioning_alias(providers=[], transition=config.target(), values={}, original_settings_label=None)
+    make_transitioning_alias(providers=[], transition=config.target(), values={"//:setting": 0}, original_settings_label=None)
