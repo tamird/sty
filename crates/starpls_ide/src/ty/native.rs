@@ -799,6 +799,7 @@ fn declarations(
                             "outputs" => (class.name == "ctx" && classes.contains_key("File")).then_some("_starpls_types.struct[_starpls_types.File | _starpls_builtins.list[_starpls_types.File] | None]"),
                             "executable" => classes.contains_key("File").then_some("_starpls_types.struct[_starpls_types.File | None]"),
                             "files" => classes.contains_key("File").then_some("_starpls_types.struct[_starpls_builtins.list[_starpls_types.File]]"),
+                            "var" => (class.name == "ctx").then_some("_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]"),
                             _ => None,
                         }
                     } else if class.name == "DefaultInfo" {
@@ -2369,6 +2370,46 @@ def output(context: ctx) -> File | list[File] | None:
             panic!("{diagnostics:?}");
         };
         assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
+    fn context_variables_have_string_keys_and_values() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = "def variables(context: ctx[object, object]) -> dict[str, str]:\n    return context.var\n";
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for invalid in ["dict[int, str]", "dict[str, int]"] {
+            analysis.update_file(file, source.replace("dict[str, str]", invalid));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        }
     }
 
     #[test]
