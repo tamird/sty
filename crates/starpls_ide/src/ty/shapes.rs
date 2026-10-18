@@ -715,6 +715,45 @@ def saved_optional(
     }
 
     #[test]
+    fn recursive_struct_fields_check_source_bodies() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let valid = "def directory():\n    directories = {}  # type: dict[str, Metadata]\n    return struct(directories=directories)\n";
+        let source = fixture.add_file(&mut analysis.db, "directory.bzl", valid);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "directory.bzli",
+            "type Metadata = struct[{'directories': dict[str, Metadata]}]\ndef directory() -> Metadata: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [source, interface] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.update_file(
+            source,
+            valid.replace("directories=directories", "directories=42"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn optional_struct_fields_preserve_presence_and_types() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
