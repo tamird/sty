@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "312090ac5b710a3f44947cb98bd4a06ab51c880d",
+    "commit": "7d9c6a18c6515870901392c3779c421c45a4bc23",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -73,7 +73,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 135
+            "line": 136
           }
         ]
       },
@@ -207,7 +207,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 137
+            "line": 138
           }
         ]
       },
@@ -405,7 +405,7 @@
           {
             "id": "invalid-assignment",
             "path": "with_cfg/private/args.bzl",
-            "line": 124
+            "line": 125
           }
         ]
       },
@@ -441,22 +441,22 @@
           {
             "id": "unsupported-operator",
             "path": "with_cfg/private/args.bzl",
-            "line": 115
+            "line": 116
           },
           {
             "id": "not-subscriptable",
             "path": "with_cfg/private/args.bzl",
-            "line": 117
-          },
-          {
-            "id": "non-static-type",
-            "path": "with_cfg/private/args.bzl",
-            "line": 116
+            "line": 118
           },
           {
             "id": "non-static-type",
             "path": "with_cfg/private/args.bzl",
             "line": 117
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 118
           }
         ]
       },
@@ -562,7 +562,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 81
+            "line": 82
           }
         ]
       },
@@ -599,6 +599,42 @@
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
             "line": 16
+          }
+        ]
+      },
+      {
+        "name": "selected-args-nullable-callback",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/args.bzl",
+            "old": "            # The executable and test frontends use the implicit args default [].\n            return []",
+            "new": "            # The executable and test frontends use the implicit args default [].\n            return None"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 79
+          }
+        ]
+      },
+      {
+        "name": "string-list-select-nullable-result",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/select.bzl",
+            "old": "def _map_list_selected(func, branches):\n    return select(_map_selected(func, branches))",
+            "new": "def _map_list_selected(func, branches):\n    _map_selected(func, branches)\n    return select({\"//conditions:default\": None})"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/select.bzl",
+            "line": 35
           }
         ]
       },
@@ -905,7 +941,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 270
+            "line": 240
           }
         ]
       },
@@ -923,7 +959,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 197
+            "line": 167
           }
         ]
       },
@@ -987,7 +1023,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 132
+            "line": 133
           }
         ]
       },
@@ -1033,15 +1069,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return (\"none\", select(mapped))\n    else:\n",
-            "new": "return (\"list\", select(mapped))\n    else:\n"
+            "old": "return (\"none\", select(mapped))\n    elif type(first) == \"string\":\n",
+            "new": "return (\"list\", select(mapped))\n    elif type(first) == \"string\":\n"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 45
+            "line": 51
           }
         ]
       },
@@ -1051,15 +1087,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return (\"none\", select(mapped))\n    else:\n",
-            "new": "return (\"none\", [\"plain\"])\n    else:\n"
+            "old": "return (\"none\", select(mapped))\n    elif type(first) == \"string\":\n",
+            "new": "return (\"none\", [\"plain\"])\n    elif type(first) == \"string\":\n"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 45
+            "line": 51
           }
         ]
       },
@@ -1225,8 +1261,8 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "    return select(_map_selected(func, branches))\n",
-            "new": "    return _map_selected(func, branches)\n"
+            "old": "def _map_dict_selected(func, branches):\n    return select(_map_selected(func, branches))\n",
+            "new": "def _map_dict_selected(func, branches):\n    return _map_selected(func, branches)\n"
           }
         ],
         "expected": [

@@ -58,9 +58,10 @@ The `with_cfg` cases follow attribute values through constructor helpers,
 split-transition registrations, argument rewriting, and frontend modes. Parser
 cases check tagged selector pieces and the generic per-piece callback helper.
 Plain argument lists use a checked, nonnullable string-list rewriter. Selector
-callbacks handle `None` pieces before calling it, and composition returns a
-selector. Source overlays reject nullable list results and plain lists returned
-by the selector mapper.
+callbacks replace `None` with the frontend's empty-list default, and composition
+returns a selector whose branches are lists of strings. Source overlays reject
+nullable callback results, selector branches containing `None`, and plain lists
+returned by the selector mapper.
 Argument rewriting also returns the generated labels. Selected
 dictionaries contribute their keys, following Bazel's string-list attribute
 conversion. Source overlays reject incorrect leaf results, selector kinds, and
