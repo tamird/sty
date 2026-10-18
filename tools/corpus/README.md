@@ -62,9 +62,13 @@ or `None`, directly or through `select`, together with generated labels. Selecte
 dictionaries contribute their keys, following Bazel's string-list attribute
 conversion. Source overlays reject incorrect leaf results, selector kinds, and
 callback arguments.
-General `map_attr` and `compose_select_value` remain gradual: representation
-decoding loses the original element type, and composition can widen the callback's
-result type.
+Location rewriting checks the finite values produced by the parser. Its selected
+accumulator combines prefixes and suffixes through the same generic fold as the
+list and dictionary mappers. Source overlays check parsed dictionary values,
+callback arguments, and the shared list rewriter.
+General `map_attr` and `_compose_compat` remain gradual: representation decoding
+loses the original element type, and arbitrary callback results determine the
+runtime operator family used by composition.
 Frontend execution properties use a checked dictionary mapper. Its callback
 validates property names and retained values before constructing a dictionary;
 the generic mapper preserves key and value types through selected branches and

@@ -2,7 +2,7 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "feaf43ff7d7be449e6443429720b9b3a59ff6340",
+    "commit": "acd636c7c2a674eb011322c169ef61b3d668e561",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
@@ -313,7 +313,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 130
+            "line": 133
           }
         ]
       },
@@ -489,7 +489,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 66
+            "line": 142
           }
         ]
       },
@@ -507,7 +507,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 56
+            "line": 59
           }
         ]
       },
@@ -696,7 +696,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 10
+            "line": 12
           }
         ]
       },
@@ -714,7 +714,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 10
+            "line": 12
           }
         ]
       },
@@ -732,7 +732,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 10
+            "line": 12
           }
         ]
       },
@@ -750,7 +750,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 201
+            "line": 293
           }
         ]
       },
@@ -768,7 +768,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 115
+            "line": 209
           }
         ]
       },
@@ -850,7 +850,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 20
+            "line": 19
           }
         ]
       },
@@ -868,7 +868,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 37
+            "line": 40
           }
         ]
       },
@@ -878,15 +878,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return (\"none\", select(mapped))",
-            "new": "return (\"list\", select(mapped))"
+            "old": "return (\"none\", select(mapped))\n    else:\n",
+            "new": "return (\"list\", select(mapped))\n    else:\n"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 49
+            "line": 57
           }
         ]
       },
@@ -896,15 +896,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return (\"none\", select(mapped))",
-            "new": "return (\"none\", [\"plain\"])"
+            "old": "return (\"none\", select(mapped))\n    else:\n",
+            "new": "return (\"none\", [\"plain\"])\n    else:\n"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 49
+            "line": 57
           }
         ]
       },
@@ -958,7 +958,7 @@
           {
             "id": "invalid-assignment",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 49
+            "line": 52
           }
         ]
       },
@@ -1068,7 +1068,7 @@
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 27
+            "line": 35
           }
         ]
       },
@@ -1078,15 +1078,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "    return _compose(items, lambda item: item[1], lambda _anchor, left, right: left | right)\n",
-            "new": "    return _compose(items, lambda item: item[1], lambda _anchor, left, right: left + right)\n"
+            "old": "    return _compose(items, lambda item: item[1], lambda value, result, prepend: value | result if prepend else result | value)\n",
+            "new": "    return _compose(items, lambda item: item[1], lambda value, result, prepend: value + result if prepend else result | value)\n"
           }
         ],
         "expected": [
           {
             "id": "unsupported-operator",
             "path": "with_cfg/private/select.bzl",
-            "line": 30
+            "line": 38
           }
         ]
       },
@@ -1096,15 +1096,69 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "    return _map_attr(func, attribute, _map_dict_selected, _compose_dict)\n",
-            "new": "    return [_map_attr(func, attribute, _map_dict_selected, _compose_dict)]\n"
+            "old": "    return _map_select(func, attribute, _map_dict_selected, _compose_dict)\n",
+            "new": "    return [_map_select(func, attribute, _map_dict_selected, _compose_dict)]\n"
           }
         ],
         "expected": [
           {
             "id": "invalid-return-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 24
+            "line": 32
+          }
+        ]
+      },
+      {
+        "name": "parsed-dictionary-bad-value",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "_rewrite_locations_in_parsed_list_or_single_value(v, label_rewriter)",
+            "new": "struct(value = v)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 148
+          }
+        ]
+      },
+      {
+        "name": "parsed-callback-bad-input",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "return _rewrite_locations_in_parsed_value(value, label_rewriter)",
+            "new": "return _rewrite_locations_in_parsed_value(label_rewriter(value), label_rewriter)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 23
+          }
+        ]
+      },
+      {
+        "name": "generic-list-bad-input",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/rewrite.bzl",
+            "old": "return [rewrite_locations_in_single_value(v, label_rewriter) for v in value]",
+            "new": "return [label_rewriter(v) for v in value]"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 142
           }
         ]
       }
