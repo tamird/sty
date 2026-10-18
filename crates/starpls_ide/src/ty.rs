@@ -256,7 +256,8 @@ impl Database {
                     "ProviderKey",
                     "Intersection",
                 ])
-                .chain(native::TYPING_ANNOTATIONS.iter().copied());
+                .chain(native::TYPING_ANNOTATIONS.iter().copied())
+                .chain(native::COMMON_RULE_ATTRS.iter().map(|(name, _)| *name));
             return candidates
                 .filter(|name| {
                     matches!(
@@ -481,7 +482,9 @@ impl ty_python_semantic::Db for Database {
         _definition: Option<Definition<'db>>,
     ) -> Option<Type<'db>> {
         self.starlark_file(file)?;
-        providers::constructor_instance(self, value_type, &ProgramEnvironment::from_file(file))
+        factory::common_rule_attrs(self, file, value_type).or_else(|| {
+            providers::constructor_instance(self, value_type, &ProgramEnvironment::from_file(file))
+        })
     }
 
     fn provided_instance_fields<'db>(

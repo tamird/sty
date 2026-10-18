@@ -19,6 +19,12 @@ use starpls_common::Dialect;
 use ty_ide::Docstring;
 use ty_ide::MarkupKind;
 
+/// Annotation names and whether they include executable rule attributes.
+pub(super) const COMMON_RULE_ATTRS: &[(&str, bool)] = &[
+    ("CommonRuleAttrs", false),
+    ("CommonExecutableRuleAttrs", true),
+];
+
 pub(super) const TYPING_ANNOTATIONS: &[&str] = &[
     "Final",
     "Callable",
@@ -1059,6 +1065,11 @@ fn declarations(
     output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");
     output.push_str("_starpls_annotation_ProviderInstance = _starpls_types.ProviderInstance\n");
     output.push_str("_starpls_annotation_Intersection = _starpls_ty_extensions.Intersection\n");
+    if dialect == Dialect::Bazel {
+        for (name, _) in COMMON_RULE_ATTRS {
+            writeln!(output, "class _starpls_annotation_{name}: ...")?;
+        }
+    }
     for name in classes.keys() {
         writeln!(output, "_starpls_annotation_{name} = _starpls_types.{name}")?;
     }

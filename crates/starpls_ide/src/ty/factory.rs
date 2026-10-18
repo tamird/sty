@@ -888,6 +888,89 @@ enum RuleKind {
     Macro,
 }
 
+fn common_attribute_parameter<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    declarations: ProgramFile<'db>,
+    attribute: &starpls_bazel::attr::Attribute,
+    kind: &RuleKind,
+) -> Option<Parameter<'db>> {
+    let ty = attribute_value_type(
+        db,
+        environment,
+        declarations,
+        &attribute.r#type,
+        AttributeUse::Input,
+    )?;
+    let ty = if attribute.configurable && !matches!(kind, RuleKind::Repository) {
+        configurable_input(db, environment, declarations, ty)?
+    } else {
+        ty
+    };
+    let parameter = Parameter::keyword_only(Name::new(&attribute.name)).with_annotated_type(ty);
+    Some(if attribute.is_mandatory {
+        parameter
+    } else {
+        let parameter = optional_attribute(db, environment, parameter);
+        let default = if matches!(kind, RuleKind::Macro) {
+            Type::none(db, environment)
+        } else {
+            Type::unknown()
+        };
+        parameter.with_default_type(default)
+    })
+}
+
+/// Keyword arguments forwarded by a wrapper with an explicit `name` parameter.
+pub(super) fn common_rule_attrs<'db>(
+    db: &'db Database,
+    file: ProgramFile<'db>,
+    value: Type<'db>,
+) -> Option<Type<'db>> {
+    let source = db.starlark_file(file)?;
+    if source.dialect != starpls_common::Dialect::Bazel || !matches!(value, Type::ClassLiteral(_)) {
+        return None;
+    }
+    let (_, executable) = super::native::COMMON_RULE_ATTRS
+        .iter()
+        .find(|(name, _)| db.annotation_builtin(source, name) == Some(value))?;
+    let environment = ProgramEnvironment::from_file(file);
+    let TypeDefinition::StaticClass(definition) = value.definition(db, &environment)? else {
+        return None;
+    };
+    let declarations = definition.program_file(db);
+    let rules = db.get_builtin_defs(&source.dialect).rules(db);
+    let starpls_bazel::attr::CommonAttributes {
+        mut build,
+        binary,
+        test: _,
+        repository: _,
+    } = starpls_bazel::attr::make_common_attributes(rules);
+    if *executable {
+        build.extend(binary);
+    }
+    let mut fields = TypedDictSchema::default();
+    for attribute in build.iter().filter(|attribute| attribute.name != "name") {
+        let parameter = common_attribute_parameter(
+            db,
+            &environment,
+            declarations,
+            attribute,
+            &RuleKind::Build,
+        )?;
+        let field = TypedDictFieldBuilder::new(parameter.annotated_type())
+            .required(!parameter.has_default())
+            .build();
+        fields.insert(Name::new(&attribute.name), field.clone());
+        if let Some(alias) = starpls_bazel::attr::input_alias(&attribute.name) {
+            fields.insert(Name::new(alias), field);
+        }
+    }
+    Some(Type::TypedDict(
+        TypedDictType::from_schema_items_with_openness(db, fields, TypedDictOpenness::Closed),
+    ))
+}
+
 fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(call.file());
     let declaration = call.declaration()?;
@@ -991,25 +1074,9 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     let mut attributes = common
         .into_iter()
         .map(|attribute| {
-            let ty = attribute_type(db, call, &attribute.r#type)?;
-            let ty = if attribute.configurable && !matches!(kind, RuleKind::Repository) {
-                configurable_input(db, call, ty)?
-            } else {
-                ty
-            };
+            let parameter =
+                common_attribute_parameter(db, &environment, declarations, &attribute, &kind)?;
             let name = Name::new(&attribute.name);
-            let parameter = Parameter::keyword_only(name.clone()).with_annotated_type(ty);
-            let parameter = if attribute.is_mandatory {
-                parameter
-            } else {
-                let parameter = optional_attribute(db, &environment, parameter)
-                    .with_default_type(Type::unknown());
-                if matches!(kind, RuleKind::Macro) {
-                    parameter.with_default_type(Type::none(db, &environment))
-                } else {
-                    parameter
-                }
-            };
             Some(RuleAttribute {
                 name,
                 parameter: Some(parameter),
@@ -1223,7 +1290,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             let ty = if !matches!(kind, RuleKind::Repository)
                 && attribute.configurable() != Some(false)
             {
-                configurable_input(db, call, ty)?
+                configurable_input(db, &environment, declarations, ty)?
             } else {
                 ty
             };
@@ -1727,28 +1794,23 @@ fn inherited_native_attribute(
 
 fn configurable_input<'db>(
     db: &'db Database,
-    call: &CheckedCall<'_, 'db>,
+    environment: &ProgramEnvironment<'db>,
+    declarations: ProgramFile<'db>,
     value: Type<'db>,
 ) -> Option<Type<'db>> {
-    let environment = ProgramEnvironment::from_file(call.file());
-    let declaration = call.declaration()?;
     let alternatives =
-        UnionType::from_elements(db, &environment, [value, Type::none(db, &environment)]);
+        UnionType::from_elements(db, environment, [value, Type::none(db, environment)]);
     let selected = specialized_native_instance(
         db,
-        &environment,
-        declaration.program_file(db),
+        environment,
+        declarations,
         "select",
         vec![
             alternatives,
-            KnownClass::Object.to_instance(db, &environment),
+            KnownClass::Object.to_instance(db, environment),
         ],
     )?;
-    Some(UnionType::from_elements(
-        db,
-        &environment,
-        [value, selected],
-    ))
+    Some(UnionType::from_elements(db, environment, [value, selected]))
 }
 
 /// Read a native generic projection through ordinary class inheritance.
@@ -2323,6 +2385,97 @@ mod tests {
     use super::*;
     use crate::Analysis;
     use crate::FilePosition;
+
+    #[test]
+    fn common_rule_keyword_schemas_match_factories() {
+        let source = r#"def implementation(context: ctx[object, object]) -> list[ProviderInstance]:
+    return []
+ordinary = rule(implementation=implementation)
+executable = rule(implementation=implementation, executable=True)
+def forward(**kwargs: Unpack[CommonRuleAttrs]) -> None:
+    ordinary(name='plain', **kwargs)
+def forward_executable(**kwargs: Unpack[CommonExecutableRuleAttrs]) -> None:
+    executable(name='binary', **kwargs)
+forward()
+forward(tags=['manual'], visibility=['//visibility:public'], testonly=True)
+forward(tags=None, features=select({'//conditions:default': ['feature']}))
+forward_executable(args=['--verbose'], output_licenses=['notice'])
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (invalid, expected) in [
+            ("forward(name='other')", "unknown-argument"),
+            ("forward(format_keys={'key': 'value'})", "unknown-argument"),
+            ("forward(args=['--verbose'])", "unknown-argument"),
+            ("forward(tags=[42])", "invalid-argument-type"),
+            ("forward_executable(args=[42])", "invalid-argument-type"),
+            (
+                "forward(visibility=select({'//conditions:default': ['//visibility:public']}))",
+                "invalid-argument-type",
+            ),
+        ] {
+            analysis.update_file(file, format!("{source}{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{diagnostic:?}");
+        }
+        // The selected host inventory adds the new spelling and its legacy alias.
+        let rules = starpls_bazel::build::BuildLanguage {
+            rule: vec![starpls_bazel::build::RuleDefinition {
+                name: "genrule".into(),
+                attribute: vec![starpls_bazel::build::AttributeDefinition {
+                    name: "package_metadata".into(),
+                    r#type: starpls_bazel::build::attribute::Discriminator::LabelList as i32,
+                    configurable: Some(false),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+        };
+        let metadata = format!("{source}forward(package_metadata=['//:license'])\nforward(applicable_licenses=['//:license'])\n");
+        analysis.update_file(file, metadata.clone());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unknown-argument");
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                rules,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for name in ["package_metadata", "applicable_licenses"] {
+            analysis.update_file(file, format!("{source}forward({name}=[42])\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{name}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        }
+    }
 
     #[test]
     fn list_attribute_inputs_accept_depsets() {

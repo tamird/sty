@@ -125,6 +125,21 @@ load(":shared.bzli", _Builder = "Builder")
 def builder() -> _Builder: ...
 ```
 
+### Bazel rule keywords
+
+`CommonRuleAttrs` is a closed dictionary schema for common Bazel rule
+attributes such as `tags`, `visibility`, and `target_compatible_with`.
+`CommonExecutableRuleAttrs` also includes `args` and `output_licenses`.
+Both omit `name`, which wrappers declare separately:
+
+```starlark
+def wrapper(name: str, **kwargs: Unpack[CommonRuleAttrs]) -> None: ...
+```
+
+Every key is optional. Values follow the corresponding rule's attribute
+contract, including `None` and configurable inputs. The selected Bazel
+inventory determines available attributes and accepted aliases.
+
 ## Project configuration
 
 Projects register their own interfaces in `sty.toml` at the Bazel workspace root:
