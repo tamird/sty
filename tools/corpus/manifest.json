@@ -1901,7 +1901,7 @@
   {
     "directory": "hermetic-llvm",
     "origin": "https://github.com/hermeticbuild/hermetic-llvm.git",
-    "commit": "9b48d9a1edf4a0f46cca873801af23f61efdce3d",
+    "commit": "596bc7b1b044ce1c85b6e5d0f43b9c5431ad42e0",
     "sources": [
       "defs.bzl",
       "directory.bzl",
@@ -2001,7 +2001,7 @@
           {
             "id": "unsupported-operator",
             "path": "defs.bzl",
-            "line": 7
+            "line": 11
           }
         ]
       },
@@ -2019,7 +2019,7 @@
           {
             "id": "invalid-return-type",
             "path": "defs.bzl",
-            "line": 40
+            "line": 44
           }
         ]
       },
@@ -2121,6 +2121,85 @@
             "id": "invalid-argument-type",
             "path": "_sty_callback_data.bzl",
             "line": 28
+          }
+        ]
+      },
+      {
+        "name": "callback-tags",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_callback_tags.bzl",
+            "fixture": "probes/llvm-callback-tags.bzl"
+          }
+        ],
+        "expected": []
+      },
+      {
+        "name": "bad-callback-tags",
+        "overlays": [
+          {
+            "kind": "file",
+            "path": "_sty_callback_tags.bzl",
+            "fixture": "probes/llvm-bad-callback-tags.bzl"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_callback_tags.bzl",
+            "line": 13
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_callback_tags.bzl",
+            "line": 14
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_callback_tags.bzl",
+            "line": 15
+          },
+          {
+            "id": "invalid-argument-type",
+            "path": "_sty_callback_tags.bzl",
+            "line": 16
+          }
+        ]
+      },
+      {
+        "name": "bad-injected-tag",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "        inner_tags.append(\"manual\")",
+            "new": "        inner_tags.append(42)"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "defs.bzl",
+            "line": 4
+          }
+        ]
+      },
+      {
+        "name": "bad-forwarded-tags",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "defs.bzl",
+            "old": "        tags = inner_tags,",
+            "new": "        tags = [42],"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-argument-type",
+            "path": "defs.bzl",
+            "line": 13
           }
         ]
       }

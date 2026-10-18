@@ -87,9 +87,11 @@ order with selected dictionaries.
 The LLVM wrapper cases relate explicit `inner_data` to the callback's `data`
 parameter. Omitted data uses the empty-list default; list and sequence callbacks
 accept it, while tuple-only and selector-only callbacks require explicit data.
-The cases also check the constraint keyword. The implementation callback remains
-gradual; its forwarding of `data` and compatibility with injected `name`/`tags`
-and other keywords remain unproved.
+The cases also check the constraint keyword and tag element types, including
+callbacks that accept only specific string literals. The implementation copies
+the supplied tags and adds `"manual"` when absent; source overlays check both the
+added value and the list passed to the callback. The callback's `data`, generated
+`name`, and other forwarded keywords remain gradual in the implementation.
 
 The C++ toolchain configuration contracts cover all thirteen constructor helpers
 and their nominal providers, including recursive flag groups. The Rust dependency
