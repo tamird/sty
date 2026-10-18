@@ -4827,6 +4827,62 @@ def constructed() -> dict[str, str]:
     }
 
     #[test]
+    fn boolean_conversion_accepts_static_objects() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def nonempty(values: Sequence[str]) -> bool:
+    return bool(values)
+def nonempty_list(values: list[str]) -> bool:
+    return bool(values)
+def truth(value: object) -> bool:
+    return bool(value)
+empty: bool = bool()
+none: bool = bool(None)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/boolean.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (invalid, expected) in [
+            ("bool(True, False)", "too-many-positional-arguments"),
+            ("wrong: str = bool(42)", "invalid-assignment"),
+        ] {
+            analysis.update_file(file, format!("{source}{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(
+                diagnostic.id().as_str(),
+                expected,
+                "{invalid}: {diagnostic:?}"
+            );
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
     fn java_internal_namespace_preserves_native_contracts() {
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
