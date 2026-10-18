@@ -40,6 +40,7 @@ use ty_python_semantic::types::ide_support::definitions_for_name;
 use ty_python_semantic::types::CallableTypeKind;
 use ty_python_semantic::types::CheckedArgument;
 use ty_python_semantic::types::CheckedCall;
+use ty_python_semantic::types::IntersectionType;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::ParameterKind;
@@ -163,6 +164,10 @@ pub(super) fn key_value<'db>(
         environment,
         CallableTypeKind::FunctionLike,
         |signature| {
+            let signature = match legacy_instance(db, signature.return_type(), environment) {
+                Some(instance) => signature.with_return_type(instance),
+                None => signature,
+            };
             results.push(signature.upper_specialized_return_type(db, environment));
             let parameters = std::iter::once(Parameter::positional_only(Some(Name::new("self"))))
                 .chain(signature.parameters().iter().cloned());
@@ -342,6 +347,11 @@ pub(super) fn constructor_instance<'db>(
     constructor: Type<'db>,
     environment: &ProgramEnvironment<'db>,
 ) -> Option<Type<'db>> {
+    if let Some(instance) = constructor.to_instance_approximation(db, environment) {
+        if let Some(instance) = legacy_instance(db, instance, environment) {
+            return Some(instance);
+        }
+    }
     if let Some(TypeDefinition::Function(definition)) =
         constructor_definition(db, constructor, environment)
     {
@@ -362,6 +372,29 @@ pub(super) fn constructor_instance<'db>(
         },
     )?;
     Some(UnionType::from_elements(db, environment, returns))
+}
+
+/// Legacy class declarations retain ty's class identity and field ownership.
+/// Their host instance view also guarantees Bazel's common Info contract.
+fn legacy_instance<'db>(
+    db: &'db Database,
+    instance: Type<'db>,
+    environment: &ProgramEnvironment<'db>,
+) -> Option<Type<'db>> {
+    let definition = super::interface::provider_definition(db, instance, environment)?;
+    let source = db.starlark_file(definition.program_file(db))?;
+    if !source.is_type_interface(db) {
+        return None;
+    }
+    let base = db
+        .annotation_builtin(source, "ProviderInstance")?
+        .to_instance_approximation(db, environment)?;
+    Some(IntersectionType::from_two_elements(
+        db,
+        environment,
+        instance,
+        base,
+    ))
 }
 
 pub(super) fn constructor_fields<'db>(
@@ -1128,6 +1161,9 @@ def _init(value):
     return {"value": value}
 Initialized, raw = provider(fields=["value"], init=_init)
 Empty = provider(fields=[])
+def _legacy_init(value, next=None):
+    return {"value": value, "next": next}
+Legacy, raw_legacy = provider(fields=["value", "next"], init=_legacy_init)
 def by_key(target, key):
     return target[key]
 "#,
@@ -1141,19 +1177,46 @@ def Initialized(value: str) -> record[{"value": str}]: ...
 def raw(*, value: str) -> Initialized: ...
 class Empty:
     def __init__(self) -> None: ...
+class Legacy:
+    value: Final[str]
+    next: Final[Legacy | None]
+    def __init__(self, value: str, next: Legacy | None = ...) -> None: ...
+class Shape(Protocol):
+    value: str
+class Dictionary(TypedDict):
+    value: str
 def by_key[T](target: Target, key: Provider[T]) -> T: ...
 "#,
         );
         fixture.add_file(
             &mut analysis.db,
             "aliases.bzl",
-            "load('info.bzl', Original='Info')\nAlias = Original\n",
+            "load('info.bzl', Original='Info', Legacy='Legacy')\nAlias = Original\nLegacyAlias = Legacy\n",
         );
         let valid = r#"
-load("info.bzl", "Info", "Initialized", "raw", "Empty", "by_key")
-load("aliases.bzl", Renamed="Alias")
-def forward(target: Target, keys: Sequence[ProviderKey]) -> list[object]:
+load("info.bzl", "Info", "Initialized", "raw", "Empty", "Legacy", "raw_legacy", "by_key")
+load("info.bzli", "Shape", "Dictionary")
+load("aliases.bzl", Renamed="Alias", LegacyAlias="LegacyAlias")
+def forward(target: Target, keys: Sequence[ProviderKey]) -> list[ProviderInstance]:
     return [target[key] for key in keys if key in target]
+def instance(value: ProviderInstance) -> None: pass
+def legacy_instance(value: Empty) -> ProviderInstance:
+    return value
+def widened_lookup(target: Target, key: Provider[object]) -> object:
+    return target[key]
+def objc_instance(value: ObjcProvider) -> ProviderInstance:
+    return value
+instance(Info(value="text", items=["text"]))
+instance(Initialized("text"))
+instance(raw(value="text"))
+instance(Empty())
+legacy: LegacyAlias = Legacy("root", next=Legacy("leaf"))
+instance(legacy)
+instance(raw_legacy(value="raw", next=legacy))
+instance(DefaultInfo())
+instance(struct(value=1))
+Local = provider(fields=())
+instance(Local())
 def initialized_key(key: Provider[Initialized]) -> None: pass
 def construct_and_lookup(target: Target, key: Intersection[Provider[Initialized], Callable[[str], Initialized]]) -> str:
     return key("constructed").value + target[key].value
@@ -1216,6 +1279,16 @@ empty: Empty = Empty()
             ("initialized_constructor(raw)", "invalid-argument-type"),
             ("def wrong_call(key: Intersection[Provider[Initialized], Callable[[str], Initialized]]) -> None:\n    key(42)", "invalid-argument-type"),
             ("def concrete(key: Provider[Info[str]]) -> None: pass\nconcrete(Info)", "invalid-argument-type"),
+            ("instance(42)", "invalid-argument-type"),
+            ("instance('not a provider')", "invalid-argument-type"),
+            ("instance({'value': 1})", "invalid-argument-type"),
+            ("instance(DefaultInfo)", "invalid-argument-type"),
+            ("def bad(value: FilesToRunProvider) -> None:\n    instance(value)", "invalid-argument-type"),
+            ("def bad(value: object) -> None:\n    instance(value)", "invalid-argument-type"),
+            ("def bad(value: Shape) -> None:\n    instance(value)", "invalid-argument-type"),
+            ("def bad(value: Dictionary) -> None:\n    instance(value)", "invalid-argument-type"),
+            ("LegacyAlias(42)", "invalid-argument-type"),
+            ("def bad(value: DefaultInfo) -> object:\n    return value.missing", "unresolved-attribute"),
         ] {
             analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();

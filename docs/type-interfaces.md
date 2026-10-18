@@ -260,9 +260,15 @@ declaration. `record[...]` is the return annotation of a provider constructor
 in a stub. Constructor declarations have one signature.
 `ProviderKey` describes a provider key without specifying its instance type.
 It accepts builtin and source providers, including generic providers. A lookup
-through that opaque view returns `object`. `Provider[T]` describes a key with
-a declared lookup result `T`. Source provider values also retain their exact
+through that opaque view returns `ProviderInstance`. `Provider[T]` describes
+a key with a declared lookup result `T`. Source provider values retain their exact
 constructor signatures; ordinary functions and raw constructors are not keys.
+
+`ProviderInstance` is the common type of Bazel provider values. It includes
+builtin providers, source providers, and `struct` values, which Bazel accepts
+in a rule implementation's provider list. Auxiliary values such as
+`FilesToRunProvider` have their own types. An opaque `ProviderInstance` exposes
+no provider-specific fields.
 
 `Intersection[A, B]` requires both contracts, using ty's intersection type.
 For example, a value used both as a provider key and a constructor can declare
@@ -275,7 +281,7 @@ type FilesConstructor = Intersection[Provider[FilesInfo], Callable[[list[File]],
 This annotation is a sty extension to the proposed Starlark type syntax.
 
 ```starlark
-def forward(target: Target, keys: Sequence[ProviderKey]) -> list[object]:
+def forward(target: Target, keys: Sequence[ProviderKey]) -> list[ProviderInstance]:
     return [target[key] for key in keys if key in target]
 ```
 

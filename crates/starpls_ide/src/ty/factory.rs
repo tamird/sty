@@ -2091,7 +2091,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                 signature.with_parameters(parameters)
             }
             _ => {
-                let instance = class.to_instance_approximation(db, &environment)?;
+                let instance = super::providers::constructor_instance(db, class, &environment)?;
                 Signature::new(parameters, instance)
             }
         };
@@ -2234,7 +2234,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
         db,
         ProvidedClass {
             name: data.name.clone(),
-            bases: Box::default(),
+            bases: declared_base(db, call, "ProviderInstance"),
             class_members: Box::from([(Name::new("__init__"), init)]),
             instance_fields: ProvidedInstanceFields {
                 fields: fields.into_boxed_slice(),

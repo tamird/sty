@@ -439,6 +439,16 @@ fn declarations(
         );
     }
     body.push_str("    class ProviderKey: ...\n");
+    body.push_str("    class ProviderInstance: ...\n");
+    // The inventory includes auxiliary values such as FilesToRunProvider that
+    // are not Bazel Info instances. Derive instance membership from the same
+    // exported keys used below, rather than from names of documented types.
+    let provider_instances: BTreeSet<_> = contexts
+        .iter()
+        .flat_map(|(_, values)| values.values())
+        .chain(classes.values().flat_map(|class| &class.field))
+        .filter_map(native_provider_instance)
+        .collect();
     let mut provider_declarations = String::new();
     for class in classes.values() {
         // These native instance types have no Starlark subclasses. Finality
@@ -471,17 +481,28 @@ fn declarations(
             "transition" => Some("_TransitionKind"),
             _ => None,
         };
+        // Bundled metadata retains the historical ObjcProvider Info class
+        // after its constructor moved to Starlark, so it has no exported key.
+        let base = if class.name == "Provider" {
+            "ProviderKey"
+        } else if matches!(class.name.as_str(), "struct" | "ObjcProvider")
+            || provider_instances.contains(class.name.as_str())
+            || (xcode_config_available && class.name == "XcodeVersionConfig")
+        {
+            "ProviderInstance"
+        } else {
+            ""
+        };
         if let Some(parameter) = parameter {
             writeln!(
                 body,
-                "    class {}({}_starpls_typing.Generic[{parameter}]):",
+                "    class {}({}{}_starpls_typing.Generic[{parameter}]):",
                 class.name,
-                if class.name == "Provider" {
-                    "ProviderKey, "
-                } else {
-                    ""
-                },
+                base,
+                if base.is_empty() { "" } else { ", " },
             )?;
+        } else if !base.is_empty() {
+            writeln!(body, "    class {}({base}):", class.name)?;
         } else {
             writeln!(body, "    class {}:", class.name)?;
         }
@@ -626,7 +647,7 @@ fn declarations(
             writeln!(body, "        @_starpls_typing.overload")?;
             writeln!(body, "        def __getitem__(self: _starpls_types.Target[None], key: _starpls_types.ProviderKey) -> _starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], None] | _starpls_types.PackageSpecificationInfo: ...")?;
             writeln!(body, "        @_starpls_typing.overload")?;
-            writeln!(body, "        def __getitem__(self, key: _starpls_types.ProviderKey) -> _starpls_builtins.object: ...")?;
+            writeln!(body, "        def __getitem__(self, key: _starpls_types.ProviderKey) -> _starpls_types.ProviderInstance: ...")?;
             writeln!(
                 body,
                 "        def __contains__(self, key: _starpls_types.ProviderKey) -> _starpls_builtins.bool: ..."
@@ -679,7 +700,7 @@ fn declarations(
             }
             match &field.callable {
                 Some(callable) => {
-                    if starpls_bazel::KNOWN_PROVIDER_TYPES.contains(&field.name.as_str()) {
+                    if native_provider_instance(field).is_some() {
                         let provider = format!("_starpls_provider_{}_{}", class.name, field.name);
                         writeln!(
                             provider_declarations,
@@ -970,7 +991,7 @@ fn declarations(
                 writeln!(exports, "{export} = {alias}")?;
                 continue;
             }
-            let provider = starpls_bazel::KNOWN_PROVIDER_TYPES.contains(&value.name.as_str());
+            let provider = native_provider_instance(value).is_some();
             if provider {
                 writeln!(
                     exports,
@@ -1033,8 +1054,9 @@ fn declarations(
     output.push_str(&body);
     output.push('\n');
     output.push_str("_starpls_annotation_ExactDict = _starpls_allocations.dict\n\n");
-    output.push_str("class _starpls_annotation_record:\n    @_starpls_typing.type_check_only\n    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_builtins.object: ...\n\n");
+    output.push_str("class _starpls_annotation_record(_starpls_types.ProviderInstance):\n    @_starpls_typing.type_check_only\n    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_builtins.object: ...\n\n");
     output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");
+    output.push_str("_starpls_annotation_ProviderInstance = _starpls_types.ProviderInstance\n");
     output.push_str("_starpls_annotation_Intersection = _starpls_ty_extensions.Intersection\n");
     for name in classes.keys() {
         writeln!(output, "_starpls_annotation_{name} = _starpls_types.{name}")?;
@@ -1259,18 +1281,24 @@ fn rule_type(name: &str) -> String {
 }
 
 fn value_annotation(value: &Value, classes: &BTreeSet<String>) -> String {
-    let known_provider = starpls_bazel::KNOWN_PROVIDER_TYPES.contains(&value.name.as_str());
-    let value_type = if known_provider && value.r#type == "Provider" {
-        &value.name
-    } else {
-        &value.r#type
-    };
+    let instance = native_provider_instance(value);
+    let value_type = instance.unwrap_or(&value.r#type);
     let annotation = annotation(value_type, false, classes, AnnotationUse::Value, None);
-    if known_provider {
+    if instance.is_some() {
         format!("_starpls_types.Provider[{annotation}]")
     } else {
         annotation
     }
+}
+
+fn native_provider_instance(value: &Value) -> Option<&str> {
+    starpls_bazel::KNOWN_PROVIDER_TYPES
+        .contains(&value.name.as_str())
+        .then_some(if value.callable.is_some() || value.r#type == "Provider" {
+            &value.name
+        } else {
+            &value.r#type
+        })
 }
 
 fn write_function(
