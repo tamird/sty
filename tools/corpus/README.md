@@ -76,7 +76,9 @@ the generic mapper preserves key and value types through selected branches and
 composition. Probes reject callbacks returning an ordinary `dict` or a list, and
 source overlays check incorrect dictionary keys, values, and composition.
 Other overlays change provider fields and callback results; callers exercise
-label types and configuration modes.
+label types and configuration modes. A frontend-selection overlay returns the
+alias constructor for a test rule, exercising the overload's narrower return
+promise against the actual branch.
 
 Plain dictionary inputs to `rewrite_args` return mappings with string keys;
 tuple inputs retain their string elements. Their cases check prebound dictionaries,

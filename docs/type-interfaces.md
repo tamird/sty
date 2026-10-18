@@ -86,13 +86,23 @@ def identity(value: int | str) -> int | str: ...
 
 ty checks the overloads against the ordinary implementation signature. sty uses
 that signature to check the source body; source annotations still take
-precedence. Callers see only the overloads. This checks the body's broad input
-and result types, not the correlation between individual overloads and branches
-in the body. Generic implementation variables are inferred from each overload's
-inputs. A generic implementation requires a fully static specialization.
+precedence. Callers see only the overloads. Generic implementation variables are
+inferred from each overload's inputs. A generic implementation requires a fully
+static specialization.
 Unresolved inference, generic variadics, and receiver-dependent generics produce
 `invalid-function-interface` when checking mapped source. Families without an
 explicit implementation produce the same diagnostic.
+
+When the source adopts its entire signature from the stub and has fixed,
+required, nongeneric parameters, ty also checks its body under each overload.
+This covers straight-line assignments and returns of names or literals, and
+return trees guarded by unchanged boolean parameters. Straight-line bodies may
+also call nongeneric, non-overloaded module functions whose return type is other
+than `Never`. For example, an overload promising `str` when a flag is `True`
+rejects `return 42` in that branch even when the broad signature allows
+`int | str`. Source-authored signature annotations and bodies using defaults,
+generics, collections, captures, or other control flow receive the
+broad-signature check; their individual overload promises remain unproved.
 
 ### Shared declarations
 

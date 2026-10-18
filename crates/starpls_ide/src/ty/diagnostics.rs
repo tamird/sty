@@ -33,7 +33,7 @@ use ty_python_semantic::lint::LintSource;
 use ty_python_semantic::lint::LintStatus;
 use ty_python_semantic::lint::RuleSelection;
 use ty_python_semantic::provided::BuiltinUsage;
-use ty_python_semantic::types::check_types_with_diagnostics;
+use ty_python_semantic::types::check_types_with_overload_bodies;
 use ty_python_semantic::types::ide_support::resolved_call_signature;
 use ty_python_semantic::types::ide_support::unreachable_ranges;
 use ty_python_semantic::types::ide_support::unused_definitions;
@@ -234,7 +234,11 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
     let options = db.environment().options(db);
     let model = SemanticModel::new(db, program_file);
     diagnostics.extend(load::diagnostics(db, program_file));
-    diagnostics.extend(super::interface::diagnostics(db, file));
+    let super::interface::InterfaceDiagnostics {
+        diagnostics: interface_diagnostics,
+        overload_bodies,
+    } = super::interface::diagnostics(db, file);
+    diagnostics.extend(interface_diagnostics);
     diagnostics.extend(super::annotations::diagnostics(db, file));
     diagnostics.extend(super::context::diagnostics(db, file));
     diagnostics.extend(super::strictness::diagnostics(db, file));
@@ -355,7 +359,7 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
             visitor.visit_stmt(statement);
         }
     }
-    check_types_with_diagnostics(db, program_file, diagnostics)
+    check_types_with_overload_bodies(db, program_file, diagnostics, overload_bodies)
 }
 
 fn has_non_underscore_binding(target: &Expr) -> bool {

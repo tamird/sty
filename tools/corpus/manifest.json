@@ -656,6 +656,24 @@
         ]
       },
       {
+        "name": "frontend-test-selection-bad-body",
+        "overlays": [
+          {
+            "kind": "replace",
+            "path": "with_cfg/private/frontend.bzl",
+            "old": "    if test:\n        return _frontend_test",
+            "new": "    if test:\n        return _frontend_default"
+          }
+        ],
+        "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 28
+          }
+        ]
+      },
+      {
         "name": "frontend-executable-bad-body",
         "overlays": [
           {
@@ -666,6 +684,11 @@
           }
         ],
         "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 30
+          },
           {
             "id": "invalid-function-interface",
             "path": "with_cfg/private/frontend.bzl",
@@ -684,6 +707,11 @@
           }
         ],
         "expected": [
+          {
+            "id": "invalid-return-type",
+            "path": "with_cfg/private/frontend.bzl",
+            "line": 28
+          },
           {
             "id": "invalid-function-interface",
             "path": "with_cfg/private/frontend.bzl",

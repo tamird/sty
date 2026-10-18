@@ -36,6 +36,7 @@ use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::types::ide_support::definitions_for_name;
 use ty_python_semantic::types::list_members::all_end_of_scope_members;
 use ty_python_semantic::types::CallableTypeKind;
+use ty_python_semantic::types::FunctionType;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypeDefinition;
 use ty_python_semantic::ImportAliasResolution;
@@ -94,7 +95,13 @@ pub(super) fn is_operation_declaration<'db>(db: &'db dyn Db, definition: Definit
             .is_some_and(|arguments| !arguments.args.is_empty())
 }
 
-pub(super) fn diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::Diagnostic> {
+#[derive(Default)]
+pub(super) struct InterfaceDiagnostics<'db> {
+    pub diagnostics: Vec<ruff_db::diagnostic::Diagnostic>,
+    pub overload_bodies: Vec<FunctionType<'db>>,
+}
+
+pub(super) fn diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
     use ruff_db::diagnostic::Annotation;
     use ruff_db::diagnostic::Diagnostic;
     use ruff_db::diagnostic::DiagnosticId;
@@ -202,7 +209,10 @@ pub(super) fn diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic:
     diagnostics.extend(pairing_diagnostics(db, file));
     diagnostics.extend(super::providers::declaration_diagnostics(db, file));
 
-    diagnostics
+    InterfaceDiagnostics {
+        diagnostics,
+        overload_bodies: Vec::new(),
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -457,7 +467,7 @@ pub(super) fn source_parameter<'db>(
     Some(*definition)
 }
 
-fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::Diagnostic> {
+fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
     use ruff_db::diagnostic::Annotation;
     use ruff_db::diagnostic::Diagnostic;
     use ruff_db::diagnostic::DiagnosticId;
@@ -471,9 +481,10 @@ fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::D
         errors,
     }) = function_annotations(db, file)
     else {
-        return Vec::new();
+        return InterfaceDiagnostics::default();
     };
     let mut diagnostics = Vec::new();
+    let mut overload_bodies = Vec::new();
     let mut report = |source_range, stub_range, message: String| {
         let mut diagnostic = Diagnostic::new(
             DiagnosticId::Lint(super::diagnostics::INVALID_FUNCTION_INTERFACE.name()),
@@ -592,8 +603,11 @@ fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::D
                 report(source_range, declaration.name.range(), "The overload family requires an ordinary implementation whose consistency can be checked".into());
                 continue;
             }
-            // Ty checks the donor family against this implementation. Check the source body
-            // against that same broad signature; callers still see only the overloads.
+            if let Type::FunctionLiteral(source) = actual {
+                overload_bodies.push(source);
+            }
+            // Ty also checks supported source bodies under each donor overload.
+            // The broad signature still governs ordinary source inference.
             expected = Type::single_callable(db, signature);
         }
         // Function literals identify declarations; compare their callable signatures.
@@ -634,7 +648,10 @@ fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::D
             );
         }
     }
-    diagnostics
+    InterfaceDiagnostics {
+        diagnostics,
+        overload_bodies,
+    }
 }
 
 pub(super) fn pairing_diagnostics(
@@ -1733,6 +1750,67 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
     }
 
     #[test]
+    fn function_stubs_check_overload_return_branches() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let body = "def choose(*, text):\n    if text:\n        return 'value'\n    return 42\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            r#"
+@overload
+def choose(*, text: Literal[True]) -> str: ...
+@overload
+def choose(*, text: Literal[False]) -> int: ...
+def choose(*, text: bool) -> str | int: ...
+"#,
+        );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            "load('source.bzl', 'choose')\ntext: str = choose(text=True)\nnumber: int = choose(text=False)\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for file in [source, stub, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+
+        // Both results satisfy the broad signature, but only one satisfies this branch.
+        let incorrect = body.replace("return 'value'", "return 42");
+        analysis.update_file(source, incorrect.clone());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(
+            source,
+            incorrect.replacen(
+                "return 42",
+                "return 42  # ty: ignore[invalid-return-type]",
+                1,
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(
+            source,
+            body.replace(
+                "return 'value'",
+                "return 'value'  # ty: ignore[invalid-return-type]",
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unused-ignore-comment");
+    }
+
+    #[test]
     fn function_stubs_check_generic_overload_implementations() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
@@ -2184,7 +2262,7 @@ number: int = identity(42)
             ("load('dep.bzl', '_VALUE')\n_VALUE = 1\n", "more than once"),
         ] {
             analysis.update_file(source, text.into());
-            let diagnostics = super::diagnostics(&analysis.db, stub);
+            let diagnostics = super::diagnostics(&analysis.db, stub).diagnostics;
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{text}: {diagnostics:?}");
             };
@@ -2196,13 +2274,13 @@ number: int = identity(42)
         }
         analysis.update_file(source, "_VALUE = 1\n".into());
         analysis.update_file(stub, "_VALUE: int\n_VALUE: str\n".into());
-        let diagnostics = super::diagnostics(&analysis.db, stub);
+        let diagnostics = super::diagnostics(&analysis.db, stub).diagnostics;
         assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
         assert!(diagnostics.iter().all(|d| d
             .headline_message()
             .contains("stub binds this name more than once")));
         analysis.update_file(stub, "def macro() -> None: ...\n".into());
-        let diagnostics = super::diagnostics(&analysis.db, stub);
+        let diagnostics = super::diagnostics(&analysis.db, stub).diagnostics;
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
