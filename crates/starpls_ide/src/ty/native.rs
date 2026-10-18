@@ -465,6 +465,7 @@ fn declarations(
                 | "Target"
                 | "depset"
                 | "runfiles"
+                | "select"
         ) {
             writeln!(body, "    @_starpls_typing.final")?;
         }

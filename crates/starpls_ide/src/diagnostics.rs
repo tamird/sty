@@ -115,6 +115,36 @@ mod tests {
     }
 
     #[test]
+    fn selectors_are_disjoint_from_mappings() {
+        for (annotation, expected) in [
+            ("Mapping[str, object]", &[][..]),
+            (
+                "Mapping[str, object] | select[object, object]",
+                &["invalid-return-type"][..],
+            ),
+        ] {
+            let source = format!(
+                r#"
+def is_selected(value: object) -> TypeIs[select[object, object]]:
+    return type(value) == "select"
+
+def mapping(value: {annotation}) -> Mapping[str, object]:
+    if is_selected(value):
+        return select({{"//:condition": []}})
+    return value
+"#
+            );
+            let (analysis, fixture) = native_analysis(&source);
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+            assert_eq!(ids, expected, "{source}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
     fn selector_composition_preserves_heterogeneous_payloads() {
         for (kind, payload, plain, operation) in [
             ("none", "list[str] | dict[str, str] | None", "None", "+"),
@@ -1243,7 +1273,7 @@ def implementation(name, visibility, srcs, tool, optional, inherited, _private, 
     checked_out = out # type: Label | None
     base(name=name, inherited=inherited)
     # EXTRA
-    return None if srcs else None
+    return None
 example = macro(implementation=implementation, inherit_attrs=base, attrs={
     "srcs": attr.label_list(),
     "tool": attr.label(mandatory=True, configurable=False),
