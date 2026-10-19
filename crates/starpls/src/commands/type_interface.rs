@@ -613,18 +613,19 @@ mod tests {
             "format-version = 1\n[source]\nrepository = '@'\nmodule = 'local'\nversions = ['1']\n[files]\n'{source}' = '{interface}'\n"
         )
         };
-        let package = |name: &str| {
-            format!("[[stub-packages]]\nmanifest = 'stubs/{name}.toml'\nallow-unversioned = true\n")
-        };
+        let package = |name: &str| format!("[[stub-packages]]\nmanifest = 'stubs/{name}.toml'\n");
         let first = manifest("one.bzl", "one.bzli");
         let second = manifest("two.bzl", "two.bzli");
         std::fs::write(stubs.join("first.toml"), &first).unwrap();
         std::fs::write(stubs.join("second.toml"), &second).unwrap();
         let configuration = package("first") + &package("second");
         std::fs::write(workspace.join("sty.toml"), &configuration).unwrap();
+        let other = root.join("external/other+");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::copy(workspace.join("one.bzl"), other.join("one.bzl")).unwrap();
         let (sender, _) = crossbeam_channel::unbounded();
         let loader = std::sync::Arc::new(crate::document::DefaultFileLoader::new(
-            std::sync::Arc::new(starpls_bazel::client::BazelCLI::default()),
+            std::sync::Arc::new(crate::document::source_tests::TestBazelClient::default()),
             workspace.clone(),
             None,
             root.join("external"),
@@ -650,8 +651,8 @@ mod tests {
                 "unknown field",
             ),
             (
-                package("first").replace("true", "false"),
-                first.clone(),
+                package("first"),
+                first.replace("repository = '@'", "repository = '@@other+'"),
                 "no selected module version",
             ),
             (
@@ -696,7 +697,7 @@ mod tests {
             let error = super::TypeInterfaceOptions::default()
                 .prepare(&loader, &workspace)
                 .and_then(|prepared| prepared.install(&mut analysis, &workspace))
-                .unwrap_err();
+                .expect_err(expected);
             assert!(format!("{error:#}").contains(expected), "{error:#}");
             assert_eq!(analysis.type_interface_files(), configured);
         }
