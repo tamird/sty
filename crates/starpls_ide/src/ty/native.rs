@@ -1566,6 +1566,7 @@ fn write_function(
             // performed when it later invokes the implementation.
             (CallableKind::Function, "rule" | "repository_rule" | "aspect" | "transition" | "exec_transition", "implementation") => Some("_starpls_typing.Callable[_ImplementationParameters, _ImplementationResult]"),
             (CallableKind::Function, "macro", "implementation") => Some("_starpls_ty_extensions.Intersection[_starpls_annotation_function, _starpls_typing.Callable[_ImplementationParameters, None]]"),
+            (CallableKind::Function, "subrule", "implementation") => Some("_starpls_annotation_function"),
             (CallableKind::Function, "transition" | "exec_transition", "inputs" | "outputs") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
             (CallableKind::Function, "rule" | "aspect", "provides") => {
                 provider_requirement_annotation(r#type, false)
@@ -1580,6 +1581,10 @@ fn write_function(
             (CallableKind::Function, "rule" | "aspect", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]"),
             // A None value removes an inherited macro attribute.
             (CallableKind::Function, "macro", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute | None]"),
+            // Subrules accept label and label-list descriptors. Their ordinary
+            // ctx.attr values fit this covariant view; subrule callbacks receive
+            // different injected values for executable and single-file labels.
+            (CallableKind::Function, "subrule", "attrs") => (classes.contains("Attribute") && classes.contains("Target")).then_some("_starpls_typing.Mapping[_RuleAttributeName, _starpls_types.Attribute[_starpls_types.Target | _starpls_typing.Sequence[_starpls_types.Target] | None]]"),
             // The host validates export and extension permissions after the rule type.
             (CallableKind::Function, "rule", "parent") => classes.contains("rule").then_some("_starpls_types.rule | None"),
             // Registration retains a separate callable signature. Attribute-dependent
@@ -1613,7 +1618,7 @@ fn write_function(
                     .then_some("_starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object]")
             }
             (CallableKind::Method("coverage_common"), "instrumented_files_info", "source_attributes" | "dependency_attributes") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
-            (CallableKind::Function, "exec_group", "toolchains") => (classes.contains("Label") && classes.contains("toolchain_type")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.toolchain_type]"),
+            (CallableKind::Function, "exec_group" | "subrule", "toolchains") => (classes.contains("Label") && classes.contains("toolchain_type")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.toolchain_type]"),
             (CallableKind::Function, "rule" | "aspect", "exec_groups") => classes.contains("exec_group").then_some("_starpls_typing.Mapping[_StringKey, _starpls_types.exec_group] | None"),
             (CallableKind::Function, "rule", "cfg") => {
                 let declared = env::normalize_doc(r#type, true);
@@ -3415,6 +3420,52 @@ def use_example():
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn subrule_registration_checks_native_inputs() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = r#"
+def implementation(ctx, _dep, _deps):
+    return 42
+valid = subrule(
+    implementation = implementation,
+    attrs = {"_dep": attr.label(default = "//:dep"), "_deps": attr.label_list(default = ["//:dep"])},
+    toolchains = [config_common.toolchain_type("//:toolchain")],
+)
+invalid_callback = subrule(implementation = print)
+invalid_attrs = subrule(implementation = implementation, attrs = {"_enabled": attr.bool(default = True)})
+invalid_toolchain = subrule(implementation = implementation, toolchains = [42])
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/subrule.bzl"),
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Bzl,
+                    is_external: false,
+                }),
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        for (diagnostic, expected) in diagnostics.iter().zip([
+            "implementation = print",
+            "attrs = {\"_enabled\": attr.bool(default = True)}",
+            "toolchains = [42]",
+        ]) {
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            assert_eq!(&source[diagnostic.range().unwrap()], expected);
+        }
     }
 
     #[test]
