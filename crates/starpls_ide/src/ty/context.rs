@@ -3000,6 +3000,96 @@ def deferred() -> object:
     }
 
     #[test]
+    fn loaded_attribute_maps_require_bazel_modules() {
+        use starpls_bazel::APIContext;
+        use starpls_common::Dialect;
+        use starpls_common::FileInfo;
+
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        for (path, dialect, context, frozen) in [
+            ("module.bzl", Dialect::Bazel, Some(APIContext::Bzl), true),
+            ("standard.bzl", Dialect::Standard, None, false),
+            ("source.py", Dialect::Standard, None, false),
+            (
+                "interface.bzli",
+                Dialect::Bazel,
+                Some(APIContext::Bzl),
+                false,
+            ),
+            (
+                "BUILD.bazel",
+                Dialect::Bazel,
+                Some(APIContext::Build),
+                false,
+            ),
+        ] {
+            let file = fixture.add_file_with_options(
+                &mut analysis.db,
+                path,
+                "",
+                dialect,
+                context.map(|api_context| FileInfo::Bazel {
+                    api_context,
+                    is_external: false,
+                }),
+            );
+            assert_eq!(
+                ty_python_semantic::Db::provided_exports_are_frozen(
+                    &analysis.db,
+                    analysis.db.starlark_program_file(file),
+                ),
+                frozen,
+                "{path}",
+            );
+        }
+    }
+
+    #[test]
+    fn loaded_attribute_maps_observe_module_completion() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        enable_context(&mut analysis);
+        let exporter = fixture.add_file(&mut analysis.db, "//:attrs.bzl", "");
+        let source = fixture.add_file(&mut analysis.db, "//:main.bzl", "");
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "//:main.bzli",
+            "class _Context(Protocol):\n    @property\n    def attr(self) -> struct[{'hub_name': str}, ...]: ...\ndef implementation(ctx: _Context) -> None: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        let literal = "attributes = {'hub_name': attr.string()}\n";
+        for imported in [false, true] {
+            for (attributes, valid) in [
+                (literal.to_owned(), true),
+                (format!("{literal}attributes['hub_name'] = attr.int()\n"), false),
+                (format!("{literal}attributes.pop('hub_name')\n"), false),
+                (format!("{literal}alias = attributes\nalias['hub_name'] = attr.int()\n"), false),
+                (format!("{literal}def mutate(value): value['hub_name'] = attr.int()\nmutate(attributes)\n"), false),
+                (literal.to_owned(), true),
+            ] {
+                analysis.update_file(exporter, attributes.clone());
+                let binding = if imported {
+                    "load('//:attrs.bzl', 'attributes')\n"
+                } else {
+                    &attributes
+                };
+                analysis.update_file(source, format!("{binding}def implementation(ctx): pass\ntarget = repository_rule(implementation=implementation, attrs=attributes)\n"));
+                let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+                assert_eq!(
+                    diagnostics.iter().filter(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type").count(),
+                    usize::from(!valid),
+                    "imported={imported}, {attributes}: {diagnostics:?}",
+                );
+                if valid {
+                    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn named_callback_signatures_are_checked_at_each_registration() {
         for (parameter, expected) in [
             ("", Some("invalid-argument-type")),

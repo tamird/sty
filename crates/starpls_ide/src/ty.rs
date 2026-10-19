@@ -661,6 +661,20 @@ impl ty_python_semantic::Db for Database {
         Some(ty)
     }
 
+    fn provided_exports_are_frozen(&self, file: ProgramFile<'_>) -> bool {
+        // BzlLoadFunction executes the complete module in a Mutability scope; closing
+        // it freezes every value before another module can load its exports.
+        self.starlark_file(file).is_some_and(|source| {
+            source.dialect == Dialect::Bazel
+                && source.api_context() == Some(APIContext::Bzl)
+                && !source.is_type_interface(self)
+                && source
+                    .path(self)
+                    .extension()
+                    .is_some_and(|extension| extension == "bzl")
+        })
+    }
+
     fn provided_builtin<'db>(
         &'db self,
         file: ProgramFile<'db>,

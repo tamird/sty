@@ -168,6 +168,10 @@ sty can project a rule's keyword row from a fresh attribute mapping stored in
 an immutable field. The row remains incomplete if the mapping may be mutated
 through an alias.
 
+For mappings loaded from Bazel `.bzl` modules, sty observes their contents after
+module evaluation, when Bazel freezes the exported values. Writes during module
+evaluation still apply; untracked aliases and escapes leave the row incomplete.
+
 ### Internal Java namespace
 
 `JavaCommonInternal` names the fixed namespace returned by Bazel's
