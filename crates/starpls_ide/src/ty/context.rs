@@ -239,7 +239,10 @@ pub(super) fn callback_contract<'a, 'db>(
         BuiltinFunction::Aspect => ContextKind::Aspect,
         _ => return None,
     };
-    let argument = argument(call, &registration, "implementation").ok()??;
+    let Argument::Expression(argument) = argument(call, &registration, "implementation").ok()??
+    else {
+        return None;
+    };
     let Type::FunctionLiteral(function_type) = argument.inferred_type(model)? else {
         return None;
     };
@@ -371,11 +374,26 @@ pub(super) fn parameter_type<'db>(
         let Some(argument) = argument(call, &signature, "implementation").ok()? else {
             continue;
         };
-        // An inline lambda is a distinct callback from this named function.
-        if matches!(argument, Expr::Lambda(_)) {
-            continue;
-        }
-        let ty = argument.inferred_type(&model)?;
+        let ty = match argument {
+            Argument::Expression(argument) => {
+                // An inline lambda is a distinct callback from this named function.
+                if matches!(argument, Expr::Lambda(_)) {
+                    continue;
+                }
+                argument.inferred_type(&model)?
+            }
+            Argument::KeywordUnpacking(expression) => {
+                let entries = model.dictionary_items(expression)?;
+                let implementation = entries
+                    .items
+                    .iter()
+                    .find(|item| item.name == "implementation")?;
+                if !implementation.is_required() {
+                    return None;
+                }
+                implementation.ty
+            }
+        };
         if !matches!(ty, Type::FunctionLiteral(_)) {
             return None;
         }
@@ -480,7 +498,8 @@ fn registration_context_type<'db>(
         },
         &|name| {
             Ok(match argument(call, signature, name)? {
-                Some(expression) => model.dictionary_items(expression),
+                Some(Argument::Expression(expression)) => model.dictionary_items(expression),
+                Some(Argument::KeywordUnpacking(_)) => return Err(()),
                 None => Some(empty_mapping()),
             })
         },
@@ -1055,38 +1074,57 @@ fn analyzed_target_type<'db>(
     }
 }
 
-/// Select a definite source argument using Ty's existing binding. Expanded
-/// arguments can supply or overwrite either field, so they leave this policy gradual.
+enum Argument<'a> {
+    Expression(&'a Expr),
+    KeywordUnpacking(&'a Expr),
+}
+
+/// Select the unique source argument that ty bound to a registration parameter.
 fn argument<'a>(
     call: &'a ExprCall,
     signature: &CallSignatureDetails<'_>,
     name: &str,
-) -> Result<Option<&'a Expr>, ()> {
+) -> Result<Option<Argument<'a>>, ()> {
     let parameter = signature
-        .parameters
+        .signature
+        .parameters()
         .iter()
-        .position(|parameter| parameter.name == name)
+        .position(|parameter| parameter.name().is_some_and(|parameter| parameter == name))
         .ok_or(())?;
+    if signature.argument_to_parameter_mapping.len()
+        != call.arguments.args.len() + call.arguments.keywords.len()
+    {
+        return Err(());
+    }
     let mut selected = None;
-    for (index, argument) in call.arguments.iter_source_order().enumerate() {
-        let expression = match argument {
-            ArgOrKeyword::Arg(expression) => {
-                if matches!(expression, Expr::Starred(_)) {
-                    return Err(());
-                }
-                expression
-            }
-            ArgOrKeyword::Keyword(keyword) => {
-                keyword.arg.as_ref().ok_or(())?;
-                &keyword.value
-            }
-        };
-        if signature.argument_to_displayed_parameter_mapping.get(index) == Some(&Some(parameter)) {
-            if selected.is_some() {
-                return Err(());
-            }
-            selected = Some(expression);
+    for (argument, binding) in call
+        .arguments
+        .iter_source_order()
+        .zip(&signature.argument_to_parameter_mapping)
+    {
+        if !binding.matched || matches!(argument, ArgOrKeyword::Arg(Expr::Starred(_))) {
+            return Err(());
         }
+        let mut matches = binding
+            .parameters
+            .iter()
+            .filter(|matched| matched.index == parameter);
+        if matches.next().is_none() {
+            continue;
+        }
+        if matches.next().is_some() || selected.is_some() {
+            return Err(());
+        }
+        selected = Some(match argument {
+            ArgOrKeyword::Arg(expression) => Argument::Expression(expression),
+            ArgOrKeyword::Keyword(keyword) => {
+                if keyword.arg.is_some() {
+                    Argument::Expression(&keyword.value)
+                } else {
+                    Argument::KeywordUnpacking(&keyword.value)
+                }
+            }
+        });
     }
     Ok(selected)
 }
@@ -1234,6 +1272,77 @@ second = {factory}(implementation=implementation, attrs=attributes)
                 );
             }
         }
+    }
+
+    #[test]
+    fn explicit_and_unpacked_registrations_share_context() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        for registration in [
+            "registered = rule(implementation=implementation, attrs={'importpath': attr.string()})",
+            "options = {'implementation': implementation, 'attrs': {'importpath': attr.string()}}\nregistered = rule(**options)",
+            "options = {'implementation': implementation}\nregistered = rule(attrs={'importpath': attr.string()}, **options)",
+        ] {
+            let source = format!(
+                r#"def implementation(ctx):
+    ctx.attr.importpath + 1
+    return []
+{registration}
+registered(name='good', importpath='example')
+registered(name='bad', importpath=42)
+"#
+            );
+            analysis.update_file(file, source);
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let mut ids = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>();
+            ids.sort_unstable();
+            assert_eq!(
+                ids,
+                ["invalid-argument-type", "unsupported-operator"],
+                "{registration}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unpacked_registration_uses_the_reaching_callback() {
+        let source = r#"def first(ctx):
+    ctx.attr.importpath + 1
+    return []
+def replacement(ctx):
+    ctx.attr.importpath + 1
+    return []
+options = {'implementation': first, 'attrs': {'importpath': attr.string()}}
+options['implementation'] = replacement
+registered = rule(**options)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
+        assert!(
+            diagnostics[0].range().unwrap().start().to_usize()
+                > source.find("def replacement").unwrap()
+        );
+
+        analysis.update_file(
+            fixture.main_file(),
+            source.replace("rule(**options)", "rule(implementation=first, **options)"),
+        );
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "parameter-already-assigned");
     }
 
     #[test]
