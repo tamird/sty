@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 use std::fmt::Write;
 
 use ruff_db::system::SystemVirtualPathBuf;
+use starpls_bazel::build::attribute::Discriminator;
 use starpls_bazel::build::BuildLanguage;
+use starpls_bazel::build_language::attribute_type_string_from_discriminator;
 use starpls_bazel::build_language::rule_value;
 use starpls_bazel::builtin::Callable;
 use starpls_bazel::builtin::Param;
@@ -1620,13 +1622,18 @@ fn write_function(
                         | "default_compatible_with"
                         | "default_restricted_to"
                 );
-            let label_default = matches!(kind, CallableKind::Method("attr"))
-                && name == "default"
-                && matches!(
+            let attribute_default = matches!(kind, CallableKind::Method("attr"))
+                && name == "default";
+            let dictionary_type = (attribute_default
+                && value.name == "string_list_dict"
+                && env::normalize_doc(r#type, true) == "dict")
+                .then(|| attribute_type_string_from_discriminator(Discriminator::StringListDict));
+            let converted_default = dictionary_type.is_some()
+                || (attribute_default && matches!(
                     value.name.as_str(),
                     "label" | "label_list" | "label_keyed_string_dict" | "string_keyed_label_dict"
-                );
-            let input = if package_label || label_default {
+                ));
+            let input = if package_label || converted_default {
                 AnnotationUse::AttributeInput
             } else {
                 input
@@ -1657,7 +1664,13 @@ fn write_function(
                 }),
                 _ => None,
             };
-            annotation(r#type, *is_star_arg || *is_star_star_arg, classes, input, callback)
+            annotation(
+                dictionary_type.as_deref().unwrap_or(r#type),
+                *is_star_arg || *is_star_star_arg,
+                classes,
+                input,
+                callback,
+            )
         });
         let parameter_type = if let CallableKind::Rule(rule) = kind {
             let configurable = rule
@@ -1668,7 +1681,6 @@ fn write_function(
                         || starpls_bazel::attr::input_alias(&attribute.name) == Some(name)
                 })
                 .and_then(|attribute| {
-                    use starpls_bazel::build::attribute::Discriminator;
                     if matches!(
                         attribute.r#type(),
                         Discriminator::Output | Discriminator::OutputList
@@ -1750,6 +1762,7 @@ fn write_function(
                     "int_list" => Some("_starpls_types.Attribute[_starpls_builtins.list[_starpls_builtins.int]]"),
                     "string" => Some("_starpls_types.Attribute[_starpls_builtins.str]"),
                     "string_list" => Some("_starpls_types.Attribute[_starpls_builtins.list[_starpls_builtins.str]]"),
+                    "string_list_dict" => Some("_starpls_types.Attribute[_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.list[_starpls_builtins.str]]]"),
                     // These covariant views include provider-refined targets
                     // and split-transition lists. Checked descriptors retain
                     // their exact flags, requiredness, and mutable list types.
@@ -6067,6 +6080,47 @@ aspect(implementation=implementation, toolchains_aspects=toolchains)
             &source[usize::from(range.start())..usize::from(range.end())],
             "value=42"
         );
+    }
+
+    #[test]
+    fn string_list_dictionary_attribute_factory_has_static_contract() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"factory = attr.string_list_dict
+value: Attribute[dict[str, list[str]]] = factory(default={"srcs": ("a", "b")})
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for invalid in [r#"{1: ["a"]}"#, r#"{"srcs": [1]}"#, "lambda: 1"] {
+            analysis.update_file(file, format!("{source}factory(default={invalid})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        }
     }
 
     #[test]
