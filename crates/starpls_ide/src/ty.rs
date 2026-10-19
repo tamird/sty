@@ -264,6 +264,11 @@ impl Database {
                     "Intersection",
                     "KeywordArgs",
                 ])
+                .chain(
+                    native::BAZEL_ANNOTATION_ALIASES
+                        .iter()
+                        .map(|(name, _)| *name),
+                )
                 .chain(native::TYPING_ANNOTATIONS.iter().copied())
                 .chain(native::COMMON_RULE_ATTRS.iter().map(|(name, _)| *name));
             return candidates

@@ -28,6 +28,11 @@ use ty_python_core::scope::NodeWithScopeKind;
 const STANDARD_PATH: &str = "starpls-native:standard.pyi";
 const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
 
+/// Bazel type constructor names and the corresponding type names in API metadata.
+/// https://github.com/bazelbuild/bazel/commit/89086de828f7aa63564054819947edb9a7697e1f
+pub(super) const BAZEL_ANNOTATION_ALIASES: &[(&str, &str)] =
+    &[("Ctx", "ctx"), ("Root", "root"), ("Runfiles", "runfiles")];
+
 /// Annotation names and whether they include executable rule attributes.
 pub(super) const COMMON_RULE_ATTRS: &[(&str, bool)] = &[
     ("CommonRuleAttrs", false),
@@ -1272,6 +1277,19 @@ fn declarations(
     for name in classes.keys() {
         writeln!(output, "_starpls_annotation_{name} = _starpls_types.{name}")?;
     }
+    if dialect == Dialect::Bazel {
+        for (annotation, runtime) in BAZEL_ANNOTATION_ALIASES {
+            if classes.contains_key(*runtime) && !classes.contains_key(*annotation) {
+                // ctx has internal type parameters, but Bazel's Ctx accepts none.
+                // An empty specialization fixes those parameters to their defaults.
+                let specialization = if *annotation == "Ctx" { "[()]" } else { "" };
+                writeln!(
+                    output,
+                    "_starpls_annotation_{annotation} = _starpls_types.{runtime}{specialization}"
+                )?;
+            }
+        }
+    }
     if classes.contains_key("rule") {
         output.push_str("_starpls_annotation__AnalyzedRule = _starpls_types._AnalyzedRule\n");
     }
@@ -2170,6 +2188,57 @@ mod tests {
     use super::*;
     use crate::Analysis;
     use crate::FilePosition;
+
+    #[test]
+    fn bazel_type_constructor_names_resolve_to_metadata_types() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = "def collect(context: Ctx, output: File) -> Runfiles:\n    root: Root = output.root\n    print(root)\n    return context.runfiles()\n";
+        let file = analysis
+            .open_document(
+                Path::new("/names.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let annotations = analysis
+            .db
+            .builtin_completion_names(file, ty_python_semantic::provided::BuiltinUsage::Annotation);
+        for (name, _) in BAZEL_ANNOTATION_ALIASES {
+            assert!(annotations.contains_key(*name), "{name}");
+        }
+        analysis.update_file(
+            file,
+            format!("{source}def invalid(context: Ctx[int], output: File) -> Root:\n    return output\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "not-subscriptable"),
+            "{diagnostics:?}"
+        );
+    }
 
     #[test]
     fn getattr_fallbacks_preserve_static_inputs() {
