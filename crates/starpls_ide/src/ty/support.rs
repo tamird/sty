@@ -1,6 +1,6 @@
 //! Fixed language declarations in the canonical Ty support universe.
 //!
-//! Replace only the owned classes in pinned typeshed inputs, retaining imports,
+//! Replace only owned declarations in pinned typeshed inputs, retaining imports,
 //! support classes, generic identities, and Ty's ordinary inference machinery.
 //! These are immutable database inputs, assembled before any file is interned.
 //! User source is never rewritten. Boolean values have their own nominal type;
@@ -18,6 +18,7 @@ use ruff_db::vendored::VendoredFileSystem;
 use ruff_db::vendored::VendoredFileSystemBuilder;
 use ruff_db::vendored::VendoredPathBuf;
 use ruff_python_ast as ast;
+use ruff_python_ast::token::TokenKind;
 use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 use zip::CompressionMethod;
@@ -209,16 +210,21 @@ fn build(base: &VendoredFileSystem) -> anyhow::Result<VendoredFileSystem> {
 fn assemble(original: &str, replacements: &str, scalars: &[&str]) -> anyhow::Result<String> {
     let replacement_module = ruff_python_parser::parse_module(replacements)?;
     let mut classes = BTreeMap::new();
+    let mut functions = BTreeMap::new();
     let mut imports = String::new();
-    for statement in &replacement_module.syntax().body {
+    for (index, statement) in replacement_module.syntax().body.iter().enumerate() {
         let class = match statement {
             ast::Stmt::ClassDef(class) => class,
+            ast::Stmt::FunctionDef(function) => {
+                record_overload(&mut functions, function, index)?;
+                continue;
+            }
             ast::Stmt::ImportFrom(import) => {
                 imports.push_str(&replacements[import.range()]);
                 imports.push('\n');
                 continue;
             }
-            _ => bail!("Replacement declarations must contain only classes and imports"),
+            _ => bail!("Replacement declarations must contain only classes, overloads and imports"),
         };
         match classes.entry(class.name.as_str()) {
             Entry::Occupied(entry) => bail!("Duplicate replacement class {}", entry.key()),
@@ -229,6 +235,7 @@ fn assemble(original: &str, replacements: &str, scalars: &[&str]) -> anyhow::Res
     }
     let original_module = ruff_python_parser::parse_module(original)?;
     let mut seen = BTreeMap::new();
+    let mut original_functions = BTreeMap::new();
     let mut edits = Vec::new();
     if !imports.is_empty() {
         let offset = original_module.syntax().body.first().and_then(|statement| {
@@ -244,7 +251,12 @@ fn assemble(original: &str, replacements: &str, scalars: &[&str]) -> anyhow::Res
         let offset = offset.unwrap_or_default();
         edits.push((TextRange::empty(offset), imports));
     }
-    for statement in &original_module.syntax().body {
+    for (index, statement) in original_module.syntax().body.iter().enumerate() {
+        if let ast::Stmt::FunctionDef(function) = statement {
+            if functions.contains_key(function.name.as_str()) {
+                record_overload(&mut original_functions, function, index)?;
+            }
+        }
         let ast::Stmt::ClassDef(class) = statement else {
             continue;
         };
@@ -276,6 +288,42 @@ fn assemble(original: &str, replacements: &str, scalars: &[&str]) -> anyhow::Res
             bail!("Missing top-level support class {name}");
         }
     }
+    for (name, (replacement_range, _)) in functions {
+        count_owner(&mut seen, name)?;
+        let (original_range, _) = original_functions
+            .remove(name)
+            .with_context(|| format!("Missing top-level support overload group {name}"))?;
+        // These are fixed support inputs, not arbitrary Python modules. Require
+        // an audit if the owned name appears anywhere outside its overload group,
+        // including references and local shadows; do not infer binding scopes.
+        for (module, source, range) in [
+            (&original_module, original, original_range),
+            (&replacement_module, replacements, replacement_range),
+        ] {
+            let mut after_import = false;
+            for token in module
+                .tokens()
+                .iter()
+                .filter(|token| !token.kind().is_trivia())
+            {
+                anyhow::ensure!(
+                    !(after_import && token.kind() == TokenKind::Star),
+                    "Wildcard imports may introduce support overload owner {name}",
+                );
+                after_import = token.kind() == TokenKind::Import;
+                if token.kind() == TokenKind::Identifier && !range.contains_range(token.range()) {
+                    let identifier = &source[token.range()];
+                    // Python normalizes identifiers; a non-ASCII spelling can
+                    // bind the owned name without matching its source bytes.
+                    anyhow::ensure!(
+                        identifier.is_ascii() && identifier != name,
+                        "Audit identifier {identifier:?} outside support overload group {name}",
+                    );
+                }
+            }
+        }
+        edits.push((original_range, replacements[replacement_range].to_owned()));
+    }
     edits.sort_by_key(|(range, _)| range.start());
     let mut output = String::with_capacity(original.len());
     let mut offset = 0;
@@ -290,6 +338,38 @@ fn assemble(original: &str, replacements: &str, scalars: &[&str]) -> anyhow::Res
     output.push_str(&original[offset..]);
     ruff_python_parser::parse_module(&output).context("Invalid assembled support declarations")?;
     Ok(output)
+}
+
+/// Replace a complete overload group, never one arm or separated definitions.
+fn record_overload<'a>(
+    groups: &mut BTreeMap<&'a str, (TextRange, usize)>,
+    function: &'a ast::StmtFunctionDef,
+    index: usize,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !function.is_async
+            && matches!(function.decorator_list.as_slice(), [decorator]
+                if matches!(&decorator.expression, ast::Expr::Name(name) if name.id == "overload")),
+        "Support function {} must have only @overload",
+        function.name,
+    );
+    let range = decorated_range(function.range(), &function.decorator_list);
+    match groups.entry(function.name.as_str()) {
+        Entry::Occupied(mut entry) => {
+            let (previous, previous_index) = entry.get_mut();
+            anyhow::ensure!(
+                *previous_index + 1 == index,
+                "Separated support overload group {}",
+                function.name,
+            );
+            *previous = TextRange::new(previous.start(), range.end());
+            *previous_index = index;
+        }
+        Entry::Vacant(entry) => {
+            entry.insert((range, index));
+        }
+    }
+    Ok(())
 }
 
 fn count_owner<'a>(seen: &mut BTreeMap<&'a str, ()>, name: &'a str) -> anyhow::Result<()> {
@@ -447,6 +527,51 @@ class unrelated:
             "{output}"
         );
         assert!(output.contains("def preserved(self)"), "{output}");
+    }
+
+    #[test]
+    fn assembly_replaces_complete_overload_groups() {
+        let replacement = "@overload\ndef owned(value: int) -> int: ...\n@overload\ndef owned(value: str) -> str: ...\n";
+        let source = "before = 1\n@overload\ndef owned(value: None) -> None: ...\n@overload\ndef owned(value: object) -> object: ...\nafter = 2\n";
+        let output = assemble(source, replacement, &[]).unwrap();
+        assert_eq!(output, format!("before = 1\n{replacement}after = 2\n"));
+        assert!(assemble(
+            source,
+            &format!("from other import owned\n{replacement}"),
+            &[]
+        )
+        .is_err());
+        for invalid in [
+            "",
+            "def owned(value): ...\n",
+            "@other\n@overload\ndef owned(value): ...\n",
+            "@overload\nasync def owned(value): ...\n",
+            "@overload\ndef owned(value): ...\nintervening = 1\n@overload\ndef owned(value): ...\n",
+        ] {
+            assert!(assemble(invalid, replacement, &[]).is_err(), "{invalid}");
+            if !invalid.is_empty() {
+                assert!(assemble(source, invalid, &[]).is_err(), "{invalid}");
+            }
+        }
+        for (competing, identifier) in [
+            ("if sys.version_info >= (3, 14):\n    @overload\n    def owned(value: bytes) -> bytes: ...\n", "owned"),
+            ("ｏｗｎｅｄ = other\n", "ｏｗｎｅｄ"),
+        ] {
+            let invalid = format!("{source}{competing}");
+            let error = assemble(&invalid, replacement, &[]).unwrap_err();
+            assert_eq!(error.to_string(), format!("Audit identifier {identifier:?} outside support overload group owned"), "{invalid}");
+        }
+        let error =
+            assemble(&format!("{source}from other import *\n"), replacement, &[]).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Wildcard imports may introduce support overload owner owned"
+        );
+        let unrelated = "# owned\ntext = 'owned'\ndef unrelated(value): ...\n";
+        assert_eq!(
+            assemble(&format!("{source}{unrelated}"), replacement, &[]).unwrap(),
+            format!("before = 1\n{replacement}after = 2\n{unrelated}"),
+        );
     }
 
     #[test]

@@ -2053,6 +2053,86 @@ mod tests {
     use crate::FilePosition;
 
     #[test]
+    fn getattr_fallbacks_preserve_static_inputs() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"
+def required(value: struct[{"items": list[str]}]) -> list[str]:
+    return getattr(value, "items", [])
+def optional_list(value: struct[{"items": NotRequired[list[str]]}], fallback: list[str]) -> list[str]:
+    return getattr(value, "items", fallback)
+def optional_dict(value: struct[{"items": NotRequired[dict[str, str]]}], fallback: dict[str, str]) -> dict[str, str]:
+    return getattr(value, "items", fallback)
+def optional_iterable(value: struct[{"items": NotRequired[Iterable[str]]}]) -> Iterable[str]:
+    return getattr(value, "items", [])
+def optional_mapping(value: struct[{"items": NotRequired[Mapping[str, str]]}]) -> Mapping[str, str]:
+    return getattr(value, "items", {})
+def scalar(value: struct[{"item": NotRequired[int]}]) -> int:
+    return getattr(value, "item", 42)
+def nullable(value: struct[{"item": NotRequired[str]}]) -> str | None:
+    return getattr(value, "item", None)
+def boolean(value: struct[{"item": NotRequired[bool]}]) -> bool:
+    return getattr(value, "item", False)
+def unrelated_fallback(value: struct[{"item": str}]) -> str:
+    return getattr(value, "item", [42])
+def absent() -> list[int]:
+    return getattr(struct(), "missing", [42])
+def direct(value: struct[{"item": str}]) -> str:
+    return getattr(value, "item")
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/getattr.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for (source, expected) in [
+            ("getattr(struct(item=1), 42)", "invalid-argument-type"),
+            ("getattr(struct(item=1))", "no-matching-overload"),
+            ("getattr(struct(item=1), 'item', 1, 2)", "no-matching-overload"),
+            ("getattr(struct(item=1), name='item')", "no-matching-overload"),
+            ("def wrong(value: struct[{'item': list[str]}]) -> list[int]:\n    return getattr(value, 'item', [])", "invalid-return-type"),
+        ] {
+            analysis.update_file(file, source.into());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == expected), "{source}: {diagnostics:?}");
+        }
+
+        analysis.update_file(
+            file,
+            "def unknown(value: object, name: str) -> object:\n    return getattr(value, name, [])"
+                .into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn attribute_constructor_values_have_static_contracts() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"

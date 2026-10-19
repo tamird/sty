@@ -1,4 +1,4 @@
-# Fixed Starlark contracts replacing these classes in pinned builtins.pyi.
+# Fixed Starlark contracts replacing these declarations in pinned builtins.pyi.
 # Imports and type variables belong to that module, not to user Starlark source.
 # https://github.com/bazelbuild/starlark/blob/master/spec.md#built-in-methods
 # Special methods encode operations for Ty and are omitted from completion.
@@ -7,6 +7,15 @@ from types import NotImplementedType
 from typing import Collection, TYPE_CHECKING
 from typing_extensions import Never
 from _starpls_allocations import dict as _AllocatedDict
+
+# Starlark accepts every fallback value. Keep its type without the Python
+# compatibility overloads that erase list and dictionary parameters to Any.
+@overload
+def getattr(o: object, name: str, /) -> Any:
+    """Return the named attribute, or fail if it is absent."""
+@overload
+def getattr(o: object, name: str, default: _T, /) -> Any | _T:
+    """Return the named attribute, or default if it is absent."""
 
 # Every Starlark value is an object; equality accepts any two values.
 # These operation signatures are internal to the checker.
