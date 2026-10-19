@@ -206,7 +206,7 @@ impl Server {
         if self.is_resolving_repo_mappings || self.configuration.refreshing {
             return;
         }
-        let repositories = self.loader.pending_repository_mappings();
+        let repositories = self.loader.pending_repository_mapping_batch();
         if repositories.is_empty() {
             return;
         }

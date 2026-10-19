@@ -2967,7 +2967,7 @@ impl Checker {
     /// Finish native work after all snapshots have drained, then refresh files
     /// before retrying pending queries. Mapping queries can regenerate files too.
     fn resolve_pending_loads(&mut self) -> bool {
-        let mut repositories = self.loader.pending_repository_mappings();
+        let repositories = self.loader.pending_repository_mappings();
         let fetches: Vec<_> = self
             .fetch_repo_receiver
             .try_iter()
@@ -2984,15 +2984,14 @@ impl Checker {
         if repositories.is_empty() && fetches.is_empty() {
             return false;
         }
-        while !repositories.is_empty() {
+        for batch in document::repository_mapping_query_batches(&repositories) {
             if self.progress {
                 eprintln!(
                     "Resolving repository mappings: {} repositories",
-                    repositories.len()
+                    batch.len()
                 );
             }
-            self.loader.resolve_repository_mappings(&repositories);
-            repositories = self.loader.pending_repository_mappings();
+            self.loader.resolve_repository_mappings(batch);
         }
         if !fetches.is_empty() {
             let results = self.loader.fetch_repositories(&fetches, |message| {

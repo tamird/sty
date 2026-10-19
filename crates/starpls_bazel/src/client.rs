@@ -282,20 +282,33 @@ impl BazelClient for BazelCLI {
         // Serialize mapping readers before they can contend for Bazel's server
         // lock with an unread stdout pipe and this interner lock held elsewhere.
         let mut state = self.mappings.lock().expect("mapping state was poisoned");
-        loop {
+        let mut mappings = Vec::with_capacity(repos.len());
+        let mut batch_len = repos.len();
+        while mappings.len() < repos.len() {
+            let batch = &repos[mappings.len()..(mappings.len() + batch_len).min(repos.len())];
             let mut command = Command::new(&self.executable);
             command.args(["mod", "--enable_bzlmod", "dump_repo_mapping"]);
             if state.format == MappingFormat::Compact {
                 command.arg("--output=compact_json");
             }
-            command.args(repos);
+            command.args(batch);
             if let Some(directory) = &self.working_directory {
                 command.current_dir(directory);
             }
-            let mut child = command
+            let mut child = match command
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
-                .spawn()?;
+                .spawn()
+            {
+                Ok(child) => child,
+                Err(error) => {
+                    if error.kind() == std::io::ErrorKind::ArgumentListTooLong && batch.len() > 1 {
+                        batch_len = batch.len() / 2;
+                        continue;
+                    }
+                    return Err(error.into());
+                }
+            };
             let stdout = child.stdout.take().expect("stdout was piped");
             let mut stderr = child.stderr.take().expect("stderr was piped");
             let (result, status, errors) = std::thread::scope(|scope| -> anyhow::Result<_> {
@@ -304,7 +317,7 @@ impl BazelClient for BazelCLI {
                     stderr.read_to_end(&mut bytes).map(|_| bytes)
                 });
                 let result =
-                    parse_repo_mappings(std::io::BufReader::new(stdout), repos.len(), &mut state);
+                    parse_repo_mappings(std::io::BufReader::new(stdout), batch.len(), &mut state);
                 if result.is_err() {
                     // A malformed stream can leave the child blocked on stdout.
                     let _ = child.kill();
@@ -314,7 +327,7 @@ impl BazelClient for BazelCLI {
                 Ok((result, status, errors))
             })?;
             let MappingOutput {
-                mappings,
+                mappings: batch_mappings,
                 empty_stdout,
             } = result.with_context(|| {
                 format!(
@@ -336,15 +349,16 @@ impl BazelClient for BazelCLI {
                     String::from_utf8_lossy(&errors)
                 );
             }
-            if mappings.len() != repos.len() {
+            if batch_mappings.len() != batch.len() {
                 bail!(
                     "expected {} repository mappings, received {}",
-                    repos.len(),
-                    mappings.len()
+                    batch.len(),
+                    batch_mappings.len()
                 );
             }
-            return Ok(mappings);
+            mappings.extend(batch_mappings);
         }
+        Ok(mappings)
     }
 
     fn selected_module(&self, canonical_repo: &str) -> anyhow::Result<Option<SelectedModule>> {
@@ -680,6 +694,41 @@ exit "$status"
         std::fs::write(root.join("status"), "1\n").unwrap();
         assert!(client.dump_repo_mappings(&["", "repo+"]).is_err());
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn mapping_query_splits_at_the_operating_system_argument_limit() {
+        use std::os::unix::fs::PermissionsExt;
+
+        use super::BazelClient;
+
+        let root = tempfile::tempdir_in(std::env::var_os("TEST_TMPDIR").unwrap()).unwrap();
+        let executable = root.path().join("bazel");
+        std::fs::write(
+            &executable,
+            r#"#!/bin/sh
+set -eu
+printf . >> "${0%/*}/calls"
+shift 4
+for repo do
+  printf '{"ordinal":"%s"}\n' "${repo##*x}"
+done
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let prefix = "x".repeat(2048);
+        let names: Vec<_> = (0..4096).map(|index| format!("{prefix}{index}")).collect();
+        let repositories: Vec<_> = names.iter().map(String::as_str).collect();
+        let mappings = super::BazelCLI::new(executable)
+            .dump_repo_mappings(&repositories)
+            .unwrap();
+        assert_eq!(mappings.len(), repositories.len());
+        for (index, mapping) in mappings.iter().enumerate() {
+            assert_eq!(mapping["ordinal"], index.to_string());
+        }
+        assert!(std::fs::read(root.path().join("calls")).unwrap().len() > 1);
     }
 
     #[test]

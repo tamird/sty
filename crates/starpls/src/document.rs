@@ -95,6 +95,45 @@ pub(crate) struct RepositoryFetchResult {
     pub(crate) result: Result<(), String>,
 }
 
+const LEGACY_MAPPING_BATCH_BYTES: usize = 16 * 1024;
+// A complete legacy batch can exceed this target when repository names are short.
+const CHECK_MAPPING_QUERY_TARGET: usize = 1024;
+
+fn repository_mapping_batch_len(repositories: &[String]) -> usize {
+    let mut bytes = 0;
+    repositories
+        .iter()
+        .take_while(|repository| {
+            bytes += repository.len() + 1;
+            bytes <= LEGACY_MAPPING_BATCH_BYTES
+        })
+        .count()
+        .max(usize::from(!repositories.is_empty()))
+}
+
+/// Combine complete failure groups into checker queries. The target keeps
+/// progress visible on Bazel versions that stream full JSON mappings.
+pub(crate) fn repository_mapping_query_batches(
+    mut repositories: &[String],
+) -> impl Iterator<Item = &[String]> {
+    std::iter::from_fn(move || {
+        if repositories.is_empty() {
+            return None;
+        }
+        let mut count = 0;
+        while count < repositories.len() {
+            let next = repository_mapping_batch_len(&repositories[count..]);
+            if count > 0 && count + next > CHECK_MAPPING_QUERY_TARGET {
+                break;
+            }
+            count += next;
+        }
+        let (batch, rest) = repositories.split_at(count);
+        repositories = rest;
+        Some(batch)
+    })
+}
+
 /// Obtain per-repository results without publishing into a loader's cache.
 pub(crate) fn fetch_repositories(
     client: &dyn BazelClient,
@@ -262,8 +301,6 @@ impl DefaultFileLoader {
             .unwrap_or_default()
     }
 
-    /// A bounded batch leaves room for the command and environment on every
-    /// supported platform, including generated repositories with long names.
     pub(crate) fn pending_repository_mappings(&self) -> Vec<String> {
         let mut pending: Vec<_> = self
             .repository_mappings
@@ -273,16 +310,12 @@ impl DefaultFileLoader {
             .map(|(name, _)| name.clone())
             .collect();
         pending.sort_unstable();
-        let mut bytes = 0;
-        let count = pending
-            .iter()
-            .take_while(|name| {
-                bytes += name.len() + 1;
-                bytes <= 16 * 1024
-            })
-            .count()
-            .max(1);
-        pending.truncate(count);
+        pending
+    }
+
+    pub(crate) fn pending_repository_mapping_batch(&self) -> Vec<String> {
+        let mut pending = self.pending_repository_mappings();
+        pending.truncate(repository_mapping_batch_len(&pending));
         pending
     }
 
@@ -304,15 +337,36 @@ impl DefaultFileLoader {
             if pending.is_empty() {
                 break;
             }
-            self.resolve_repository_mappings(&pending);
+            for repositories in repository_mapping_query_batches(&pending) {
+                self.resolve_repository_mappings(repositories);
+            }
         }
     }
 
     /// Call with analysis snapshots drained; invalidate loads before analysis resumes.
     pub(crate) fn resolve_repository_mappings(&self, repositories: &[String]) {
-        let names: Vec<_> = repositories.iter().map(String::as_str).collect();
-        let result = self.bazel_client.dump_repo_mappings(&names);
-        let _ = self.finish_repository_mappings(repositories, result);
+        let query = |repositories: &[String]| {
+            let names: Vec<_> = repositories.iter().map(String::as_str).collect();
+            self.bazel_client.dump_repo_mappings(&names)
+        };
+        let result = query(repositories);
+        if result
+            .as_ref()
+            .is_ok_and(|mappings| mappings.len() == repositories.len())
+            || repository_mapping_batch_len(repositories) == repositories.len()
+        {
+            let _ = self.finish_repository_mappings(repositories, result);
+            return;
+        }
+
+        // A failed large query must not poison mappings that would have
+        // succeeded in their original batch.
+        let mut remaining = repositories;
+        while !remaining.is_empty() {
+            let (batch, rest) = remaining.split_at(repository_mapping_batch_len(remaining));
+            let _ = self.finish_repository_mappings(batch, query(batch));
+            remaining = rest;
+        }
     }
 
     /// Publish with analysis snapshots drained; invalidate loads before analysis resumes.
@@ -1602,7 +1656,7 @@ pub(crate) mod source_tests {
     }
 
     #[test]
-    fn generated_repository_names_use_bounded_mapping_batches() {
+    fn generated_repository_names_share_one_mapping_query() {
         let client = Arc::new(TestBazelClient::default());
         let (sender, _) = crossbeam_channel::unbounded();
         let loader =
@@ -1614,13 +1668,39 @@ pub(crate) mod source_tests {
         loader.prepare_repository_mappings(&repositories);
         loader.prepare_repository_mappings(&repositories);
         let requests = client.mapping_requests.lock().unwrap();
-        assert_eq!(requests.iter().map(Vec::len).sum::<usize>(), 1000);
-        assert_eq!(requests.len(), 7);
-        assert!(requests.iter().all(|batch| batch
-            .iter()
-            .map(|name| name.len() + 1)
-            .sum::<usize>()
-            <= 16 * 1024));
+        assert_eq!(*requests, [repositories]);
+    }
+
+    #[test]
+    fn failed_mapping_queries_preserve_previous_failure_boundaries() {
+        let client = Arc::new(TestBazelClient::default());
+        let (sender, _) = crossbeam_channel::unbounded();
+        let loader =
+            DefaultFileLoader::new(client.clone(), Default::default(), None, None, sender, true)
+                .with_deferred_mappings();
+        // These 2,730 five-byte names fill one legacy batch, which cannot be
+        // split at the checker target. Later names make two more batches.
+        let mut repositories: Vec<_> = (0..2730).map(|index| format!("a{index:04}")).collect();
+        repositories.extend(["fail+".to_owned(), "other+".to_owned()]);
+        let suffix = "x".repeat(200);
+        repositories.extend((0..150).map(|index| format!("z{index:04}{suffix}")));
+        loader.prepare_repository_mappings(&repositories);
+        assert_eq!(
+            client
+                .mapping_requests
+                .lock()
+                .unwrap()
+                .iter()
+                .map(Vec::len)
+                .collect::<Vec<_>>(),
+            [2730, 152, 81, 71]
+        );
+        assert!(loader.repository_mapping("a0000").unwrap().is_some());
+        assert!(loader.repository_mapping("other+").is_err());
+        assert!(loader
+            .repository_mapping(&format!("z0079{suffix}"))
+            .unwrap()
+            .is_some());
     }
 
     #[test]
