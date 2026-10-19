@@ -3038,6 +3038,173 @@ def register(attributes: Mapping[str, Attribute[bool]] | Mapping[str, Attribute[
     }
 
     #[test]
+    fn optional_rule_attributes_preserve_guaranteed_calls() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"
+def fixed():
+    return rule(implementation = lambda ctx: [DefaultInfo()], initializer = None, dependency_resolution_rule = False, subrules = [], attrs = {"exports": attr.label(mandatory = True)})
+lifted = subrule(implementation = lambda ctx, _dep: None, attrs = {"_dep": attr.label(default = "//:dep", mandatory = True)})
+def subrule_input():
+    return rule(implementation = lambda ctx: [DefaultInfo()], subrules = [lifted], attrs = {"exports": attr.label(mandatory = True)})
+def uncertain_private():
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = {"_secret": attr.label(mandatory = True, default = json.decode('"//:secret"')), "exports": attr.label(mandatory = True)})
+def late_private():
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = {"_secret": attr.label(mandatory = True, default = configuration_field(fragment = "cpp", name = "compiler")), "exports": attr.label(mandatory = True)})
+def optional(flag):
+    attrs = {"extra": attr.string()} if flag else {}
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+def overclaimed(flag):
+    attrs = {"extra": attr.string()} if flag else {}
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+def required(flag):
+    attrs = {"extra": attr.string(mandatory = True)} if flag else {}
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+def flagged(flag):
+    attrs = {"extra": attr.label(flags = ["MANDATORY"])} if flag else {}
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+def empty_flags(flag):
+    attrs = {"extra": attr.label(flags = [])} if flag else {}
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+def unknown_flags(flags):
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = {"extra": attr.label(flags = flags), "exports": attr.label(mandatory = True)})
+def generated(flag):
+    return rule(implementation = lambda ctx: [DefaultInfo()], build_setting = config.bool() if flag else None, attrs = {"exports": attr.label(mandatory = True)})
+def dependency_resolution(flag):
+    attrs = {"extra": attr.string()} if flag else {}
+    return rule(implementation = lambda ctx: [DefaultInfo()], dependency_resolution_rule = True, attrs = attrs | {"exports": attr.label(mandatory = True)})
+def initialized():
+    return rule(implementation = lambda ctx: [DefaultInfo()], initializer = lambda name, exports, extra: {}, attrs = {"extra": attr.string(), "exports": attr.label(mandatory = True)})
+_initialized_parent = rule(implementation = lambda ctx: [DefaultInfo()], initializer = lambda name, exports, extra: {}, extendable = True, attrs = {"extra": attr.string(), "exports": attr.label(mandatory = True)})
+def inherited():
+    return rule(implementation = lambda ctx: [DefaultInfo()], parent = _initialized_parent)
+def computed(keys):
+    attrs = {key: attr.string() if key else attr.int() for key in keys}
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+def mixed(keys):
+    attrs = {key: attr.string(mandatory = True) if key else attr.int() for key in keys}
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+def unknown(attrs):
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+def unknown_required(flag):
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = {"extra": attr.string(mandatory = flag), "exports": attr.label(mandatory = True)})
+def wrong():
+    return rule(implementation = lambda ctx: [DefaultInfo()], attrs = {"exports": attr.int(mandatory = True)})
+def calls(flag):
+    attrs = {"extra": attr.string()} if flag else {}
+    target = rule(implementation = lambda ctx: [DefaultInfo()], attrs = attrs | {"exports": attr.label(mandatory = True)})
+    target(name = "ok", exports = "//:x")
+    target(name = "bad", exports = 42)
+    target(name = "bad")
+def required_with_unknown_flags(flags):
+    target = rule(implementation = lambda ctx: [DefaultInfo()], attrs = {"extra": attr.label(mandatory = True, flags = flags)})
+    target(name = "bad")
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/optional.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let interface = analysis
+            .open_document(
+                Path::new("/optional.bzli"),
+                Dialect::Bazel,
+                None,
+                r#"class Contract(Protocol):
+    def __call__(self, *, name: str, exports: str | Label) -> None: ...
+type Fixed = Intersection[rule, Contract]
+class ExtraContract(Protocol):
+    def __call__(self, *, name: str, exports: str | Label, extra: str) -> None: ...
+type Extra = Intersection[rule, ExtraContract]
+class ToolchainsContract(Protocol):
+    def __call__(self, *, name: str, exports: str | Label, toolchains: Sequence[str | Label]) -> None: ...
+type WithToolchains = Intersection[rule, ToolchainsContract]
+def fixed() -> Fixed: ...
+def subrule_input() -> Fixed: ...
+def uncertain_private() -> Fixed: ...
+def late_private() -> Fixed: ...
+def optional(flag: bool) -> Fixed: ...
+def overclaimed(flag: bool) -> Extra: ...
+def required(flag: bool) -> Fixed: ...
+def flagged(flag: bool) -> Fixed: ...
+def empty_flags(flag: bool) -> Fixed: ...
+def unknown_flags(flags: Sequence[str]) -> Fixed: ...
+def generated(flag: bool) -> Fixed: ...
+def dependency_resolution(flag: bool) -> WithToolchains: ...
+def initialized() -> Fixed: ...
+def inherited() -> Fixed: ...
+def computed(keys: Sequence[str]) -> Fixed: ...
+def mixed(keys: Sequence[str]) -> Fixed: ...
+def unknown(attrs: dict[str, Attribute[object]]) -> Fixed: ...
+def unknown_required(flag: bool) -> Fixed: ...
+def wrong() -> Fixed: ...
+def calls(flag: bool) -> None: ...
+def required_with_unknown_flags(flags: Sequence[str]) -> None: ...
+"#
+                .into(),
+                1,
+            )
+            .unwrap();
+        analysis.set_type_interfaces([(file, interface)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let findings: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let before = &source[..diagnostic.range().unwrap().start().to_usize()];
+                let function = before
+                    .rsplit_once("\ndef ")
+                    .unwrap()
+                    .1
+                    .split_once('(')
+                    .unwrap()
+                    .0;
+                (function, diagnostic.id().as_str())
+            })
+            .collect();
+        assert_eq!(
+            findings,
+            [
+                ("subrule_input", "unsound-return-statement"),
+                ("uncertain_private", "unsound-return-statement"),
+                ("late_private", "unsound-return-statement"),
+                ("overclaimed", "unsound-return-statement"),
+                ("required", "unsound-return-statement"),
+                ("flagged", "unsound-return-statement"),
+                ("unknown_flags", "unsound-return-statement"),
+                ("generated", "unsound-return-statement"),
+                ("dependency_resolution", "unsound-return-statement"),
+                ("initialized", "unsound-return-statement"),
+                ("inherited", "unsound-return-statement"),
+                ("mixed", "unsound-return-statement"),
+                ("unknown", "unsound-return-statement"),
+                ("unknown_required", "unsound-return-statement"),
+                ("wrong", "invalid-return-type"),
+                ("calls", "invalid-argument-type"),
+                ("calls", "missing-argument"),
+                ("required_with_unknown_flags", "missing-argument"),
+            ]
+        );
+    }
+
+    #[test]
     fn bundled_metadata_uses_recursive_native_declarations() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"

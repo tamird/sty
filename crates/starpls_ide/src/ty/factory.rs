@@ -55,7 +55,7 @@ pub(super) struct Attribute {
     pub(super) executable: Option<bool>,
     pub(super) configuration: AttributeConfiguration,
     configurability: Configurability,
-    mandatory: bool,
+    mandatory: Option<bool>,
     default: Option<FileRange>,
     default_value: DefaultValue,
     /// Whether Bazel exposes an implicit build-rule input as `$name`.
@@ -107,6 +107,8 @@ pub(super) struct RuleData {
     documentation: Documentation,
     pub(super) attributes: Box<[RuleAttributeData]>,
     pub(super) complete: bool,
+    /// Whether the generated call signature has no unresolved shape requirements.
+    call_shape_complete: bool,
     pub(super) executable: Option<bool>,
     pub(super) build_setting: Option<BuildSetting>,
 }
@@ -234,7 +236,7 @@ impl Attribute {
             return default;
         }
         let values = self.allowed_value_type(db, environment)?;
-        Some(if self.mandatory {
+        Some(if self.mandatory == Some(true) {
             values
         } else {
             // Bazel validates explicit inputs before filling omitted attributes.
@@ -267,7 +269,7 @@ impl Attribute {
     }
 
     pub(super) fn has_non_none_value(&self) -> bool {
-        self.mandatory
+        self.mandatory == Some(true)
             || !matches!(
                 self.default_value,
                 DefaultValue::None | DefaultValue::Unknown
@@ -849,11 +851,10 @@ fn attribute<'db>(
 ) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(call.file());
     let declarations = call.declaration()?.program_file(db);
-    let mandatory = match call.argument("mandatory") {
-        CheckedArgument::Omitted => false,
-        CheckedArgument::Value { ty, expression: _ } => ty.as_bool_literal()?,
-        CheckedArgument::Indeterminate => return None,
-    };
+    let mandatory = any_enabled([
+        boolean_argument(call, "mandatory"),
+        mandatory_attribute_flag(db, call),
+    ]);
     let values = match kind {
         AttributeKind::String => {
             scalar_values(call, |ty| ty.string_literal_value(db).map(Box::from))
@@ -962,13 +963,7 @@ fn attribute<'db>(
             {
                 Some(false)
             }
-            CheckedArgument::Indeterminate
-                if call.call().arguments.keywords.iter().all(|arg| {
-                    arg.arg
-                        .as_ref()
-                        .is_some_and(|name| name.as_str() != "materializer")
-                }) =>
-            {
+            CheckedArgument::Indeterminate if keyword_is_absent(call, "materializer") => {
                 accepts_implicit_input
             }
             CheckedArgument::Value { .. } | CheckedArgument::Indeterminate => None,
@@ -1056,7 +1051,68 @@ fn scalar_values<'db, T>(
     let CheckedArgument::Value { ty: _, expression } = call.argument("values") else {
         return None;
     };
-    let expression = expression?;
+    let elements = literal_sequence_elements(expression?)?;
+    // Bazel treats an empty values sequence as unrestricted. Its length must be known,
+    // including when the inferred homogeneous element type happens to be a literal.
+    if elements.is_empty() {
+        return None;
+    }
+    elements
+        .iter()
+        .map(|element| {
+            let ty = call.expression_type(element)?;
+            literal(ty)
+        })
+        .collect()
+}
+
+fn mandatory_attribute_flag<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<bool> {
+    if keyword_is_absent(call, "flags") {
+        return Some(false);
+    }
+    match call.argument("flags") {
+        CheckedArgument::Omitted => Some(false),
+        CheckedArgument::Value { expression, ty: _ } => {
+            let mut unknown = false;
+            for element in literal_sequence_elements(expression?)? {
+                match call
+                    .expression_type(element)
+                    .and_then(|ty| ty.string_literal_value(db))
+                {
+                    Some("MANDATORY") => return Some(true),
+                    Some(_) => {}
+                    None => unknown = true,
+                }
+            }
+            (!unknown).then_some(false)
+        }
+        CheckedArgument::Indeterminate => None,
+    }
+}
+
+/// Prove a keyword-only parameter cannot be supplied directly or by unpacking.
+fn keyword_is_absent(call: &CheckedCall<'_, '_>, name: &str) -> bool {
+    call.call().arguments.keywords.iter().all(|argument| {
+        argument
+            .arg
+            .as_ref()
+            .is_some_and(|argument| argument.as_str() != name)
+    })
+}
+
+fn keyword_is_omitted_or<'db>(
+    call: &CheckedCall<'_, 'db>,
+    name: &str,
+    predicate: impl FnOnce(Type<'db>, Option<&Expr>) -> bool,
+) -> bool {
+    match call.argument(name) {
+        CheckedArgument::Omitted => true,
+        CheckedArgument::Value { ty, expression } => predicate(ty, expression),
+        CheckedArgument::Indeterminate => keyword_is_absent(call, name),
+    }
+}
+
+fn literal_sequence_elements(expression: &Expr) -> Option<&[Expr]> {
     let elements = match expression {
         Expr::List(list) => {
             let ruff_python_ast::ExprList {
@@ -1079,18 +1135,7 @@ fn scalar_values<'db, T>(
         }
         _ => return None,
     };
-    // Bazel treats an empty values sequence as unrestricted. Its length must be known,
-    // including when the inferred homogeneous element type happens to be a literal.
-    if elements.is_empty() || elements.iter().any(Expr::is_starred_expr) {
-        return None;
-    }
-    elements
-        .iter()
-        .map(|element| {
-            let ty = call.expression_type(element)?;
-            literal(ty)
-        })
-        .collect()
+    (!elements.iter().any(Expr::is_starred_expr)).then_some(elements)
 }
 
 enum RuleKind {
@@ -1299,7 +1344,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     executable: Some(false),
                     configuration: AttributeConfiguration::Ordinary,
                     configurability: Configurability::Explicit(attribute.configurable),
-                    mandatory: attribute.is_mandatory,
+                    mandatory: Some(attribute.is_mandatory),
                     default: None,
                     default_value: if matches!(kind, RuleKind::Macro)
                         && !attribute.is_mandatory
@@ -1316,7 +1361,8 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             })
         })
         .collect::<Option<Vec<_>>>()?;
-    if build_setting.is_some() && setting_kind.is_none() {
+    let mut generated_required_inputs_known = build_setting.is_none() || setting_kind.is_some();
+    if !generated_required_inputs_known {
         // An unresolved descriptor may be None. Admit its possible attributes
         // without weakening other attributes or accepting arbitrary keywords.
         for name in BuildSetting::ATTRIBUTE_NAMES {
@@ -1337,6 +1383,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         .filter(|_| test.is_none())
         .chain(binary_attributes.into_iter().filter(|_| binary.is_none()));
     for attribute in uncertain_attributes {
+        generated_required_inputs_known &= !attribute.is_mandatory;
         if !attributes
             .iter()
             .any(|existing| existing.name == attribute.name)
@@ -1402,10 +1449,41 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     let is_complete = own_attributes.is_complete();
     let DictionaryItems {
         items,
-        extra_items: _,
+        extra_items,
         first_entry: _,
     } = own_attributes;
     let is_complete = is_complete && items.iter().all(DictionaryItem::is_required);
+    // Unenumerated optional declarations add no required caller inputs. The
+    // rule base, initializer and subrules can also change which calls succeed.
+    let mut call_shape_complete = generated_required_inputs_known
+        && complete
+        && match kind {
+            RuleKind::Build => {
+                parent_data.is_none_or(|data| data.call_shape_complete)
+                    && keyword_is_omitted_or(call, "dependency_resolution_rule", |ty, _| {
+                        ty.as_bool_literal() == Some(false)
+                    })
+                    && keyword_is_omitted_or(call, "initializer", |ty, _| ty.is_none(db))
+                    && keyword_is_omitted_or(call, "subrules", |_, expression| {
+                        expression
+                            .and_then(literal_sequence_elements)
+                            .is_some_and(<[Expr]>::is_empty)
+                    })
+                    && items
+                        .iter()
+                        .filter(|item| !item.is_required())
+                        .all(|item| is_optional_descriptor(db, &environment, item.ty))
+                    && match extra_items {
+                        DictionaryExtraItems::Closed => true,
+                        DictionaryExtraItems::Value(value) => {
+                            is_optional_descriptor(db, &environment, value)
+                        }
+                        DictionaryExtraItems::ParamSpec(_)
+                        | DictionaryExtraItems::KeywordTail(_) => false,
+                    }
+            }
+            RuleKind::Repository | RuleKind::Macro => is_complete,
+        };
     complete &= is_complete;
     if parent.is_some() && !is_complete {
         // Unseen overrides can replace a public label's default, but not its
@@ -1454,6 +1532,9 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         let attribute = value
             .provided_data(db, &environment)
             .and_then(|data| data.downcast_ref::<Attribute>());
+        if matches!(kind, RuleKind::Build) && attribute.is_none() {
+            call_shape_complete = false;
+        }
         if parent.is_some() {
             if let Some(inherited) = attributes.iter_mut().find(|entry| entry.name == name) {
                 override_rule_attribute(inherited, attribute, Some(source));
@@ -1477,7 +1558,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 executable: None,
                 configuration: AttributeConfiguration::Unknown,
                 configurability: Configurability::Unknown,
-                mandatory: false,
+                mandatory: None,
                 default: None,
                 default_value: DefaultValue::Unknown,
                 accepts_implicit_input: None,
@@ -1500,7 +1581,8 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         let mut parameter = match implicit_input_name.clone() {
             // If the source is unknown, `$name` is not necessarily the required spelling.
             Some(input)
-                if uncertain_input || attribute.is_some_and(|attribute| !attribute.mandatory) =>
+                if uncertain_input
+                    || attribute.is_some_and(|attribute| attribute.mandatory != Some(true)) =>
             {
                 Parameter::implicit_keyword_only(input)
             }
@@ -1539,7 +1621,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     .parameters
                     .push((Name::new(name), doc.clone()));
             }
-            if !attribute.mandatory {
+            if attribute.mandatory != Some(true) {
                 parameter = match attribute.default {
                     Some(source) => {
                         let default_type = if allowed_values.is_some() {
@@ -1608,6 +1690,16 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         source,
     } in attributes
     {
+        call_shape_complete &=
+            descriptor
+                .as_ref()
+                .is_none_or(|attribute| match attribute.mandatory {
+                    Some(false) => true,
+                    Some(true) => parameter
+                        .as_ref()
+                        .is_some_and(|parameter| !parameter.has_default()),
+                    None => false,
+                });
         if matches!(kind, RuleKind::Build) && starpls_bazel::attr::visible_in_rule_context(&name) {
             let value = match &descriptor {
                 Some(attribute) => super::context::analyzed_attribute_type(
@@ -1645,13 +1737,13 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         });
     }
     if !complete {
-        // Partial mappings and unknown parents can contain additional required names.
+        // Unknown attribute names remain available for ordinary call checking.
         parameters.push(Parameter::keyword_variadic(Name::new("kwargs")));
     }
     let parameters = Parameters::standard(
         std::iter::once(Parameter::positional_only(Some(Name::new("self")))).chain(parameters),
     );
-    let parameters = if complete {
+    let parameters = if call_shape_complete {
         parameters
     } else {
         parameters.with_incomplete_shape()
@@ -1693,6 +1785,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     documentation,
                     attributes: descriptors.into_boxed_slice(),
                     complete,
+                    call_shape_complete,
                     executable,
                     build_setting: setting_kind,
                 })),
@@ -1701,6 +1794,24 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         },
     )
     .to_instance_approximation(db, &environment)
+}
+
+fn is_optional_descriptor<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    ty: Type<'db>,
+) -> bool {
+    let ty = ty.expand_top_level_aliases(db, environment);
+    let alternatives = match ty {
+        Type::Never => return true,
+        Type::Union(union) => union.elements(db),
+        _ => std::slice::from_ref(&ty),
+    };
+    alternatives.iter().all(|ty| {
+        ty.provided_data(db, environment)
+            .and_then(|data| data.downcast_ref::<Attribute>())
+            .is_some_and(|attribute| attribute.mandatory == Some(false))
+    })
 }
 
 fn inherit_rule_attributes<'db>(
@@ -1810,7 +1921,7 @@ fn override_rule_attribute(
         parent.default = None;
         parent.default_value = DefaultValue::Unknown;
     }
-    if !parent.mandatory {
+    if parent.mandatory != Some(true) {
         if let Some(parameter) = parameter {
             *parameter = match parent.default {
                 Some(source) => parameter.clone().with_default(ParameterDefault::Source {
@@ -1948,7 +2059,7 @@ fn inherit_macro_attributes<'db>(
             .and_then(|entry| entry.descriptor.clone())
             .or_else(|| inherited_native_attribute(db, definition?, name.as_str()));
         if let Some(descriptor) = &mut descriptor {
-            if !descriptor.mandatory {
+            if descriptor.mandatory != Some(true) {
                 descriptor.default = None;
                 descriptor.default_value = DefaultValue::None;
             }
@@ -2045,7 +2156,7 @@ fn inherited_native_attribute(
         configurability: attribute
             .configurable
             .map_or(Configurability::Unknown, Configurability::Explicit),
-        mandatory: attribute.mandatory(),
+        mandatory: Some(attribute.mandatory()),
         default: None,
         default_value: DefaultValue::Unknown,
         accepts_implicit_input: Some(false),
@@ -2971,6 +3082,11 @@ example = rule(implementation=implementation, extendable=True, attrs={
     "_maybe_materialized": attr.label(default=Label("//:default"), mandatory=False, **json.decode("{}")),
     "visible": attr.string(),
 })
+stable = rule(implementation=implementation, attrs={"_direct": attr.label(default=Label("//:default"))})
+lifted = subrule(implementation=lambda ctx, _dep: None, attrs={"_dep": attr.label(default="//:dep", mandatory=True)})
+with_subrule = rule(implementation=implementation, subrules=[lifted])
+alternate = rule(implementation=implementation, dependency_resolution_rule=True)
+initialized = rule(implementation=implementation, initializer=lambda name, extra: {}, attrs={"extra": attr.string()})
 child = rule(parent=example, implementation=implementation)
 wrapped = macro(implementation=macro_impl, inherit_attrs=example)
 repository = repository_rule(implementation=implementation, attrs={"_direct": attr.string(default="x")})
@@ -3113,16 +3229,27 @@ mandatory_wrapped(name="wrapped")
             )
             .unwrap(),
         );
-        let known = "example(name='known', **{'$direct': '//:value'})\n";
-        let uncertain = "example(name='uncertain', **{'$uncertain': '//:value'})\n";
-        let maybe_materialized =
-            "example(name='maybe_materialized', **{'$maybe_materialized': '//:value'})\n";
-        let mandatory_uncertain =
-            "mandatory_uncertain(name='uncertain', **{'$secret': '//:value'})\n";
-        analysis.update_file(
-            file_id,
-            format!("{source}{known}{uncertain}{maybe_materialized}{mandatory_uncertain}"),
-        );
+        let mut checked = source.clone();
+        let mut expected = Vec::new();
+        for (fragment, callee) in [
+            ("stable(name='known', **{'$direct': '//:value'})", None),
+            ("example(name='omitted', **{'$direct': '//:value'})", Some("example(")),
+            ("example(name='uncertain', **{'$uncertain': '//:value'})", Some("example(")),
+            ("example(name='maybe_materialized', **{'$maybe_materialized': '//:value'})", Some("example(")),
+            ("mandatory_uncertain(name='uncertain', **{'$secret': '//:value'})", Some("mandatory_uncertain(")),
+            ("mandatory_uncertain(name='omitted')", Some("mandatory_uncertain(")),
+            ("with_subrule(name='omitted')", Some("with_subrule(")),
+            ("alternate(name='alternate', toolchains=['//:toolchain'])", Some("alternate(")),
+            ("initialized(name='initialized')", Some("initialized(")),
+            ("def invoke_union(flag: bool) -> None:\n    chosen = example if flag else stable\n    chosen(name='union')", Some("chosen(")),
+        ] {
+            if let Some(callee) = callee {
+                expected.push(checked.len() + fragment.find(callee).unwrap());
+            }
+            checked.push_str(fragment);
+            checked.push('\n');
+        }
+        analysis.update_file(file_id, checked);
         let diagnostics = analysis.snapshot().diagnostics(file_id).unwrap();
         let calls = diagnostics
             .iter()
@@ -3132,12 +3259,8 @@ mandatory_wrapped(name="wrapped")
                     .is_some_and(|range| range.start().to_usize() >= source.len())
             })
             .collect::<Vec<_>>();
-        assert_eq!(calls.len(), 3, "{calls:?}");
-        for (diagnostic, start) in calls.iter().zip([
-            source.len() + known.len(),
-            source.len() + known.len() + uncertain.len(),
-            source.len() + known.len() + uncertain.len() + maybe_materialized.len(),
-        ]) {
+        assert_eq!(calls.len(), expected.len(), "{calls:?}");
+        for (diagnostic, start) in calls.iter().zip(expected) {
             assert_eq!(diagnostic.id().as_str(), "non-static-type");
             assert_eq!(diagnostic.range().unwrap().start().to_usize(), start);
         }

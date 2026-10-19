@@ -24,6 +24,7 @@ use ty_python_core::definition::Definition;
 use ty_python_semantic::lint::LintMetadata;
 use ty_python_semantic::types::ide_support::call_input_types_with_context;
 use ty_python_semantic::types::ide_support::CallInputError;
+use ty_python_semantic::types::CallableTypeKind;
 use ty_python_semantic::types::OverloadBodyAnalysis;
 use ty_python_semantic::types::OverloadBodyView;
 use ty_python_semantic::types::Type;
@@ -99,19 +100,20 @@ impl<'db> Checks<'_, 'db> {
     }
 
     fn check_type(&mut self, range: TextRange, ty: Type<'_>, subject: &str) {
-        if !self.non_static {
-            return;
+        if self.non_static && !self.is_fully_static(ty) {
+            self.report_non_static_type(range, ty, subject);
         }
-        if !self.is_fully_static(ty) {
-            self.report(
-                range,
-                &NON_STATIC_TYPE,
-                format!(
-                    "Cannot establish a fully static type for {subject}: `{}`",
-                    ty.display(self.db, &self.model.program_environment())
-                ),
-            );
-        }
+    }
+
+    fn report_non_static_type(&mut self, range: TextRange, ty: Type<'_>, subject: &str) {
+        self.report(
+            range,
+            &NON_STATIC_TYPE,
+            format!(
+                "Cannot establish a fully static type for {subject}: `{}`",
+                ty.display(self.db, &self.model.program_environment())
+            ),
+        );
     }
 
     fn is_fully_static(&self, ty: Type<'_>) -> bool {
@@ -121,6 +123,41 @@ impl<'db> Checks<'_, 'db> {
         // lets Ty handle recursive types and externally visible overloads.
         ty.is_fully_static(self.db, &env)
             && ty.is_equivalent_to(self.db, &env, ty.top_materialization(self.db, &env))
+    }
+
+    fn contains_generated_rule(&self, ty: Type<'db>) -> bool {
+        let ty = ty.expand_top_level_aliases(self.db, &self.model.program_environment());
+        match ty {
+            Type::NominalInstance(_) => ty
+                .provided_data(self.db, &self.model.program_environment())
+                .is_some_and(|data| data.downcast_ref::<super::factory::RuleData>().is_some()),
+            Type::Union(union) => union
+                .elements(self.db)
+                .iter()
+                .any(|element| self.contains_generated_rule(*element)),
+            Type::Intersection(intersection) => intersection
+                .iter_positive(self.db)
+                .any(|element| self.contains_generated_rule(element)),
+            _ => false,
+        }
+    }
+
+    fn is_fully_static_invocation(&self, callee: Type<'db>) -> bool {
+        let expanded = callee.expand_top_level_aliases(self.db, &self.model.program_environment());
+        if !self.contains_generated_rule(expanded) {
+            return self.is_fully_static(callee);
+        }
+        // A nominal rule's identity can be fully static while its bound call
+        // signature is incomplete. Composite rule types need a stronger proof.
+        matches!(expanded, Type::NominalInstance(_))
+            && expanded
+                .map_callable_signatures(
+                    self.db,
+                    &self.model.program_environment(),
+                    CallableTypeKind::Regular,
+                    std::convert::identity,
+                )
+                .is_some_and(|callable| self.is_fully_static(callable))
     }
 
     fn expression_type(&self, expression: &Expr) -> Option<Type<'db>> {
@@ -239,7 +276,9 @@ impl<'db> Checks<'_, 'db> {
                 // Some valid calls, including overload expansion, do not retain all matched
                 // inputs. A fully static whole callable is a stronger proof for those calls.
                 if let Some(callee) = self.expression_type(&call.func) {
-                    self.check_type(call.func.range(), callee, "called function");
+                    if self.non_static && !self.is_fully_static_invocation(callee) {
+                        self.report_non_static_type(call.func.range(), callee, "called function");
+                    }
                 } else {
                     self.report(
                         call.func.range(),
@@ -771,6 +810,62 @@ complete(choice)
             panic!("{diagnostics:?}");
         };
         assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
+    fn generated_rule_aliases_preserve_invocation_completeness() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let identity = fixture.add_file(
+            &mut analysis.db,
+            "identity.bzl",
+            "def ident(value): return value\n",
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "identity.bzli",
+            "type Identity[T] = T\ndef ident[T](value: T) -> Identity[T]: ...\n",
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "rules.bzl",
+            r#"load("identity.bzl", "ident")
+def implementation(ctx): return []
+complete = ident(rule(implementation=implementation))
+direct = rule(implementation=implementation, initializer=lambda name, extra: {}, attrs={"extra": attr.string()})
+aliased = ident(direct)
+"#,
+        );
+        let source = r#"load("rules.bzl", "complete", "direct", "aliased")
+complete(name="complete")
+direct(name="direct")
+aliased(name="aliased")
+"#;
+        let file = fixture.add_file(&mut analysis.db, "caller.bzl", source);
+        loader.add_files_from_fixture(&fixture);
+        analysis
+            .set_type_interfaces([(identity, interface)])
+            .unwrap();
+        analysis.set_rules(rules(&["non-static-type"]));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let rejected = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                assert_eq!(diagnostic.id().as_str(), "non-static-type");
+                let range = diagnostic.range().unwrap();
+                &source[range.start().to_usize()..range.end().to_usize()]
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rejected, ["direct", "aliased"], "{diagnostics:?}");
     }
 
     #[test]
