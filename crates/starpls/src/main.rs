@@ -1,3 +1,5 @@
+use std::process::ExitCode;
+
 use clap::Parser;
 use clap::Subcommand;
 use commands::check::CheckCommand;
@@ -38,7 +40,7 @@ enum Commands {
     Version,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<ExitCode> {
     let cli = Cli::parse();
 
     // Don't do any log filtering when running the language server.
@@ -61,13 +63,13 @@ fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
 }
 
-fn run(cli: Cli) -> anyhow::Result<()> {
+fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     let Cli { command } = cli;
     match command {
         Some(Commands::Check(cmd)) => cmd.run(),
-        Some(Commands::Server(cmd)) => cmd.run(),
-        Some(Commands::Version) => run_version(),
-        None => ServerCommand::default().run(),
+        Some(Commands::Server(cmd)) => cmd.run().map(|()| ExitCode::SUCCESS),
+        Some(Commands::Version) => run_version().map(|()| ExitCode::SUCCESS),
+        None => ServerCommand::default().run().map(|()| ExitCode::SUCCESS),
     }
 }
 

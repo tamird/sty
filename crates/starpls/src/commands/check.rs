@@ -5,6 +5,7 @@ use std::io::BufRead;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -141,6 +142,7 @@ impl FromStr for SourceOverlay {
 
 #[cfg(test)]
 mod tests {
+    use std::process::ExitCode;
     use std::sync::Arc;
 
     use super::CheckCommand;
@@ -293,7 +295,12 @@ mod tests {
             let report_path = root.join("coverage.json");
             let result =
                 checker.report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new());
-            assert_eq!(result.is_err(), select_sources, "{name}: {result:?}");
+            let expected = (!exclude_bad).then_some(if select_sources {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            });
+            assert_eq!(result.ok(), expected, "{name}");
             let report: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
             let mut expected = vec!["shared.bzli", "packaged.bzli", "extra.bzl", "good.bzl"];
@@ -355,9 +362,12 @@ mod tests {
                 ..Default::default()
             },
         );
-        checker
-            .report_diagnostics_to(None, &mut Vec::new(), &mut Vec::new())
-            .unwrap();
+        assert_eq!(
+            checker
+                .report_diagnostics_to(None, &mut Vec::new(), &mut Vec::new())
+                .unwrap(),
+            ExitCode::SUCCESS
+        );
         assert_eq!(checker.files.len(), 2);
         std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
     }
@@ -487,7 +497,7 @@ mod tests {
             let report_path = root.join("coverage.json");
             let result =
                 checker.report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new());
-            assert_eq!(result.is_err(), nested, "{result:?}");
+            assert_eq!(result.ok(), (!nested).then_some(ExitCode::SUCCESS));
             let report: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
             assert_eq!(report["complete"], !nested, "{report}");
@@ -577,9 +587,12 @@ mod tests {
             assert_eq!(checker.analysis.type_interface_files().len(), 2, "{name}");
             let mut output = Vec::new();
             let mut status = Vec::new();
-            assert!(checker
-                .report_diagnostics_to(None, &mut output, &mut status)
-                .is_err());
+            assert_eq!(
+                checker
+                    .report_diagnostics_to(None, &mut output, &mut status)
+                    .unwrap(),
+                ExitCode::FAILURE
+            );
             let output = String::from_utf8(output).unwrap();
             let diagnostics: Vec<serde_json::Value> = output
                 .lines()
@@ -692,7 +705,7 @@ mod tests {
                 );
                 let report_path = checker.bazel_info.workspace.join("coverage.json");
                 let result = checker.report_diagnostics(Some(&report_path));
-                assert_eq!(result.is_err(), expected_errors != 0, "{result:?}");
+                assert_eq!(result.unwrap() == ExitCode::FAILURE, expected_errors != 0);
                 let report: serde_json::Value =
                     serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
                 assert_eq!(report["diagnostics"]["errors"], expected_errors);
@@ -718,7 +731,10 @@ mod tests {
                 },
             );
             let report_path = checker.bazel_info.workspace.join("coverage.json");
-            assert!(checker.report_diagnostics(Some(&report_path)).is_err());
+            assert_eq!(
+                checker.report_diagnostics(Some(&report_path)).unwrap(),
+                ExitCode::FAILURE
+            );
             let report: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
             assert_eq!(report["diagnostics"]["errors"], 1);
@@ -768,7 +784,7 @@ mod tests {
                 "print(glob(['*.txt']))\n",
             )],
         );
-        checker.report_diagnostics(None).unwrap();
+        assert_eq!(checker.report_diagnostics(None).unwrap(), ExitCode::SUCCESS);
         assert_eq!(checker.files.len(), 1);
         assert!(client.fetch_requests.lock().unwrap().is_empty());
         assert!(!checker
@@ -793,7 +809,7 @@ mod tests {
         let mut output = Vec::new();
         let mut errors = Vec::new();
         let result = checker.report_diagnostics_to(Some(&report_path), &mut output, &mut errors);
-        assert!(result.is_err(), "{result:?}");
+        assert_eq!(result.unwrap(), ExitCode::FAILURE);
         let output = String::from_utf8(output).unwrap();
         let diagnostics: Vec<serde_json::Value> = output
             .lines()
@@ -842,6 +858,7 @@ mod tests {
         }
         let errors = String::from_utf8(errors).unwrap();
         assert!(errors.contains("Checked 2 files"), "{errors}");
+        assert!(!errors.contains("failed with"), "{errors}");
         assert!(!output.contains('\u{1b}'), "{output}");
     }
 
@@ -866,7 +883,7 @@ mod tests {
             let mut errors = Vec::new();
             let result =
                 checker.report_diagnostics_to(Some(&report_path), &mut output, &mut errors);
-            assert_eq!(result.is_ok(), complete, "{case}: {result:?}");
+            assert_eq!(result.ok(), complete.then_some(ExitCode::SUCCESS), "{case}");
             let output = String::from_utf8(output).unwrap();
             let diagnostics: Vec<serde_json::Value> = output
                 .lines()
@@ -909,7 +926,7 @@ mod tests {
                 ("stubs+/dep.bzl", "wrong.txt", "value = 42\n"),
             ],
         );
-        checker.report_diagnostics(None).unwrap();
+        assert_eq!(checker.report_diagnostics(None).unwrap(), ExitCode::SUCCESS);
         assert_eq!(checker.files.len(), 4);
         assert!(client.fetch_requests.lock().unwrap().is_empty());
     }
@@ -1060,7 +1077,7 @@ mod tests {
             );
             let report_path = checker.bazel_info.workspace.join("coverage.json");
             let result = checker.report_diagnostics(Some(&report_path));
-            assert_eq!(result.is_err(), audit, "{result:?}");
+            assert_eq!(result.ok(), (!audit).then_some(ExitCode::SUCCESS));
             let report: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
             assert_eq!(report["version"], 2);
@@ -1357,7 +1374,10 @@ mod tests {
             ),
         ]);
         let report_path = checker.bazel_info.workspace.join("coverage.json");
-        checker.report_diagnostics(Some(&report_path)).unwrap();
+        assert_eq!(
+            checker.report_diagnostics(Some(&report_path)).unwrap(),
+            ExitCode::SUCCESS
+        );
         assert_eq!(*client.fetch_requests.lock().unwrap(), ["rules+", "wrong+"]);
         let report: serde_json::Value =
             serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
@@ -1666,7 +1686,7 @@ mod tests {
             let report_path = checker.bazel_info.workspace.join("coverage.json");
             for _ in 0..2 {
                 let result = checker.report_diagnostics(Some(&report_path));
-                assert_eq!(result.is_err(), failed, "{result:?}");
+                assert_eq!(result.ok(), (!failed).then_some(ExitCode::SUCCESS));
                 let requests = client.fetch_requests.lock().unwrap();
                 assert_eq!(requests.len(), if failed { 6 } else { 3 });
                 let batches = client.fetch_batches.lock().unwrap();
@@ -1806,7 +1826,10 @@ mod tests {
                 local_checker_with_options(&format!("checker-exclusions-{mode}"), &inputs, options);
             let root = checker.bazel_info.workspace.clone();
             let report_path = root.join("coverage.json");
-            assert!(checker.report_diagnostics(Some(&report_path)).is_err());
+            assert_eq!(
+                checker.report_diagnostics(Some(&report_path)).unwrap(),
+                ExitCode::FAILURE
+            );
             let report: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
             let selected: std::collections::BTreeSet<_> = report["selected_files"]
@@ -2317,9 +2340,12 @@ mod tests {
             &options,
         )
         .unwrap();
-        assert!(checker
-            .report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new())
-            .is_err());
+        assert_eq!(
+            checker
+                .report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new())
+                .unwrap(),
+            ExitCode::FAILURE
+        );
         let report: serde_json::Value =
             serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
         assert_eq!(report["complete"], true, "{report}");
@@ -2349,7 +2375,7 @@ impl CheckCommand {
         Ok(paths)
     }
 
-    pub(crate) fn run(self) -> anyhow::Result<()> {
+    pub(crate) fn run(self) -> anyhow::Result<ExitCode> {
         let paths = self.input_paths()?;
         if self.progress {
             eprintln!("Initializing Bazel context");
@@ -3044,7 +3070,7 @@ impl Checker {
         }
     }
 
-    fn report_diagnostics(&mut self, report_path: Option<&Path>) -> anyhow::Result<()> {
+    fn report_diagnostics(&mut self, report_path: Option<&Path>) -> anyhow::Result<ExitCode> {
         self.report_diagnostics_to(
             report_path,
             &mut anstream::stdout(),
@@ -3057,7 +3083,7 @@ impl Checker {
         report_path: Option<&Path>,
         output: &mut dyn Write,
         stderr: &mut dyn Write,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<ExitCode> {
         let CheckResult {
             loads: graph,
             diagnostics,
@@ -3118,11 +3144,14 @@ impl Checker {
             );
         }
         if report.diagnostics.errors > 0 {
-            anyhow::bail!(
-                "failed with {} errors and {} warnings",
-                report.diagnostics.errors,
-                report.diagnostics.warnings
-            );
+            if report_path.is_none() || matches!(self.output_format, OutputFormat::Full) {
+                writeln!(
+                    stderr,
+                    "Error: failed with {} errors and {} warnings",
+                    report.diagnostics.errors, report.diagnostics.warnings
+                )?;
+            }
+            return Ok(ExitCode::FAILURE);
         }
         if report.diagnostics.warnings > 0 {
             writeln!(
@@ -3134,7 +3163,7 @@ impl Checker {
                 )))
             )?;
         }
-        Ok(())
+        Ok(ExitCode::SUCCESS)
     }
 
     fn report_file(&self, snapshot: &AnalysisSnapshot, file: File) -> anyhow::Result<ReportFile> {
