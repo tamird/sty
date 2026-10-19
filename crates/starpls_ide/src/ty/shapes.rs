@@ -2,6 +2,7 @@
 
 use std::collections::btree_map::Entry;
 
+use ruff_db::files::FileRange;
 use ruff_python_ast::name::Name;
 use ruff_python_ast::Expr;
 use ruff_python_ast::ExprDict;
@@ -10,8 +11,10 @@ use ruff_python_ast::Stmt;
 use ruff_text_size::Ranged;
 use starpls_hir::Db as _;
 use ty_python_core::definition::Definition;
+use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::provided::ProvidedGetattrPresence;
 use ty_python_semantic::provided::ProvidedGetattrResult;
+use ty_python_semantic::provided::ProvidedInstanceDisplay;
 use ty_python_semantic::provided::ProvidedTypeApplication;
 use ty_python_semantic::provided::TypeExpressionContext;
 use ty_python_semantic::types::CheckedArgument;
@@ -185,7 +188,8 @@ pub(super) fn type_application<'db>(
     application: ProvidedTypeApplication<'_, 'db>,
     context: &mut dyn TypeExpressionContext<'db>,
 ) -> Option<Type<'db>> {
-    let file = db.starlark_file(context.program_file())?;
+    let program = context.program_file();
+    let file = db.starlark_file(program)?;
     let ProvidedTypeApplication {
         expression,
         value_type,
@@ -194,7 +198,7 @@ pub(super) fn type_application<'db>(
     let Type::ClassLiteral(class) = value_type else {
         return None;
     };
-    let environment = ProgramEnvironment::from_file(context.program_file());
+    let environment = ProgramEnvironment::from_file(program);
     let object = KnownClass::Object.to_instance(db, &environment);
     let is_struct = db.annotation_builtin(file, "struct") == Some(value_type);
     let is_record = db.annotation_builtin(file, "record") == Some(value_type);
@@ -232,6 +236,23 @@ pub(super) fn type_application<'db>(
         }
         _ => return None,
     };
+    let parsed =
+        is_record.then(|| ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db));
+    let constructor = parsed.as_ref().and_then(|parsed| {
+        parsed.suite().iter().find_map(|statement| match statement {
+            Stmt::FunctionDef(function)
+                if function.returns.as_deref().is_some_and(|returns| {
+                    returns.node_index().load() == expression.node_index().load()
+                }) =>
+            {
+                Some(function)
+            }
+            _ => None,
+        })
+    });
+    let mut stored_fields = constructor
+        .filter(|function| function.type_params.is_some())
+        .map(|_| Vec::with_capacity(mapping.items.len()));
     let mut fields = TypedDictSchema::default();
     for item in &mapping.items {
         let Some(key_expression @ Expr::StringLiteral(key)) = &item.key else {
@@ -262,6 +283,13 @@ pub(super) fn type_application<'db>(
             .build();
         match fields.entry(name) {
             Entry::Vacant(entry) => {
+                if let Some(stored_fields) = &mut stored_fields {
+                    stored_fields.push(ProvidedField {
+                        name: entry.key().clone(),
+                        ty,
+                        source: Some(FileRange::new(program.file(db), key.range())),
+                    });
+                }
                 entry.insert(field);
             }
             Entry::Occupied(_) => context.report_invalid_type_form(
@@ -274,23 +302,11 @@ pub(super) fn type_application<'db>(
     let shape = Type::TypedDict(schema);
     context.store_expression_type(mapping_expression, shape);
     if is_record {
-        let program = context.program_file();
-        let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
-        let function = parsed.suite().iter().find_map(|statement| match statement {
-            Stmt::FunctionDef(function)
-                if function.returns.as_deref().is_some_and(|returns| {
-                    returns.node_index().load() == expression.node_index().load()
-                }) =>
-            {
-                Some(function)
-            }
-            _ => None,
-        });
-        if !file.is_type_interface(db) || function.is_none() {
+        if !file.is_type_interface(db) || constructor.is_none() {
             context.report_invalid_type_form(expression.range(), "A record shape must be the return annotation of a provider constructor in a .bzli file");
             return Some(Type::unknown());
         }
-        let function = function?;
+        let function = constructor?;
         if !function.decorator_list.is_empty() {
             context.report_invalid_type_form(
                 function.name.range(),
@@ -298,23 +314,14 @@ pub(super) fn type_application<'db>(
             );
         }
         let instance = super::providers::instance(db, program, function)?;
-        if function.type_params.is_none() {
-            return Some(instance);
-        }
-        let members = Type::protocol_with_readonly_members(
-            db,
-            &environment,
-            schema
-                .items(db)
-                .iter()
-                .map(|(name, field)| (name.as_str(), field.declared_type())),
-        );
-        return Some(IntersectionType::from_two_elements(
-            db,
-            &environment,
-            instance,
-            members,
-        ));
+        return match stored_fields {
+            Some(fields) => instance.with_provided_instance_fields(
+                db,
+                fields.into_boxed_slice(),
+                ProvidedInstanceDisplay::ClassName,
+            ),
+            None => Some(instance),
+        };
     }
     if !is_struct {
         return Some(shape);

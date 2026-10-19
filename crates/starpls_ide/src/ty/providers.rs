@@ -463,9 +463,9 @@ pub(super) fn fields<'db>(
     data: &ProvidedData,
 ) -> Option<ProvidedInstanceFields<'db>> {
     let declaration = data.downcast_ref::<RecordDeclaration>()?;
-    // Generic fields live in the constructor's structural return type, where ty
-    // applies its ordinary function specialization. The nominal identity carries
-    // no competing fields containing the constructor's unbound type parameters.
+    // Generic fields live on the constructor's returned instance, where ty
+    // applies ordinary function specialization. The class identity carries no
+    // competing fields containing the constructor's unbound type parameters.
     let fields = if declaration.generic {
         Vec::new()
     } else {
@@ -1404,21 +1404,19 @@ absent_result = getattr(value, "absent", None)
         let source = fixture.add_file(
             &mut analysis.db,
             "info.bzl",
-            "Info = provider(fields=['value', 'pieces'])\nOther = provider(fields=['value', 'pieces'])\nEnvelope = provider(fields=['inner'])\nDefaulted = provider(fields=['value'])\nBounded = provider(fields=['value'])\n",
+            "Info = provider(fields=['value', 'pieces'])\nOther = provider(fields=['value', 'pieces'])\nEnvelope = provider(fields=['inner'])\nDefaulted = provider(fields=['value'])\nBounded = provider(fields=['value'])\ndef project(value):\n    return value.value\n",
         );
-        let interface = fixture.add_file(
-            &mut analysis.db,
-            "info.bzli",
-            r#"
+        let interface_text = r#"
 def Info[T](*, value: T, pieces: depset[tuple[str, T]]) -> record[{"value": T, "pieces": depset[tuple[str, T]]}]: ...
 def Other[T](*, value: T, pieces: depset[tuple[str, T]]) -> record[{"value": T, "pieces": depset[tuple[str, T]]}]: ...
 def Envelope[T](*, inner: Info[T]) -> record[{"inner": Info[T]}]: ...
 def Defaulted[T = str](*, value: T) -> record[{"value": T}]: ...
 def Bounded[T: str](*, value: T) -> record[{"value": T}]: ...
-"#,
-        );
+def project[T](value: Info[T]) -> T: ...
+"#;
+        let interface = fixture.add_file(&mut analysis.db, "info.bzli", interface_text);
         let valid = r#"
-load("info.bzl", "Info", "Other", "Envelope", "Defaulted", "Bounded")
+load("info.bzl", "Info", "Other", "Envelope", "Defaulted", "Bounded", "project")
 alias = Info
 value = alias(value="ok", pieces=depset([("source", "piece")]))
 text: str = value.value
@@ -1427,6 +1425,13 @@ def consume(value: Info[str]) -> str:
     return value.value
 def readonly(value: Info[object]) -> object:
     return value.value
+def read_function(value: Info[function]) -> function:
+    return value.value
+def callback(number: int) -> str:
+    return str(number)
+function_value = Info(value=callback, pieces=depset([]))
+result: str = function_value.value(1)
+projected: str = project(value)
 consume(value)
 readonly(value)
 envelope: Envelope[str] = Envelope(inner=value)
@@ -1448,6 +1453,28 @@ def from_target(target: Target):
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
         }
+        let locations = analysis
+            .snapshot()
+            .goto_definition(
+                FilePosition {
+                    file_id: caller,
+                    pos: (valid.find(".value(1)").unwrap() as u32 + 1).into(),
+                },
+                false,
+            )
+            .unwrap()
+            .unwrap();
+        let [crate::LocationLink::Local {
+            target_file_id,
+            target_selection_range,
+            origin_selection_range: _,
+            target_range: _,
+        }] = locations.as_slice()
+        else {
+            panic!("{locations:?}");
+        };
+        assert_eq!(*target_file_id, interface.source);
+        assert_eq!(&interface_text[*target_selection_range], "\"value\"");
         for variable in ["erased", "defaulted"] {
             let hover = analysis
                 .snapshot()
@@ -1465,6 +1492,11 @@ def from_target(target: Target):
         }
         for (invalid, expected) in [
             ("wrong: int = value.value", "invalid-assignment"),
+            ("function_value.value('wrong')", "invalid-argument-type"),
+            (
+                "wrong_projection: int = project(value)",
+                "invalid-assignment",
+            ),
             (
                 "wrong: list[tuple[str, int]] = value.pieces.to_list()",
                 "invalid-assignment",
