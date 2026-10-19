@@ -12,6 +12,7 @@ rust_library(
     compile_data = [
         "src/ty/allocations.pyi",
         "src/ty/collections.pyi",
+        "src/ty/legacy_python.pyi",
         "src/ty/primitives.pyi",
         "src/ty/starlark.pyi",
     ],

@@ -420,11 +420,39 @@ fn declarations(
 "#,
         );
     }
+    let mut legacy_python_declarations = false;
     if dialect == Dialect::Bazel {
         // AutoloadSymbols.modifyBuildBzlEnv retains only non-rule autoload
         // globals. Each member can be absent under Bazel's autoload policy.
         // https://github.com/bazelbuild/bazel/blob/9.2.0/src/main/java/com/google/devtools/build/lib/packages/AutoloadSymbols.java
-        body.push_str(
+        let bzl_globals = contexts
+            .iter()
+            .find(|(context, _)| *context == APIContext::Bzl)
+            .map(|(_, globals)| globals);
+        let has_legacy_python_types = ["File", "Provider", "depset"]
+            .iter()
+            .all(|name| classes.contains_key(*name));
+        let mut python_key = |name| {
+            if let Some(value) = bzl_globals
+                .and_then(|globals| globals.get(name))
+                .filter(|value| native_provider_instance(value).is_some())
+            {
+                if value.callable.is_some() {
+                    format!("_starpls_provider{}", export_name(APIContext::Bzl, name))
+                } else {
+                    value_annotation(value, &declared_classes)
+                }
+            } else if has_legacy_python_types {
+                legacy_python_declarations = true;
+                format!("_Legacy{name}Key")
+            } else {
+                "_starpls_typing.Callable[..., _starpls_typing.Any]".to_owned()
+            }
+        };
+        let py_info = python_key("PyInfo");
+        let py_runtime_info = python_key("PyRuntimeInfo");
+        write!(
+            body,
             r#"    @_starpls_typing.final
     class _LegacyGlobals:
         if _starpls_native_rule_available:
@@ -439,8 +467,8 @@ fn declarations(
             ProguardSpecProvider: _starpls_typing.Any = ...
             ProtoInfo: _starpls_typing.Any = ...
             PyCcLinkParamsProvider: _starpls_typing.Any = ...
-            PyInfo: _starpls_typing.Callable[..., _starpls_typing.Any] = ...
-            PyRuntimeInfo: _starpls_typing.Callable[..., _starpls_typing.Any] = ...
+            PyInfo: {py_info} = ...
+            PyRuntimeInfo: {py_runtime_info} = ...
             apple_common: _starpls_typing.Any = ...
             cc_common: _starpls_typing.Any = ...
             cc_proto_aspect: _starpls_typing.Any = ...
@@ -449,7 +477,7 @@ fn declarations(
         @_starpls_typing.type_check_only
         def __getattr__(self, name: _starpls_builtins.str) -> _starpls_typing.Never: ...
 "#,
-        );
+        )?;
     }
     body.push_str("    class ProviderKey: ...\n");
     body.push_str("    class ProviderInstance: ...\n");
@@ -1176,6 +1204,9 @@ fn declarations(
             output,
             "_starpls_annotation_{name} = _starpls_typing.{name}"
         )?;
+    }
+    if legacy_python_declarations {
+        output.push_str(include_str!("legacy_python.pyi"));
     }
     output.push_str(&provider_declarations);
     output.push_str(&rule_declarations);
@@ -3352,6 +3383,11 @@ no_default = getattr(native.legacy_globals, "PyInfo")
 missing = getattr(native.legacy_globals, "missing", False)
 native_rule = getattr(native.legacy_globals, "sh_binary", False)
 nested_missing = getattr(getattr(native, "legacy_globals", None), "missing", False)
+def use_keys(target: Target, files: depset[File]) -> str:
+    py(transitive_sources = files).transitive_sources
+    runtime(python_version = "PY3", interpreter_path = "/usr/bin/python3").python_version
+    target[py].transitive_sources
+    return target[runtime].python_version
 "#;
         let file = analysis
             .open_document(
@@ -3382,12 +3418,21 @@ nested_missing = getattr(getattr(native, "legacy_globals", None), "missing", Fal
         else {
             panic!("expected the legacy member observations: {types:?}");
         };
-        assert!(matches!(py, TyType::Callable(_)));
-        assert_eq!(py, runtime);
-        let optional =
-            UnionType::from_elements(db, &environment, [*py, TyType::none(db, &environment)]);
-        for actual in [nested_py, nested_runtime, direct_default] {
-            assert_eq!(*actual, optional);
+        assert_ne!(py, runtime);
+        for (member, actual) in [
+            (py, nested_py),
+            (runtime, nested_runtime),
+            (py, direct_default),
+        ] {
+            assert_eq!(
+                *actual,
+                UnionType::from_two_elements(
+                    db,
+                    &environment,
+                    *member,
+                    TyType::none(db, &environment)
+                )
+            );
         }
         let gradual = TyType::Dynamic(DynamicType::Any);
         for actual in [cc, java, no_default] {
@@ -3409,6 +3454,19 @@ nested_missing = getattr(getattr(native, "legacy_globals", None), "missing", Fal
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         drop(snapshot);
 
+        analysis.update_file(
+            file,
+            format!("{source}\npy(transitive_sources = 42)\nruntime(python_version = False)\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+
         // Optional getter results cannot establish a required property.
         let DeclarationSource { path, mut contents } =
             generate(Dialect::Bazel, &builtins, &BuildLanguage::default()).unwrap();
@@ -3416,10 +3474,10 @@ nested_missing = getattr(getattr(native, "legacy_globals", None), "missing", Fal
             r#"
 class _RequiredPy(_starpls_typing.Protocol):
     @_starpls_builtins.property
-    def PyInfo(self) -> _starpls_typing.Callable[..., _starpls_typing.Any]: ...
+    def PyInfo(self) -> _starpls_types.ProviderKey: ...
 class _RequiredRuntime(_starpls_typing.Protocol):
     @_starpls_builtins.property
-    def PyRuntimeInfo(self) -> _starpls_typing.Callable[..., _starpls_typing.Any]: ...
+    def PyRuntimeInfo(self) -> _starpls_types.ProviderKey: ...
 def inspect_legacy(bridge: _starpls_types._LegacyGlobals, py: _RequiredPy, runtime: _RequiredRuntime):
     bridge
     py
@@ -3454,6 +3512,82 @@ def inspect_legacy(bridge: _starpls_types._LegacyGlobals, py: _RequiredPy, runti
         for required in [py, runtime] {
             assert!(!bridge.is_assignable_to(db, &model.program_environment(), *required));
         }
+    }
+
+    #[test]
+    fn legacy_python_provider_prefers_host_inventory() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        builtins.r#type.push(Type {
+            name: "PyInfo".into(),
+            field: vec![Value {
+                name: "token".into(),
+                r#type: "string".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        builtins.global.push(Value {
+            name: "PyInfo".into(),
+            callable: Some(Callable {
+                param: vec![Param {
+                    name: "token".into(),
+                    r#type: "string".into(),
+                    is_mandatory: true,
+                    ..Default::default()
+                }],
+                return_type: "PyInfo".into(),
+            }),
+            ..Default::default()
+        });
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                "def inspect() -> str:\n    return native.legacy_globals.PyInfo(token = 'present').token\n".into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let py_info = builtins.global.last_mut().unwrap();
+        py_info.callable = None;
+        py_info.r#type = "Provider".into();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.update_file(
+            file,
+            "def inspect(target: Target) -> str:\n    return target[native.legacy_globals.PyInfo].token\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let partial = Builtins {
+            r#type: vec![Type {
+                name: "native".into(),
+                ..Default::default()
+            }],
+            global: vec![Value {
+                name: "native".into(),
+                r#type: "native".into(),
+                ..Default::default()
+            }],
+        };
+        analysis
+            .set_builtin_defs(partial, Default::default())
+            .unwrap();
+        analysis.update_file(file, "native.legacy_globals.PyInfo()\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
