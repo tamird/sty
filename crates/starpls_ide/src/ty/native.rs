@@ -1490,6 +1490,8 @@ fn write_function(
             // Bazel reads string-keyed dictionaries. Mapping also admits dictionary
             // schemas without promising mutation through their required fields.
             (CallableKind::Method("repository_ctx" | "module_ctx"), "download" | "download_and_extract", "auth") => Some("_starpls_typing.Mapping[_StringKey, _DownloadAuth]"),
+            // StarlarkPath.getChild casts every variadic component to String.
+            (CallableKind::Method("path"), "get_child", "relative_paths") => Some("_starpls_builtins.str"),
             (CallableKind::Method("apple_common"), "apple_host_system_env", "xcode_config") => classes.contains("XcodeVersionConfig").then_some("_starpls_types.XcodeVersionConfig | None"),
             (CallableKind::Method("apple_common"), "target_apple_env", "xcode_config") => classes.contains("XcodeVersionConfig").then_some("_starpls_types.XcodeVersionConfig"),
             (CallableKind::Method("apple_common"), "target_apple_env", "platform") => classes.contains("apple_platform").then_some("_starpls_types.apple_platform"),
@@ -3541,6 +3543,44 @@ selected(name="shell", srcs=["//:input"], use_bash_launcher=True)
                 ruff_text_size::TextRange::new(invalid.into(), (invalid + 1).into()),
             );
         }
+    }
+
+    #[test]
+    fn path_get_child_checks_each_component() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = "\
+def inspect(value: path) -> path:
+    value.get_child()
+    value.get_child('a', 'b/c')
+    value.get_child('a', 1)
+    return value.get_child('child')
+";
+        let invalid = u32::try_from(source.find("1)").unwrap()).unwrap();
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        assert_eq!(
+            diagnostic.range().unwrap(),
+            ruff_text_size::TextRange::new(invalid.into(), (invalid + 1).into()),
+        );
     }
 
     #[test]
