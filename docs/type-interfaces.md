@@ -247,6 +247,13 @@ independently of the implementation signature. Bazel additionally requires a
 function defined in Starlark source. It validates the generated per-target
 arguments and returned attribute updates when it invokes the initializer.
 
+`transition(implementation=...)` likewise preserves the registered callback's
+signature. Input and output keys must be sequences of strings. Registration
+checks callability and exposes gradual callback annotations; Bazel validates
+invocation arguments and returned settings later. The same
+contract applies to `exec_transition` when the host exposes it; Bazel restricts
+its use to builtins.
+
 ty's `missing-type-argument` rejects bare generic annotations such as `list`.
 
 Projects can also require fully known types:

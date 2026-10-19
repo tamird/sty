@@ -1503,9 +1503,10 @@ fn write_function(
             // Creation accepts any callable. The constructed provider checks the
             // initializer's returned dictionary against its field contract.
             (CallableKind::Function, "provider", "init") => Some("_starpls_typing.Callable[_ProviderInitParameters, _ProviderInitResult] | None"),
-            // Registration stores a callable; the context owner checks the domain
-            // supplied when Bazel invokes each implementation.
-            (CallableKind::Function, "rule" | "repository_rule" | "aspect", "implementation") => Some("_starpls_typing.Callable[_ImplementationParameters, _ImplementationResult]"),
+            // Registration stores a callable; each host API owns the checks
+            // performed when it later invokes the implementation.
+            (CallableKind::Function, "rule" | "repository_rule" | "aspect" | "transition" | "exec_transition", "implementation") => Some("_starpls_typing.Callable[_ImplementationParameters, _ImplementationResult]"),
+            (CallableKind::Function, "transition" | "exec_transition", "inputs" | "outputs") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
             (CallableKind::Function, "rule" | "aspect", "provides") => {
                 provider_requirement_annotation(r#type, false)
             }
@@ -4742,6 +4743,123 @@ unpacked(name="unpacked", value="inherited")
             };
             assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
             assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
+        }
+    }
+
+    #[test]
+    fn transition_registration_preserves_callback_signatures() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        // exec_transition is restricted to Bazel builtins and is not always exported.
+        builtins
+            .global
+            .retain(|value| value.name != "exec_transition");
+        let mut exec_transition = builtins
+            .global
+            .iter()
+            .find(|value| value.name == "transition")
+            .unwrap()
+            .clone();
+        exec_transition.name = "exec_transition".into();
+        exec_transition.callable.as_mut().unwrap().return_type = "transition".into();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = analysis
+            .open_document(
+                Path::new("/transition.bzl"),
+                Dialect::Bazel,
+                None,
+                "unavailable = exec_transition\n".into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "unresolved-reference"),
+            "{diagnostics:?}"
+        );
+        builtins.global.push(exec_transition);
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        for constructor in ["transition", "exec_transition"] {
+            let source = format!(
+                r#"
+def identity(settings: dict[str, object], attrs: struct[object]) -> dict[str, object]:
+    return settings
+def split(settings: dict[str, str], attrs: struct[object]) -> list[dict[str, str]]:
+    return [settings]
+def registered_only() -> int:
+    return 42
+keys: list[str] = []
+identity_transition = {constructor}(implementation=identity, inputs=[], outputs=keys)
+split_transition = {constructor}(implementation=split, inputs=("//command_line_option:cpu",), outputs=keys)
+unpacked_transition = {constructor}(**{{"implementation": identity}}, inputs=keys, outputs=keys)
+# Registration does not invoke the callback or validate its returned settings.
+unchecked_invocation = {constructor}(implementation=registered_only, inputs=keys, outputs=keys)
+"#
+            );
+            analysis.update_file(file, source.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{constructor}: {diagnostics:?}");
+            for argument in [
+                "implementation=42",
+                "implementation=None",
+                "implementation='identity'",
+                "**{'implementation': False}",
+            ] {
+                analysis.update_file(
+                    file,
+                    format!("{source}{constructor}({argument}, inputs=keys, outputs=keys)\n"),
+                );
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{constructor} {argument}: {diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+                assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
+            }
+            for arguments in ["inputs=[42], outputs=keys", "inputs=keys, outputs=None"] {
+                analysis.update_file(
+                    file,
+                    format!("{source}{constructor}(implementation=identity, {arguments})\n"),
+                );
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{constructor} {arguments}: {diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            }
+            let gradual = "def gradual(settings: Unknown, attrs: struct[object]) -> None: pass\n";
+            analysis.update_file(
+                file,
+                format!("{source}{gradual}{constructor}(implementation=gradual, inputs=keys, outputs=keys)\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(
+                ids,
+                ["non-static-type", "non-static-type", "non-static-type"],
+                "{constructor}: {diagnostics:?}"
+            );
+            assert!(diagnostics.iter().any(|diagnostic| {
+                diagnostic.range().unwrap().start().to_usize() >= source.len() + gradual.len()
+            }));
         }
     }
 
