@@ -2175,7 +2175,7 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
                     extra_values.push(Type::unknown());
                     continue;
                 };
-                if let DictionaryExtraItems::Value(ty) = extra_items {
+                if let Some(ty) = extra_items.value_type() {
                     openness = TypedDictOpenness::ImplicitlyOpen;
                     extra_values.push(ty);
                 }

@@ -1256,6 +1256,37 @@ def calls(context: Context, other: object) -> tuple[str, str, str, str]: ...
     }
 
     #[test]
+    fn gradual_callback_result_in_one_overload_domain_is_reported() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "source.bzl",
+            "def invoke(callback, flag):\n    return callback()\n",
+        );
+        let interface_text = "@overload\ndef invoke(callback: Callable[[], object], flag: Literal[True]) -> object: ...\n@overload\ndef invoke(callback: Callable[[], Any], flag: Literal[False]) -> object: ...\ndef invoke(callback: IMPLEMENTATION, flag: bool) -> object: ...\n";
+        let interface = fixture.add_file(&mut analysis.db, "source.bzli", "");
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        analysis.set_rules(rules(&["non-static-type"]));
+        for implementation in ["object", "Callable[[], object]"] {
+            analysis.update_file(
+                interface,
+                interface_text.replace("IMPLEMENTATION", implementation),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic.headline_message().contains("call result")
+                        && diagnostic.headline_message().contains("Any")
+                }),
+                "{implementation}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
     fn recursive_aliases_terminate() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

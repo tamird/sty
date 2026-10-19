@@ -39,6 +39,11 @@ pub(super) fn type_application<'db>(
     };
     let environment = ProgramEnvironment::from_file(context.program_file());
     let value = context.infer_value_expression(callable);
+    if exclusions.is_empty() {
+        if let Some(capture) = context.capture_keyword_parameters(expression, value) {
+            return Some(capture);
+        }
+    }
     let Some(signature) = value.single_callable_signature(db, &environment) else {
         context.report_invalid_type_form(
             callable.range(),
