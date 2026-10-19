@@ -355,9 +355,11 @@ def consume(row: KeywordArgs[target]) -> None: pass
             .map(|diagnostic| diagnostic.id().as_str())
             .collect();
         assert_eq!(ids, ["invalid-type-form"], "{diagnostics:?}");
-        // Storing a mutable mapping in a struct does not establish a stable field row.
-        // Both the original snapshot and a later alias mutation remain incomplete.
-        for mutation in ["", "attributes.pop('value')"] {
+        // A retaining field preserves the row until the original mapping is mutated.
+        for (mutation, expected) in [
+            ("", None),
+            ("attributes.pop('value')", Some("invalid-type-form")),
+        ] {
             analysis.update_file(
                 file,
                 format!(
@@ -376,7 +378,11 @@ def consume(row: KeywordArgs[target]) -> None: pass
                 .iter()
                 .map(|diagnostic| diagnostic.id().as_str())
                 .collect();
-            assert_eq!(ids, ["invalid-type-form"], "{mutation}: {diagnostics:?}");
+            assert_eq!(
+                ids,
+                expected.into_iter().collect::<Vec<_>>(),
+                "{mutation}: {diagnostics:?}"
+            );
         }
     }
 

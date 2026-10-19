@@ -160,9 +160,9 @@ exclusions can follow as more string arguments. Excluding a name describes the
 residual keyword row; the wrapper body must still supply any required argument.
 Wrapper-specific inputs belong in the wrapper's own signature.
 
-A generated rule can remain incomplete when its attributes arrive through a
-mutable mapping stored in another object. Such values are rejected until the
-ordinary rule inference establishes their complete keyword contract.
+sty can project a rule's keyword row from a fresh attribute mapping stored in
+an immutable field. The row remains incomplete if the mapping may be mutated
+through an alias.
 
 ### Internal Java namespace
 
