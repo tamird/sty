@@ -465,6 +465,10 @@ fn declarations(
         );
     }
     let mut legacy_python_declarations = false;
+    let legacy_py_cc_link_params = dialect == Dialect::Bazel
+        && ["Provider", "CcInfo", "LinkingContext"]
+            .iter()
+            .all(|name| classes.contains_key(*name));
     if dialect == Dialect::Bazel {
         // AutoloadSymbols.modifyBuildBzlEnv retains only non-rule autoload
         // globals. Each member can be absent under Bazel's autoload policy.
@@ -495,6 +499,11 @@ fn declarations(
         };
         let py_info = python_key("PyInfo");
         let py_runtime_info = python_key("PyRuntimeInfo");
+        let py_cc_link_params_provider = if legacy_py_cc_link_params {
+            "_LegacyPyCcLinkParamsProviderKey"
+        } else {
+            "_starpls_typing.Any"
+        };
         // Bazel's original `cc_proto_aspect` was created with `aspect()`.
         // https://github.com/bazelbuild/bazel/blob/7.6.1/src/main/starlark/builtins_bzl/common/cc/cc_proto_library.bzl#L245
         let aspect_result = bzl_globals
@@ -523,7 +532,7 @@ fn declarations(
             JavaPluginInfo: _starpls_typing.Any = ...
             ProguardSpecProvider: _starpls_typing.Any = ...
             ProtoInfo: _starpls_typing.Any = ...
-            PyCcLinkParamsProvider: _starpls_typing.Any = ...
+            PyCcLinkParamsProvider: {py_cc_link_params_provider} = ...
             PyInfo: {py_info} = ...
             PyRuntimeInfo: {py_runtime_info} = ...
             apple_common: _starpls_typing.Any = ...
@@ -1274,6 +1283,9 @@ fn declarations(
     }
     if legacy_python_declarations {
         output.push_str(include_str!("legacy_python.pyi"));
+    }
+    if legacy_py_cc_link_params {
+        output.push_str(include_str!("legacy_py_cc_link_params.pyi"));
     }
     output.push_str(&provider_declarations);
     output.push_str(&rule_declarations);
@@ -3668,6 +3680,54 @@ def inspect_legacy(bridge: _starpls_types._LegacyGlobals, py: _RequiredPy, runti
         };
         for required in [py, runtime] {
             assert!(!bridge.is_assignable_to(db, &model.program_environment(), *required));
+        }
+    }
+
+    #[test]
+    fn legacy_python_linking_provider_preserves_its_constructor_and_identity() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = r#"def use_key(target: Target, info: CcInfo) -> list[CcInfo]:
+    key = native.legacy_globals.PyCcLinkParamsProvider
+    positional: CcInfo = key(info).cc_info
+    structural: CcInfo = key(cc_info = struct(linking_context = None)).cc_info
+    return [positional, structural, target[key].cc_info]
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for (call, expected) in [
+            ("key(42)", "invalid-argument-type"),
+            (
+                "key(cc_info = struct(linking_context = 42))",
+                "invalid-argument-type",
+            ),
+            ("key()", "missing-argument"),
+        ] {
+            analysis.update_file(
+                file,
+                format!("{source}\nkey = native.legacy_globals.PyCcLinkParamsProvider\n{call}\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{call}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{call}");
         }
     }
 
