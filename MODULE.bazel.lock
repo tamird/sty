@@ -706,7 +706,7 @@
           "REPO_MAPPING:rules_rust+,rules_cc rules_cc+",
           "FILE:@@//Cargo.lock 9e73d0f4d9a3ba0897d419bff9b4a946a220aa354411e9fc385e5d48faf6f63c",
           "FILE:@@//Cargo.toml 7f0af077ff9961ca24a46eabbecb1aef62eb9da602ce479b1a2081bbb404e850",
-          "FILE:@@//crates/starpls/Cargo.toml 10b82c717a932a35300ee221ac713a6e2979b91de73887c89c479a15155510dc",
+          "FILE:@@//crates/starpls/Cargo.toml 661e0be0c44e733374d4068d2b2bbc8267042d0d1fd10f5e5f04e633db6d54a7",
           "FILE:@@//crates/starpls_bazel/Cargo.toml ecc431d3889919876c48e431c6ad2242969e71242a32812d476353d27e7b7a57",
           "FILE:@@//crates/starpls_common/Cargo.toml ffd5064267e2cdf344bd2d55540fdf6923c46b3ba3c6c4cd71086c2042e93af0",
           "FILE:@@//crates/starpls_syntax/Cargo.toml fe715f6f06e5af54870af4682170511ec27ffb57e60cf33d00cc0695f82702e5",

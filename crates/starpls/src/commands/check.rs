@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::BufRead;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -12,7 +13,9 @@ use annotate_snippets::Renderer;
 use anyhow::anyhow;
 use anyhow::Context;
 use clap::Args;
+use clap::ValueEnum;
 use ruff_db::diagnostic::Diagnostic;
+use ruff_db::diagnostic::DiagnosticFormat;
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::Serialize;
 use starpls_bazel::client::BazelCLI;
@@ -65,6 +68,10 @@ pub(crate) struct CheckCommand {
     #[clap(long, value_name = "PATH")]
     report: Option<PathBuf>,
 
+    /// Diagnostic output format; json-lines writes status messages to stderr.
+    #[clap(long, value_enum, default_value_t)]
+    output_format: OutputFormat,
+
     /// Path to the Bazel output base.
     #[clap(long = "output_base")]
     pub(crate) output_base: Option<String>,
@@ -81,6 +88,24 @@ pub(crate) struct CheckCommand {
 
     #[command(flatten)]
     pub(crate) type_interfaces: super::type_interface::TypeInterfaceOptions,
+}
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum OutputFormat {
+    #[default]
+    Full,
+    JsonLines,
+}
+
+impl OutputFormat {
+    fn diagnostic_config(self) -> DisplayDiagnosticConfig {
+        let config = DisplayDiagnosticConfig::new("sty");
+        match self {
+            Self::Full => config.color(true),
+            // The canonical renderer otherwise reports every severity as error.
+            Self::JsonLines => config.format(DiagnosticFormat::JsonLines).preview(true),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -328,6 +353,122 @@ mod tests {
             .workspace
             .join("external/stubs+")
             .exists());
+    }
+
+    #[test]
+    fn json_lines_preserves_severity_and_logical_overlay_paths() {
+        let (mut checker, _) = overlay_checker(
+            "json-lines-overlays",
+            &[
+                ("first+/defs.bzl", "shared.txt", "_unused = 1\nmissing\n"),
+                ("second+/defs.bzl", "shared.txt", "_unused = 1\nmissing\n"),
+            ],
+        );
+        checker.output_format = super::OutputFormat::JsonLines;
+        let root = checker.bazel_info.workspace.clone();
+        let report_path = root.join("coverage.json");
+        let mut output = Vec::new();
+        let mut errors = Vec::new();
+        let result = checker.report_diagnostics_to(Some(&report_path), &mut output, &mut errors);
+        assert!(result.is_err(), "{result:?}");
+        let output = String::from_utf8(output).unwrap();
+        let diagnostics: Vec<serde_json::Value> = output
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(diagnostics.len(), 4, "{output}");
+        for repository in ["first+", "second+"] {
+            let path = root.join("external").join(repository).join("defs.bzl");
+            let selected: Vec<_> = diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic["filename"] == path.to_str().unwrap())
+                .collect();
+            assert_eq!(selected.len(), 2, "{diagnostics:?}");
+            for diagnostic in selected {
+                let (severity, line) = match diagnostic["name"].as_str().unwrap() {
+                    "unresolved-reference" => ("error", 2),
+                    "unused-definition" => ("warning", 1),
+                    name => panic!("unexpected diagnostic {name}: {diagnostic}"),
+                };
+                assert_eq!(diagnostic["severity"], severity);
+                assert_eq!(
+                    diagnostic["location"],
+                    serde_json::json!({"row": line, "column": 1})
+                );
+                assert_eq!(
+                    diagnostic["end_location"],
+                    serde_json::json!({"row": line, "column": 8})
+                );
+                assert!(!diagnostic["message"].as_str().unwrap().is_empty());
+            }
+        }
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+        assert_eq!(report["version"], 2);
+        assert_eq!(report["complete"], true);
+        assert_eq!(report["workspace"], root.to_str().unwrap());
+        assert_eq!(
+            report["diagnostics"],
+            serde_json::json!({"errors": 2, "warnings": 2, "infos": 0})
+        );
+        assert_eq!(report["checked_files"].as_array().unwrap().len(), 2);
+        for file in report["checked_files"].as_array().unwrap() {
+            assert!(diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic["filename"] == file["path"]));
+        }
+        let errors = String::from_utf8(errors).unwrap();
+        assert!(errors.contains("Checked 2 files"), "{errors}");
+        assert!(!output.contains('\u{1b}'), "{output}");
+    }
+
+    #[test]
+    fn json_lines_keeps_status_and_input_failures_off_stdout() {
+        for (case, source, input, expected_warnings, complete) in [
+            ("clean", "value = 1\n", "source.bzl", 0, true),
+            ("warning", "_unused = 1\n", "source.bzl", 1, true),
+            ("missing", "", "missing.bzl", 0, false),
+        ] {
+            let mut checker = local_checker_with_options(
+                &format!("json-lines-status-{case}"),
+                &[("source.bzl", source)],
+                CheckCommand {
+                    paths: vec![input.to_owned()],
+                    output_format: super::OutputFormat::JsonLines,
+                    ..Default::default()
+                },
+            );
+            let report_path = checker.bazel_info.workspace.join("coverage.json");
+            let mut output = Vec::new();
+            let mut errors = Vec::new();
+            let result =
+                checker.report_diagnostics_to(Some(&report_path), &mut output, &mut errors);
+            assert_eq!(result.is_ok(), complete, "{case}: {result:?}");
+            let output = String::from_utf8(output).unwrap();
+            let diagnostics: Vec<serde_json::Value> = output
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect();
+            assert_eq!(diagnostics.len(), expected_warnings, "{case}: {output}");
+            for diagnostic in diagnostics {
+                assert_eq!(diagnostic["severity"], "warning");
+            }
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+            assert_eq!(report["complete"], complete);
+            assert_eq!(
+                report["diagnostics"],
+                serde_json::json!({"errors": 0, "warnings": expected_warnings, "infos": 0})
+            );
+            let errors = String::from_utf8(errors).unwrap();
+            assert!(errors.contains("Checked "), "{case}: {errors}");
+            assert_eq!(errors.contains("Cannot select"), !complete, "{errors}");
+            assert_eq!(
+                errors.contains("passed with 1 warnings"),
+                expected_warnings == 1,
+                "{errors}"
+            );
+        }
     }
 
     #[test]
@@ -1941,6 +2082,7 @@ struct Checker {
     fetch_repo_receiver: crossbeam_channel::Receiver<Task>,
     progress: bool,
     load_scope: LoadScope,
+    output_format: OutputFormat,
 }
 
 /// CLI selection only: dependencies can still load excluded source paths.
@@ -2026,6 +2168,7 @@ impl Checker {
             loader,
             fetch_repo_receiver,
             progress: options.progress,
+            output_format: options.output_format,
             load_scope: if options.audit_loads {
                 LoadScope::Transitive
             } else {
@@ -2199,6 +2342,8 @@ impl Checker {
         snapshot: &AnalysisSnapshot,
         diagnostics: &[Diagnostic],
         counts: &mut DiagnosticCounts,
+        config: &DisplayDiagnosticConfig,
+        output: &mut dyn Write,
     ) -> anyhow::Result<()> {
         for diagnostic in diagnostics {
             match diagnostic.severity() {
@@ -2208,8 +2353,11 @@ impl Checker {
                 Severity::Fatal => counts.errors += 1,
             }
         }
-        let config = DisplayDiagnosticConfig::new("sty").color(true);
-        anstream::print!("{}", snapshot.render_diagnostics(diagnostics, &config)?);
+        write!(
+            output,
+            "{}",
+            snapshot.render_diagnostics(diagnostics, config)?
+        )?;
         Ok(())
     }
 
@@ -2380,6 +2528,19 @@ impl Checker {
     }
 
     fn report_diagnostics(&mut self, report_path: Option<&Path>) -> anyhow::Result<()> {
+        self.report_diagnostics_to(
+            report_path,
+            &mut anstream::stdout(),
+            &mut anstream::stderr(),
+        )
+    }
+
+    fn report_diagnostics_to(
+        &mut self,
+        report_path: Option<&Path>,
+        output: &mut dyn Write,
+        stderr: &mut dyn Write,
+    ) -> anyhow::Result<()> {
         let CheckResult {
             loads: graph,
             diagnostics,
@@ -2387,25 +2548,33 @@ impl Checker {
         let snapshot = self.analysis.snapshot();
         let mut counts = DiagnosticCounts::default();
         let mut checked = indexmap::IndexSet::new();
+        let config = self.output_format.diagnostic_config();
         for InputError { path, message } in &self.input_errors {
-            eprintln!("Cannot select {}: {message}", path.display());
+            writeln!(stderr, "Cannot select {}: {message}", path.display())?;
         }
         for (file, diagnostics) in diagnostics {
-            Self::report_diagnostics_for_file(&snapshot, &diagnostics, &mut counts)?;
+            Self::report_diagnostics_for_file(
+                &snapshot,
+                &diagnostics,
+                &mut counts,
+                &config,
+                output,
+            )?;
             checked.insert(file);
         }
+        output.flush()?;
 
         let report = self.coverage_report(&snapshot, &graph, &checked, counts)?;
         for load in &report.unresolved_loads {
-            eprintln!(
+            writeln!(
+                stderr,
                 "Unresolved load in {}: {:?}: {}",
                 load.source.path.display(),
                 load.module,
                 load.message
-            );
+            )?;
         }
         if let Some(path) = report_path {
-            use std::io::Write;
             let file = std::fs::File::create(path)
                 .with_context(|| format!("cannot write coverage report {}", path.display()))?;
             let mut writer = std::io::BufWriter::new(file);
@@ -2413,12 +2582,17 @@ impl Checker {
             writeln!(writer)?;
             writer.flush()?;
         }
-        anstream::println!(
+        let status: &mut dyn Write = match self.output_format {
+            OutputFormat::Full => &mut *output,
+            OutputFormat::JsonLines => &mut *stderr,
+        };
+        writeln!(
+            status,
             "Checked {} files; discovered {} dependencies; excluded {} inputs",
             report.checked_files.len(),
             report.loaded_dependencies.len(),
             report.excluded_inputs.len()
-        );
+        )?;
         if !report.complete {
             anyhow::bail!(
                 "coverage incomplete: {} input failures and {} unresolved loads",
@@ -2434,13 +2608,14 @@ impl Checker {
             );
         }
         if report.diagnostics.warnings > 0 {
-            anstream::println!(
+            writeln!(
+                status,
                 "{}",
                 Renderer::styled().render(Level::Warning.title(&format!(
                     "passed with {} warnings",
                     report.diagnostics.warnings
                 )))
-            );
+            )?;
         }
         Ok(())
     }

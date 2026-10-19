@@ -130,6 +130,15 @@ sources and `.bzli` interfaces and records other inputs as exclusions.
 Recursive discovery stops at nested repository roots. Explicit paths use
 their existing repository context, including Bazel's external directory.
 
+Use `--output-format json-lines` to write one diagnostic JSON object per
+line to stdout. Each object includes `name`, its actual `severity`,
+`filename`, `message`, and 1-indexed `location` and `end_location` positions
+when available. Source overlays use their logical filenames. Progress and
+status messages go to stderr; a clean check produces no stdout. The
+separate `--report` coverage summary retains its version 2 format and
+counts fatal diagnostics as errors. Errors or incomplete coverage still
+fail the command; warnings alone do not.
+
 Suppress a diagnostic on its source line with a rule-specific comment:
 
 ```starlark
