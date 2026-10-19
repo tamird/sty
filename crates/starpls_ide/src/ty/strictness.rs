@@ -8,6 +8,7 @@ use ruff_db::diagnostic::Span;
 use ruff_python_ast::visitor;
 use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::AnyNodeRef;
+use ruff_python_ast::ArgOrKeyword;
 use ruff_python_ast::Expr;
 use ruff_python_ast::ExprContext;
 use ruff_python_ast::HasNodeIndex;
@@ -17,6 +18,7 @@ use ruff_python_ast::Stmt;
 use ruff_python_ast::TypeParam;
 use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
+use rustc_hash::FxHashSet;
 use starpls_common::File;
 use ty_python_core::definition::Definition;
 use ty_python_semantic::lint::LintMetadata;
@@ -100,13 +102,7 @@ impl<'db> Checks<'_, 'db> {
         if !self.non_static {
             return;
         }
-        let env = self.model.program_environment();
-        // Materialization also inspects lazy function signatures, which the
-        // stored-type query skips. Equivalence preserves callable variance and
-        // lets Ty handle recursive types and externally visible overloads.
-        if !ty.is_fully_static(self.db, &env)
-            || !ty.is_equivalent_to(self.db, &env, ty.top_materialization(self.db, &env))
-        {
+        if !self.is_fully_static(ty) {
             self.report(
                 range,
                 &NON_STATIC_TYPE,
@@ -116,6 +112,15 @@ impl<'db> Checks<'_, 'db> {
                 ),
             );
         }
+    }
+
+    fn is_fully_static(&self, ty: Type<'_>) -> bool {
+        let env = self.model.program_environment();
+        // Materialization also inspects lazy function signatures, which the
+        // stored-type query skips. Equivalence preserves callable variance and
+        // lets Ty handle recursive types and externally visible overloads.
+        ty.is_fully_static(self.db, &env)
+            && ty.is_equivalent_to(self.db, &env, ty.top_materialization(self.db, &env))
     }
 
     fn expression_type(&self, expression: &Expr) -> Option<Type<'db>> {
@@ -153,14 +158,15 @@ impl<'db> Checks<'_, 'db> {
         }
     }
 
+    /// Returns direct call results consumed by a proven static parameter contract.
     fn check_call_inputs(
         &mut self,
         call: &ruff_python_ast::ExprCall,
         callback: Option<&super::context::CallbackContract<'_, '_>>,
-    ) {
+    ) -> FxHashSet<TextRange> {
         // Excluded source syntax does not participate in ordinary call inference.
         if self.model.scope(call.into()).is_none() {
-            return;
+            return FxHashSet::default();
         }
         let env = self.model.program_environment();
         let inputs = match self.domain {
@@ -176,7 +182,7 @@ impl<'db> Checks<'_, 'db> {
                 // A checked invocation need only satisfy the selected contracts for supplied
                 // arguments. Subtyping proves that no gradual alternative was needed; the
                 // argument values and the checked result are inspected separately below.
-                for input in arguments.into_iter().flatten() {
+                for input in arguments.iter().flatten() {
                     if !input
                         .argument_type
                         .is_subtype_of(self.db, &env, input.parameter_type)
@@ -193,8 +199,42 @@ impl<'db> Checks<'_, 'db> {
                         break;
                     }
                 }
+                call.arguments
+                    .iter_source_order()
+                    .zip(arguments)
+                    .filter_map(|(argument, inputs)| {
+                        let expression = match argument {
+                            ArgOrKeyword::Arg(expression) => expression,
+                            ArgOrKeyword::Keyword(keyword) => {
+                                keyword.arg.as_ref()?;
+                                &keyword.value
+                            }
+                        };
+                        if !matches!(expression, Expr::Call(_)) || inputs.is_empty() {
+                            return None;
+                        }
+                        let result = self.expression_type(expression)?;
+                        if self.is_fully_static(result) {
+                            return None;
+                        }
+                        // Every runtime value must fit every selected parameter. Top
+                        // materialization preserves variance and existential containers.
+                        let upper_bound = result.top_materialization(self.db, &env);
+                        inputs
+                            .iter()
+                            .all(|input| {
+                                self.is_fully_static(input.parameter_type)
+                                    && upper_bound.is_subtype_of(
+                                        self.db,
+                                        &env,
+                                        input.parameter_type,
+                                    )
+                            })
+                            .then_some(expression.range())
+                    })
+                    .collect()
             }
-            Err(CallInputError::Invalid) => {}
+            Err(CallInputError::Invalid) => FxHashSet::default(),
             Err(CallInputError::Incomplete) => {
                 // Some valid calls, including overload expansion, do not retain all matched
                 // inputs. A fully static whole callable is a stronger proof for those calls.
@@ -207,8 +247,54 @@ impl<'db> Checks<'_, 'db> {
                         "Cannot establish fully static input contracts for called function".into(),
                     );
                 }
+                FxHashSet::default()
             }
         }
+    }
+
+    fn visit_checked_expr(&mut self, expression: &Expr, consumed: bool) {
+        if self
+            .domain
+            .is_some_and(|domain| !domain.is_reachable(expression.range()))
+        {
+            return;
+        }
+        if let Expr::Name(name) = expression {
+            if name.ctx == ExprContext::Store {
+                self.check_provided_annotation(name.node_index().load());
+                self.check_expression(expression, "variable");
+            }
+        }
+        if self.non_static && !self.file.is_type_interface(self.db) {
+            if let Expr::Call(call) = expression {
+                let callback = if self.domain.is_none() {
+                    super::context::callback_contract(self.db, self.model, call)
+                } else {
+                    // Registration-specific callback views apply only at module scope.
+                    // Domain views own function-body calls and their existing inferred arguments.
+                    None
+                };
+                let checked = self.check_call_inputs(call, callback.as_ref());
+                if !consumed {
+                    self.check_expression(expression, "call result");
+                }
+                self.visit_expr(&call.func);
+                for argument in call
+                    .arguments
+                    .args
+                    .iter()
+                    .chain(call.arguments.keywords.iter().map(|keyword| &keyword.value))
+                {
+                    let consumed = checked.contains(&argument.range());
+                    if !consumed {
+                        self.check_argument(argument, callback.as_ref());
+                    }
+                    self.visit_checked_expr(argument, consumed);
+                }
+                return;
+            }
+        }
+        visitor::walk_expr(self, expression);
     }
 
     fn check_overload_body<'ast>(
@@ -408,38 +494,7 @@ impl<'ast> Visitor<'ast> for Checks<'_, '_> {
     }
 
     fn visit_expr(&mut self, expression: &'ast Expr) {
-        if self
-            .domain
-            .is_some_and(|domain| !domain.is_reachable(expression.range()))
-        {
-            return;
-        }
-        if let Expr::Name(name) = expression {
-            if name.ctx == ExprContext::Store {
-                self.check_provided_annotation(name.node_index().load());
-                self.check_expression(expression, "variable");
-            }
-        }
-        if self.non_static && !self.file.is_type_interface(self.db) {
-            if let Expr::Call(call) = expression {
-                let callback = if self.domain.is_none() {
-                    super::context::callback_contract(self.db, self.model, call)
-                } else {
-                    // Registration-specific callback views apply only at module scope.
-                    // Domain views own function-body calls and their existing inferred arguments.
-                    None
-                };
-                self.check_call_inputs(call, callback.as_ref());
-                self.check_expression(expression, "call result");
-                for argument in &call.arguments.args {
-                    self.check_argument(argument, callback.as_ref());
-                }
-                for keyword in &call.arguments.keywords {
-                    self.check_argument(&keyword.value, callback.as_ref());
-                }
-            }
-        }
-        visitor::walk_expr(self, expression);
+        self.visit_checked_expr(expression, false);
     }
 }
 
@@ -813,6 +868,49 @@ def Initialized(value: str, count: int = ...) -> record[{"value": str, "count": 
             .diagnostics(fixture.main_file())
             .unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn a_static_parameter_can_check_a_gradual_call_result() {
+        let prelude = "def accept(value: object) -> None:\n    pass\ndef require_int(value: int) -> None:\n    pass\n";
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(&format!(
+            "{prelude}accept(json.decode('{{}}'))\naccept(value=json.decode('{{}}'))\n"
+        ));
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(rules(&["non-static-type"]));
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for source in [
+            "require_int(json.decode('{}'))",
+            "accept(require_int(json.decode('{}')))",
+            "accept(*json.decode('{}'))",
+            "decoded = json.decode('{}')\naccept(decoded)",
+        ] {
+            let source = format!("{prelude}{source}\n");
+            analysis.update_file(file, source.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic.headline_message().contains("call result")
+                        && diagnostic.range().is_some_and(|range| {
+                            &source[range.start().to_usize()..range.end().to_usize()]
+                                == "json.decode('{}')"
+                        })
+                }),
+                "{source}: {diagnostics:?}"
+            );
+        }
     }
 
     #[test]

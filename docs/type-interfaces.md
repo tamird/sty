@@ -285,13 +285,17 @@ reports types whose recursive structure prevents ty from establishing that they
 are fully static. Both rules are disabled by default.
 
 For a call, each supplied argument must satisfy its selected parameter contract
-without relying on `Any` or `Unknown`. The argument values and inferred result
-must also be fully static. Omitted optional parameters and unused overloads do
-not affect calls whose individual input contracts ty can establish. Otherwise,
-the rule conservatively requires the whole callable to be fully static. Storing
-or passing a function also checks its whole callable contract. For example,
-passing `1` to `int | Any` uses the known `int` alternative, while passing it to
-`Any` alone cannot establish a static contract.
+without relying on `Any` or `Unknown`. Argument values and inferred results
+must be fully static. A gradual call result can be passed directly to a fully
+static parameter if every possible value satisfies the parameter contract. For
+example, a function with an `object` parameter can accept the result of
+`json.decode`; a function with an `int` parameter cannot. Operations within the
+argument expression are checked separately. Omitted optional parameters and
+unused overloads do not affect calls whose individual input contracts ty can
+establish. Otherwise, the rule conservatively requires the whole callable to be
+fully static. Storing or passing a function also checks its whole callable
+contract. For example, passing `1` to `int | Any` uses the known `int`
+alternative, while passing it to `Any` alone cannot establish a static contract.
 
 An explicit `object` annotation describes an opaque value and satisfies these
 rules. Code can narrow that value before using operations that require a more
