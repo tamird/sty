@@ -1,5 +1,6 @@
 //! Bazel's fixed metadata is a declaration input, separate from user source.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -100,7 +101,16 @@ pub(super) fn generate(
     builtins: &Builtins,
     rules: &BuildLanguage,
 ) -> anyhow::Result<DeclarationSource> {
-    let contents = declarations(dialect, builtins, rules)?;
+    generate_with_extensions(dialect, builtins, rules, &BTreeSet::new())
+}
+
+pub(super) fn generate_with_extensions(
+    dialect: Dialect,
+    builtins: &Builtins,
+    rules: &BuildLanguage,
+    extensions: &BTreeSet<String>,
+) -> anyhow::Result<DeclarationSource> {
+    let contents = declarations(dialect, builtins, rules, extensions)?;
     ruff_python_parser::parse_module(&contents).map_err(|error| {
         let offset = usize::from(error.location.start());
         let start = contents[..offset].rfind('\n').map_or(0, |index| index + 1);
@@ -189,6 +199,7 @@ fn declarations(
     dialect: Dialect,
     builtins: &Builtins,
     rules: &BuildLanguage,
+    extensions: &BTreeSet<String>,
 ) -> anyhow::Result<String> {
     let decoded_json = "_starpls_ty_extensions.Intersection[_starpls_typing.Any, None | _starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.float | _starpls_builtins.str | _starpls_builtins.list[\"_JsonValue\"] | _starpls_builtins.dict[_starpls_builtins.str, \"_JsonValue\"]]";
     // ApiExporter::collectRuleInfo omits return_type; collectMethodInfo supplies it.
@@ -424,6 +435,12 @@ fn declarations(
             });
     }
     let declared_classes: BTreeSet<_> = classes.keys().cloned().collect();
+    for extension in extensions {
+        anyhow::ensure!(
+            declared_classes.contains(extension),
+            "cannot extend Bazel builtin type `{extension}`"
+        );
+    }
     let mut body = String::new();
     if propagation_context_available {
         // These nested native types are not exported by Bazel's API inventory.
@@ -561,6 +578,16 @@ fn declarations(
             "ProviderInstance"
         } else {
             ""
+        };
+        let base = if extensions.contains(&class.name) {
+            let separator = if base.is_empty() { "" } else { ", " };
+            Cow::Owned(format!(
+                "{base}{separator}{}{}",
+                super::host::BINDING_PREFIX,
+                class.name
+            ))
+        } else {
+            Cow::Borrowed(base)
         };
         if let Some(parameter) = parameter {
             writeln!(

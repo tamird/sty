@@ -30,6 +30,7 @@ mod annotations;
 mod context;
 mod diagnostics;
 mod factory;
+mod host;
 pub(crate) mod interface;
 mod keywords;
 pub(crate) mod load;
@@ -125,10 +126,15 @@ impl Database {
         builtins: &starpls_bazel::Builtins,
         rules: &starpls_bazel::build::BuildLanguage,
     ) -> anyhow::Result<()> {
+        let source = native::generate(dialect, builtins, rules)?;
+        self.install_native_source(source);
+        Ok(())
+    }
+
+    fn install_native_source(&mut self, source: native::DeclarationSource) {
         use starpls_common::Db;
 
-        let native::DeclarationSource { path, contents } =
-            native::generate(dialect, builtins, rules)?;
+        let native::DeclarationSource { path, contents } = source;
         let changed = self.source_system_mut().set_virtual_source(&path, contents);
         if let Some(file) = self.files.try_virtual_file(&path) {
             if changed {
@@ -137,7 +143,6 @@ impl Database {
         } else {
             self.files.virtual_file(self, &path);
         }
-        Ok(())
     }
 
     /// Selects semantics using the same host identity as source navigation and loads.
@@ -686,6 +691,9 @@ impl ty_python_semantic::Db for Database {
         name: &str,
         usage: BuiltinUsage,
     ) -> Option<ProvidedBindingValue<'db>> {
+        if let Some(binding) = host::binding(self, file, name) {
+            return Some(binding);
+        }
         let source_file = self.starlark_file(file)?;
         if matches!(usage, BuiltinUsage::Annotation) {
             if let Some((_, interface)) = self

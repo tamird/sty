@@ -30,7 +30,9 @@ pub(crate) fn did_close_text_document(
         return Ok(());
     }
     if server.analysis.close_document(&path)?.is_some() {
-        if server.configuration.needs_reopen {
+        if server.configuration.needs_reopen
+            || server.configuration.edited_builtin_extension.as_deref() == Some(path.as_path())
+        {
             server.reload_configuration()?;
         }
         server.invalidate_diagnostics();

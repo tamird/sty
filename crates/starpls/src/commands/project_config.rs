@@ -19,6 +19,14 @@ pub(super) struct ProjectConfig {
     pub rules: BTreeMap<String, String>,
     #[serde(default)]
     pub analysis: AnalysisOptions,
+    #[serde(default)]
+    pub bazel: BazelOptions,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub(super) struct BazelOptions {
+    pub builtins: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -50,6 +58,7 @@ impl FromStr for ConfigOverride {
             type_interfaces: _,
             rules,
             analysis,
+            bazel: _,
         } = table.try_into()?;
         anyhow::ensure!(
             !rules.is_empty() || analysis != AnalysisOptions::default(),

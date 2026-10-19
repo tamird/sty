@@ -83,6 +83,7 @@ pub(crate) struct ConfigurationState {
     pub(crate) refreshing: bool,
     pub(crate) pending: bool,
     pub(crate) needs_reopen: bool,
+    pub(crate) edited_builtin_extension: Option<PathBuf>,
     restart_required: bool,
     inputs: HashMap<PathBuf, Option<Vec<u8>>>,
     watched: FxHashSet<PathBuf>,
@@ -231,6 +232,14 @@ impl Server {
         let file = self
             .analysis
             .open_document(path, dialect, info, contents, version)?;
+        if self.analysis.invalidate_bazel_builtin_extension()? {
+            self.configuration.edited_builtin_extension = Some(path.to_path_buf());
+            self.configuration.complete = false;
+            self.send_error_message(
+                "Bazel builtin declarations changed. Save or close the file to reload them.",
+            );
+            self.refresh_editor_semantics();
+        }
         if api_context == Some(APIContext::Prelude) {
             self.analysis.set_bazel_prelude_file(file);
         }
@@ -398,9 +407,11 @@ impl Server {
     }
 
     pub(crate) fn configuration_changed(&mut self, paths: &[PathBuf]) -> anyhow::Result<()> {
-        let mut changed = false;
+        let mut changed = paths
+            .iter()
+            .any(|path| self.configuration.edited_builtin_extension.as_ref() == Some(path));
         let inputs = self.loader.configuration_inputs();
-        let configured = self.config.args.type_interfaces.is_configured(
+        let configured = self.config.args.type_interfaces.has_source_interfaces(
             inputs
                 .get(&self.workspace.join("sty.toml"))
                 .and_then(Option::as_deref),
@@ -450,6 +461,7 @@ impl Server {
         }
         drop(snapshot);
         self.analysis.set_type_interfaces(Vec::new())?;
+        self.analysis.set_bazel_builtin_extension(None)?;
         self.analysis.set_all_workspace_targets(Vec::new());
         self.invalidate_diagnostics();
         self.refresh_editor_semantics();
@@ -569,6 +581,13 @@ impl Server {
             .and(native)
             .and_then(|()| interfaces?.install(&mut self.analysis, &self.workspace));
         self.configuration.complete = result.is_ok();
+        self.configuration.edited_builtin_extension = result
+            .as_ref()
+            .err()
+            .and_then(|error| {
+                error.downcast_ref::<crate::commands::type_interface::UnsavedBuiltinExtension>()
+            })
+            .map(|error| error.0.clone());
         if let Err(error) = result {
             self.send_error_message(&format!("Cannot reload sty configuration: {error:#}"));
         }

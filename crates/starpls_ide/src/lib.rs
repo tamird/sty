@@ -211,6 +211,7 @@ impl starpls_hir::Db for Database {
         let defs = self.environment().builtin_defs(self, dialect);
         defs.set_builtins(self).to(builtins);
         defs.set_rules(self).to(rules);
+        defs.set_extension(self).to(None);
         Ok(())
     }
 

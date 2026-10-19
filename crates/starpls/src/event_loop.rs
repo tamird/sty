@@ -1543,6 +1543,180 @@ mod tests {
     }
 
     #[test]
+    fn host_builtin_contract_reloads_in_the_editor() {
+        let TestServer {
+            mut server,
+            client,
+            disk: _,
+            tasks,
+            debounced: _debounced,
+        } = server();
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("bazel-builtin-contract");
+        std::fs::create_dir_all(&root).unwrap();
+        let extension = root.join("host.bzli");
+        let contract = "class _RepositoryContext(Protocol):\n    def copy(self, source: str, destination: str, *, inputs: list = ...) -> None: ...\nbuiltins: dict[{\"repository_ctx\": _RepositoryContext}]\n";
+        std::fs::write(&extension, contract).unwrap();
+        #[cfg(unix)]
+        let editor = {
+            let path = root.join("host-editor.bzli");
+            std::os::unix::fs::symlink(&extension, &path).unwrap();
+            path
+        };
+        #[cfg(not(unix))]
+        let editor = extension.clone();
+        let configuration = root.join("sty.toml");
+        let settings = "[bazel]\nbuiltins = 'host.bzli'\n";
+        std::fs::write(
+            &configuration,
+            format!("{settings}[rules]\nmissing-type-argument = 'error'\n"),
+        )
+        .unwrap();
+        server.loader = Arc::new(DefaultFileLoader::new(
+            server.bazel_client.clone(),
+            root.clone(),
+            None,
+            root.join("external"),
+            tasks,
+            false,
+        ));
+        server.analysis = Analysis::new(server.loader.clone(), Default::default()).unwrap();
+        server
+            .analysis
+            .set_builtin_defs(crate::server::load_bazel_builtins(None), Default::default())
+            .unwrap();
+        server.workspace = root.clone();
+        let source = root.join("rule.bzl");
+        server
+            .open_document(
+                &source,
+                "def implementation(ctx: repository_ctx) -> None:\n    ctx.copy('a', 'b')\n".into(),
+                1,
+            )
+            .unwrap();
+        let file = server
+            .analysis
+            .snapshot()
+            .open_file(&source)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            collect_diagnostics(&server.snapshot(), file).unwrap().len(),
+            1
+        );
+        server.reload_configuration().unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        let diagnostics = collect_diagnostics(&server.snapshot(), file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let host = server.analysis.bazel_builtin_extension_file().unwrap();
+        assert_eq!(
+            collect_diagnostics(&server.snapshot(), host).unwrap().len(),
+            1
+        );
+        std::fs::write(
+            &configuration,
+            format!("{settings}[rules]\nmissing-type-argument = 'ignore'\n"),
+        )
+        .unwrap();
+        server
+            .configuration_changed(std::slice::from_ref(&configuration))
+            .unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        assert!(collect_diagnostics(&server.snapshot(), host)
+            .unwrap()
+            .is_empty());
+
+        server.open_document(&editor, contract.into(), 1).unwrap();
+        assert!(server.configuration.complete);
+        change(
+            &mut server,
+            &editor,
+            &contract.replace("source: str", "source: int"),
+        );
+        assert!(!server.configuration.complete);
+        assert_eq!(
+            collect_diagnostics(&server.snapshot(), file).unwrap().len(),
+            1
+        );
+        server.reload_configuration().unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+        assert_eq!(
+            server.configuration.edited_builtin_extension.as_deref(),
+            Some(editor.as_path())
+        );
+        crate::handlers::notifications::did_close_text_document(
+            &mut server,
+            lsp_types::DidCloseTextDocumentParams {
+                text_document: lsp_types::TextDocumentIdentifier {
+                    uri: lsp_types::Url::from_file_path(&editor).unwrap(),
+                },
+            },
+        )
+        .unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        assert!(collect_diagnostics(&server.snapshot(), file)
+            .unwrap()
+            .is_empty());
+
+        std::fs::write(
+            &configuration,
+            format!("{settings}[type-interfaces]\n'rule.bzl' = 'rule.bzl'\n"),
+        )
+        .unwrap();
+        server
+            .configuration_changed(std::slice::from_ref(&configuration))
+            .unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+        assert!(server.analysis.type_interface_pairs().is_empty());
+        assert_eq!(
+            collect_diagnostics(&server.snapshot(), file).unwrap().len(),
+            1
+        );
+
+        std::fs::write(
+            root.join("rule.bzli"),
+            "def implementation(ctx: repository_ctx) -> None: ...\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &configuration,
+            format!("{settings}[type-interfaces]\n'rule.bzl' = 'rule.bzli'\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            &extension,
+            "class repository_ctx(Protocol):\n    def copy(self,",
+        )
+        .unwrap();
+        server
+            .configuration_changed(&[configuration, extension])
+            .unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+        assert!(server.analysis.type_interface_pairs().is_empty());
+        assert_eq!(
+            collect_diagnostics(&server.snapshot(), file).unwrap().len(),
+            1
+        );
+        assert!(client.receiver.try_iter().any(|message| match message {
+            lsp_server::Message::Notification(message) => {
+                message.method == "window/showMessage"
+                    && message
+                        .params
+                        .to_string()
+                        .contains("invalid Bazel builtins")
+            }
+            _ => false,
+        }));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn saved_configuration_replaces_stubs_and_recovers() {
         let TestServer {
             mut server,

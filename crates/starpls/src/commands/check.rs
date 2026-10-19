@@ -251,6 +251,72 @@ mod tests {
     }
 
     #[test]
+    fn host_builtin_contract_is_checked_with_workspace_rules() {
+        for excluded in [false, true] {
+            let mut checker = local_checker_with_options(
+                &format!("checker-host-builtins-{excluded}"),
+                &[
+                    (
+                        "sty.toml",
+                        "[bazel]\nbuiltins = 'host.bzli'\n[rules]\nmissing-type-argument = 'error'\n",
+                    ),
+                    (
+                        "host.bzli",
+                        "class _RepositoryContext(Protocol):\n    def copy(self, source: list) -> None: ...\nbuiltins: dict[{\"repository_ctx\": _RepositoryContext}]\n",
+                    ),
+                    (
+                        "rule.bzl",
+                        "def implementation(ctx: repository_ctx) -> None:\n    ctx.copy([])\n",
+                    ),
+                ],
+                CheckCommand {
+                    paths: vec!["rule.bzl".into()],
+                    ignore_patterns: excluded.then(|| "host.bzli".into()).into_iter().collect(),
+                    output_format: super::OutputFormat::JsonLines,
+                    ..Default::default()
+                },
+            );
+            let root = checker.bazel_info.workspace.clone();
+            let report_path = root.join("coverage.json");
+            let mut diagnostics = Vec::new();
+            let result = checker.report_diagnostics_to(
+                Some(&report_path),
+                &mut diagnostics,
+                &mut Vec::new(),
+            );
+            assert_eq!(result.ok(), (!excluded).then_some(ExitCode::FAILURE));
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+            assert_eq!(report["complete"], !excluded, "{report}");
+            assert_eq!(report["diagnostics"]["errors"], usize::from(!excluded));
+            for key in ["selected_files", "checked_files"] {
+                let paths: std::collections::BTreeSet<_> = report[key]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|entry| std::path::PathBuf::from(entry["path"].as_str().unwrap()))
+                    .collect();
+                assert!(paths.contains(&root.join("rule.bzl")), "{report}");
+                assert_eq!(paths.contains(&root.join("host.bzli")), !excluded);
+            }
+            if excluded {
+                assert!(report["input_errors"][0]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("configured Bazel builtins are excluded"));
+            } else {
+                let diagnostic: serde_json::Value = serde_json::from_slice(&diagnostics).unwrap();
+                assert_eq!(diagnostic["name"], "missing-type-argument");
+                assert!(diagnostic["filename"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with("host.bzli"));
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
     fn local_interface_sources_complete_selection_and_reject_exclusions() {
         let sources = [
             (
@@ -2673,12 +2739,19 @@ impl Checker {
             });
         }
         let snapshot = checker.analysis.snapshot();
+        let builtin_extension = checker.analysis.bazel_builtin_extension_file();
         for file in interfaces {
             let path = snapshot.path(file);
             if checker.ignored_paths.contains(path) {
                 checker
                     .exclusions
                     .insert(path.to_path_buf(), Exclusion::Ignored);
+                if Some(file) == builtin_extension {
+                    checker.input_errors.push(InputError {
+                        path: path.to_path_buf(),
+                        message: "configured Bazel builtins are excluded by --ignore_pattern; remove the exclusion to check the declarations".to_owned(),
+                    });
+                }
             } else {
                 checker.files.insert(file);
             }

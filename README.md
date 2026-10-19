@@ -263,6 +263,35 @@ Names loaded from the mapped `.bzl` module use stub declarations when present an
 inference otherwise. Stubs may load provider types for use in annotations. Function bodies
 use `...` or `pass`, and optional defaults use `= ...`.
 
+### Bazel host builtins
+
+When your Bazel version or fork exposes additional builtin methods, declare
+them in a `.bzli` file selected by the workspace's `sty.toml`:
+
+```toml
+[bazel]
+builtins = "bazel.bzli"
+```
+
+The file declares a `builtins` field map. Each key names an existing Bazel
+builtin type; its value is a protocol declaring additional members. One
+protocol can extend multiple builtin types:
+
+```starlark
+class _ExternalContext(Protocol):
+    def copy(self, src: str | Label | path, dst: str | Label | path, *, watch_src: Literal["yes", "no", "auto"] = ...) -> None: ...
+
+builtins: dict[{"repository_ctx": _ExternalContext, "module_ctx": _ExternalContext}]
+```
+
+The file must be self-contained: define its protocols and their shared bases
+in the same file. The map must be closed, and each registration must be
+required. Declaring an existing builtin member is an error. `sty check` and
+`sty server` use the same workspace selection; the workspace owns matching the
+contract to its Bazel executable. The configured contract is checked with the
+workspace's diagnostic rules. Editor changes suspend the declarations until
+the file is saved or closed and the configuration is revalidated.
+
 ## Experimental features
 
 sty has a number of experimental features that can be enabled via command-line arguments:

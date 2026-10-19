@@ -1008,6 +1008,7 @@ impl Analysis {
             .collect()
     }
 
+    /// Configured declaration files, including the Bazel host contract.
     pub fn type_interface_files(&self) -> Vec<File> {
         let Self { db } = self;
         let mut files: Vec<_> = db
@@ -1015,6 +1016,7 @@ impl Analysis {
             .type_interfaces(db)
             .values()
             .map(|(_, interface)| *interface)
+            .chain(self.bazel_builtin_extension_file())
             .collect();
         files.sort_by(|left, right| left.path(db).cmp(right.path(db)));
         files.dedup();

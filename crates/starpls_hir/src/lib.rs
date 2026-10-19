@@ -31,6 +31,14 @@ pub struct BuiltinDefs {
     pub builtins: Builtins,
     #[returns(ref)]
     pub rules: starpls_bazel::build::BuildLanguage,
+    #[returns(clone)]
+    pub extension: Option<BuiltinExtension>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BuiltinExtension {
+    pub file: File,
+    pub contents: ruff_db::source::SourceText,
 }
 
 #[salsa::db]
@@ -74,8 +82,8 @@ pub struct Environment {
 
 impl Environment {
     pub fn initialize(db: &dyn Db, options: InferenceOptions) -> Self {
-        let standard = BuiltinDefs::new(db, Builtins::default(), Default::default());
-        let bazel = BuiltinDefs::new(db, Builtins::default(), Default::default());
+        let standard = BuiltinDefs::new(db, Builtins::default(), Default::default(), None);
+        let bazel = BuiltinDefs::new(db, Builtins::default(), Default::default(), None);
         Self::new(
             db,
             options,
