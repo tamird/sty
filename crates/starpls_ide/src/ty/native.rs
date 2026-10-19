@@ -1565,6 +1565,7 @@ fn write_function(
             // Registration stores a callable; each host API owns the checks
             // performed when it later invokes the implementation.
             (CallableKind::Function, "rule" | "repository_rule" | "aspect" | "transition" | "exec_transition", "implementation") => Some("_starpls_typing.Callable[_ImplementationParameters, _ImplementationResult]"),
+            (CallableKind::Function, "macro", "implementation") => Some("_starpls_ty_extensions.Intersection[_starpls_annotation_function, _starpls_typing.Callable[_ImplementationParameters, None]]"),
             (CallableKind::Function, "transition" | "exec_transition", "inputs" | "outputs") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
             (CallableKind::Function, "rule" | "aspect", "provides") => {
                 provider_requirement_annotation(r#type, false)
@@ -1577,6 +1578,8 @@ fn write_function(
             (CallableKind::Method("json"), "encode", "x") => Some("_starpls_builtins.object"),
             // Rule construction reads each dictionary while preserving its key and value types.
             (CallableKind::Function, "rule" | "aspect", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]"),
+            // A None value removes an inherited macro attribute.
+            (CallableKind::Function, "macro", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute | None]"),
             // The host validates export and extension permissions after the rule type.
             (CallableKind::Function, "rule", "parent") => classes.contains("rule").then_some("_starpls_types.rule | None"),
             // Registration retains a separate callable signature. Attribute-dependent
@@ -3351,9 +3354,21 @@ example = rule(implementation = flags, fragments = ["cpp"])
             .unwrap();
         let source = r#"
 features = struct(macro = getattr(getattr(native, "legacy_globals", None), "macro", macro))
-def implementation(name, visibility, enabled):
+def implementation(name, visibility, enabled = None):
     pass
 example = features.macro(implementation = implementation, attrs = {"enabled": attr.bool()})
+source_alias = implementation
+masked = features.macro(implementation = source_alias, attrs = {"enabled": None})
+def invalid_implementation(name, visibility) -> int:
+    return 42
+invalid_callback = features.macro(implementation = invalid_implementation)
+invalid_builtin = features.macro(implementation = print)
+invalid_macro = features.macro(implementation = example)
+def rule_implementation(ctx):
+    return []
+rule_symbol = rule(implementation = rule_implementation)
+invalid_rule = features.macro(implementation = rule_symbol)
+invalid_attrs = features.macro(implementation = implementation, attrs = {"enabled": 42})
 def invalid_access():
     native.legacy_globals.macro
     attr.bool(default = "wrong")
@@ -3374,15 +3389,32 @@ def use_example():
             )
             .unwrap();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
-        for (diagnostic, expected) in diagnostics
-            .iter()
-            .zip(["default = \"wrong\"", "enabled = \"wrong\""])
-        {
+        assert_eq!(diagnostics.len(), 7, "{diagnostics:?}");
+        for (diagnostic, expected) in diagnostics.iter().zip([
+            "implementation = invalid_implementation",
+            "implementation = print",
+            "implementation = example",
+            "implementation = rule_symbol",
+            "attrs = {\"enabled\": 42}",
+            "default = \"wrong\"",
+            "enabled = \"wrong\"",
+        ]) {
             assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
             let range = diagnostic.range().unwrap();
             assert_eq!(&source[range], expected);
         }
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        analysis.update_file(
+            file,
+            "def implementation(name: str, visibility: list[str]) -> None:\n    pass\nfeatures = struct(macro = macro)\nmasked = macro(implementation = implementation, attrs = {\"enabled\": None})\n".to_owned(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
