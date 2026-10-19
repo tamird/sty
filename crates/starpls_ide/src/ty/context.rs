@@ -887,6 +887,7 @@ fn dependency(kind: &AttributeKind) -> bool {
             | AttributeKind::LabelList
             | AttributeKind::LabelKeyedStringDict
             | AttributeKind::StringKeyedLabelDict
+            | AttributeKind::StringKeyedLabelListDict
     )
 }
 
@@ -1026,6 +1027,7 @@ fn field_type<'db>(
                 AttributeKind::LabelList => list(target),
                 AttributeKind::LabelKeyedStringDict => list(target),
                 AttributeKind::StringKeyedLabelDict => dict(string, target),
+                AttributeKind::StringKeyedLabelListDict => dict(string, list(target)),
                 _ => unreachable!("split attributes are dependencies"),
             };
             Some(dict(optional(string), value))
@@ -3825,6 +3827,60 @@ example = macro(implementation=implementation, inherit_attrs=parent)
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn label_list_dictionary_context_views() {
+        let source = r#"def _transition(settings, attributes):
+    return {}
+change = transition(implementation=_transition, inputs=[], outputs=[])
+def _impl(ctx):
+    ctx.attr.inputs
+    ctx.files.inputs
+    ctx.split_attr.split_inputs
+    return []
+grouped = rule(implementation=_impl, attrs={
+    "inputs": attr.label_list_dict(),
+    "split_inputs": attr.label_list_dict(cfg=change),
+})
+def _repo_impl(repo_ctx):
+    repo_ctx.attr.repo_inputs
+repository = repository_rule(implementation=_repo_impl, attrs={"repo_inputs": attr.label_list_dict()})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        starpls_bazel::env::apply_versioned_signatures(&mut builtins, "release 9.0.0");
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let file = fixture.main_file();
+        let snapshot = analysis.snapshot();
+        let diagnostics = snapshot.diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (expression, expected, key) in [
+            (
+                "ctx.attr.inputs",
+                "dict[str, list[Target[FilesToRunProvider[File | None]] | Target[None]]]",
+                "\"inputs\"",
+            ),
+            ("ctx.files.inputs", "list[File]", "\"inputs\""),
+            (
+                "ctx.split_attr.split_inputs",
+                "dict[str | None, dict[str, list[Target[FilesToRunProvider[File | None]] | Target[None]]]]",
+                "\"split_inputs\"",
+            ),
+            (
+                "repo_ctx.attr.repo_inputs",
+                "dict[str, list[Label]]",
+                "\"repo_inputs\"",
+            ),
+        ] {
+            check_field(&snapshot, file, source, expression, expected, key);
         }
     }
 

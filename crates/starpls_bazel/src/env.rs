@@ -153,6 +153,11 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         if class.name != "attr" {
             continue;
         }
+        if version >= (9, 0) {
+            if let Some(value) = label_list_dict(&class.field) {
+                class.field.push(value);
+            }
+        }
         for value in &mut class.field {
             let Some(callable) = &mut value.callable else {
                 continue;
@@ -192,6 +197,50 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             }
         }
     }
+}
+
+/// Bazel 9 added a dictionary-valued dependency attribute. Its parameters
+/// match `label_list` except for `default` and `materializer`.
+/// https://github.com/bazelbuild/bazel/blob/9.0.0/src/main/java/com/google/devtools/build/lib/starlarkbuildapi/StarlarkAttrModuleApi.java
+fn label_list_dict(fields: &[Value]) -> Option<Value> {
+    if fields.iter().any(|field| field.name == "label_list_dict") {
+        return None;
+    }
+    let mut value = fields
+        .iter()
+        .find(|field| field.name == "label_list")?
+        .clone();
+    let callable = value.callable.as_mut()?;
+    let default = callable
+        .param
+        .iter_mut()
+        .find(|param| param.name == "default")?;
+    default.r#type = "dict".to_owned();
+    default.default_value = "{}".to_owned();
+    default.doc = "Default value of the attribute.".to_owned();
+    callable.param.retain(|param| {
+        matches!(
+            param.name.as_str(),
+            "allow_empty"
+                | "configurable"
+                | "default"
+                | "doc"
+                | "allow_files"
+                | "allow_rules"
+                | "providers"
+                | "for_dependency_resolution"
+                | "flags"
+                | "mandatory"
+                | "skip_validations"
+                | "cfg"
+                | "aspects"
+        )
+    });
+    value.name = "label_list_dict".to_owned();
+    value.doc =
+        "Creates a dependency attribute holding a dictionary from strings to lists of labels."
+            .to_owned();
+    Some(value)
 }
 
 #[derive(Debug, Serialize, Deserialize)]

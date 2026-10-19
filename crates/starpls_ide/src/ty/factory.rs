@@ -760,6 +760,7 @@ fn attribute_kind(name: &str) -> Option<AttributeKind> {
         "label" => AttributeKind::Label,
         "label_keyed_string_dict" => AttributeKind::LabelKeyedStringDict,
         "label_list" => AttributeKind::LabelList,
+        "label_list_dict" => AttributeKind::StringKeyedLabelListDict,
         "output" => AttributeKind::Output,
         "output_list" => AttributeKind::OutputList,
         "string" => AttributeKind::String,

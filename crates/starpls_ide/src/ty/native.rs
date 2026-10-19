@@ -1624,15 +1624,26 @@ fn write_function(
                 );
             let attribute_default = matches!(kind, CallableKind::Method("attr"))
                 && name == "default";
-            let dictionary_type = (attribute_default
-                && value.name == "string_list_dict"
-                && env::normalize_doc(r#type, true) == "dict")
-                .then(|| attribute_type_string_from_discriminator(Discriminator::StringListDict));
-            let converted_default = dictionary_type.is_some()
-                || (attribute_default && matches!(
+            let dictionary_type = if attribute_default && env::normalize_doc(r#type, true) == "dict" {
+                match value.name.as_str() {
+                    "label_list_dict" => Some(Discriminator::LabelListDict),
+                    "string_list_dict" => Some(Discriminator::StringListDict),
+                    _ => None,
+                }
+                .map(attribute_type_string_from_discriminator)
+            } else {
+                None
+            };
+            let converted_default = attribute_default
+                && matches!(
                     value.name.as_str(),
-                    "label" | "label_list" | "label_keyed_string_dict" | "string_keyed_label_dict"
-                ));
+                    "label"
+                        | "label_list"
+                        | "label_list_dict"
+                        | "label_keyed_string_dict"
+                        | "string_keyed_label_dict"
+                        | "string_list_dict"
+                );
             let input = if package_label || converted_default {
                 AnnotationUse::AttributeInput
             } else {
@@ -1774,6 +1785,10 @@ fn write_function(
                         .into_iter()
                         .all(|class| classes.contains(class))
                         .then_some("_starpls_types.Attribute[_starpls_typing.Sequence[_starpls_types.Target]]"),
+                    "label_list_dict" => ["Target", "FilesToRunProvider", "File"]
+                        .into_iter()
+                        .all(|class| classes.contains(class))
+                        .then_some("_starpls_types.Attribute[_starpls_typing.Mapping[_starpls_builtins.str, _starpls_typing.Sequence[_starpls_types.Target]]]"),
                     _ => None,
                 }
             }
@@ -6121,6 +6136,89 @@ value: Attribute[dict[str, list[str]]] = factory(default={"srcs": ("a", "b")})
             };
             assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
         }
+    }
+
+    #[test]
+    fn label_list_dictionary_attribute_follows_bazel_release() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let mut older = builtins.clone();
+        env::apply_versioned_signatures(&mut older, "release 8.5.0");
+        assert!(older
+            .r#type
+            .iter()
+            .find(|class| class.name == "attr")
+            .unwrap()
+            .field
+            .iter()
+            .all(|field| field.name != "label_list_dict"));
+        env::apply_versioned_signatures(&mut builtins, "release 9.0.0");
+        let mut supplied = builtins.clone();
+        env::apply_versioned_signatures(&mut builtins, "release 9.0.0");
+        assert_eq!(builtins, supplied);
+
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"factory = attr.label_list_dict
+value = factory(default={"srcs": ("//:a", Label("//:b"))}, skip_validations=True)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (arguments, expected) in [
+            ("default={1: ['//:a']}", "invalid-argument-type"),
+            ("default={'srcs': [1]}", "invalid-argument-type"),
+            ("default=lambda: 1", "invalid-argument-type"),
+            ("materializer=lambda: 1", "unknown-argument"),
+        ] {
+            analysis.update_file(file, format!("{source}factory({arguments})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{arguments}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected);
+        }
+        let default = supplied
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "attr")
+            .unwrap()
+            .field
+            .iter_mut()
+            .find(|field| field.name == "label_list_dict")
+            .unwrap()
+            .callable
+            .as_mut()
+            .unwrap()
+            .param
+            .iter_mut()
+            .find(|parameter| parameter.name == "default")
+            .unwrap();
+        default.r#type = "Dictionary: string -> list of Labels".to_owned();
+        analysis
+            .set_builtin_defs(supplied, Default::default())
+            .unwrap();
+        analysis.update_file(file, source.to_owned());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
