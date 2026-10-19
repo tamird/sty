@@ -7,6 +7,7 @@ They do not describe or rewrite executable Starlark source.
 import builtins as _builtins
 import typing as _typing
 from _typeshed import SupportsRichComparisonT as _ComparableT
+from types import FunctionType as _starpls_annotation_function
 
 _T = _typing.TypeVar("_T")
 _U = _typing.TypeVar("_U")

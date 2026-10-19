@@ -478,6 +478,10 @@ impl ty_python_core::Db for Database {
 
 #[salsa::db]
 impl ty_python_semantic::Db for Database {
+    fn provided_function_is_builtin(&self, definition: Definition<'_>) -> bool {
+        native::is_builtin_function(self, definition)
+    }
+
     fn provided_type_reference<'db>(
         &'db self,
         file: ProgramFile<'db>,
@@ -641,6 +645,7 @@ impl ty_python_semantic::Db for Database {
             "string" => KnownClass::Str.to_instance(self, &environment),
             "NoneType" => Type::none(self, &environment),
             "range" => KnownClass::Range.to_instance(self, &environment),
+            "function" => KnownClass::FunctionType.to_instance(self, &environment),
             "list" => KnownClass::List.to_specialized_instance(self, &environment, &[unknown]),
             "dict" => {
                 KnownClass::Dict.to_specialized_instance(self, &environment, &[unknown, unknown])
@@ -1321,6 +1326,80 @@ def package(value: object) -> str:
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
+    fn function_type_accepts_starlark_functions() {
+        let source = r#"def accept(value: function):
+    pass
+
+def user(name):
+    pass
+
+def zero() -> None:
+    pass
+
+def source_tag() -> Literal["function"]:
+    return type(user)
+
+def as_function(value: object) -> function:
+    if type(value) == "function":
+        return value
+    fail("expected a function")
+
+accept(user)
+accept(lambda: None)
+accept(print)
+builtin_alias = print
+accept(builtin_alias)
+accept(len)
+accept(struct)
+accept(attr.string)
+accept(42)
+callbacks = [zero]
+callbacks.append([].clear)
+accept(callbacks[1])
+typed_callbacks: list[function] = [zero]
+typed_callbacks.append(zero)
+typed_callbacks.append({}.clear)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"));
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    let range = diagnostic.range().unwrap();
+                    &source[range]
+                })
+                .collect::<Vec<_>>(),
+            [
+                "print",
+                "builtin_alias",
+                "len",
+                "struct",
+                "attr.string",
+                "42",
+                "callbacks[1]",
+                "{}.clear"
+            ],
+            "{diagnostics:?}"
+        );
     }
 
     #[test]

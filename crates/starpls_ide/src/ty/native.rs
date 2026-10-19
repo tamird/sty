@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
+use ruff_db::files::FilePath;
 use ruff_db::system::SystemVirtualPathBuf;
 use starpls_bazel::build::attribute::Discriminator;
 use starpls_bazel::build::BuildLanguage;
@@ -20,6 +21,11 @@ use starpls_bazel::BUILTINS_VALUES_DENY_LIST;
 use starpls_common::Dialect;
 use ty_ide::Docstring;
 use ty_ide::MarkupKind;
+use ty_python_core::definition::Definition;
+use ty_python_core::scope::NodeWithScopeKind;
+
+const STANDARD_PATH: &str = "starpls-native:standard.pyi";
+const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
 
 /// Annotation names and whether they include executable rule attributes.
 pub(super) const COMMON_RULE_ATTRS: &[(&str, bool)] = &[
@@ -67,11 +73,22 @@ enum AnnotationUse {
 }
 
 pub(super) fn path(dialect: Dialect) -> SystemVirtualPathBuf {
-    let dialect = match dialect {
-        Dialect::Standard => "standard",
-        Dialect::Bazel => "bazel",
+    match dialect {
+        Dialect::Standard => STANDARD_PATH,
+        Dialect::Bazel => BAZEL_PATH,
+    }
+    .to_owned()
+    .into()
+}
+
+pub(super) fn is_builtin_function(db: &dyn ty_python_core::Db, definition: Definition<'_>) -> bool {
+    let path = definition.program_file(db).file(db).path(db);
+    let is_builtin_source = match path {
+        FilePath::SystemVirtual(path) => matches!(path.as_str(), STANDARD_PATH | BAZEL_PATH),
+        FilePath::Vendored(path) => path.as_str() == "stdlib/builtins.pyi",
+        _ => false,
     };
-    format!("starpls-native:{dialect}.pyi").into()
+    is_builtin_source && matches!(definition.scope(db).node(db), NodeWithScopeKind::Module)
 }
 
 pub(super) fn export_name(context: APIContext, name: &str) -> String {
@@ -1225,6 +1242,7 @@ fn write_type_overloads(
         ("_builtins.bool", "bool"),
         ("_builtins.int", "int"),
         ("_builtins.str", "string"),
+        ("_starpls_annotation_function", "function"),
         (
             "_starpls_ty_extensions.Top[_builtins.list[_typing.Any]]",
             "list",

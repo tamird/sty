@@ -57,6 +57,10 @@ types. The aliased implementation is inferred using its own annotations.
 Incomplete source signatures remain gradual; `non-static-type` can require
 them to be fully known.
 
+The `function` annotation describes a Starlark `def` or `lambda` value. A
+`Callable` annotation describes a call signature and also accepts other kinds
+of callable values, including builtins.
+
 ### Overloaded functions
 
 Use `@overload` on consecutive declarations with the same name to describe
