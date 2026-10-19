@@ -3524,8 +3524,8 @@ example = macro(implementation=implementation, attrs={{
             }
         }
         for (parameter, annotation, registrations, expected) in [
-            ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False, values=['fast'], default='fast')})", "str"),
-            ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.int(configurable=False, values=[1], default=1)})", "int"),
+            ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False, values=['fast'], default='fast')})", "Literal[\"fast\"]"),
+            ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.int(configurable=False, values=[1], default=1)})", "Literal[1]"),
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False)})", "str"),
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.int(configurable=False)})", "int"),
             ("value", "", "example = macro(implementation=implementation, attrs={'value': attr.string(configurable=False)})", "str"),
@@ -3551,6 +3551,42 @@ example = macro(implementation=implementation, attrs={{
                 "",
             );
         }
+    }
+
+    #[test]
+    fn macro_scalar_values_flow_to_rule_calls() {
+        let source = r#"def target_impl(ctx): return []
+target = rule(implementation=target_impl, attrs={
+    "mode": attr.string(values=["fast"], mandatory=True),
+    "stamp": attr.int(values=[0, 1], mandatory=True),
+})
+def implementation(name, visibility, mode, stamp, _private_mode):
+    target(name=name, mode=mode, stamp=stamp)
+    target(name=name + "_private", mode=_private_mode, stamp=stamp)
+wrapped = macro(implementation=implementation, attrs={
+    "mode": attr.string(values=["fast"], default="fast", configurable=False),
+    "stamp": attr.int(values=[0, 1], default=0, configurable=False),
+    "_private_mode": attr.string(values=["fast", "slow"], default="fast", configurable=False),
+})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(
+            file,
+            source.replace(
+                "values=[\"fast\"], default",
+                "values=[\"fast\", \"slow\"], default",
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
     }
 
     #[test]

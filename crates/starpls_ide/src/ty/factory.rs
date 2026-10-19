@@ -129,19 +129,24 @@ impl RuleData {
         let attribute = self.attributes.iter().find(|entry| entry.name == name)?;
         let attribute = attribute.descriptor.as_ref()?;
         let none = Type::none(db, environment);
-        if name.starts_with('_') && attribute.default_value == DefaultValue::None {
+        let is_private = name.starts_with('_');
+        if is_private && attribute.default_value == DefaultValue::None {
             return Some(none);
         }
-        let value = attribute_value_type(
-            db,
-            environment,
-            declarations,
-            &attribute.kind,
-            AttributeUse::MacroContext,
-        )?;
+        let value = attribute
+            .finite_value_type(db, environment, is_private)
+            .or_else(|| {
+                attribute_value_type(
+                    db,
+                    environment,
+                    declarations,
+                    &attribute.kind,
+                    AttributeUse::MacroContext,
+                )
+            })?;
         let selected = || {
             // A selected None branch survives conversion into a macro body.
-            let alternatives = if name.starts_with('_') {
+            let alternatives = if is_private {
                 value
             } else {
                 UnionType::from_elements(db, environment, [value, none])
