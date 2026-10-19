@@ -634,7 +634,11 @@ fn context_type<'db>(
             }
             let ty = if let Some(attribute) = descriptor {
                 let finite = if view == View::Attr {
-                    attribute.finite_value_type(db, &environment, name.starts_with('_'))
+                    attribute.finite_value_type(
+                        db,
+                        &environment,
+                        context_kind == ContextKind::Aspect && name.starts_with('_'),
+                    )
                 } else {
                     None
                 };
@@ -1646,31 +1650,22 @@ example = rule(implementation=implementation, attrs={'image': attr.label(mandato
     }
 
     #[test]
-    fn private_scalar_attributes_preserve_default_literals() {
+    fn private_scalar_rule_attributes_allow_overrides() {
         let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
         enable_context(&mut analysis);
         let file = fixture.main_file();
-        for (descriptor, private, public) in [
-            ("attr.string(default='fast')", "Literal[\"fast\"]", "str"),
-            ("attr.string()", "Literal[\"\"]", "str"),
-            ("attr.int(default=42)", "Literal[42]", "int"),
-            ("attr.int()", "Literal[0]", "int"),
-            ("attr.bool(default=True)", "Literal[True]", "bool"),
-            ("attr.bool()", "Literal[False]", "bool"),
-            ("attr.string(default=dynamic())", "str", "str"),
-            (
-                "attr.label(default='//:tool')",
-                "Target[FilesToRunProvider[File | None]] | Target[None]",
-                "Target[FilesToRunProvider[File | None]] | Target[None]",
-            ),
+        for (descriptor, expected) in [
+            ("attr.string(default='fast')", "str"),
+            ("attr.int(default=42)", "int"),
+            ("attr.bool(default=True)", "bool"),
         ] {
-            let source = format!("def dynamic() -> str: return 'fast'\ndef implementation(ctx):\n    ctx.attr._private\n    ctx.attr.public\nexample = rule(implementation=implementation, attrs={{'_private': {descriptor}, 'public': {descriptor}}})\n");
+            let source = format!("def implementation(ctx):\n    ctx.attr._private\n    ctx.attr.public\nexample = rule(implementation=implementation, attrs={{'_private': {descriptor}, 'public': {descriptor}}})\n");
             analysis.update_file(file, source.clone());
             let snapshot = analysis.snapshot();
             let diagnostics = snapshot.diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{descriptor}: {diagnostics:?}");
-            check_field(&snapshot, file, &source, "ctx.attr._private", private, "");
-            check_field(&snapshot, file, &source, "ctx.attr.public", public, "");
+            check_field(&snapshot, file, &source, "ctx.attr._private", expected, "");
+            check_field(&snapshot, file, &source, "ctx.attr.public", expected, "");
         }
     }
 
@@ -1687,11 +1682,11 @@ def implementation(ctx):
         print(version)
     return []
 library = rule(implementation=implementation, attrs={
-    "_kind": attr.string(default="library"),
+    "_kind": attr.string(default="library", values=["library"]),
     "sources": attr.label_list(),
 })
 binary = rule(implementation=implementation, attrs={
-    "_kind": attr.string(default="binary"),
+    "_kind": attr.string(default="binary", values=["binary"]),
     "version": attr.string(),
 })
 "#;
@@ -1921,7 +1916,7 @@ example_test(name="selected", own="value", deps=select({"//conditions:default": 
             ("ctx.executable.tool", "File", "\"tool\""),
             ("ctx.file.single", "File", ""),
             ("ctx.outputs.executable", "File", ""),
-            ("ctx.attr._private", "Literal[\"private\"]", ""),
+            ("ctx.attr._private", "Literal[\"private\", \"other\"]", ""),
         ] {
             check_field(&snapshot, file, source, expression, expected, key);
         }

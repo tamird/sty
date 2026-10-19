@@ -30,6 +30,7 @@ use ty_python_semantic::types::DictionaryExtraItems;
 use ty_python_semantic::types::DictionaryFirstEntry;
 use ty_python_semantic::types::DictionaryItem;
 use ty_python_semantic::types::DictionaryItems;
+use ty_python_semantic::types::IntersectionType;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::ParameterDefault;
@@ -57,6 +58,8 @@ pub(super) struct Attribute {
     mandatory: bool,
     default: Option<FileRange>,
     default_value: DefaultValue,
+    /// Whether Bazel exposes an implicit build-rule input as `$name`.
+    accepts_implicit_input: Option<bool>,
     values: Option<ScalarValues>,
     documentation: Option<Box<str>>,
 }
@@ -178,15 +181,28 @@ pub(super) enum Configurability {
 }
 
 impl Attribute {
+    fn implicit_input_name(&self, name: &str, kind: &RuleKind) -> Option<Name> {
+        let suffix = name.strip_prefix('_')?;
+        if suffix.is_empty() {
+            return None;
+        }
+        match kind {
+            RuleKind::Build if self.accepts_implicit_input != Some(false) => {
+                Some(Name::new(format!("${suffix}")))
+            }
+            RuleKind::Build => None,
+            RuleKind::Repository => Some(Name::new(name)),
+            RuleKind::Macro => None,
+        }
+    }
+
     pub(super) fn finite_value_type<'db>(
         &self,
         db: &'db Database,
         environment: &ProgramEnvironment<'db>,
-        private: bool,
+        fixed_default: bool,
     ) -> Option<Type<'db>> {
-        if private {
-            // Private attributes cannot be supplied by the rule caller. A known
-            // scalar default therefore identifies their analyzed value exactly.
+        if fixed_default {
             match &self.default_value {
                 DefaultValue::String(value) => {
                     return Some(Type::string_literal(db, value.as_ref()))
@@ -205,6 +221,7 @@ impl Attribute {
             mandatory: _,
             default: _,
             default_value: _,
+            accepts_implicit_input: _,
             values,
             documentation: _,
         } = self;
@@ -326,6 +343,7 @@ impl get_size2::GetSize for Attribute {
             mandatory: _,
             default: _,
             default_value,
+            accepts_implicit_input: _,
             values,
             documentation,
         } = self;
@@ -805,7 +823,7 @@ fn attribute<'db>(
         AttributeKind::OutputList => CheckedArgument::Omitted,
         _ => call.argument("default"),
     };
-    let (default, default_value) = match default {
+    let (default, default_value, accepts_implicit_input) = match default {
         CheckedArgument::Omitted => (
             None,
             match kind {
@@ -815,6 +833,7 @@ fn attribute<'db>(
                 AttributeKind::Bool => DefaultValue::Bool(false),
                 _ => DefaultValue::NonNone,
             },
+            Some(true),
         ),
         CheckedArgument::Value { ty, expression } => {
             let expression = expression?;
@@ -832,11 +851,12 @@ fn attribute<'db>(
                 &kind,
                 AttributeUse::Input,
             )?;
+            let direct_value = ty.is_assignable_to(db, &environment, input);
             let default_value = if ty.is_none(db) {
                 DefaultValue::None
             } else if Type::none(db, &environment).is_assignable_to(db, &environment, ty) {
                 DefaultValue::Unknown
-            } else if ty.is_assignable_to(db, &environment, input) {
+            } else if direct_value {
                 match kind {
                     AttributeKind::String => ty
                         .string_literal_value(db)
@@ -856,9 +876,54 @@ fn attribute<'db>(
                 // Computed and late-bound defaults do not expose their value here.
                 DefaultValue::Unknown
             };
-            (Some(source), default_value)
+            // Bazel names direct and computed implicit attributes with `$`; late-bound
+            // defaults use `:`. The inferred type can leave the source undecided.
+            let is_marker = |name| {
+                native_class(db, declarations, name)
+                    .and_then(|class| class.to_instance_approximation(db, &environment))
+                    .is_some_and(|marker| ty.is_subtype_of(db, &environment, marker))
+            };
+            let accepts_implicit_input = if ty.is_none(db)
+                || ty.is_subtype_of(db, &environment, input)
+                || matches!(ty, Type::FunctionLiteral(_))
+                || is_marker("NativeComputedDefault")
+            {
+                Some(true)
+            } else if is_marker("LateBoundDefault") {
+                Some(false)
+            } else {
+                None
+            };
+            (Some(source), default_value, accepts_implicit_input)
         }
         CheckedArgument::Indeterminate => return None,
+    };
+    let accepts_implicit_input = if accepts_implicit_input == Some(false)
+        || !matches!(kind, AttributeKind::Label | AttributeKind::LabelList)
+    {
+        accepts_implicit_input
+    } else {
+        match call.argument("materializer") {
+            CheckedArgument::Omitted => accepts_implicit_input,
+            CheckedArgument::Value { ty, expression: _ } if ty.is_none(db) => {
+                accepts_implicit_input
+            }
+            CheckedArgument::Value { ty, expression: _ }
+                if !Type::none(db, &environment).is_assignable_to(db, &environment, ty) =>
+            {
+                Some(false)
+            }
+            CheckedArgument::Indeterminate
+                if call.call().arguments.keywords.iter().all(|arg| {
+                    arg.arg
+                        .as_ref()
+                        .is_some_and(|name| name.as_str() != "materializer")
+                }) =>
+            {
+                accepts_implicit_input
+            }
+            CheckedArgument::Value { .. } | CheckedArgument::Indeterminate => None,
+        }
     };
     let flag = |name| match call.argument(name) {
         CheckedArgument::Omitted => Some(false),
@@ -928,6 +993,7 @@ fn attribute<'db>(
             mandatory,
             default,
             default_value,
+            accepts_implicit_input,
             values,
             documentation: doc_string(db, call),
         }),
@@ -1206,6 +1272,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     } else {
                         DefaultValue::NonNone
                     },
+                    accepts_implicit_input: Some(false),
                     values: None,
                     documentation: Some(attribute.doc.into_boxed_str()),
                 }),
@@ -1376,6 +1443,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 mandatory: false,
                 default: None,
                 default_value: DefaultValue::Unknown,
+                accepts_implicit_input: None,
                 values: None,
                 documentation: attribute.documentation.clone(),
             });
@@ -1387,7 +1455,21 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             attributes.retain(|attribute| attribute.name.as_str() != name);
             continue;
         }
-        let mut parameter = Parameter::keyword_only(Name::new(name)).with_source_range(source);
+        let implicit_input_name =
+            attribute.and_then(|attribute| attribute.implicit_input_name(name, &kind));
+        let uncertain_input = matches!(kind, RuleKind::Build)
+            && implicit_input_name.is_some()
+            && attribute.is_some_and(|attribute| attribute.accepts_implicit_input.is_none());
+        let mut parameter = match implicit_input_name.clone() {
+            // If the source is unknown, `$name` is not necessarily the required spelling.
+            Some(input)
+                if uncertain_input || attribute.is_some_and(|attribute| !attribute.mandatory) =>
+            {
+                Parameter::implicit_keyword_only(input)
+            }
+            input => Parameter::keyword_only(input.unwrap_or_else(|| Name::new(name))),
+        }
+        .with_source_range(source);
         if matches!(kind, RuleKind::Macro) && value == Type::none(db, &environment) {
             // A removed macro attribute can be omitted, but cannot accept a value.
             parameter = parameter
@@ -1415,12 +1497,22 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 };
                 parameter = optional_attribute(db, &environment, parameter);
             }
+            if uncertain_input {
+                // An unresolved source may expose `$name` with this input type, or may
+                // expose no `$name` at all. Keep the accepted set bounded by the input.
+                let ty = IntersectionType::from_elements(
+                    db,
+                    &environment,
+                    [parameter.annotated_type(), Type::unknown()],
+                );
+                parameter = parameter.with_annotated_type(ty);
+            }
         } else {
             // Keep a known attribute name navigable during recovery. An
             // invalid descriptor supplies no type or requiredness contract.
             parameter = parameter.with_default_type(Type::unknown());
         }
-        let parameter = if name.starts_with('_') {
+        let parameter = if name.starts_with('_') && implicit_input_name.is_none() {
             // An own private macro keyword may explicitly omit its value.
             matches!(kind, RuleKind::Macro).then(|| {
                 parameter
@@ -1580,9 +1672,14 @@ fn inherit_rule_attributes<'db>(
         source,
     } in &data.attributes
     {
-        let parameter = if name.starts_with('_') {
-            None
+        let input_name = if name.starts_with('_') {
+            descriptor
+                .as_ref()
+                .and_then(|attribute| attribute.implicit_input_name(name, &RuleKind::Build))
         } else {
+            Some(name.clone())
+        };
+        let parameter = input_name.and_then(|input_name| {
             let parameter = signature
                 .parameters()
                 .iter()
@@ -1590,13 +1687,13 @@ fn inherit_rule_attributes<'db>(
                     ParameterKind::KeywordOnly {
                         name: parameter_name,
                         default_type: _,
-                    } => parameter_name == name,
+                    } => *parameter_name == input_name,
                     _ => false,
                 })
                 .cloned();
             complete &= parameter.is_some();
             parameter
-        };
+        });
         attributes.push(RuleAttribute {
             name: name.clone(),
             parameter,
@@ -1747,7 +1844,10 @@ fn inherit_macro_attributes<'db>(
             complete = false;
             continue;
         };
-        if name.starts_with('_') || matches!(name.as_str(), "name" | "visibility") {
+        if name.starts_with('_')
+            || name.starts_with('$')
+            || matches!(name.as_str(), "name" | "visibility")
+        {
             continue;
         }
         // Bazel's build-language metadata omits is_documented. These three
@@ -1889,6 +1989,7 @@ fn inherited_native_attribute(
         mandatory: attribute.mandatory(),
         default: None,
         default_value: DefaultValue::Unknown,
+        accepts_implicit_input: Some(false),
         values: None,
         documentation: attribute.documentation.as_deref().map(Into::into),
     })
@@ -2746,6 +2847,194 @@ forward_executable(args=['--verbose'], output_licenses=['notice'])
                 panic!("{name}: {diagnostics:?}");
             };
             assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        }
+    }
+
+    #[test]
+    fn private_rule_attributes_use_host_input_names() {
+        let source = r#"def implementation(ctx): return []
+def computed(): return "//:computed"
+def materialize(context: object) -> None: return None
+def undecided(value): return value
+def macro_impl(name, visibility, **kwargs): pass
+example = rule(implementation=implementation, extendable=True, attrs={
+    "_direct": attr.label(default=Label("//:default")),
+    "_computed": attr.label(default=computed),
+    "_late": attr.label(default=configuration_field(fragment="cpp", name="compiler")),
+    "_uncertain": attr.label(default=json.decode('"//:uncertain"')),
+    "_materialized": attr.label(materializer=materialize),
+    "_maybe_materialized": attr.label(default=Label("//:default"), mandatory=False, **json.decode("{}")),
+    "visible": attr.string(),
+})
+child = rule(parent=example, implementation=implementation)
+wrapped = macro(implementation=macro_impl, inherit_attrs=example)
+repository = repository_rule(implementation=implementation, attrs={"_direct": attr.string(default="x")})
+mandatory = rule(implementation=implementation, attrs={"_secret": attr.string(mandatory=True), "visible": attr.string()})
+mandatory_uncertain = rule(implementation=implementation, attrs={"_secret": attr.label(mandatory=True, default=undecided(configuration_field(fragment="cpp", name="compiler")))})
+mandatory_repository = repository_rule(implementation=implementation, attrs={"_secret": attr.string(mandatory=True)})
+mandatory_wrapped = macro(implementation=macro_impl, inherit_attrs=mandatory)
+example(name="ok", **{"$direct": "//:override", "$computed": "//:other", "$uncertain": "//:value", "$maybe_materialized": "//:value"}, $0visible="ok")
+child(name="inherited", **{"$direct": "//:override"})
+repository(name="private", _direct="override")
+mandatory(name="ok", **{"$secret": "value"})
+mandatory_repository(name="repo", _secret="value")
+mandatory_wrapped(name="wrapped")
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let (file_id, pos) = fixture.cursor_pos.unwrap();
+        let source = source.replace("$0", "");
+        {
+            let snapshot = analysis.snapshot();
+            let diagnostics = snapshot.diagnostics(file_id).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            let help = snapshot
+                .signature_help(FilePosition { file_id, pos })
+                .unwrap()
+                .unwrap();
+            let [signature] = help.signatures.as_slice() else {
+                panic!("{help:?}");
+            };
+            assert!(signature.label.contains("visible: str"), "{help:?}");
+            assert!(!signature.label.contains("$direct"), "{help:?}");
+            let hover = snapshot
+                .hover(FilePosition {
+                    file_id,
+                    pos: source
+                        .find("example(name=\"ok\"")
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                })
+                .unwrap()
+                .unwrap();
+            assert!(
+                !hover.contents.value.contains("$direct"),
+                "{}",
+                hover.contents.value
+            );
+            let call = "mandatory(name=\"ok\", ";
+            let pos = (source.find(call).unwrap() + call.len())
+                .try_into()
+                .unwrap();
+            let help = snapshot
+                .signature_help(FilePosition { file_id, pos })
+                .unwrap()
+                .unwrap();
+            assert!(
+                help.signatures[0].label.contains("$secret: str"),
+                "{help:?}"
+            );
+            let items = snapshot
+                .completions(FilePosition { file_id, pos }, None)
+                .unwrap()
+                .unwrap();
+            assert!(
+                items.iter().any(|item| item.label == "visible="),
+                "{items:?}"
+            );
+            assert!(
+                !items.iter().any(|item| item.label == "$secret="),
+                "{items:?}"
+            );
+        }
+        for (call, expected) in [
+            (
+                "example(name='bad', **{'$direct': 42})",
+                "invalid-argument-type",
+            ),
+            (
+                "example(name='bad', **{'$diretc': '//:value'})",
+                "unknown-argument",
+            ),
+            (
+                "example(name='bad', _direct='//:value')",
+                "unknown-argument",
+            ),
+            (
+                "example(name='bad', **{'$late': '//:value'})",
+                "unknown-argument",
+            ),
+            (
+                "example(name='bad', **{'$materialized': '//:value'})",
+                "unknown-argument",
+            ),
+            (
+                "example(name='bad', **{'$uncertain': 42})",
+                "invalid-argument-type",
+            ),
+            (
+                "example(name='bad', **{'$maybe_materialized': 42})",
+                "invalid-argument-type",
+            ),
+            (
+                "wrapped(name='bad', **{'$direct': '//:value'})",
+                "unknown-argument",
+            ),
+            (
+                "repository(name='bad', **{'$direct': 'value'})",
+                "unknown-argument",
+            ),
+            (
+                "repository(name='bad', _direct=42)",
+                "invalid-argument-type",
+            ),
+            ("mandatory(name='missing')", "missing-argument"),
+            ("mandatory_repository(name='missing')", "missing-argument"),
+            // `:secret` remains unsupported, but `$secret` must not also be required.
+            (
+                "mandatory_uncertain(name='other', **{':secret': '//:value'})",
+                "unknown-argument",
+            ),
+        ] {
+            analysis.update_file(file_id, format!("{source}{call}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file_id).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{call}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{call}: {diagnostic:?}");
+        }
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let known = "example(name='known', **{'$direct': '//:value'})\n";
+        let uncertain = "example(name='uncertain', **{'$uncertain': '//:value'})\n";
+        let maybe_materialized =
+            "example(name='maybe_materialized', **{'$maybe_materialized': '//:value'})\n";
+        let mandatory_uncertain =
+            "mandatory_uncertain(name='uncertain', **{'$secret': '//:value'})\n";
+        analysis.update_file(
+            file_id,
+            format!("{source}{known}{uncertain}{maybe_materialized}{mandatory_uncertain}"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file_id).unwrap();
+        let calls = diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic
+                    .range()
+                    .is_some_and(|range| range.start().to_usize() >= source.len())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(calls.len(), 3, "{calls:?}");
+        for (diagnostic, start) in calls.iter().zip([
+            source.len() + known.len(),
+            source.len() + known.len() + uncertain.len(),
+            source.len() + known.len() + uncertain.len() + maybe_materialized.len(),
+        ]) {
+            assert_eq!(diagnostic.id().as_str(), "non-static-type");
+            assert_eq!(diagnostic.range().unwrap().start().to_usize(), start);
         }
     }
 

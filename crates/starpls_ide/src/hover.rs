@@ -93,7 +93,9 @@ pub(crate) fn hover(
             writeln!(
                 text,
                 "{}\n```",
-                display_ty.display(db, &model.program_environment())
+                display_ty
+                    .display(db, &model.program_environment())
+                    .hide_implicit_parameters()
             )
             .ok()?;
             let receiver = expr.value.inferred_type(&model)?;
@@ -262,6 +264,7 @@ fn type_comment_hover(
     let mut text = format!(
         "```python\n(type) {}\n```\n",
         ty.display(db, &model.program_environment())
+            .hide_implicit_parameters()
     );
     if let Some(doc) = type_documentation(model, ty) {
         text.push_str(&doc.render(MarkupKind::Markdown));
@@ -333,7 +336,14 @@ fn format_for_name<'db>(model: &SemanticModel<'db>, name: &str, ty: Type<'db>) -
         text.push_str(": ");
     }
 
-    write!(&mut text, "{}", display_ty.display(db, &environment)).unwrap();
+    write!(
+        &mut text,
+        "{}",
+        display_ty
+            .display(db, &environment)
+            .hide_implicit_parameters()
+    )
+    .unwrap();
     text.push_str("\n```\n");
 
     let doc = type_documentation(model, ty);
@@ -380,6 +390,7 @@ fn format_parameter<'db>(
     let mut text = format!(
         "```python\n(parameter) {name}: {}\n```\n",
         ty.display(model.db(), &model.program_environment())
+            .hide_implicit_parameters()
     );
     if let Some(doc) = documentation {
         text.push_str(doc);
@@ -782,7 +793,7 @@ example = {factory}(
             (
                 "attrs = {'_tool': attr.label()}\nattrs.update({'_tool': attr.string()})\n",
                 "attrs",
-                "Literal[\"\"]",
+                "str",
             ),
         ] {
             let source = format!(

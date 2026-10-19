@@ -529,9 +529,10 @@ fn keyword_parameters(model: &SemanticModel<'_>, call: &ruff_python_ast::ExprCal
     let mut names = HashSet::new();
     for details in call_signature_details(model, call) {
         for parameter in details.parameters {
-            if parameter.is_positional_only
-                || parameter.is_variadic
-                || parameter.is_keyword_variadic
+            // Follow sty's Ruff-based frontend, then reject non-ASCII names and `load`.
+            if !parameter.can_complete_as_keyword()
+                || !parameter.name.is_ascii()
+                || parameter.name == "load"
                 || call.arguments.keywords.iter().any(|keyword| {
                     keyword
                         .arg
