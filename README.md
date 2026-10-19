@@ -154,9 +154,14 @@ Suppress a diagnostic on its source line with a rule-specific comment:
 value: str = 42  # ty: ignore[invalid-assignment]
 ```
 
-Unused suppressions, malformed directives, and unknown Ty rule names are
+Unused suppressions, malformed directives, and unknown ty rule names are
 errors. A check fails when it reports an error, including a suppression
 whose diagnostic has been fixed.
+
+Set `analysis.require-valid-suppressions = true` in `sty.toml` or through
+`--config` to require every ignore-comment diagnostic to be an unsuppressible
+error. Each ignore must name specific rules and apply to a limited range of
+code. File-wide comments are rejected.
 
 For a BUILD file or `.bzl` source installed by a repository rule, use
 `--source-overlay LOGICAL=PHYSICAL`. Each mapping selects the logical

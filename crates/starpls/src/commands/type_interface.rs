@@ -96,12 +96,13 @@ impl TypeInterfaceOptions {
             rules,
             analysis,
         } = config;
-        let rules = starpls_ide::DiagnosticRules::from_settings(&rules).with_context(|| {
+        let mut rules = starpls_ide::DiagnosticRules::from_settings(&rules).with_context(|| {
             format!(
                 "invalid configuration {}",
                 workspace.join("sty.toml").display()
             )
         })?;
+        rules.set_require_valid_suppressions(analysis.require_valid_suppressions.unwrap_or(false));
         let mut registrations = super::stub_package::load(loader, workspace, stub_packages)?;
         let resolve = |path: &Path| -> anyhow::Result<PathBuf> {
             let path = workspace.join(path);

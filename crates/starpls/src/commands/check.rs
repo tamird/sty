@@ -506,12 +506,12 @@ mod tests {
 
     #[test]
     fn config_overrides_preserve_project_interfaces_and_invocation_scope() {
-        let config = "[[stub-packages]]\nmanifest = 'stubs.toml'\n[type-interfaces]\n'source.bzl' = 'source.bzli'\n[rules]\nmissing-type-argument = 'error'\n[analysis]\nstrict-generic-narrowing = false\n";
+        let config = "[[stub-packages]]\nmanifest = 'stubs.toml'\n[type-interfaces]\n'source.bzl' = 'source.bzli'\n[rules]\nmissing-type-argument = 'error'\n[analysis]\nstrict-generic-narrowing = false\nrequire-valid-suppressions = false\n";
         let sources = [
             ("sty.toml", config),
             (
                 "source.bzl",
-                "def convert(value): return value + 1\ndef unchecked(value: list): return value\ndef inspect(value: object) -> None:\n    if type(value) == 'list':\n        value.append(42)\n",
+                "def convert(value): return value + 1\ndef unchecked(value: list): return value\ndef inspect(value: object) -> None:\n    if type(value) == 'list':\n        value.append(42)\nvalid = 1  # ty: ignore[division-by-zero, unused-ignore-comment]\nmissing = missing_name  # type: ignore\n",
             ),
             ("source.bzli", "def convert(value: str) -> str: ...\n"),
             ("packaged.bzl", "def value(): return 'bad'\n"),
@@ -521,15 +521,17 @@ mod tests {
                 "format-version = 1\n[source]\nrepository = '@@'\nmodule = 'local'\nversions = ['1']\n[files]\n'packaged.bzl' = 'packaged.bzli'\n",
             ),
         ];
-        for (index, (name, overrides, strict, missing_severity)) in [
-            ("project", vec![], false, "error"),
+        for (index, (name, overrides, strict, require_suppressions, missing_severity)) in [
+            ("project", vec![], false, false, "error"),
             (
                 "ordered",
                 vec![
                     "analysis.strict-generic-narrowing=true",
+                    "analysis.require-valid-suppressions=true",
                     "rules.missing-type-argument='ignore'",
                     "rules.missing-type-argument='warn'",
                 ],
+                true,
                 true,
                 "warning",
             ),
@@ -538,12 +540,15 @@ mod tests {
                 vec![
                     "analysis.strict-generic-narrowing=true",
                     "analysis.strict-generic-narrowing=false",
+                    "analysis.require-valid-suppressions=true",
+                    "analysis.require-valid-suppressions=false",
                 ],
+                false,
                 false,
                 "error",
             ),
             // A later invocation reloads the project policy without CLI changes.
-            ("project-again", vec![], false, "error"),
+            ("project-again", vec![], false, false, "error"),
         ]
         .into_iter()
         .enumerate()
@@ -597,6 +602,10 @@ mod tests {
             ];
             if strict {
                 expected.push(("invalid-argument-type", "error"));
+            }
+            if require_suppressions {
+                expected.push(("blanket-ignore-comment", "error"));
+                expected.push(("unused-ignore-comment", "error"));
             }
             expected.sort_unstable();
             assert_eq!(actual, expected, "{name}: {output}");

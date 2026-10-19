@@ -175,6 +175,15 @@ impl DiagnosticRules {
         Ok(rules)
     }
 
+    pub fn set_require_valid_suppressions(&mut self, require: bool) {
+        let Self {
+            ordinary,
+            with_flow,
+        } = self;
+        ordinary.set_require_valid_suppressions(require);
+        with_flow.set_require_valid_suppressions(require);
+    }
+
     pub(super) fn selection(&self, use_code_flow_analysis: bool) -> &RuleSelection {
         let Self {
             ordinary,

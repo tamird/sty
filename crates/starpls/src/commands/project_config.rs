@@ -21,10 +21,11 @@ pub(super) struct ProjectConfig {
     pub analysis: AnalysisOptions,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(super) struct AnalysisOptions {
     pub strict_generic_narrowing: Option<bool>,
+    pub require_valid_suppressions: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -51,7 +52,7 @@ impl FromStr for ConfigOverride {
             analysis,
         } = table.try_into()?;
         anyhow::ensure!(
-            !rules.is_empty() || analysis.strict_generic_narrowing.is_some(),
+            !rules.is_empty() || analysis != AnalysisOptions::default(),
             "configuration override must contain at least one rules or analysis setting"
         );
         starpls_ide::DiagnosticRules::from_settings(&rules)?;
@@ -63,13 +64,18 @@ impl ConfigOverride {
     pub(super) fn apply(&self, config: &mut ProjectConfig) {
         let Self {
             rules,
-            analysis: AnalysisOptions {
-                strict_generic_narrowing,
-            },
+            analysis:
+                AnalysisOptions {
+                    strict_generic_narrowing,
+                    require_valid_suppressions,
+                },
         } = self;
         config.rules.extend(rules.clone());
         if let Some(value) = strict_generic_narrowing {
             config.analysis.strict_generic_narrowing = Some(*value);
+        }
+        if let Some(value) = require_valid_suppressions {
+            config.analysis.require_valid_suppressions = Some(*value);
         }
     }
 }
