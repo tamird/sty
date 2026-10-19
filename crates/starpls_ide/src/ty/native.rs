@@ -495,6 +495,19 @@ fn declarations(
         };
         let py_info = python_key("PyInfo");
         let py_runtime_info = python_key("PyRuntimeInfo");
+        // Bazel's original `cc_proto_aspect` was created with `aspect()`.
+        // https://github.com/bazelbuild/bazel/blob/7.6.1/src/main/starlark/builtins_bzl/common/cc/cc_proto_library.bzl#L245
+        let aspect_result = bzl_globals
+            .and_then(|globals| globals.get("aspect"))
+            .and_then(|value| value.callable.as_ref())
+            .map_or("", |callable| callable.return_type.as_str());
+        let cc_proto_aspect = annotation(
+            aspect_result,
+            false,
+            &declared_classes,
+            AnnotationUse::Value,
+            None,
+        );
         write!(
             body,
             r#"    @_starpls_typing.final
@@ -515,7 +528,7 @@ fn declarations(
             PyRuntimeInfo: {py_runtime_info} = ...
             apple_common: _starpls_typing.Any = ...
             cc_common: _starpls_typing.Any = ...
-            cc_proto_aspect: _starpls_typing.Any = ...
+            cc_proto_aspect: {cc_proto_aspect} = ...
             java_common: _starpls_typing.Any = ...
             proto_common_do_not_use: _starpls_typing.Any = ...
         @_starpls_typing.type_check_only
@@ -3496,7 +3509,7 @@ invalid_toolchain = subrule(implementation = implementation, toolchains = [42])
     }
 
     #[test]
-    fn legacy_globals_preserve_optional_provider_keys() {
+    fn legacy_globals_preserve_optional_types() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
@@ -3507,8 +3520,11 @@ invalid_toolchain = subrule(implementation = implementation, toolchains = [42])
             .unwrap();
         let source = r#"py = native.legacy_globals.PyInfo
 runtime = native.legacy_globals.PyRuntimeInfo
+proto_aspect = native.legacy_globals.cc_proto_aspect
+direct_aspect = aspect(implementation = lambda target, ctx: [])
 nested_py = getattr(getattr(native, "legacy_globals", None), "PyInfo", None)
 nested_runtime = getattr(getattr(native, "legacy_globals", None), "PyRuntimeInfo", None)
+nested_proto_aspect = getattr(getattr(native, "legacy_globals", None), "cc_proto_aspect", None)
 direct_default = getattr(native.legacy_globals, "PyInfo", None)
 cc = native.legacy_globals.CcInfo
 java = native.legacy_globals.JavaInfo
@@ -3551,15 +3567,18 @@ def use_keys(target: Target, files: depset[File]) -> str:
             .filter_map(Stmt::as_assign_stmt)
             .map(|assignment| assignment.value.inferred_type(&model).unwrap())
             .collect();
-        let [py, runtime, nested_py, nested_runtime, direct_default, cc, java, nested_java, java_default, other_default, _name, computed, no_default, missing, native_rule, nested_missing] =
+        let [py, runtime, proto_aspect, direct_aspect, nested_py, nested_runtime, nested_proto_aspect, direct_default, cc, java, nested_java, java_default, other_default, _name, computed, no_default, missing, native_rule, nested_missing] =
             types.as_slice()
         else {
             panic!("expected the legacy member observations: {types:?}");
         };
         assert_ne!(py, runtime);
+        assert_eq!(proto_aspect, direct_aspect);
+        assert!(proto_aspect.is_fully_static(db, &environment));
         for (member, actual) in [
             (py, nested_py),
             (runtime, nested_runtime),
+            (proto_aspect, nested_proto_aspect),
             (py, direct_default),
         ] {
             assert_eq!(
