@@ -3,8 +3,8 @@ description: Build the pinned sty revision and check a Bazel workspace's impleme
 
 inputs:
   files:
-    description: Newline-separated implementation files or directories, relative to working-directory.
-    required: true
+    description: Additional implementation files or directories, newline-separated and relative to working-directory.
+    default: ''
   working-directory:
     description: Bazel workspace containing sty.toml.
     default: .
@@ -70,16 +70,12 @@ runs:
         CODE_FLOW_ANALYSIS: ${{ inputs.code-flow-analysis }}
         AUDIT_LOADS: ${{ inputs.audit-loads }}
       run: |
-        if [[ -z "${CHECK_FILES//[[:space:]]/}" ]]; then
-          echo 'The files input must select at least one implementation.' >&2
-          exit 1
-        fi
         if [[ -n "$CHECK_BAZEL_VERSION" ]]; then
           export USE_BAZEL_VERSION="$CHECK_BAZEL_VERSION"
         else
           unset USE_BAZEL_VERSION
         fi
-        options=(--experimental_infer_ctx_attributes)
+        options=(--check-local-interface-sources --experimental_infer_ctx_attributes)
         case "$CODE_FLOW_ANALYSIS" in
           true) options+=(--experimental_use_code_flow_analysis) ;;
           false) ;;

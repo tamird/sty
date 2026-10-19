@@ -25,14 +25,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: tamird/sty@FULL_COMMIT_SHA
-        with:
-          files: |
-            foo/defs.bzl
-            foo/private/helpers.bzl
 ```
 
-List the implementations covered by the repository's `.bzli` files and map those
-interfaces in `sty.toml` at the Bazel workspace root:
+Map the repository's implementations to their `.bzli` files in `sty.toml` at the
+Bazel workspace root:
 
 ```toml
 [type-interfaces]
@@ -40,13 +36,16 @@ interfaces in `sty.toml` at the Bazel workspace root:
 "foo/private/helpers.bzl" = "foo/private/helpers.bzli"
 ```
 
-The check reads this configuration, validates the stubs and their implementations,
-and follows their loads. It enables inference of `ctx.attr` fields from Bazel rule
+The action checks all registered interfaces and every paired implementation owned
+by the checked Bazel repository, including pairs from local stub manifests. The
+optional `files` input adds implementations or directories, including dependency
+sources.
+The check follows loads and enables inference of `ctx.attr` fields from Bazel rule
 declarations, and reports possibly unbound names and unreachable code. Run the
 corresponding local check with:
 
 ```sh
-sty check --experimental_infer_ctx_attributes --experimental_use_code_flow_analysis foo/defs.bzl foo/private/helpers.bzl
+sty check --check-local-interface-sources --experimental_infer_ctx_attributes --experimental_use_code_flow_analysis
 ```
 
 See the [stub specification](type-interfaces.md) for supported declarations and
@@ -63,10 +62,17 @@ division-by-zero = "error"
 
 `code-flow-analysis: false` disables the additional flow diagnostics supplied by
 the flag; explicitly configured rules retain their configured severity. Set
-`audit-loads: true` to resolve every transitive load and check cycles. Each source
-body to check must appear in `files` or a selected directory.
+`audit-loads: true` to resolve every transitive load and check cycles. Load auditing
+does not select dependency bodies for checking.
 
-Each run uploads build logs, rendered diagnostics, the selected file list,
+With `--check-local-interface-sources`, an `--ignore_pattern` that excludes an
+owned source fails coverage. Ignored sources remain excluded from diagnostics;
+the coverage report records the input failure.
+The check also fails if no implementation is selected. Configured local sources
+that resolve outside the workspace or beneath a nested repository boundary must
+be checked from their own workspace instead.
+
+Each run uploads build logs, rendered diagnostics, the requested file list,
 and a JSON coverage report as the `sty` artifact, including after a failed check.
 Build failures appear in the build step and its log; a successful type check
 requires successful dependency resolution and complete selected-file coverage.
