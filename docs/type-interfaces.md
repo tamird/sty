@@ -177,6 +177,19 @@ exclusions can follow as more string arguments. Excluding a name describes the
 residual keyword row; the wrapper body must still supply any required argument.
 Wrapper-specific inputs belong in the wrapper's own signature.
 
+A callable `Protocol` class projects the signature of its instances. A stub
+can use this form to replace individual inputs while forwarding the remaining
+keywords through the implementation's `**kwargs`:
+
+```starlark
+load(":tool.bzl", _tool = "tool")
+
+class _Wrapper(Protocol):
+    def __call__(self, *, srcs: list[str], **kwargs: Unpack[KeywordArgs[_tool, "srcs"]]) -> None: ...
+
+def wrapper(**kwargs: Unpack[KeywordArgs[_Wrapper]]) -> None: ...
+```
+
 sty can project a rule's keyword row from a fresh attribute mapping stored in
 an immutable field. The row remains incomplete if the mapping may be mutated
 through an alias.

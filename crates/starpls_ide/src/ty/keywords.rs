@@ -39,6 +39,15 @@ pub(super) fn type_application<'db>(
     };
     let environment = ProgramEnvironment::from_file(context.program_file());
     let value = context.infer_value_expression(callable);
+    // A protocol names the call contract of its instances. Its class object has
+    // a separate constructor signature, which does not describe that contract.
+    let value = match value {
+        Type::ClassLiteral(_) => match value.to_instance_approximation(db, &environment) {
+            Some(instance @ Type::ProtocolInstance(_)) => instance,
+            _ => value,
+        },
+        _ => value,
+    };
     if exclusions.is_empty() {
         if let Some(capture) = context.capture_keyword_parameters(expression, value) {
             return Some(capture);
@@ -239,6 +248,120 @@ wrapper(items=[], number=1, tags=["manual"])
             .map(|diagnostic| diagnostic.id().as_str())
             .collect();
         assert_eq!(ids, ["invalid-argument-type"], "{diagnostics:?}");
+    }
+
+    #[test]
+    fn keyword_args_project_callable_protocols() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "target.bzl",
+            "def target(*, x: int, y: str = '') -> int: return x\n",
+        );
+        let source_text = r#"
+load("target.bzl", "target")
+def wrapper(**kwargs):
+    return target(**kwargs)
+def _identity(callback):
+    return callback
+_identity(wrapper)(x=1)
+"#;
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", source_text);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            r#"
+load("target.bzl", _target="target")
+class _Contract(Protocol):
+    def __call__(self, *, x: int, **kwargs: Unpack[KeywordArgs[_target, "x"]]) -> int: ...
+def wrapper(**kwargs: Unpack[KeywordArgs[_Contract]]) -> int: ...
+def _identity[T](callback: T) -> T: ...
+"#,
+        );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            "load('source.bzl', 'wrapper')\nwrapper(x=1, y='ok')\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [source, interface, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{file:?}: {diagnostics:?}");
+        }
+        analysis.update_file(
+            source,
+            format!("{source_text}wrapper()\nalias = wrapper\nalias()\n_identity(wrapper)()\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(ids, ["missing-argument"; 3], "{diagnostics:?}");
+        analysis.update_file(
+            source,
+            source_text.replace("target(**kwargs)", "target(x='bad')"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        analysis.update_file(source, source_text.into());
+        analysis.update_file(
+            caller,
+            "load('source.bzl', 'wrapper')\nwrapper(x=1, y=2)\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
+    fn keyword_args_project_callable_protocols_through_cycle() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source_text = r#"
+def _impl(ctx):
+    return []
+target = rule(_impl, attrs={"items": attr.string_list(mandatory=True)})
+def wrapper(**kwargs):
+    target(name="generated", **kwargs)
+wrapper(items=["local"])
+"#;
+        let source = fixture.add_file(&mut analysis.db, "api.bzl", source_text);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "api.bzli",
+            r#"
+load("api.bzl", _callee="target")
+class _Wrapper(Protocol):
+    def __call__(self, *, items: list[str], **kwargs: Unpack[KeywordArgs[_callee, "name", "items"]]) -> None: ...
+def wrapper(**kwargs: Unpack[KeywordArgs[_Wrapper]]) -> None: ...
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [interface, source] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{file:?}: {diagnostics:?}");
+        }
+        analysis.update_file(source, format!("{source_text}wrapper()\n"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(ids, ["missing-argument"], "{diagnostics:?}");
     }
 
     #[test]
