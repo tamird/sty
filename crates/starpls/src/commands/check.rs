@@ -72,6 +72,10 @@ pub(crate) struct CheckCommand {
     #[clap(long, value_enum, default_value_t)]
     output_format: OutputFormat,
 
+    /// Override a rules or analysis setting with TOML; repeat for more settings.
+    #[clap(short = 'c', long = "config", value_name = "KEY=VALUE")]
+    config: Vec<super::project_config::ConfigOverride>,
+
     /// Path to the Bazel output base.
     #[clap(long = "output_base")]
     pub(crate) output_base: Option<String>,
@@ -238,6 +242,156 @@ mod tests {
             .prepare_analysis(loader, &info, Default::default())
             .unwrap();
         Checker::new(analysis, info, paths, &[], loader, receiver, &options).unwrap()
+    }
+
+    #[test]
+    fn config_overrides_preserve_project_interfaces_and_invocation_scope() {
+        let config = "[[stub-packages]]\nmanifest = 'stubs.toml'\n[type-interfaces]\n'source.bzl' = 'source.bzli'\n[rules]\nmissing-type-argument = 'error'\n[analysis]\nstrict-generic-narrowing = false\n";
+        let sources = [
+            ("sty.toml", config),
+            (
+                "source.bzl",
+                "def convert(value): return value + 1\ndef unchecked(value: list): return value\ndef inspect(value: object) -> None:\n    if type(value) == 'list':\n        value.append(42)\n",
+            ),
+            ("source.bzli", "def convert(value: str) -> str: ...\n"),
+            ("packaged.bzl", "def value(): return 'bad'\n"),
+            ("packaged.bzli", "def value() -> int: ...\n"),
+            (
+                "stubs.toml",
+                "format-version = 1\n[source]\nrepository = '@@'\nmodule = 'local'\nversions = ['1']\n[files]\n'packaged.bzl' = 'packaged.bzli'\n",
+            ),
+        ];
+        for (index, (name, overrides, strict, missing_severity)) in [
+            ("project", vec![], false, "error"),
+            (
+                "ordered",
+                vec![
+                    "analysis.strict-generic-narrowing=true",
+                    "rules.missing-type-argument='ignore'",
+                    "rules.missing-type-argument='warn'",
+                ],
+                true,
+                "warning",
+            ),
+            (
+                "explicit-false",
+                vec![
+                    "analysis.strict-generic-narrowing=true",
+                    "analysis.strict-generic-narrowing=false",
+                ],
+                false,
+                "error",
+            ),
+            // A later invocation reloads the project policy without CLI changes.
+            ("project-again", vec![], false, "error"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut args = vec![
+                "check",
+                "source.bzl",
+                "packaged.bzl",
+                "--output-format",
+                "json-lines",
+            ];
+            for value in overrides {
+                args.extend(["--config", value]);
+            }
+            let matches = <CheckCommand as clap::Args>::augment_args(clap::Command::new("check"))
+                .try_get_matches_from(args)
+                .unwrap();
+            let options =
+                <CheckCommand as clap::FromArgMatches>::from_arg_matches(&matches).unwrap();
+            let mut checker = local_checker_with_options(
+                "checker-config-overrides",
+                if index == 0 { &sources } else { &[] },
+                options,
+            );
+            let root = checker.bazel_info.workspace.clone();
+            assert_eq!(checker.analysis.type_interface_files().len(), 2, "{name}");
+            let mut output = Vec::new();
+            let mut status = Vec::new();
+            assert!(checker
+                .report_diagnostics_to(None, &mut output, &mut status)
+                .is_err());
+            let output = String::from_utf8(output).unwrap();
+            let diagnostics: Vec<serde_json::Value> = output
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect();
+            let mut actual: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    (
+                        diagnostic["name"].as_str().unwrap(),
+                        diagnostic["severity"].as_str().unwrap(),
+                    )
+                })
+                .collect();
+            actual.sort_unstable();
+            let mut expected = vec![
+                ("invalid-return-type", "error"),
+                ("missing-type-argument", missing_severity),
+                ("unsupported-operator", "error"),
+            ];
+            if strict {
+                expected.push(("invalid-argument-type", "error"));
+            }
+            expected.sort_unstable();
+            assert_eq!(actual, expected, "{name}: {output}");
+            assert_eq!(
+                std::fs::read_to_string(root.join("sty.toml")).unwrap(),
+                config
+            );
+        }
+    }
+
+    #[test]
+    fn config_overrides_reject_invalid_or_non_check_settings() {
+        use clap::Parser;
+
+        for (value, expected) in [
+            ("", "at least one rules or analysis setting"),
+            ("[rules]", "at least one rules or analysis setting"),
+            ("[analysis]", "at least one rules or analysis setting"),
+            ("rules.unknown-rule='error'", "invalid rule"),
+            ("rules.non-static-type='warning'", "invalid level"),
+            ("rules.non-static-type=42", "invalid type"),
+            ("analysis.strict-generic-narrowing='yes'", "invalid type"),
+            ("analysis.unknown=true", "unknown field"),
+            ("unknown=true", "support rules and analysis"),
+            (
+                "type-interfaces.'source.bzl'='source.bzli'",
+                "support rules and analysis",
+            ),
+            ("stub-packages=[]", "support rules and analysis"),
+            ("rules =", "TOML parse error"),
+        ] {
+            let error = match crate::Cli::try_parse_from([
+                "sty",
+                "check",
+                "--config",
+                "rules.non-static-type='error'",
+                "--config",
+                value,
+            ]) {
+                Ok(_) => panic!("accepted {value:?}"),
+                Err(error) => error,
+            };
+            assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+            assert!(error.to_string().contains(expected), "{value}: {error}");
+        }
+        let error = match crate::Cli::try_parse_from([
+            "sty",
+            "server",
+            "--config",
+            "rules.non-static-type='error'",
+        ]) {
+            Ok(_) => panic!("server accepted check-only configuration"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 
     #[test]
@@ -1955,7 +2109,9 @@ impl CheckCommand {
         // Package manifests can resolve source repositories relative to an
         // external annotation repository. Finish those synchronous queries
         // before deferring mappings discovered through the source graph.
-        let prepared = self.type_interfaces.prepare(&loader, &info.workspace)?;
+        let prepared =
+            self.type_interfaces
+                .prepare_with_overrides(&loader, &info.workspace, &self.config)?;
         loader.fetch_source_repositories(prepared.paths(), |message| {
             if self.progress {
                 eprintln!("{message}");

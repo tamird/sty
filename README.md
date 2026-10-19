@@ -139,6 +139,15 @@ separate `--report` coverage summary retains its version 2 format and
 counts fatal diagnostics as errors. Errors or incomplete coverage still
 fail the command; warnings alone do not.
 
+Use repeatable `--config '<KEY> = <VALUE>'` arguments to override `[rules]`
+or `[analysis]` settings for one check, for example
+`--config 'rules.non-static-type = "error"'`
+`--config 'analysis.strict-generic-narrowing = true'`.
+These values take precedence over the workspace's `sty.toml`; the last
+explicit value for a setting wins. Project interface and stub package
+selections remain in effect. Overrides do not modify files or editor
+settings, and invalid settings are rejected.
+
 Suppress a diagnostic on its source line with a rule-specific comment:
 
 ```starlark

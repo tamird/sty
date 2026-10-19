@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow::Context;
 use serde::Deserialize;
@@ -20,11 +21,57 @@ pub(super) struct ProjectConfig {
     pub analysis: AnalysisOptions,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(super) struct AnalysisOptions {
-    #[serde(default)]
-    pub strict_generic_narrowing: bool,
+    pub strict_generic_narrowing: Option<bool>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct ConfigOverride {
+    rules: BTreeMap<String, String>,
+    analysis: AnalysisOptions,
+}
+
+impl FromStr for ConfigOverride {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> anyhow::Result<Self> {
+        let table: toml::Table = toml::from_str(value)?;
+        for section in table.keys() {
+            anyhow::ensure!(
+                matches!(section.as_str(), "rules" | "analysis"),
+                "configuration overrides support rules and analysis, not {section:?}"
+            );
+        }
+        let ProjectConfig {
+            stub_packages: _,
+            type_interfaces: _,
+            rules,
+            analysis,
+        } = table.try_into()?;
+        anyhow::ensure!(
+            !rules.is_empty() || analysis.strict_generic_narrowing.is_some(),
+            "configuration override must contain at least one rules or analysis setting"
+        );
+        starpls_ide::DiagnosticRules::from_settings(&rules)?;
+        Ok(Self { rules, analysis })
+    }
+}
+
+impl ConfigOverride {
+    pub(super) fn apply(&self, config: &mut ProjectConfig) {
+        let Self {
+            rules,
+            analysis: AnalysisOptions {
+                strict_generic_narrowing,
+            },
+        } = self;
+        config.rules.extend(rules.clone());
+        if let Some(value) = strict_generic_narrowing {
+            config.analysis.strict_generic_narrowing = Some(*value);
+        }
+    }
 }
 
 impl ProjectConfig {

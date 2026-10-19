@@ -68,12 +68,34 @@ impl TypeInterfaceOptions {
         loader: &crate::document::DefaultFileLoader,
         workspace: &Path,
     ) -> anyhow::Result<PreparedInterfaces> {
+        self.prepare_with_overrides(loader, workspace, &[])
+    }
+
+    pub(super) fn prepare_with_overrides(
+        &self,
+        loader: &crate::document::DefaultFileLoader,
+        workspace: &Path,
+        overrides: &[super::project_config::ConfigOverride],
+    ) -> anyhow::Result<PreparedInterfaces> {
+        let mut config = super::project_config::ProjectConfig::load(loader, workspace)?;
+        if !overrides.is_empty() {
+            // A command-line replacement must not conceal invalid project policy.
+            starpls_ide::DiagnosticRules::from_settings(&config.rules).with_context(|| {
+                format!(
+                    "invalid configuration {}",
+                    workspace.join("sty.toml").display()
+                )
+            })?;
+            for override_ in overrides {
+                override_.apply(&mut config);
+            }
+        }
         let super::project_config::ProjectConfig {
             stub_packages,
             type_interfaces,
             rules,
             analysis,
-        } = super::project_config::ProjectConfig::load(loader, workspace)?;
+        } = config;
         let rules = starpls_ide::DiagnosticRules::from_settings(&rules).with_context(|| {
             format!(
                 "invalid configuration {}",
@@ -206,7 +228,11 @@ impl PreparedInterfaces {
         }
         analysis.set_type_interfaces(mappings)?;
         analysis.set_rules(rules);
-        analysis.set_strict_generic_narrowing(analysis_options.strict_generic_narrowing);
+        analysis.set_strict_generic_narrowing(
+            analysis_options
+                .strict_generic_narrowing
+                .unwrap_or_default(),
+        );
         Ok(())
     }
 }
@@ -380,6 +406,14 @@ mod tests {
         ] {
             std::fs::write(root.join("sty.toml"), invalid).unwrap();
             assert!(options.prepare(&loader, &root).is_err());
+            // A valid override cannot conceal an invalid project setting or
+            // replace the registrations installed by an earlier invocation.
+            let overrides = ["rules.missing-type-argument = 'ignore'".parse().unwrap()];
+            assert!(options
+                .prepare_with_overrides(&loader, &root, &overrides)
+                .and_then(|prepared| prepared.install(&mut analysis, &root))
+                .is_err());
+            assert_eq!(analysis.type_interface_sources(), [source]);
             let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
             assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
         }
