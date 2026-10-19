@@ -60,6 +60,7 @@ pub(super) struct Attribute {
     default_value: DefaultValue,
     /// Whether Bazel exposes an implicit build-rule input as `$name`.
     accepts_implicit_input: Option<bool>,
+    /// The allowed explicit inputs; the omission default is tracked separately.
     values: Option<ScalarValues>,
     documentation: Option<Box<str>>,
 }
@@ -70,6 +71,16 @@ enum ScalarValues {
     Int(Box<[i32]>),
 }
 
+impl ScalarValues {
+    fn allows_selected_none(&self) -> bool {
+        // Bazel converts a selected None to the attribute type's implicit default.
+        match self {
+            Self::String(values) => values.iter().any(|value| value.is_empty()),
+            Self::Int(values) => values.contains(&0),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
 enum DefaultValue {
     None,
@@ -78,6 +89,17 @@ enum DefaultValue {
     Int(i32),
     Bool(bool),
     Unknown,
+}
+
+impl DefaultValue {
+    fn literal_type<'db>(&self, db: &'db Database) -> Option<Type<'db>> {
+        match self {
+            Self::String(value) => Some(Type::string_literal(db, value.as_ref())),
+            Self::Int(value) => Some(Type::int_literal(i64::from(*value))),
+            Self::Bool(value) => Some(Type::bool_literal(*value)),
+            Self::None | Self::NonNone | Self::Unknown => None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
@@ -202,30 +224,25 @@ impl Attribute {
         environment: &ProgramEnvironment<'db>,
         fixed_default: bool,
     ) -> Option<Type<'db>> {
-        if fixed_default {
-            match &self.default_value {
-                DefaultValue::String(value) => {
-                    return Some(Type::string_literal(db, value.as_ref()))
-                }
-                DefaultValue::Int(value) => return Some(Type::int_literal(i64::from(*value))),
-                DefaultValue::Bool(value) => return Some(Type::bool_literal(*value)),
-                DefaultValue::None | DefaultValue::NonNone | DefaultValue::Unknown => {}
-            }
+        let default = self.default_value.literal_type(db);
+        if fixed_default && default.is_some() {
+            return default;
         }
-        let Self {
-            kind: _,
-            single_file: _,
-            executable: _,
-            configuration: _,
-            configurability: _,
-            mandatory: _,
-            default: _,
-            default_value: _,
-            accepts_implicit_input: _,
-            values,
-            documentation: _,
-        } = self;
-        let values = values.as_ref()?;
+        let values = self.allowed_value_type(db, environment)?;
+        Some(if self.mandatory {
+            values
+        } else {
+            // Bazel validates explicit inputs before filling omitted attributes.
+            UnionType::from_elements(db, environment, [values, default?])
+        })
+    }
+
+    fn allowed_value_type<'db>(
+        &self,
+        db: &'db Database,
+        environment: &ProgramEnvironment<'db>,
+    ) -> Option<Type<'db>> {
+        let values = self.values.as_ref()?;
         Some(match values {
             ScalarValues::String(values) => UnionType::from_elements(
                 db,
@@ -806,11 +823,11 @@ fn attribute<'db>(
         CheckedArgument::Indeterminate => return None,
     };
     let values = match kind {
-        AttributeKind::String => scalar_values(call, mandatory, Box::from(""), |ty| {
-            ty.string_literal_value(db).map(Box::from)
-        })
-        .map(ScalarValues::String),
-        AttributeKind::Int => scalar_values(call, mandatory, 0, |ty| {
+        AttributeKind::String => {
+            scalar_values(call, |ty| ty.string_literal_value(db).map(Box::from))
+                .map(ScalarValues::String)
+        }
+        AttributeKind::Int => scalar_values(call, |ty| {
             let value = ty.as_int_literal()?;
             i32::try_from(value).ok()
         })
@@ -1002,8 +1019,6 @@ fn attribute<'db>(
 
 fn scalar_values<'db, T>(
     call: &CheckedCall<'_, 'db>,
-    mandatory: bool,
-    implicit_default: T,
     literal: impl Fn(Type<'db>) -> Option<T>,
 ) -> Option<Box<[T]>> {
     let CheckedArgument::Value { ty: _, expression } = call.argument("values") else {
@@ -1037,23 +1052,13 @@ fn scalar_values<'db, T>(
     if elements.is_empty() || elements.iter().any(Expr::is_starred_expr) {
         return None;
     }
-    let mut values = elements
+    elements
         .iter()
         .map(|element| {
             let ty = call.expression_type(element)?;
             literal(ty)
         })
-        .collect::<Option<Vec<_>>>()?;
-    if !mandatory {
-        // Rule and repository defaults are filled after explicit allowed-value validation.
-        let default = match call.argument("default") {
-            CheckedArgument::Omitted => implicit_default,
-            CheckedArgument::Value { ty, expression: _ } => literal(ty)?,
-            CheckedArgument::Indeterminate => return None,
-        };
-        values.push(default);
-    }
-    Some(values.into_boxed_slice())
+        .collect()
 }
 
 enum RuleKind {
@@ -1077,7 +1082,7 @@ fn common_attribute_parameter<'db>(
         AttributeUse::Input,
     )?;
     let ty = if attribute.configurable && !matches!(kind, RuleKind::Repository) {
-        configurable_input(db, environment, declarations, ty)?
+        configurable_input(db, environment, declarations, ty, true)?
     } else {
         ty
     };
@@ -1476,11 +1481,23 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 .with_annotated_type(Type::Never)
                 .with_default_type(Type::unknown());
         } else if let Some(attribute) = attribute {
-            let ty = attribute_type(db, call, &attribute.kind)?;
+            let input = attribute_value_type(
+                db,
+                &environment,
+                declarations,
+                &attribute.kind,
+                AttributeUse::Input,
+            )?;
+            let allowed_values = attribute.allowed_value_type(db, &environment);
+            let ty = allowed_values.unwrap_or(input);
             let ty = if !matches!(kind, RuleKind::Repository)
                 && attribute.configurable() != Some(false)
             {
-                configurable_input(db, &environment, declarations, ty)?
+                let allows_selected_none = attribute
+                    .values
+                    .as_ref()
+                    .is_none_or(ScalarValues::allows_selected_none);
+                configurable_input(db, &environment, declarations, ty, allows_selected_none)?
             } else {
                 ty
             };
@@ -1492,7 +1509,17 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             }
             if !attribute.mandatory {
                 parameter = match attribute.default {
-                    Some(source) => parameter.with_default(ParameterDefault::Source { ty, source }),
+                    Some(source) => {
+                        let default_type = if allowed_values.is_some() {
+                            attribute.default_value.literal_type(db).unwrap_or(input)
+                        } else {
+                            ty
+                        };
+                        parameter.with_default(ParameterDefault::Source {
+                            ty: default_type,
+                            source,
+                        })
+                    }
                     None => parameter.with_default_type(Type::unknown()),
                 };
                 parameter = optional_attribute(db, &environment, parameter);
@@ -2000,9 +2027,13 @@ fn configurable_input<'db>(
     environment: &ProgramEnvironment<'db>,
     declarations: ProgramFile<'db>,
     value: Type<'db>,
+    allows_selected_none: bool,
 ) -> Option<Type<'db>> {
-    let alternatives =
-        UnionType::from_elements(db, environment, [value, Type::none(db, environment)]);
+    let alternatives = if allows_selected_none {
+        UnionType::from_elements(db, environment, [value, Type::none(db, environment)])
+    } else {
+        value
+    };
     let selected = specialized_native_instance(
         db,
         environment,
@@ -2055,22 +2086,6 @@ pub(super) fn specialized_native_class<'db>(
     let class = class.as_class_literal()?;
     let specialized = class.apply_specialization(db, |context| context.specialize(db, arguments));
     Some(Type::from(specialized))
-}
-
-fn attribute_type<'db>(
-    db: &'db Database,
-    call: &CheckedCall<'_, 'db>,
-    kind: &AttributeKind,
-) -> Option<Type<'db>> {
-    let environment = ProgramEnvironment::from_file(call.file());
-    let declaration = call.declaration()?;
-    attribute_value_type(
-        db,
-        &environment,
-        declaration.program_file(db),
-        kind,
-        AttributeUse::Input,
-    )
 }
 
 pub(super) enum AttributeUse<'db> {
@@ -2847,6 +2862,58 @@ forward_executable(args=['--verbose'], output_licenses=['notice'])
                 panic!("{name}: {diagnostics:?}");
             };
             assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        }
+    }
+
+    #[test]
+    fn scalar_attribute_allowed_values_check_explicit_inputs() {
+        let source = r#"def implementation(ctx): return []
+def macro_implementation(name, visibility, **kwargs): pass
+def dynamic() -> str: return "other"
+example = rule(implementation=implementation, attrs={
+    "_mode": attr.string(values=["script"], default="other"),
+    "retries": attr.int(values=(0, 1), mandatory=True),
+    "free": attr.string(values=[]),
+    "dynamic_default": attr.string(values=["zstd"], default=dynamic()),
+})
+repository = repository_rule(implementation=implementation, attrs={"mode": attr.string(values=["fast"])})
+wrapped = macro(implementation=macro_implementation, attrs={"mode": attr.string(values=["fast"])})
+example(name="direct", retries=1, free="anything", dynamic_default="zstd", **{"$mode": "script"})
+example(name="omitted", retries=0)
+example(name="none", retries=1, dynamic_default=None)
+example(name="selected", retries=select({"//conditions:default": None}), dynamic_default=select({"//conditions:default": "zstd"}))
+repository(name="repo", mode="fast")
+wrapped(name="macro", mode="fast")
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for invalid in [
+            r#"example(name="bad", retries=1, **{"$mode": "other"})"#,
+            r#"example(name="bad", retries=3)"#,
+            r#"example(name="bad", retries=1, dynamic_default="other")"#,
+            r#"example(name="bad", retries=select({"//conditions:default": 3}))"#,
+            r#"example(name="bad", retries=1, dynamic_default=select({"//conditions:default": None}))"#,
+            r#"repository(name="bad", mode="slow")"#,
+            r#"wrapped(name="bad", mode="slow")"#,
+        ] {
+            analysis.update_file(file, format!("{source}{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
         }
     }
 

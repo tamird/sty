@@ -1838,20 +1838,33 @@ example(name="dynamic", mode=dynamic())
         let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
         enable_context(&mut analysis);
         let file = fixture.main_file();
-        for (edited, errors) in [
-            (source.to_owned(), vec!["ctx.missing"]),
+        for (edited, errors, invalid_call) in [
+            (source.to_owned(), vec!["ctx.missing"], true),
             (
                 source.replace("values=[\"zstd\", \"gzip\"]", "values=[]"),
                 vec!["ctx.attrs", "ctx.missing"],
+                false,
             ),
             (
                 source.replace("default=\"zstd\"", "default=dynamic()"),
                 vec!["ctx.attrs", "ctx.missing"],
+                true,
             ),
-            (source.to_owned(), vec!["ctx.missing"]),
+            (source.to_owned(), vec!["ctx.missing"], true),
         ] {
             analysis.update_file(file, edited.clone());
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let mut diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            if invalid_call {
+                let call_start = edited.rfind("example(name=").unwrap();
+                let index = diagnostics
+                    .iter()
+                    .position(|diagnostic| {
+                        diagnostic.range().unwrap().start().to_usize() >= call_start
+                    })
+                    .expect("dynamic call is invalid");
+                let diagnostic = diagnostics.remove(index);
+                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            }
             assert_eq!(diagnostics.len(), errors.len(), "{diagnostics:?}");
             for (diagnostic, expression) in diagnostics.into_iter().zip(errors) {
                 assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
