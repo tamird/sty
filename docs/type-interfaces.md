@@ -88,21 +88,25 @@ def identity(value: str) -> str: ...
 def identity(value: int | str) -> int | str: ...
 ```
 
-ty checks the overloads against the ordinary implementation signature. sty uses
-that signature to check the source body; source annotations still take
-precedence. Callers see only the overloads. Generic implementation variables are
-inferred from each overload's inputs. A generic implementation requires a fully
-static specialization.
-Unresolved inference, generic variadics, and receiver-dependent generics produce
+ty checks the overloads against the ordinary implementation signature. Source
+annotations still take precedence, and callers see only the overloads. Generic
+implementation variables are inferred from each overload's inputs. A generic
+implementation requires a fully static specialization. Unresolved inference,
+generic variadics, and receiver-dependent generics produce
 `invalid-function-interface` when checking mapped source. Families without an
 explicit implementation produce the same diagnostic.
 
-When the source adopts its entire signature from the stub, ty also checks
-supported bodies under each overload's parameter and result types. This includes
+When the source adopts its entire signature from the stub, ty checks supported
+bodies under each overload's parameter and result types. Supported bodies include
 assignments, conditionals, callback calls, builtin list and dictionary
 construction, supported collection methods, and typed `**kwargs`. Generic inputs
-must yield a complete static implementation specialization. Optional parameters retain the actual source default wherever
-the overload permits omission.
+must yield a complete static implementation specialization. Optional parameters
+retain the actual source default wherever the overload permits omission.
+
+If every overload is supported, these separate views own body type diagnostics
+and `non-static-type` checks, preserving relationships between parameters.
+Declarations, default expressions, and condition warnings keep their shared
+source interpretation.
 
 For example, an overload promising `str` when a flag is `True` rejects `return 42`
 in that branch even when the shared implementation permits `int | str`. Captures,

@@ -33,10 +33,11 @@ use ty_python_semantic::lint::LintSource;
 use ty_python_semantic::lint::LintStatus;
 use ty_python_semantic::lint::RuleSelection;
 use ty_python_semantic::provided::BuiltinUsage;
-use ty_python_semantic::types::check_types_with_overload_bodies;
+use ty_python_semantic::types::check_types_with_overload_analysis;
 use ty_python_semantic::types::ide_support::resolved_call_signature;
 use ty_python_semantic::types::ide_support::unreachable_ranges;
 use ty_python_semantic::types::ide_support::unused_definitions;
+use ty_python_semantic::types::OverloadBodyAnalysis;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::ProgramEnvironment;
 use ty_python_semantic::SemanticModel;
@@ -241,7 +242,11 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
     diagnostics.extend(interface_diagnostics);
     diagnostics.extend(super::annotations::diagnostics(db, file));
     diagnostics.extend(super::context::diagnostics(db, file));
-    diagnostics.extend(super::strictness::diagnostics(db, file));
+    let overload_bodies: Vec<_> = overload_bodies
+        .into_iter()
+        .map(|function| OverloadBodyAnalysis::new(db, function))
+        .collect();
+    diagnostics.extend(super::strictness::diagnostics(db, file, &overload_bodies));
     if !options.allow_unused_definitions {
         let index = semantic_index(db, program_file);
         let environment = model.program_environment();
@@ -359,7 +364,7 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
             visitor.visit_stmt(statement);
         }
     }
-    check_types_with_overload_bodies(db, program_file, diagnostics, overload_bodies)
+    check_types_with_overload_analysis(db, program_file, diagnostics, overload_bodies)
 }
 
 fn has_non_underscore_binding(target: &Expr) -> bool {
