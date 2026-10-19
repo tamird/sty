@@ -1071,7 +1071,7 @@ a$0bc = 123
             "for (x,) in [(1,)]:\n    x$0\n",
             expect![[r#"
                 ```python
-                (variable) x: int
+                (variable) x: Literal[1]
                 ```
             "#]],
         );
