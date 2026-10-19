@@ -128,34 +128,56 @@ pub(super) fn getattr_result<'db>(
     {
         return presence.into();
     }
-    let possibly_missing = ProvidedGetattrPresence::PossiblyMissing.into();
+    let mut result = ProvidedGetattrResult::from(ProvidedGetattrPresence::PossiblyMissing);
     let Some((class, _)) = super::factory::native_class(db, definition.program_file(db), "struct")
         .and_then(|class| class.to_instance_approximation(db, &environment))
         .and_then(|instance| instance.class_specialization(db, &environment))
     else {
-        return possibly_missing;
+        return result;
     };
-    let Some(specialization) = receiver.base_class_specialization(db, &environment, class) else {
-        return possibly_missing;
+    let intersect = |left: Option<Type<'db>>, right| {
+        left.map_or(right, |left| {
+            IntersectionType::from_two_elements(db, &environment, left, right)
+        })
     };
-    let [_, Type::TypedDict(shape)] = specialization.types(db) else {
-        return possibly_missing;
-    };
-    if let Some(field) = shape.items(db).get(attribute) {
-        ProvidedGetattrResult {
-            presence: if field.is_required() {
-                ProvidedGetattrPresence::Present
-            } else {
-                ProvidedGetattrPresence::PossiblyMissing
-            },
-            return_type: Some(field.declared_type()),
-            immutable_storage: field.is_required(),
+    let mut value_bound = None;
+    let mut project = |constraint: Type<'db>| {
+        if result.presence == ProvidedGetattrPresence::Absent {
+            return;
         }
-    } else if matches!(shape.openness(db), TypedDictOpenness::Closed) {
-        ProvidedGetattrPresence::Absent.into()
-    } else {
-        possibly_missing
+        let Some(specialization) = constraint.base_class_specialization(db, &environment, class)
+        else {
+            return;
+        };
+        let [value, shape] = specialization.types(db) else {
+            return;
+        };
+        value_bound = Some(intersect(value_bound, *value));
+        let Type::TypedDict(shape) = shape else {
+            return;
+        };
+        let Some(field) = shape.items(db).get(attribute) else {
+            if matches!(shape.openness(db), TypedDictOpenness::Closed) {
+                result = ProvidedGetattrPresence::Absent.into();
+            }
+            return;
+        };
+        if field.is_required() {
+            result.presence = ProvidedGetattrPresence::Present;
+            result.immutable_storage = true;
+        }
+        result.return_type = Some(intersect(result.return_type, field.declared_type()));
+    };
+    match receiver.expand_top_level_aliases(db, &environment) {
+        Type::Intersection(intersection) => intersection.iter_positive(db).for_each(&mut project),
+        receiver => project(receiver),
     }
+    // A named field justifies replacing the getter's ordinary result; every
+    // struct carrier also constrains that field through its uniform value bound.
+    result.return_type = result
+        .return_type
+        .map(|field| intersect(value_bound, field));
+    result
 }
 
 pub(super) fn type_application<'db>(
@@ -631,6 +653,85 @@ def opaque(value: struct[object], name: str) -> object:
             }),
             "{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn intersected_struct_shapes_project_all_field_constraints() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("possibly-missing-attribute".into(), "error".into()),
+                    ("non-static-type".into(), "error".into()),
+                ]
+                .into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def name(value):
+    return value.name
+def overlap(value):
+    return value.name
+def optional(value):
+    return getattr(value, "name", None)
+def conflict(value):
+    return getattr(value, "name", None)
+def closed(value):
+    return getattr(value, "name", None)
+def union(value):
+    return getattr(value, "name", None)
+def uniform(value):
+    return getattr(value, "name", None)
+"#;
+        let implementation = fixture.add_file(&mut analysis.db, "api.bzl", source);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "api.bzli",
+            r#"type _Combined = Intersection[struct[{"other": str}, ...], struct[{"name": str}, ...]]
+def name(value: _Combined) -> str: ...
+def overlap(value: Intersection[struct[{"name": NotRequired[str | int]}, ...], struct[{"name": str | None}, ...]]) -> str: ...
+def optional(value: Intersection[struct[{"name": NotRequired[str | int]}, ...], struct[{"name": NotRequired[str | None]}, ...]]) -> str | None: ...
+def conflict(value: Intersection[struct[{"name": NotRequired[str]}, ...], struct[{"name": NotRequired[int]}, ...]]) -> None: ...
+def closed(value: Intersection[struct[{"other": str}], struct[{"name": NotRequired[str]}, ...]]) -> None: ...
+def union(value: _Combined | struct[{}]) -> str | None: ...
+def uniform(value: Intersection[struct[str], struct[{"name": NotRequired[str | int]}, ...]]) -> str | None: ...
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis
+            .set_type_interfaces([(implementation, interface)])
+            .unwrap();
+        for file in [implementation, interface] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (name, expected) in [
+            ("optional", "possibly-missing-attribute"),
+            ("union", "unresolved-attribute"),
+        ] {
+            analysis.update_file(
+                implementation,
+                source.replace(
+                    &format!("def {name}(value):\n    return getattr(value, \"name\", None)"),
+                    &format!("def {name}(value):\n    return value.name"),
+                ),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(implementation).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{name}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{name}");
+        }
     }
 
     #[test]
