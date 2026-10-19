@@ -34,6 +34,10 @@ body, including paths through its default arguments, and checks that its
 signature accepts the stub's calls. Source annotations and type comments take
 precedence. Generic annotations retain the stub's type parameters and scope.
 
+A stub variable annotation also supplies the declared type of a unique,
+direct module assignment with the same name. ty checks the assigned value in
+the stub annotation's context, including private bindings used by functions.
+
 Annotation expressions in the implementation can also refer to declarations and
 imports in its registered stub. Source lexical bindings take precedence over
 these names. Stub declarations are available in annotations and type comments;

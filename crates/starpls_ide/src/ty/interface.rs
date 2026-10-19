@@ -216,7 +216,7 @@ pub(super) fn diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_>
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct FunctionAnnotations {
+struct ImplementationAnnotations {
     interface: File,
     owners: FxHashMap<NodeIndex, NodeIndex>,
     value_declarations: Vec<NodeIndex>,
@@ -224,7 +224,7 @@ struct FunctionAnnotations {
     errors: Vec<(TextRange, TextRange, String)>,
 }
 
-fn function_annotations(db: &dyn Db, file: File) -> Option<&FunctionAnnotations> {
+fn implementation_annotations(db: &dyn Db, file: File) -> Option<&ImplementationAnnotations> {
     if file.api_context() == Some(APIContext::Build)
         || !db
             .environment()
@@ -233,16 +233,16 @@ fn function_annotations(db: &dyn Db, file: File) -> Option<&FunctionAnnotations>
     {
         return None;
     }
-    function_annotations_query(db, file.source, (file.dialect, file.info)).as_ref()
+    implementation_annotations_query(db, file.source, (file.dialect, file.info)).as_ref()
 }
 
 /// Correspondence is needed during indexing and must depend only on syntax.
 #[salsa::tracked(returns(ref))]
-fn function_annotations_query(
+fn implementation_annotations_query(
     db: &dyn Db,
     source: ruff_db::files::File,
     context: (Dialect, Option<FileInfo>),
-) -> Option<FunctionAnnotations> {
+) -> Option<ImplementationAnnotations> {
     let (dialect, info) = context;
     let file = File {
         source,
@@ -256,6 +256,7 @@ fn function_annotations_query(
     let source_names = module_bindings(db, file);
     let stub_names = module_bindings(db, interface);
     let parsed = starpls_common::parsed_module(db, file).load(db);
+    let source_assignments = direct_module_assignments(parsed.suite());
     let source_functions: FxHashMap<_, _> = parsed
         .suite()
         .iter()
@@ -267,7 +268,7 @@ fn function_annotations_query(
         })
         .collect();
     let stub = starpls_common::parsed_module(db, interface).load(db);
-    let mut result = FunctionAnnotations {
+    let mut result = ImplementationAnnotations {
         interface,
         owners: FxHashMap::default(),
         value_declarations: Vec::new(),
@@ -284,6 +285,24 @@ fn function_annotations_query(
         }
     }
     for statement in stub.suite() {
+        if let Stmt::AnnAssign(declaration) = statement {
+            let Expr::Name(name) = declaration.target.as_ref() else {
+                continue;
+            };
+            let Some(&owner) = source_assignments.get(&name.id) else {
+                continue;
+            };
+            if declaration
+                .value
+                .as_deref()
+                .is_none_or(|value| matches!(value, Expr::EllipsisLiteral(_)))
+                && source_names.get(&name.id) == Some(&1)
+                && stub_names.get(&name.id) == Some(&1)
+            {
+                result.owners.insert(owner, declaration.node_index().load());
+            }
+            continue;
+        }
         let Stmt::FunctionDef(first) = statement else {
             continue;
         };
@@ -400,18 +419,18 @@ fn function_annotations_query(
     Some(result)
 }
 
-pub(super) fn function_annotation<'db>(
+pub(super) fn implementation_annotation<'db>(
     db: &'db Database,
     file: File,
     owner: NodeIndex,
 ) -> Option<ty_python_core::ProvidedAnnotation<'db>> {
-    let FunctionAnnotations {
+    let ImplementationAnnotations {
         interface,
         owners,
         value_declarations: _,
         overload_counts: _,
         errors: _,
-    } = function_annotations(db, file)?;
+    } = implementation_annotations(db, file)?;
     let &owner = owners.get(&owner)?;
     Some(ty_python_core::ProvidedAnnotation::External {
         file: db.starlark_program_file(*interface),
@@ -451,7 +470,7 @@ pub(super) fn source_parameter<'db>(
     if sources.next().is_some() {
         return None;
     }
-    let annotations = function_annotations(db, source)?;
+    let annotations = implementation_annotations(db, source)?;
     let (&owner, _) = annotations
         .owners
         .iter()
@@ -473,13 +492,13 @@ fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
     use ruff_db::diagnostic::DiagnosticId;
     use ruff_db::diagnostic::Severity;
     use ruff_db::diagnostic::Span;
-    let Some(FunctionAnnotations {
+    let Some(ImplementationAnnotations {
         interface,
         owners,
         value_declarations,
         overload_counts,
         errors,
-    }) = function_annotations(db, file)
+    }) = implementation_annotations(db, file)
     else {
         return InterfaceDiagnostics::default();
     };
@@ -742,22 +761,7 @@ fn build_annotations_query(
     let parsed = starpls_common::parsed_module(db, file).load(db);
     let source_names = module_bindings(db, file);
     let stub_names = module_bindings(db, interface);
-    let mut candidates = FxHashMap::default();
-    for statement in parsed.suite() {
-        let target = match statement {
-            Stmt::Assign(assignment) => {
-                let [target] = assignment.targets.as_slice() else {
-                    continue;
-                };
-                target
-            }
-            Stmt::AnnAssign(assignment) => &assignment.target,
-            _ => continue,
-        };
-        if let Expr::Name(name) = target {
-            candidates.insert(&name.id, name.node_index().load());
-        }
-    }
+    let candidates = direct_module_assignments(parsed.suite());
     let mut result = BuildAnnotations {
         interface,
         owners: FxHashMap::default(),
@@ -810,6 +814,28 @@ fn build_annotations_query(
         }
     }
     Some(result)
+}
+
+fn direct_module_assignments(statements: &[Stmt]) -> FxHashMap<&Name, NodeIndex> {
+    statements
+        .iter()
+        .filter_map(|statement| {
+            let target = match statement {
+                Stmt::Assign(assignment) => {
+                    let [target] = assignment.targets.as_slice() else {
+                        return None;
+                    };
+                    target
+                }
+                Stmt::AnnAssign(assignment) => &assignment.target,
+                _ => return None,
+            };
+            let Expr::Name(name) = target else {
+                return None;
+            };
+            Some((&name.id, name.node_index().load()))
+        })
+        .collect()
 }
 
 fn module_bindings(db: &dyn Db, file: File) -> FxHashMap<Name, usize> {
@@ -2231,6 +2257,141 @@ number: int = identity(42)
             .unwrap()
             .iter()
             .any(|d| d.id().as_str() == "invalid-assignment"));
+    }
+
+    #[test]
+    fn stub_value_annotations_check_module_implementations() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let text = "_DATA = {'edition': '2024', 'deps': []}\ndef data():\n    return _DATA\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", text);
+        let other = fixture.add_file(&mut analysis.db, "other.bzl", text);
+        let declaration = "type _Data = dict[{\"edition\": str, \"deps\": list[str]}]\n_DATA: _Data\ndef data() -> _Data: ...\n";
+        let stub = fixture.add_file(&mut analysis.db, "data.bzli", declaration);
+        loader.add_files_from_fixture(&fixture);
+        analysis
+            .set_type_interfaces([(source, stub), (other, stub)])
+            .unwrap();
+        for file in [source, other, stub] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.update_file(source, text.replace("'2024'", "42"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| diagnostic.id().as_str()
+                == "invalid-argument-type"
+                && diagnostic.headline_message().contains("edition")),
+            "{diagnostics:?}"
+        );
+        assert!(analysis.snapshot().diagnostics(other).unwrap().is_empty());
+        analysis.update_file(
+            stub,
+            declaration.replace("\"edition\": str", "\"edition\": int"),
+        );
+        assert!(analysis.snapshot().diagnostics(source).unwrap().is_empty());
+        assert!(analysis
+            .snapshot()
+            .diagnostics(other)
+            .unwrap()
+            .iter()
+            .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"));
+
+        analysis.update_file(stub, declaration.to_owned());
+        analysis.update_file(source, format!("_DATA = {{}}\n{text}"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() != "invalid-assignment"));
+    }
+
+    #[test]
+    fn stub_value_annotations_leave_type_helpers_in_the_stub() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "source.bzl",
+            "_VALUE = 42\nresult = _VALUE + 1\n",
+        );
+        let stub = fixture.add_file(&mut analysis.db, "source.bzli", "");
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for declaration in [
+            "type _VALUE = str\n",
+            // Invalid initialized declarations must not supply context before
+            // the interface syntax validator reports them.
+            "_VALUE: str = 'declaration'\n",
+        ] {
+            analysis.update_file(stub, declaration.into());
+            let annotations = super::implementation_annotations(&analysis.db, source).unwrap();
+            assert!(annotations.owners.is_empty(), "{annotations:?}");
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+    }
+
+    #[test]
+    fn source_value_annotations_take_precedence_over_stubs() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "");
+        let stub = fixture.add_file(&mut analysis.db, "source.bzli", "_VALUE: int\n");
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for declaration in [
+            "_VALUE = 'source' # type: str\n",
+            "_VALUE: str = 'source'\n",
+        ] {
+            analysis.update_file(source, format!("{declaration}result: str = _VALUE\n"));
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+    }
+
+    #[test]
+    fn stub_value_annotation_cycles_use_ordinary_recovery() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", "VALUE = {}\n");
+        let declaration = "VALUE: dict[str, int]\n";
+        let stub = fixture.add_file(&mut analysis.db, "source.bzli", declaration);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for file in [source, stub] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.update_file(
+            stub,
+            "load('source.bzl', _SourceValue='VALUE')\nVALUE: _SourceValue\n".into(),
+        );
+        let source_diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let stub_diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
+        assert!(
+            source_diagnostics
+                .iter()
+                .chain(&stub_diagnostics)
+                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
+            "source: {source_diagnostics:?}; stub: {stub_diagnostics:?}"
+        );
+        analysis.update_file(stub, declaration.into());
+        for file in [source, stub] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
     }
 
     #[test]
