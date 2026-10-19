@@ -1,5 +1,7 @@
 //! Native factories supply declarations to Ty after its ordinary call checking.
 
+use std::collections::btree_map::Entry;
+
 use ruff_db::files::FilePath;
 use ruff_db::files::FileRange;
 use ruff_python_ast::find_node::covering_node;
@@ -19,6 +21,7 @@ use ty_python_semantic::provided::ProvidedBindingValue;
 use ty_python_semantic::provided::ProvidedClass;
 use ty_python_semantic::provided::ProvidedData;
 use ty_python_semantic::provided::ProvidedField;
+use ty_python_semantic::provided::ProvidedInstanceDisplay;
 use ty_python_semantic::provided::ProvidedInstanceFields;
 use ty_python_semantic::types::CallableTypeKind;
 use ty_python_semantic::types::CheckedArgument;
@@ -2127,24 +2130,39 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
     let mut fields = Vec::new();
     let mut shape = TypedDictSchema::default();
     let mut openness = TypedDictOpenness::Closed;
-    let mut values = Vec::new();
+    let mut extra_values = Vec::new();
+    let mut insert_field = |field: ProvidedField<'db>, required: bool| {
+        let schema_field = TypedDictFieldBuilder::new(field.ty)
+            .required(required)
+            .read_only(true)
+            .build();
+        match shape.entry(field.name.clone()) {
+            Entry::Occupied(mut entry) => {
+                if entry.get().is_required() {
+                    return;
+                }
+                entry.insert(schema_field);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(schema_field);
+            }
+        }
+        if required {
+            fields.push(field);
+        }
+    };
     for keyword in &call.call().arguments.keywords {
         match &keyword.arg {
             Some(name) => {
                 let ty = call.expression_type(&keyword.value)?;
-                values.push(ty);
-                shape.insert(
-                    name.id.clone(),
-                    TypedDictFieldBuilder::new(ty)
-                        .required(true)
-                        .read_only(true)
-                        .build(),
+                insert_field(
+                    ProvidedField {
+                        name: name.id.clone(),
+                        ty,
+                        source: Some(FileRange::new(call.file().file(db), name.range())),
+                    },
+                    true,
                 );
-                fields.push(ProvidedField {
-                    name: name.id.clone(),
-                    ty,
-                    source: Some(FileRange::new(call.file().file(db), name.range())),
-                });
             }
             None => {
                 let Some(DictionaryItems {
@@ -2154,69 +2172,56 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
                 }) = call.dictionary_items(db, &keyword.value)
                 else {
                     openness = TypedDictOpenness::ImplicitlyOpen;
-                    values.push(Type::unknown());
+                    extra_values.push(Type::unknown());
                     continue;
                 };
                 if let DictionaryExtraItems::Value(ty) = extra_items {
                     openness = TypedDictOpenness::ImplicitlyOpen;
-                    values.push(ty);
+                    extra_values.push(ty);
                 }
                 for item in items {
-                    values.push(item.ty);
-                    shape.insert(
-                        item.name.clone(),
-                        TypedDictFieldBuilder::new(item.ty)
-                            .required(item.is_required())
-                            .read_only(true)
-                            .build(),
-                    );
-                    if !item.is_required() {
-                        continue;
-                    }
+                    let required = item.is_required();
                     let DictionaryItem {
                         name,
                         ty,
                         kind: _,
                         source,
                     } = item;
-                    fields.push(ProvidedField {
-                        name,
-                        ty,
-                        source: Some(FileRange::new(call.file().file(db), source)),
-                    });
+                    insert_field(
+                        ProvidedField {
+                            name,
+                            ty,
+                            source: Some(FileRange::new(call.file().file(db), source)),
+                        },
+                        required,
+                    );
                 }
             }
         }
     }
+    let values = UnionType::from_elements(
+        db,
+        &environment,
+        extra_values
+            .into_iter()
+            .chain(shape.values().map(|field| field.declared_type())),
+    );
     let shape = Type::TypedDict(TypedDictType::from_schema_items_with_openness(
         db, shape, openness,
     ));
-    let values = UnionType::from_elements(db, &environment, values);
-    let base = call.declaration().and_then(|declaration| {
-        specialized_native_class(
-            db,
-            declaration.program_file(db),
-            "struct",
-            vec![values, shape],
-        )
-    });
-    let class = call.class_type(
+    let declaration = call.declaration()?;
+    let instance = specialized_native_class(
         db,
-        ProvidedClass {
-            name: Name::new("struct"),
-            bases: base.into_iter().collect(),
-            class_members: Box::default(),
-            instance_fields: ProvidedInstanceFields {
-                fields: fields.into_boxed_slice(),
-                // Unlisted names use the native getter's possibly-missing field contract.
-                has_dynamic_fields: false,
-                implications: Box::default(),
-                data: None,
-            }
-            .into(),
-        },
-    );
-    class.to_instance_approximation(db, &environment)
+        declaration.program_file(db),
+        "struct",
+        vec![values, shape],
+    )?
+    .to_instance_approximation(db, &environment)?;
+    instance.with_provided_instance_fields(
+        db,
+        fields.into_boxed_slice(),
+        ProvidedInstanceDisplay::ClassName,
+    )
 }
 
 fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<'db>> {
@@ -2999,6 +3004,56 @@ inherited(name="signature", build_setting_default=$0[])
             ],
             "{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn struct_values_are_assignable_by_field_shape() {
+        let source = r#"def require_entry(entry: struct[{"file": str, "path": str}]) -> None:
+    pass
+def collect(path):
+    # type: (str) -> None
+    entries = [struct(file="input", path=path)]
+    entries.extend([struct(file="input", path="")])
+    require_entry(struct(file="input", path=42))
+    require_entry(struct(file="input"))
+def require_int_fields(entry: struct[int]) -> None:
+    pass
+def optional_keys(duplicate: dict[{"x": NotRequired[str]}], distinct: dict[{"y": NotRequired[str]}]) -> None:
+    require_int_fields(struct(x=1, **duplicate))
+    require_int_fields(struct(x=1, **distinct))
+"#;
+        for complete_inventory in [true, false] {
+            let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+            let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+                "../../../starpls/src/builtin/builtin.pb"
+            ))
+            .unwrap();
+            if !complete_inventory {
+                builtins.r#type.retain(|class| class.name != "struct");
+            }
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            assert_eq!(
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| (
+                        diagnostic.id().as_str(),
+                        &source[diagnostic.range().unwrap()]
+                    ))
+                    .collect::<Vec<_>>(),
+                [
+                    ("invalid-argument-type", "struct(file=\"input\", path=42)"),
+                    ("invalid-argument-type", "struct(file=\"input\")"),
+                    ("invalid-argument-type", "struct(x=1, **distinct)"),
+                ],
+                "complete inventory: {complete_inventory}; {diagnostics:?}"
+            );
+        }
     }
 
     #[test]

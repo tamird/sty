@@ -269,6 +269,16 @@ fn declarations(
         })
         .map(|class| (class.name.clone(), class.clone()))
         .collect();
+    if contexts.iter().any(|(_, globals)| {
+        globals
+            .get("struct")
+            .is_some_and(|value| value.callable.is_some())
+    }) {
+        classes.entry("struct".to_owned()).or_insert_with(|| Type {
+            name: "struct".to_owned(),
+            ..Default::default()
+        });
+    }
     if classes.get("attr").is_some_and(|class| {
         class
             .field
