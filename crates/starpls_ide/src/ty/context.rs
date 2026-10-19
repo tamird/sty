@@ -800,10 +800,10 @@ fn context_type<'db>(
         factory::specialized_native_class(db, declarations, name, vec![build_setting, attributes])?
     };
     let mut implications = Vec::new();
-    // Valid single-file and executable prerequisites provide a File in each
-    // enabled view when the target is present. These types describe accepted
-    // inputs; Bazel can record prerequisite errors during context construction
-    // and still invoke the implementation.
+    // A valid single-file or executable prerequisite has a Target in ctx.attr
+    // exactly when it has a File in its enabled views. These types describe
+    // accepted inputs; Bazel can record prerequisite errors during context
+    // construction and still invoke the implementation.
     if context_kind != ContextKind::Repository {
         for RuleAttributeData {
             name,
@@ -834,6 +834,13 @@ fn context_type<'db>(
                     target: Box::from([Name::new(view.name()), name.clone()]),
                     ty,
                 });
+                if let Some(ty) = analyzed_target_type(db, &environment, declarations, attribute) {
+                    implications.push(ProvidedFieldImplication {
+                        guard: Box::from([Name::new(view.name()), name.clone()]),
+                        target: Box::from([Name::new("attr"), name.clone()]),
+                        ty,
+                    });
+                }
             }
         }
     }
@@ -946,41 +953,7 @@ fn field_type<'db>(
             None => Some(Type::unknown()),
         }
     };
-    let target = || {
-        // Successful executable/single-artifact prerequisites exclude targets
-        // without FilesToRunProvider. Other dependencies can be environment groups.
-        let provider = if attribute.executable == Some(true) {
-            let file = native("File")?;
-            factory::specialized_native_instance(
-                db,
-                environment,
-                declarations,
-                "FilesToRunProvider",
-                vec![file],
-            )?
-        } else {
-            native("FilesToRunProvider")?
-        };
-        let target = factory::specialized_native_instance(
-            db,
-            environment,
-            declarations,
-            "Target",
-            vec![provider],
-        )?;
-        if attribute.executable == Some(true) || attribute.single_file == Some(true) {
-            Some(target)
-        } else {
-            let group = factory::specialized_native_instance(
-                db,
-                environment,
-                declarations,
-                "Target",
-                vec![Type::none(db, environment)],
-            )?;
-            Some(UnionType::from_elements(db, environment, [target, group]))
-        }
-    };
+    let target = || analyzed_target_type(db, environment, declarations, attribute);
     match view {
         View::Attr => {
             if attribute.kind == AttributeKind::Label {
@@ -1032,6 +1005,49 @@ fn field_type<'db>(
             };
             Some(dict(optional(string), value))
         }
+    }
+}
+
+fn analyzed_target_type<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    declarations: ProgramFile<'db>,
+    attribute: &Attribute,
+) -> Option<Type<'db>> {
+    let native = |name| {
+        factory::native_class(db, declarations, name)?.to_instance_approximation(db, environment)
+    };
+    // Successful executable/single-artifact prerequisites exclude targets
+    // without FilesToRunProvider. Other dependencies can be environment groups.
+    let provider = if attribute.executable == Some(true) {
+        factory::specialized_native_instance(
+            db,
+            environment,
+            declarations,
+            "FilesToRunProvider",
+            vec![native("File")?],
+        )?
+    } else {
+        native("FilesToRunProvider")?
+    };
+    let target = factory::specialized_native_instance(
+        db,
+        environment,
+        declarations,
+        "Target",
+        vec![provider],
+    )?;
+    if attribute.executable == Some(true) || attribute.single_file == Some(true) {
+        Some(target)
+    } else {
+        let group = factory::specialized_native_instance(
+            db,
+            environment,
+            declarations,
+            "Target",
+            vec![Type::none(db, environment)],
+        )?;
+        Some(UnionType::from_elements(db, environment, [target, group]))
     }
 }
 
@@ -1489,6 +1505,43 @@ example = rule(implementation=implementation, attrs={
             );
             analysis.update_file(file, source.to_owned());
             check_field(&analysis.snapshot(), file, source, expression, "File", key);
+        }
+    }
+
+    #[test]
+    fn file_guards_refine_matching_target_views() {
+        let source = r#"def implementation(ctx):
+    if ctx.file.src:
+        print(ctx.attr.src[DefaultInfo].files)
+    if ctx.executable.tool:
+        print(ctx.attr.tool[DefaultInfo].files_to_run.executable.path)
+    if not ctx.file.src or not ctx.file.other:
+        fail("missing inputs")
+    print(ctx.attr.src[DefaultInfo].default_runfiles.files)
+    return []
+example = rule(implementation=implementation, attrs={
+    "src": attr.label(allow_single_file=True),
+    "other": attr.label(allow_single_file=True),
+    "tool": attr.label(executable=True, cfg="exec"),
+})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for guard in ["ctx.file.other", "not ctx.file.src"] {
+            analysis.update_file(
+                file,
+                source.replace("if ctx.file.src:", &format!("if {guard}:")),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{guard}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "not-subscriptable");
+            assert!(diagnostic.concise_message().to_string().contains("None"));
         }
     }
 
