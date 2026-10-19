@@ -658,11 +658,12 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
         return None;
     };
     let environment = ProgramEnvironment::from_file(call.file());
-    let value = match call
-        .dictionary_argument(db, "x")
-        .map(|dictionary| dictionary.first_entry)
+    let dictionary = call.dictionary_argument(db, "x");
+    let value = match dictionary
+        .as_ref()
+        .map(|dictionary| &dictionary.first_entry)
     {
-        Some(DictionaryFirstEntry::Entry { key: _, value }) => value,
+        Some(DictionaryFirstEntry::Entry { key: _, value }) => *value,
         Some(DictionaryFirstEntry::Empty) => return None,
         Some(DictionaryFirstEntry::Unknown) | None => {
             let (class, specialization) = ty.class_specialization(db, &environment)?;
@@ -685,6 +686,10 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
     let [payload, _kind] = specialization.types(db) else {
         return None;
     };
+    let payload = dictionary
+        .as_ref()
+        .and_then(|dictionary| selector_literal_payload(db, &environment, dictionary))
+        .unwrap_or(*payload);
     let declaration = call.declaration()?;
     let value = value.expand_top_level_aliases(db, &environment);
     let values = match value {
@@ -700,11 +705,33 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                 &environment,
                 declaration.program_file(db),
                 "select",
-                vec![*payload, Type::string_literal(db, kind)],
+                vec![payload, Type::string_literal(db, kind)],
             )
         })
         .collect::<Option<Vec<_>>>()?;
     Some(UnionType::from_elements(db, &environment, alternatives))
+}
+
+fn selector_literal_payload<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    dictionary: &DictionaryItems<'db>,
+) -> Option<Type<'db>> {
+    if !dictionary.is_complete() {
+        return None;
+    }
+    // Captured strings and integers retain their value until selection. A residual
+    // entry can contribute a value even though it does not establish key presence.
+    let values = dictionary
+        .items
+        .iter()
+        .filter(|item| item.ty.expand_top_level_aliases(db, environment) != Type::Never)
+        .map(|item| {
+            (item.ty.string_literal_value(db).is_some() || item.ty.as_int_literal().is_some())
+                .then_some(item.ty)
+        })
+        .collect::<Option<Vec<_>>>()?;
+    (!values.is_empty()).then(|| UnionType::from_elements(db, environment, values))
 }
 
 fn selector_value_kind<'db>(
@@ -2879,7 +2906,7 @@ example = rule(implementation=implementation, attrs={
     "_mode": attr.string(values=["script"], default="other"),
     "retries": attr.int(values=(0, 1), mandatory=True),
     "free": attr.string(values=[]),
-    "dynamic_default": attr.string(values=["zstd"], default=dynamic()),
+    "dynamic_default": attr.string(values=["zstd", "gzip"], default=dynamic()),
 })
 repository = repository_rule(implementation=implementation, attrs={"mode": attr.string(values=["fast"])})
 wrapped = macro(implementation=macro_implementation, attrs={"mode": attr.string(values=["fast"])})
@@ -2887,6 +2914,9 @@ example(name="direct", retries=1, free="anything", dynamic_default="zstd", **{"$
 example(name="omitted", retries=0)
 example(name="none", retries=1, dynamic_default=None)
 example(name="selected", retries=select({"//conditions:default": None}), dynamic_default=select({"//conditions:default": "zstd"}))
+selected_retries = select({"//conditions:default": 0, "//:other": 1})
+selected_compression = select({"//conditions:default": "zstd", "//:other": "gzip"})
+example(name="stored", retries=selected_retries, dynamic_default=selected_compression)
 repository(name="repo", mode="fast")
 wrapped(name="macro", mode="fast")
 "#;
@@ -2909,6 +2939,9 @@ wrapped(name="macro", mode="fast")
             r#"example(name="bad", retries=1, dynamic_default="other")"#,
             r#"example(name="bad", retries=select({"//conditions:default": 3}))"#,
             r#"example(name="bad", retries=1, dynamic_default=select({"//conditions:default": None}))"#,
+            r#"bad_compression = select({"//conditions:default": "zstd", "//:other": "other"})
+example(name="bad", retries=0, dynamic_default=bad_compression)"#,
+            r#"example(name="bad", retries=0, dynamic_default=select({"//conditions:default": "zstd"} | {"//:other": "other" for _ in (0,)}))"#,
             r#"repository(name="bad", mode="slow")"#,
             r#"wrapped(name="bad", mode="slow")"#,
         ] {
