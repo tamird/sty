@@ -24,6 +24,11 @@ Field-map annotations and type aliases use syntax from
 openness, and record semantics below are defined by sty. Existing Python-style
 provider, TypedDict, and Protocol declarations remain accepted.
 
+When Bazel type checks a `.bzl` source file, annotation names must resolve in
+that Bazel version's type environment. Bazel type names and runtime type names
+can differ: `Ctx` describes a build-rule context with runtime type `ctx`.
+A `.bzli` file also accepts sty-specific names such as `repository_ctx`.
+
 For each name loaded from a mapped `.bzl` module, sty uses the stub declaration
 when present and source inference otherwise. Annotations are resolved in the
 stub's scope. Call checking trusts the stub declarations.
