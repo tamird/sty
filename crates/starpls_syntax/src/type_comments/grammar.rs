@@ -5,7 +5,10 @@ use crate::SyntaxKind;
 use crate::SyntaxKind::*;
 use crate::T;
 
-const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], T![None], T!['['], ELLIPSIS]);
+const LITERAL_START: SyntaxKindSet =
+    SyntaxKindSet::new(&[STRING, INT, FLOAT, T![True], T![False], T![+], T![-]]);
+const TYPE_START: SyntaxKindSet =
+    SyntaxKindSet::new(&[T![ident], T![None], T!['['], ELLIPSIS]).union(LITERAL_START);
 
 const PARAMETER_TYPE_START: SyntaxKindSet = TYPE_START.union(SyntaxKindSet::new(&[T![*], T![**]]));
 
@@ -47,18 +50,6 @@ pub(crate) fn parameter_types(p: &mut Parser) {
 pub(crate) fn parameter_type(p: &mut Parser) {
     let m = p.start();
     match p.current() {
-        T![ident] => {
-            union_type(p);
-            m.complete(p, SIMPLE_PARAMETER_TYPE);
-        }
-        T![None] => {
-            union_type(p);
-            m.complete(p, SIMPLE_PARAMETER_TYPE);
-        }
-        T!['['] => {
-            union_type(p);
-            m.complete(p, SIMPLE_PARAMETER_TYPE);
-        }
         T![*] => {
             p.bump(T![*]);
             union_type(p);
@@ -71,6 +62,10 @@ pub(crate) fn parameter_type(p: &mut Parser) {
         }
         ELLIPSIS => {
             p.bump(ELLIPSIS);
+            m.complete(p, SIMPLE_PARAMETER_TYPE);
+        }
+        kind if TYPE_START.contains(kind) => {
+            union_type(p);
             m.complete(p, SIMPLE_PARAMETER_TYPE);
         }
         _ => unreachable!(),
@@ -134,6 +129,18 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
             let m = p.start();
             p.bump(ELLIPSIS);
             m.complete(p, ELLIPSIS_TYPE)
+        }
+        kind if LITERAL_START.contains(kind) => {
+            let m = p.start();
+            p.bump_any();
+            if matches!(kind, T![+] | T![-]) {
+                if matches!(p.current(), INT | FLOAT) {
+                    p.bump_any();
+                } else {
+                    p.error_recover_until("Expected numeric literal", EMPTY);
+                }
+            }
+            m.complete(p, LITERAL_VALUE)
         }
         _ => {
             p.error_recover_until("Expected type", EMPTY);

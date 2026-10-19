@@ -133,6 +133,7 @@ pub enum Type {
     UnionType(UnionType),
     NoneType(NoneType),
     EllipsisType(EllipsisType),
+    LiteralValue(LiteralValue),
 }
 
 impl AstNode for Type {
@@ -144,7 +145,7 @@ impl AstNode for Type {
     {
         matches!(
             kind,
-            PATH_TYPE | TYPE_LIST | UNION_TYPE | NONE_TYPE | ELLIPSIS_TYPE
+            PATH_TYPE | TYPE_LIST | UNION_TYPE | NONE_TYPE | ELLIPSIS_TYPE | LITERAL_VALUE
         )
     }
 
@@ -158,6 +159,7 @@ impl AstNode for Type {
             UNION_TYPE => Self::UnionType(UnionType { syntax }),
             NONE_TYPE => Self::NoneType(NoneType { syntax }),
             ELLIPSIS_TYPE => Self::EllipsisType(EllipsisType { syntax }),
+            LITERAL_VALUE => Self::LiteralValue(LiteralValue { syntax }),
             _ => return None,
         })
     }
@@ -169,6 +171,7 @@ impl AstNode for Type {
             Type::UnionType(type_) => type_.syntax(),
             Type::NoneType(type_) => type_.syntax(),
             Type::EllipsisType(type_) => type_.syntax(),
+            Type::LiteralValue(value) => value.syntax(),
         }
     }
 }
@@ -190,6 +193,10 @@ ast_node! {
 
 ast_node! {
     EllipsisType => ELLIPSIS_TYPE
+}
+
+ast_node! {
+    LiteralValue => LITERAL_VALUE
 }
 
 ast_node! {

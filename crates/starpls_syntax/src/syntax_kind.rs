@@ -103,6 +103,7 @@ pub enum SyntaxKind {
     NONE_TYPE,
     UNION_TYPE,    // int | None
     ELLIPSIS_TYPE, // ...
+    LITERAL_VALUE, // "split", -1
 
     PATH_TYPE,         // tuple[int, int, string], java_common.JavaRuntimeInfo
     GENERIC_ARGUMENTS, // [int, int, string] in the type above

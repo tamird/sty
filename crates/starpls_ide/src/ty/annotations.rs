@@ -301,6 +301,47 @@ mod tests {
     }
 
     #[test]
+    fn literal_type_comments_check_callers_and_bodies() {
+        let signature = "def configure(operations, enabled, code):\n    # type: (Mapping[str, Literal['set', 'extend']], Literal[True], Literal[1, -1]) -> Literal['split']\n";
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        let file = fixture.main_file();
+        analysis.set_rules(rules("error"));
+        for (body, call, expected) in [
+            (
+                "return 'split'",
+                "configure({'flag': 'set'}, True, -1)",
+                None,
+            ),
+            (
+                "return 'split'",
+                "configure({'flag': 'other'}, True, -1)",
+                Some("invalid-argument-type"),
+            ),
+            ("return 'ordinary'", "", Some("invalid-return-type")),
+        ] {
+            analysis.update_file(file, format!("{signature}    {body}\n{call}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.id().as_str())
+                    .collect::<Vec<_>>(),
+                expected.into_iter().collect::<Vec<_>>(),
+                "{body}; {call}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(file, "value = -1  # type: Literal[-]\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == "invalid-syntax"
+                    && diagnostic.headline_message() == "Expected numeric literal"
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn annotation_policy_accepts_provider_initializer_contracts() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
