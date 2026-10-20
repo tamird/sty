@@ -145,7 +145,7 @@ pub(super) fn globals(
             if value.name.is_empty() || BUILTINS_VALUES_DENY_LIST.contains(&value.name.as_str()) {
                 continue;
             }
-            refine_builtin_signature(&mut value);
+            refine_builtin_signature(dialect, &mut value);
             globals.insert(value.name.clone(), value);
         }
     };
@@ -176,7 +176,7 @@ pub(super) fn globals(
     globals
 }
 
-fn refine_builtin_signature(value: &mut Value) {
+fn refine_builtin_signature(dialect: Dialect, value: &mut Value) {
     let Some(callable) = &mut value.callable else {
         return;
     };
@@ -191,7 +191,9 @@ fn refine_builtin_signature(value: &mut Value) {
         // Rule values are callable objects with a nominal inheritance contract.
         "rule" => callable.return_type = "rule".to_owned(),
         // Bazel documents a mutable list, which the inventory calls a sequence.
-        "glob" => callable.return_type = "list of strings".to_owned(),
+        "glob" | "subpackages" if dialect == Dialect::Bazel => {
+            callable.return_type = "list of strings".to_owned();
+        }
         "visibility" => {
             if let [input] = callable.param.as_mut_slice() {
                 input.r#type = "string; or list of strings".to_owned();
@@ -363,7 +365,7 @@ fn declarations(
     }
     if let Some(native) = classes.get_mut("native") {
         for field in &mut native.field {
-            refine_builtin_signature(field);
+            refine_builtin_signature(dialect, field);
         }
         let workspace = env::make_workspace_builtins();
         for field in rule_values.iter().chain(workspace.global.iter()) {
@@ -4241,8 +4243,13 @@ selected(name="shell", srcs=["//:input"], use_bash_launcher=True)
     }
 
     #[test]
-    fn glob_returns_a_mutable_list_of_strings() {
-        for (path, glob) in [("/main.bzl", "native.glob"), ("/BUILD.bazel", "glob")] {
+    fn package_queries_return_mutable_lists_of_strings() {
+        for (path, query) in [
+            ("/main.bzl", "native.glob(['*.rs'])"),
+            ("/BUILD.bazel", "glob(['*.rs'])"),
+            ("/main.bzl", "native.subpackages(include=['**'])"),
+            ("/BUILD.bazel", "subpackages(include=['**'])"),
+        ] {
             let builtins = starpls_bazel::decode_builtins(include_bytes!(
                 "../../../starpls/src/builtin/builtin.pb"
             ))
@@ -4252,14 +4259,14 @@ selected(name="shell", srcs=["//:input"], use_bash_launcher=True)
                 .set_builtin_defs(builtins, Default::default())
                 .unwrap();
             let source = format!(
-                "files = {glob}([\"*.rs\"])\ncombined = files + [\"extra.rs\"]\nfiles.append(\"other.rs\")\nfiles.append(1)\n"
+                "files = {query}\ncombined = files + [\"extra.rs\"]\nfiles.append(\"other.rs\")\nfiles.append(1)\n"
             );
             let invalid = u32::try_from(source.rfind('1').unwrap()).unwrap();
             let file = analysis
                 .open_document(Path::new(path), Dialect::Bazel, None, source, 1)
                 .unwrap();
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert_eq!(diagnostics.len(), 1, "{path}: {diagnostics:?}");
+            assert_eq!(diagnostics.len(), 1, "{query}: {diagnostics:?}");
             assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
             assert_eq!(
                 diagnostics[0].range().unwrap(),
