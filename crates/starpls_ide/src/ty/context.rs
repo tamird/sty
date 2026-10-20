@@ -607,8 +607,9 @@ fn context_type<'db>(
         .provided_data(db, &environment)
         .and_then(|data| data.downcast_ref::<factory::RuleData>());
     let aspect_attributes;
+    let aspect_conditional_attributes;
     let mut analyzed_types = TypedDictSchema::default();
-    let (attributes, complete) = if context_kind == ContextKind::Aspect {
+    let (attributes, complete, conditional_attributes) = if context_kind == ContextKind::Aspect {
         let mapping = dictionary_argument("attrs")
             .ok()?
             .unwrap_or(DictionaryItems {
@@ -616,13 +617,16 @@ fn context_type<'db>(
                 extra_items: DictionaryExtraItems::Value(Type::unknown()),
                 first_entry: DictionaryFirstEntry::Unknown,
             });
-        let is_complete = mapping.is_complete();
+        let names_complete = mapping.is_complete();
         let DictionaryItems {
             items,
             extra_items: _,
             first_entry: _,
         } = mapping;
-        let is_complete = is_complete && items.iter().all(DictionaryItem::is_required);
+        let is_complete = names_complete && items.iter().all(DictionaryItem::is_required);
+        aspect_conditional_attributes = (names_complete && !is_complete)
+            .then(|| RuleAttributeData::conditional_items(db, &environment, file, &items))
+            .flatten();
         for item in items.iter().filter(|item| item.is_required()) {
             if let Some(value) =
                 factory::native_type_argument(db, &environment, declarations, item.ty, "Attribute")
@@ -655,7 +659,11 @@ fn context_type<'db>(
                 },
             )
             .collect::<Vec<_>>();
-        (aspect_attributes.as_slice(), is_complete)
+        (
+            aspect_attributes.as_slice(),
+            is_complete,
+            aspect_conditional_attributes.as_deref(),
+        )
     } else {
         let rule = rule?;
         if context_kind == ContextKind::Build {
@@ -672,8 +680,19 @@ fn context_type<'db>(
             })
             .unwrap_or_default();
         }
-        (rule.attributes.as_ref(), rule.complete)
+        (
+            rule.attributes.as_ref(),
+            rule.complete,
+            rule.conditional_context_attributes.as_deref(),
+        )
     };
+    let conditional_attributes = conditional_attributes.filter(|conditional| {
+        conditional
+            .iter()
+            .all(|candidate| attributes.iter().all(|known| candidate.name != known.name))
+    });
+    let complete = complete || conditional_attributes.is_some();
+    let conditional_attributes = conditional_attributes.unwrap_or_default();
     let make_class = |name, base, fields, has_dynamic_fields, implications| {
         let class = class_type(ProvidedClass {
             name: Name::new(name),
@@ -706,12 +725,19 @@ fn context_type<'db>(
         }
         let mut complete = complete;
         let mut fields = Vec::new();
-        for RuleAttributeData {
-            name,
-            descriptor,
-            source,
-        } in attributes
-        {
+        let mut conditional_fields = Vec::new();
+        for (
+            RuleAttributeData {
+                name,
+                descriptor,
+                source,
+            },
+            required,
+        ) in attributes.iter().map(|attribute| (attribute, true)).chain(
+            conditional_attributes
+                .iter()
+                .map(|attribute| (attribute, false)),
+        ) {
             // Bazel accepts hints at rule call sites but hides them from ctx.attr.
             if context_kind == ContextKind::Build
                 && !starpls_bazel::attr::visible_in_rule_context(name)
@@ -761,11 +787,16 @@ fn context_type<'db>(
                     .get(name)
                     .map_or_else(Type::unknown, |field| field.declared_type())
             };
-            fields.push(ProvidedField {
+            let field = ProvidedField {
                 name: name.clone(),
                 ty,
                 source: *source,
-            });
+            };
+            if required {
+                fields.push(field);
+            } else {
+                conditional_fields.push(field);
+            }
         }
         if view == View::Outputs {
             let output = factory::native_class(db, declarations, "File")?
@@ -815,13 +846,15 @@ fn context_type<'db>(
         let object = KnownClass::Object.to_instance(db, &environment);
         let schema = TypedDictType::from_schema_items_with_openness(
             db,
-            fields
+            conditional_fields
                 .iter()
-                .map(|field| {
+                .map(|field| (field, false))
+                .chain(fields.iter().map(|field| (field, true)))
+                .map(|(field, required)| {
                     (
                         field.name.clone(),
                         TypedDictFieldBuilder::new(field.ty)
-                            .required(true)
+                            .required(required)
                             .read_only(true)
                             .build(),
                     )
@@ -838,6 +871,7 @@ fn context_type<'db>(
             &environment,
             fields
                 .iter()
+                .chain(&conditional_fields)
                 .map(|field| field.ty)
                 .chain((!complete).then_some(object)),
         );
@@ -1427,6 +1461,118 @@ second = {factory}(implementation=implementation, attrs=attributes)
                     "{factory}, {edit}: {diagnostics:?}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn conditional_attributes_preserve_context_field_presence() {
+        let source = r#"def enabled() -> bool: return True
+def implementation(ctx) -> list[DefaultInfo]:
+    metadata: dict[str, str] = getattr(ctx.attr, "metadata", {})
+    srcs: list[File] = getattr(ctx.files, "srcs", [])
+    tool: Target | None = getattr(ctx.attr, "tool", None)
+    name: str = ctx.attr.name
+    absent: None = getattr(ctx.attr, "invented", None)
+    print(tool, name, absent)
+    if metadata:
+        fail("unexpected metadata")
+    return [DefaultInfo(files=depset(srcs))]
+extra = {"metadata": attr.string_dict(), "srcs": attr.label_list(allow_files=True), "tool": attr.label()} if enabled() else {}
+example = rule(implementation=implementation, attrs={"known": attr.string()} | extra)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("non-static-type".into(), "error".into()),
+                    ("possibly-missing-attribute".into(), "error".into()),
+                ]
+                .into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for (from, to, expected) in [
+            (
+                "metadata: dict[str, str]",
+                "metadata: dict[str, int]",
+                "invalid-assignment",
+            ),
+            (
+                "getattr(ctx.attr, \"metadata\", {})",
+                "ctx.attr.metadata",
+                "possibly-missing-attribute",
+            ),
+            ("tool: Target | None", "tool: Target", "invalid-assignment"),
+            (
+                "print(tool, name, absent)",
+                "print(tool, name, absent)\n    ctx.attr.invented",
+                "unresolved-attribute",
+            ),
+        ] {
+            analysis.update_file(fixture.main_file(), source.replace(from, to));
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            assert_eq!(diagnostics.len(), 1, "{to}: {diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].id().as_str(),
+                expected,
+                "{to}: {diagnostics:?}"
+            );
+        }
+
+        analysis.update_file(
+            fixture.main_file(),
+            r#"def attributes() -> dict[str, Attribute[object]]: return {}
+def implementation(ctx) -> list[DefaultInfo]:
+    ctx.attr.unknown
+    return []
+example = rule(implementation=implementation, attrs=attributes())
+"#
+            .to_owned(),
+        );
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for (factory, parameters, value, result, returned) in [
+            ("repository_rule", "context", "Label", "None", "None"),
+            (
+                "aspect",
+                "target, context",
+                "Target",
+                "list[DefaultInfo]",
+                "[]",
+            ),
+        ] {
+            analysis.update_file(
+                fixture.main_file(),
+                format!(
+                    r#"def enabled() -> bool: return True
+def implementation({parameters}) -> {result}:
+    tool: {value} | None = getattr(context.attr, "_tool", None)
+    print(tool)
+    return {returned}
+extra = {{"_tool": attr.label(default=Label("//:tool"))}} if enabled() else {{}}
+example = {factory}(implementation=implementation, attrs=extra)
+"#
+                ),
+            );
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            assert!(diagnostics.is_empty(), "{factory}: {diagnostics:?}");
         }
     }
 

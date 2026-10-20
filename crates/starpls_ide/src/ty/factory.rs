@@ -29,6 +29,7 @@ use ty_python_semantic::types::CheckedCall;
 use ty_python_semantic::types::DictionaryExtraItems;
 use ty_python_semantic::types::DictionaryFirstEntry;
 use ty_python_semantic::types::DictionaryItem;
+use ty_python_semantic::types::DictionaryItemKind;
 use ty_python_semantic::types::DictionaryItems;
 use ty_python_semantic::types::IntersectionType;
 use ty_python_semantic::types::KnownClass;
@@ -106,6 +107,9 @@ impl DefaultValue {
 pub(super) struct RuleData {
     documentation: Documentation,
     pub(super) attributes: Box<[RuleAttributeData]>,
+    /// Additional context attributes, when all possible names are known but
+    /// these attributes are only present on some paths.
+    pub(super) conditional_context_attributes: Option<Box<[RuleAttributeData]>>,
     pub(super) complete: bool,
     /// Whether the generated call signature has no unresolved shape requirements.
     call_shape_complete: bool,
@@ -120,6 +124,34 @@ pub(super) struct RuleAttributeData {
     pub(super) name: Name,
     pub(super) descriptor: Option<Attribute>,
     pub(super) source: Option<FileRange>,
+}
+
+impl RuleAttributeData {
+    pub(super) fn conditional_items<'db>(
+        db: &'db Database,
+        environment: &ProgramEnvironment<'db>,
+        file: ProgramFile<'db>,
+        items: &[DictionaryItem<'db>],
+    ) -> Option<Box<[Self]>> {
+        items
+            .iter()
+            .filter(|item| !item.is_required())
+            .map(|item| {
+                if item.kind != DictionaryItemKind::Optional {
+                    return None;
+                }
+                let descriptor = item
+                    .ty
+                    .provided_data(db, environment)?
+                    .downcast_ref::<Attribute>()?;
+                Some(Self {
+                    name: item.name.clone(),
+                    descriptor: Some(descriptor.clone()),
+                    source: Some(FileRange::new(file.file(db), item.source)),
+                })
+            })
+            .collect()
+    }
 }
 
 impl RuleData {
@@ -1516,13 +1548,22 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         extra_items: DictionaryExtraItems::Value(Type::unknown()),
         first_entry: DictionaryFirstEntry::Unknown,
     });
-    let is_complete = own_attributes.is_complete();
+    let names_complete = own_attributes.is_complete();
     let DictionaryItems {
         items,
         extra_items,
         first_entry: _,
     } = own_attributes;
-    let is_complete = is_complete && items.iter().all(DictionaryItem::is_required);
+    let is_complete = names_complete && items.iter().all(DictionaryItem::is_required);
+    let conditional_context_attributes = (names_complete
+        && !is_complete
+        && !matches!(kind, RuleKind::Macro)
+        && parent.is_none()
+        && test.is_some()
+        && binary.is_some()
+        && generated_required_inputs_known)
+        .then(|| RuleAttributeData::conditional_items(db, &environment, call.file(), &items))
+        .flatten();
     // Initializers receive supplied public Starlark attributes after base-type
     // conversion, but before mandatory and allowed-value checks.
     let initializer_preserves_call_shape = matches!(kind, RuleKind::Build)
@@ -1849,6 +1890,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 data: Some(ProvidedData::new(RuleData {
                     documentation,
                     attributes: descriptors.into_boxed_slice(),
+                    conditional_context_attributes,
                     complete,
                     call_shape_complete,
                     may_have_initializer,
