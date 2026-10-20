@@ -228,15 +228,14 @@ pub(super) fn callback_contract<'a, 'db>(
     let registration = resolved_call_signature(model, call)?;
     let declaration = registration.definition?;
     let factory = factory::declaration(db, declaration)?;
-    let context_kind = match factory {
-        BuiltinFunction::Rule { repository } => {
-            if repository {
-                ContextKind::Repository
-            } else {
-                ContextKind::Build
-            }
-        }
-        BuiltinFunction::Aspect => ContextKind::Aspect,
+    let inferred_context = match factory {
+        BuiltinFunction::Rule { repository } => Some(if repository {
+            ContextKind::Repository
+        } else {
+            ContextKind::Build
+        }),
+        BuiltinFunction::Aspect => Some(ContextKind::Aspect),
+        BuiltinFunction::ModuleExtension => None,
         _ => return None,
     };
     let Argument::Expression(argument) = argument(call, &registration, "implementation").ok()??
@@ -258,8 +257,14 @@ pub(super) fn callback_contract<'a, 'db>(
         return None;
     }
     let signature = overload.signature(db);
-    let context = registration_context_type(db, model, file, call, &registration, context_kind)?;
-    let invocation = callback_invocation(db, file, declaration, context_kind, context)?;
+    let invocation = match inferred_context {
+        Some(context_kind) => {
+            let context =
+                registration_context_type(db, model, file, call, &registration, context_kind)?;
+            callback_invocation(db, file, declaration, context_kind, context)?
+        }
+        None => declared_implementation_type(&registration)?,
+    };
     // The body binding already combines every registration, source defaults, and annotation
     // precedence. Project only unannotated slots; the declared return remains authoritative.
     let signature = signature
@@ -366,6 +371,7 @@ pub(super) fn parameter_type<'db>(
             BuiltinFunction::Rule { repository: _ }
                 | BuiltinFunction::Aspect
                 | BuiltinFunction::Macro
+                | BuiltinFunction::ModuleExtension
         ) {
             continue;
         }
@@ -439,6 +445,22 @@ fn registration_parameter_type<'db>(
             let data = result.provided_data(db, &environment)?;
             let data = data.downcast_ref::<factory::RuleData>()?;
             return data.parameter_type(db, &environment, declarations, parameter);
+        }
+        BuiltinFunction::ModuleExtension => {
+            let first = function
+                .parameters
+                .posonlyargs
+                .first()
+                .or_else(|| function.parameters.args.first())?;
+            if first.parameter.name.as_str() != parameter {
+                return None;
+            }
+            let callback = declared_implementation_type(signature)?
+                .single_callable_signature(db, &environment)?;
+            let [context] = callback.parameters().iter().as_slice() else {
+                return None;
+            };
+            return Some(context.annotated_type());
         }
         BuiltinFunction::Rule { repository } => {
             if repository {
@@ -1079,6 +1101,15 @@ enum Argument<'a> {
     KeywordUnpacking(&'a Expr),
 }
 
+fn declared_implementation_type<'db>(signature: &CallSignatureDetails<'db>) -> Option<Type<'db>> {
+    signature
+        .signature
+        .parameters()
+        .iter()
+        .find(|parameter| parameter.name().map(Name::as_str) == Some("implementation"))
+        .map(Parameter::annotated_type)
+}
+
 /// Select the unique source argument that ty bound to a registration parameter.
 fn argument<'a>(
     call: &'a ExprCall,
@@ -1185,6 +1216,11 @@ mod tests {
     use crate::LocationLink;
 
     fn enable_context(analysis: &mut Analysis) {
+        install_bazel_builtins(analysis);
+        enable_context_inference(analysis);
+    }
+
+    fn install_bazel_builtins(analysis: &mut Analysis) {
         analysis
             .set_builtin_defs(
                 starpls_bazel::decode_builtins(include_bytes!(
@@ -1194,6 +1230,9 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
+    }
+
+    fn enable_context_inference(analysis: &mut Analysis) {
         analysis
             .db
             .environment()
@@ -1202,6 +1241,75 @@ mod tests {
                 infer_ctx_attributes: true,
                 ..Default::default()
             });
+    }
+
+    #[test]
+    fn module_extensions_check_registration_and_callback() {
+        let source = r#"def implementation(context: module_ctx) -> extension_metadata:
+    return context.extension_metadata(reproducible=True)
+extension: ModuleExtension = module_extension(implementation, tag_classes={"download": tag_class()})
+def register(callback: Callable[[module_ctx], extension_metadata | None], tags: dict[Literal["download"], tag_class]) -> ModuleExtension:
+    return module_extension(callback, tag_classes=tags)
+def register_schema(callback: Callable[[module_ctx], extension_metadata | None], tags: dict[{"download": tag_class}]) -> ModuleExtension:
+    return module_extension(callback, tag_classes=tags)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        install_bazel_builtins(&mut analysis);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for (extra, expected) in [
+            (
+                "module_extension(lambda context: 42)",
+                "invalid-argument-type",
+            ),
+            ("module_extension(lambda: None)", "invalid-argument-type"),
+            (
+                "def wrong_context(context: repository_ctx) -> None: pass\nmodule_extension(wrong_context)",
+                "invalid-argument-type",
+            ),
+            (
+                "module_extension(implementation, tag_classes={'download': 42})",
+                "invalid-argument-type",
+            ),
+            (
+                "module_extension(implementation, tag_classes={42: tag_class()})",
+                "invalid-argument-type",
+            ),
+            (
+                "def register_mapping(tags: Mapping[str, tag_class]) -> ModuleExtension:\n    return module_extension(implementation, tag_classes=tags)",
+                "invalid-argument-type",
+            ),
+            (
+                "module_extension(implementation, os_dependent='yes')",
+                "invalid-argument-type",
+            ),
+            ("extension()", "call-non-callable"),
+        ] {
+            analysis.update_file(file, format!("{source}{extra}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                !diagnostics.is_empty()
+                    && diagnostics
+                        .iter()
+                        .all(|diagnostic| diagnostic.id().as_str() == expected),
+                "{extra}: {diagnostics:?}"
+            );
+        }
+
+        // Registration checks are unconditional; inferring a named callback's
+        // body from registrations follows the existing opt-in analysis.
+        enable_context_inference(&mut analysis);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        analysis.update_file(file, source.replacen("context: module_ctx", "context", 1));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]

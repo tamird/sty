@@ -25,7 +25,7 @@
         "params": [
           {
             "name": "implementation",
-            "type": "Unknown",
+            "type": "callable",
             "doc": "The function that implements this module extension. Must take a single parameter, `module_ctx`. The function is called once at the beginning of a build to determine the set of available repos.",
             "default_value": "",
             "is_mandatory": true,
@@ -34,7 +34,7 @@
           },
           {
             "name": "tag_classes",
-            "type": "Unknown",
+            "type": "dict",
             "doc": "A dictionary to declare all the tag classes used by the extension. It maps from the name of the tag class to a `tag_class` object.",
             "default_value": "{}",
             "is_mandatory": false,
@@ -78,7 +78,7 @@
             "is_star_star_arg": false
           }
         ],
-        "return_type": "Unknown"
+        "return_type": "ModuleExtension"
       }
     },
     {

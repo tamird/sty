@@ -284,6 +284,7 @@ impl Database {
                     "property",
                     "record",
                     "ProviderKey",
+                    native::MODULE_EXTENSION_TYPE,
                     "JavaCommonInternal",
                     "Intersection",
                     "Top",

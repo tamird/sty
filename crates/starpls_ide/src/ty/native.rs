@@ -27,6 +27,7 @@ use ty_python_core::scope::NodeWithScopeKind;
 
 const STANDARD_PATH: &str = "starpls-native:standard.pyi";
 const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
+pub(super) const MODULE_EXTENSION_TYPE: &str = "ModuleExtension";
 
 /// Bazel type constructor names and the corresponding type names in API metadata.
 /// https://github.com/bazelbuild/bazel/commit/89086de828f7aa63564054819947edb9a7697e1f
@@ -403,6 +404,22 @@ fn declarations(
                 ..Default::default()
             });
     }
+    let module_extension_available = dialect == Dialect::Bazel
+        && contexts.iter().any(|(_, globals)| {
+            globals
+                .get("module_extension")
+                .is_some_and(|value| value.callable.is_some())
+        });
+    if module_extension_available {
+        // Bazel's module_extension returns this fieldless native value, but
+        // its Java API declares Object and the exporter omits the value type.
+        classes
+            .entry(MODULE_EXTENSION_TYPE.to_owned())
+            .or_insert_with(|| Type {
+                name: MODULE_EXTENSION_TYPE.to_owned(),
+                ..Default::default()
+            });
+    }
     if dialect == Dialect::Bazel {
         classes
             .entry("repo_metadata".to_owned())
@@ -571,6 +588,7 @@ fn declarations(
             "File"
                 | "Label"
                 | "DormantDependency"
+                | MODULE_EXTENSION_TYPE
                 | "DefaultInfo"
                 | "PackageSpecificationInfo"
                 | "FilesToRunProvider"
@@ -1255,6 +1273,9 @@ fn declarations(
     );
     output.push_str(&body);
     output.push('\n');
+    if module_extension_available && classes.contains_key("tag_class") {
+        output.push_str("class _ModuleExtensionTags(_starpls_typing.TypedDict, extra_items=_starpls_typing.ReadOnly[_starpls_types.tag_class]): ...\n\n");
+    }
     if classes.contains_key("struct") {
         output.push_str("_starpls_annotation__PendingDownload = _starpls_types._PendingDownload\n");
     }
@@ -1636,6 +1657,11 @@ fn write_function(
             // Registration stores a callable; each host API owns the checks
             // performed when it later invokes the implementation.
             (CallableKind::Function, "rule" | "repository_rule" | "aspect" | "transition" | "exec_transition", "implementation") => Some("_starpls_typing.Callable[_ImplementationParameters, _ImplementationResult]"),
+            // Bazel invokes an extension with one module context and consumes
+            // optional metadata from its result.
+            (CallableKind::Function, "module_extension", "implementation") => (classes.contains("module_ctx") && classes.contains("extension_metadata") && env::normalize_doc(r#type, true) == "callable").then_some("_starpls_typing.Callable[[_starpls_types.module_ctx], _starpls_types.extension_metadata | None]"),
+            // Bazel copies a concrete dictionary, including typed dictionary schemas.
+            (CallableKind::Function, "module_extension", "tag_classes") => (classes.contains("tag_class") && env::normalize_doc(r#type, true) == "dict").then_some("_starpls_builtins.dict[_StringKey, _starpls_types.tag_class] | _ModuleExtensionTags"),
             (CallableKind::Function, "macro", "implementation") => Some("_starpls_ty_extensions.Intersection[_starpls_annotation_function, _starpls_typing.Callable[_ImplementationParameters, None]]"),
             (CallableKind::Function, "subrule", "implementation") => Some("_starpls_annotation_function"),
             (CallableKind::Function, "transition" | "exec_transition", "inputs" | "outputs") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
