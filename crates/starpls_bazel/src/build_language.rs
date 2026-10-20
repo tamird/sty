@@ -63,7 +63,7 @@ pub fn attribute_type_string_from_discriminator(value: Discriminator) -> String 
         Boolean => "boolean",
         IntegerList => "List of ints",
         LabelListDict => "Dictionary: string -> list of Labels",
-        StringDict => "Dict of strings",
+        StringDict => "Dictionary: string -> string",
         StringListDict => "Dictionary: string -> list of strings",
         LabelKeyedStringDict => "Dictionary: Label -> string",
         _ => "Unknown",

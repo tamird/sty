@@ -7206,7 +7206,7 @@ value = factory(default={"srcs": ("//:a", Label("//:b"))}, skip_validations=True
     }
 
     #[test]
-    fn label_rule_inputs_accept_converted_iterables() {
+    fn rule_inputs_accept_bazel_attribute_conversions() {
         let function = |name: &str, input: &str| Value {
             name: name.to_owned(),
             callable: Some(Callable {
@@ -7236,6 +7236,7 @@ value = factory(default={"srcs": ("//:a", Label("//:b"))}, skip_validations=True
                         ("label_rule", Discriminator::LabelList),
                         ("mapping_rule", Discriminator::StringListDict),
                         ("keyed_rule", Discriminator::LabelKeyedStringDict),
+                        ("string_dict_rule", Discriminator::StringDict),
                     ]
                     .into_iter()
                     .map(|(name, kind)| RuleDefinition {
@@ -7261,6 +7262,8 @@ labels = [Label("//:input.rs")]
 mapping = {"key": ["value"]}
 native.mapping_rule(srcs=mapping)
 string_keys = {"//:input": "value"}
+native.string_dict_rule(srcs=string_keys)
+native.string_dict_rule(srcs=select({"//conditions:default": string_keys}))
 label_keys = {Label("//:input"): "value"}
 mixed_keys = {"//:input": "one", Label("//:other"): "two"}
 native.keyed_rule(srcs=string_keys)
@@ -7300,6 +7303,8 @@ strict_labels(labels)
             "strict_labels(paths)",
             "native.keyed_rule(srcs={42: \"bad\"})",
             "source_rule(name=\"bad\", keyed={42: \"bad\"})",
+            "native.string_dict_rule(srcs={42: \"value\"})",
+            "native.string_dict_rule(srcs={\"key\": 42})",
         ] {
             analysis
                 .open_document(
