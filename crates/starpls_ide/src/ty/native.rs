@@ -145,7 +145,7 @@ pub(super) fn globals(
             if value.name.is_empty() || BUILTINS_VALUES_DENY_LIST.contains(&value.name.as_str()) {
                 continue;
             }
-            refine_builtin_signature(dialect, &mut value);
+            refine_builtin_signature(dialect, &mut value, builtins);
             globals.insert(value.name.clone(), value);
         }
     };
@@ -176,11 +176,32 @@ pub(super) fn globals(
     globals
 }
 
-fn refine_builtin_signature(dialect: Dialect, value: &mut Value) {
+fn refine_builtin_signature(dialect: Dialect, value: &mut Value, builtins: &Builtins) {
     let Some(callable) = &mut value.callable else {
         return;
     };
     match value.name.as_str() {
+        // Bazel stores these constructor arguments unchanged in the instance fields.
+        // Its API exporter omits their input types, but includes the field types.
+        "AnalysisTestResultInfo"
+            if dialect == Dialect::Bazel && callable.return_type == value.name =>
+        {
+            if let Some(instance) = builtins.r#type.iter().find(|ty| ty.name == value.name) {
+                for parameter in callable
+                    .param
+                    .iter_mut()
+                    .filter(|param| param.r#type.is_empty())
+                {
+                    if let Some(field) = instance
+                        .field
+                        .iter()
+                        .find(|field| field.name == parameter.name && field.callable.is_none())
+                    {
+                        parameter.r#type.clone_from(&field.r#type);
+                    }
+                }
+            }
+        }
         // The inventory omits Label's input and result types.
         "Label" => {
             callable.return_type = "Label".to_owned();
@@ -365,7 +386,7 @@ fn declarations(
     }
     if let Some(native) = classes.get_mut("native") {
         for field in &mut native.field {
-            refine_builtin_signature(dialect, field);
+            refine_builtin_signature(dialect, field, builtins);
         }
         let workspace = env::make_workspace_builtins();
         for field in rule_values.iter().chain(workspace.global.iter()) {
@@ -4524,6 +4545,46 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
                 diagnostics.iter().any(|d| d.id().as_str() == expected),
                 "{expression}: {diagnostics:?}"
             );
+        }
+    }
+
+    #[test]
+    fn analysis_test_result_constructor_matches_its_fields() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = |success: &str, message: &str| {
+            format!("def check() -> tuple[bool, str]:\n    result = AnalysisTestResultInfo(success={success}, message={message})\n    return (result.success, result.message)\n")
+        };
+        let file = analysis
+            .open_document(
+                Path::new("/analysis_test.bzl"),
+                Dialect::Bazel,
+                None,
+                source("True", "'passed'"),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (success, message) in [("'yes'", "'passed'"), ("True", "42")] {
+            analysis.update_file(file, source(success, message));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
         }
     }
 
