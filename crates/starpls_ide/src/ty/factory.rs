@@ -4196,6 +4196,10 @@ raw(field=1)
                 "dict[Literal['name'], Literal['documentation']]",
                 "{'name': 'documentation'}",
             ),
+            (
+                "dict[{'name': Literal['documentation']}]",
+                "{'name': 'documentation'}",
+            ),
         ] {
             analysis.update_file(
                 file,
@@ -4204,8 +4208,14 @@ raw(field=1)
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{annotation}: {diagnostics:?}");
         }
-        for fields in ["{'name': 1}", "{1: 'documentation'}", "'name'", "[1]"] {
-            analysis.update_file(file, format!("Info = provider(fields={fields})\n"));
+        for (prefix, fields) in [
+            ("", "{'name': 1}"),
+            ("", "{1: 'documentation'}"),
+            ("", "'name'"),
+            ("", "[1]"),
+            ("fields: dict[{'name': int}] = {'name': 1}\n", "fields"),
+        ] {
+            analysis.update_file(file, format!("{prefix}Info = provider(fields={fields})\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert_eq!(diagnostics.len(), 1, "{fields}: {diagnostics:?}");
             assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");

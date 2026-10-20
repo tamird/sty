@@ -1275,9 +1275,7 @@ fn declarations(
     );
     output.push_str(&body);
     output.push('\n');
-    if module_extension_available && classes.contains_key("tag_class") {
-        output.push_str("class _ModuleExtensionTags(_starpls_typing.TypedDict, extra_items=_starpls_typing.ReadOnly[_starpls_types.tag_class]): ...\n\n");
-    }
+    output.push_str("class _DictSchema[_Value](_starpls_typing.TypedDict, extra_items=_starpls_typing.ReadOnly[_Value]): ...\n\n");
     if classes.contains_key("struct") {
         output.push_str("_starpls_annotation__PendingDownload = _starpls_types._PendingDownload\n");
     }
@@ -1651,8 +1649,8 @@ fn write_function(
             (CallableKind::Method("apple_common"), "target_apple_env", "xcode_config") => classes.contains("XcodeVersionConfig").then_some("_starpls_types.XcodeVersionConfig"),
             (CallableKind::Method("apple_common"), "target_apple_env", "platform") => classes.contains("apple_platform").then_some("_starpls_types.apple_platform"),
             (CallableKind::Function, "struct", "kwargs") => Some("_StructField"),
-            // provider() casts dictionary keys and documentation values to strings.
-            (CallableKind::Function, "provider", "fields") => Some("_starpls_builtins.list[_ProviderFieldName] | _starpls_builtins.tuple[_starpls_builtins.str, ...] | _starpls_builtins.dict[_ProviderFieldName, _ProviderFieldDoc] | None"),
+            // provider() reads a concrete dictionary with string keys and documentation.
+            (CallableKind::Function, "provider", "fields") => Some("_starpls_builtins.list[_ProviderFieldName] | _starpls_builtins.tuple[_starpls_builtins.str, ...] | _starpls_builtins.dict[_ProviderFieldName, _ProviderFieldDoc] | _DictSchema[_starpls_builtins.str] | None"),
             // Creation accepts any callable. The constructed provider checks the
             // initializer's returned dictionary against its field contract.
             (CallableKind::Function, "provider", "init") => Some("_starpls_typing.Callable[_ProviderInitParameters, _ProviderInitResult] | None"),
@@ -1663,7 +1661,7 @@ fn write_function(
             // optional metadata from its result.
             (CallableKind::Function, "module_extension", "implementation") => (classes.contains("module_ctx") && classes.contains("extension_metadata") && env::normalize_doc(r#type, true) == "callable").then_some("_starpls_typing.Callable[[_starpls_types.module_ctx], _starpls_types.extension_metadata | None]"),
             // Bazel copies a concrete dictionary, including typed dictionary schemas.
-            (CallableKind::Function, "module_extension", "tag_classes") => (classes.contains("tag_class") && env::normalize_doc(r#type, true) == "dict").then_some("_starpls_builtins.dict[_StringKey, _starpls_types.tag_class] | _ModuleExtensionTags"),
+            (CallableKind::Function, "module_extension", "tag_classes") => (classes.contains("tag_class") && env::normalize_doc(r#type, true) == "dict").then_some("_starpls_builtins.dict[_StringKey, _starpls_types.tag_class] | _DictSchema[_starpls_types.tag_class]"),
             (CallableKind::Function, "macro", "implementation") => Some("_starpls_ty_extensions.Intersection[_starpls_annotation_function, _starpls_typing.Callable[_ImplementationParameters, None]]"),
             (CallableKind::Function, "subrule", "implementation") => Some("_starpls_annotation_function"),
             (CallableKind::Function, "transition" | "exec_transition", "inputs" | "outputs") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
