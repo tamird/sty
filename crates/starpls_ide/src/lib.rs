@@ -257,13 +257,11 @@ impl Analysis {
         if let Some(enabled) = strict_generic_narrowing {
             support.strict_generic_narrowing = enabled;
         }
-        let mut source = support.clone();
+        let mut analysis = ty::FileAnalysisSettings::new(support);
         if let Some(enabled) = widen_singleton_collection_elements {
-            source.widen_singleton_collection_elements = enabled;
+            analysis.source.widen_singleton_collection_elements = enabled;
         }
-        settings
-            .set_analysis(&mut self.db)
-            .to(ty::FileAnalysisSettings { source, support });
+        settings.set_analysis(&mut self.db).to(analysis);
     }
 
     pub fn set_rules(&mut self, rules: DiagnosticRules) {

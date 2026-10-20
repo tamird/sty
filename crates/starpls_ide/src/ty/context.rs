@@ -1878,7 +1878,7 @@ toolchain = rule(implementation=implementation, attrs={
             ("attr.string(values=[])", "str"),
             ("attr.string(values=())", "str"),
             ("attr.string()", "str"),
-            ("attr.string(values=unknown())", "str"),
+            ("attr.string(values=unknown([]))", "str"),
             ("attr.int(values=[-1, 1, 1], default=-1)", "Literal[-1, 1]"),
             (
                 "attr.int(values=(-2147483648, 2147483647), mandatory=True)",
@@ -1896,10 +1896,13 @@ toolchain = rule(implementation=implementation, attrs={
                 "attr.string(values=['fast']) if flag() else attr.string(values=['slow'])",
                 "Unknown",
             ),
-            ("fake(values=['fast'], mandatory=True)", "Unknown"),
+            (
+                "unknown(attr.string(), values=['fast'], mandatory=True)",
+                "Unknown",
+            ),
         ] {
             let source = format!(
-                "def dynamic() -> str: return 'other'\ndef number() -> int: return 2\ndef flag() -> bool: return True\ndef unknown(): pass\ndef fake(**kwargs): return None\nallowed = ['fast']\nmake = attr.string\ndef implementation(ctx):\n    ctx.attr.mode\nexample = rule(implementation=implementation, attrs={{'mode': {descriptor}}})\n"
+                "def dynamic() -> str: return 'other'\ndef number() -> int: return 2\ndef flag() -> bool: return True\ndef unknown(value, **kwargs): return value\nallowed = ['fast']\nmake = attr.string\ndef implementation(ctx):\n    ctx.attr.mode\nexample = rule(implementation=implementation, attrs={{'mode': {descriptor}}})\n"
             );
             analysis.update_file(file, source.clone());
             let snapshot = analysis.snapshot();
@@ -3752,12 +3755,12 @@ example = rule(implementation=implementation, attrs={
             ("", 1),
             (", executable=True, cfg='exec'", 0),
             ("", 1),
-            (", executable=unknown(), cfg='exec'", 1),
+            (", executable=unknown(True), cfg='exec'", 1),
             (", allow_single_file=True", 0),
-            (", allow_single_file=unknown()", 1),
+            (", allow_single_file=unknown(True)", 1),
             (", providers=[PackageSpecificationInfo]", 1),
         ] {
-            let source = format!("def unknown():\n    pass\ndef implementation(ctx):\n    ctx.attr.dep[DefaultInfo].files_to_run.executable\nexample = rule(implementation=implementation, attrs={{'dep': attr.label(mandatory=True{options})}})\n");
+            let source = format!("def unknown(value):\n    return value\ndef implementation(ctx):\n    ctx.attr.dep[DefaultInfo].files_to_run.executable\nexample = rule(implementation=implementation, attrs={{'dep': attr.label(mandatory=True{options})}})\n");
             analysis.update_file(file, source.clone());
             for _ in 0..2 {
                 let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -4379,7 +4382,7 @@ example = rule(implementation=rule_impl, attrs={
 
     #[test]
     fn uncertain_flags_keep_unrelated_context_fields_precise() {
-        let source = r#"def unknown(): pass
+        let source = r#"def unknown(value): return value
 def implementation(ctx):
     ctx.attr.count
     ctx.attr.dep
@@ -4391,9 +4394,9 @@ def implementation(ctx):
     ctx.attr.none_transition
     ctx.outputs.dynamic
     ctx.file.
-example = rule(implementation=implementation, outputs=unknown(), executable=unknown(), attrs={
+example = rule(implementation=implementation, outputs=unknown({}), executable=unknown(True), attrs={
     "count": attr.int(),
-    "dep": attr.label(allow_single_file=unknown(), executable=unknown(), cfg=unknown()),
+    "dep": attr.label(allow_single_file=unknown(True), executable=unknown(True), cfg=unknown("exec")),
     "native": attr.label(cfg=config.target()),
     "none_transition": attr.label(cfg=config.none()),
     "absent": attr.label(allow_single_file=None, executable=False),

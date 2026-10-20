@@ -22,6 +22,7 @@ use ty_python_semantic::types::Type;
 use ty_python_semantic::AnalysisSettings;
 use ty_python_semantic::Db as _;
 use ty_python_semantic::ProgramEnvironment;
+use ty_python_semantic::ReturnTypeInference;
 use ty_site_packages::PythonVersionWithSource;
 
 use crate::Database;
@@ -51,10 +52,26 @@ pub(crate) struct SemanticSettings {
 }
 
 /// Source-specific inference settings and the Python settings used for support declarations.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct FileAnalysisSettings {
     pub source: AnalysisSettings,
     pub support: AnalysisSettings,
+}
+
+impl FileAnalysisSettings {
+    pub(crate) fn new(support: AnalysisSettings) -> Self {
+        let source = AnalysisSettings {
+            return_type_inference: ReturnTypeInference::Always,
+            ..support.clone()
+        };
+        Self { source, support }
+    }
+}
+
+impl Default for FileAnalysisSettings {
+    fn default() -> Self {
+        Self::new(AnalysisSettings::default())
+    }
 }
 
 impl SemanticSettings {
@@ -831,6 +848,58 @@ mod tests {
     use ty_python_semantic::SemanticModel;
 
     use crate::Analysis;
+
+    #[test]
+    fn unannotated_call_results_come_from_starlark_implementations() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "source.bzl",
+            "def complete():\n    pass\ndef integer():\n    return 1\n",
+        );
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "contract.bzl",
+            "def placeholder():\n    return 1\n",
+        );
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "contract.bzli",
+            "def placeholder(): ...\n",
+        );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            "load('source.bzl', 'complete', 'integer')\nload('contract.bzl', 'placeholder')\ncompleted = complete()\nnumber = integer()\nunknown = placeholder()\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+
+        let inferred_types = |analysis: &Analysis| {
+            let db = &analysis.db;
+            let model = SemanticModel::new(db, db.starlark_program_file(caller));
+            starpls_common::parsed_module(db, caller)
+                .load(db)
+                .suite()
+                .iter()
+                .filter_map(|statement| match statement {
+                    Stmt::Assign(assignment) => Some(
+                        assignment
+                            .value
+                            .inferred_type(&model)
+                            .unwrap()
+                            .display(db, &model.program_environment())
+                            .to_string(),
+                    ),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(inferred_types(&analysis), ["None", "Literal[1]", "Unknown"]);
+        analysis.set_analysis_options(Some(true), Some(false));
+        assert_eq!(inferred_types(&analysis), ["None", "Literal[1]", "Unknown"]);
+    }
 
     #[test]
     fn config_overrides_preserve_python_support_inference() {
