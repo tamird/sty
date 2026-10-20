@@ -1788,7 +1788,8 @@ fn write_function(
                     .then_some("_starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object]")
             }
             (CallableKind::Method("coverage_common"), "instrumented_files_info", "source_attributes" | "dependency_attributes") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
-            (CallableKind::Function, "exec_group" | "subrule", "toolchains") => (classes.contains("Label") && classes.contains("toolchain_type")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.toolchain_type]"),
+            // These registrations share Bazel's toolchain requirement parser.
+            (CallableKind::Function, "rule" | "aspect" | "exec_group" | "subrule", "toolchains") => (classes.contains("Label") && classes.contains("toolchain_type") && env::normalize_doc(r#type, true).eq_ignore_ascii_case("sequence")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.toolchain_type]"),
             (CallableKind::Function, "rule" | "aspect", "exec_groups") => classes.contains("exec_group").then_some("_starpls_typing.Mapping[_StringKey, _starpls_types.exec_group] | None"),
             (CallableKind::Function, "rule", "cfg") => {
                 let declared = env::normalize_doc(r#type, true);
@@ -3847,7 +3848,7 @@ def use_example():
     }
 
     #[test]
-    fn subrule_registration_checks_native_inputs() {
+    fn registrations_check_native_inputs() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
@@ -3867,6 +3868,16 @@ valid = subrule(
 invalid_callback = subrule(implementation = print)
 invalid_attrs = subrule(implementation = implementation, attrs = {"_enabled": attr.bool(default = True)})
 invalid_toolchain = subrule(implementation = implementation, toolchains = [42])
+def rule_implementation(ctx):
+    return []
+def aspect_implementation(target, ctx):
+    return []
+valid_rule = rule(implementation = rule_implementation, toolchains = ["//:one", Label("//:two"), config_common.toolchain_type("//:three")])
+valid_aspect = aspect(implementation = aspect_implementation, toolchains = (Label("//:one"),))
+empty_rule = rule(implementation = rule_implementation, toolchains = [])
+invalid_rule = rule(implementation = rule_implementation, toolchains = [42])
+invalid_aspect = aspect(implementation = aspect_implementation, toolchains = [42])
+invalid_sequence = aspect(implementation = aspect_implementation, toolchains = "//:one")
 "#;
         let file = analysis
             .open_document(
@@ -3881,11 +3892,14 @@ invalid_toolchain = subrule(implementation = implementation, toolchains = [42])
             )
             .unwrap();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        assert_eq!(diagnostics.len(), 6, "{diagnostics:?}");
         for (diagnostic, expected) in diagnostics.iter().zip([
             "implementation = print",
             "attrs = {\"_enabled\": attr.bool(default = True)}",
             "toolchains = [42]",
+            "toolchains = [42]",
+            "toolchains = [42]",
+            "toolchains = \"//:one\"",
         ]) {
             assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
             assert_eq!(&source[diagnostic.range().unwrap()], expected);
