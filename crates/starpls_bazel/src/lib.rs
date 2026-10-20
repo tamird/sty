@@ -88,6 +88,22 @@ pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
     "zip",
 ];
 
+/// Bazel's API exporter omits the `@StarlarkBuiltin` category. Add a name only
+/// when its interface in Bazel's `src/main/java/com/google/devtools/build/lib/starlarkbuildapi`
+/// declares `DocCategory.CONFIGURATION_FRAGMENT` (for example, `apple/AppleConfigurationApi.java`).
+/// The active builtin inventory determines whether that type and its members are available.
+pub const KNOWN_CONFIGURATION_FRAGMENT_TYPES: &[&str] = &[
+    "android",
+    "apple",
+    "bazel_android",
+    "coverage",
+    "cpp",
+    "java",
+    "objc",
+    "platform",
+    "proto",
+];
+
 pub const KNOWN_PROVIDER_TYPES: &[&str] = &[
     "AnalysisTestResultInfo",
     "AndroidNeverLinkLibrariesProvider",

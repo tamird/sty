@@ -160,6 +160,11 @@ fn registration_invocation<'db>(
             declaration,
             result: factory::result(db, call).unwrap_or_else(|| call.return_type()),
             kind,
+            aspect_fragments: if kind == ContextKind::Aspect {
+                fragments_for_call(db, call)
+            } else {
+                Vec::new()
+            },
         },
         &|name| match call.argument(name) {
             CheckedArgument::Omitted => Ok(Some(empty_mapping())),
@@ -562,6 +567,16 @@ fn registration_context_type<'db>(
             declaration: signature.definition?,
             result: call.inferred_type(model)?,
             kind: context_kind,
+            aspect_fragments: if context_kind == ContextKind::Aspect {
+                match argument(call, signature, "fragments") {
+                    Ok(Some(Argument::Expression(expression))) => {
+                        fragment_names(db, Some(expression), |element| element.inferred_type(model))
+                    }
+                    _ => Vec::new(),
+                }
+            } else {
+                Vec::new()
+            },
         },
         &|name| {
             Ok(match argument(call, signature, name)? {
@@ -582,11 +597,42 @@ fn empty_mapping<'db>() -> DictionaryItems<'db> {
     }
 }
 
+pub(super) fn fragments_for_call<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Vec<Name> {
+    match call.argument("fragments") {
+        CheckedArgument::Value { expression, .. } => {
+            fragment_names(db, expression, |element| call.expression_type(element))
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn fragment_names<'db>(
+    db: &'db Database,
+    expression: Option<&Expr>,
+    infer_type: impl Fn(&Expr) -> Option<Type<'db>>,
+) -> Vec<Name> {
+    let mut names: Vec<_> = expression
+        .and_then(factory::literal_sequence_elements)
+        .into_iter()
+        .flatten()
+        .filter_map(|element| {
+            let name = infer_type(element)?.string_literal_value(db)?;
+            starpls_bazel::KNOWN_CONFIGURATION_FRAGMENT_TYPES
+                .contains(&name)
+                .then(|| Name::new(name))
+        })
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
 struct Registration<'db> {
     file: ProgramFile<'db>,
     declaration: Definition<'db>,
     result: Type<'db>,
     kind: ContextKind,
+    aspect_fragments: Vec<Name>,
 }
 
 fn context_type<'db>(
@@ -600,6 +646,7 @@ fn context_type<'db>(
         declaration,
         result,
         kind: context_kind,
+        aspect_fragments,
     } = registration;
     let environment = ProgramEnvironment::from_file(file);
     let declarations = declaration.program_file(db);
@@ -907,6 +954,35 @@ fn context_type<'db>(
             REPOSITORY_CONTEXT_SCHEMA,
             vec![attribute_view],
         );
+    }
+    let fragment_names = match context_kind {
+        ContextKind::Build => rule.map_or(&[][..], |rule| rule.fragments.as_ref()),
+        ContextKind::Aspect => &aspect_fragments,
+        ContextKind::Repository => unreachable!(),
+    };
+    if !fragment_names.is_empty() {
+        let fields: Box<[_]> = fragment_names
+            .iter()
+            .filter_map(|name| {
+                let ty = factory::native_class(db, declarations, name)?
+                    .to_instance_approximation(db, &environment)?;
+                Some(ProvidedField {
+                    name: name.clone(),
+                    ty,
+                    source: None,
+                })
+            })
+            .collect();
+        if !fields.is_empty() {
+            if let Some(base) = factory::native_class(db, declarations, "fragments") {
+                let ty = make_class("fragments", base, fields, false, Box::default())?;
+                context_fields.push(ProvidedField {
+                    name: Name::new("fragments"),
+                    ty,
+                    source: None,
+                });
+            }
+        }
     }
     let build_setting = match rule.and_then(|rule| rule.build_setting) {
         Some(setting) => setting.value_type(db, &environment),
@@ -1323,6 +1399,69 @@ mod tests {
                 infer_ctx_attributes: true,
                 ..Default::default()
             });
+    }
+
+    #[test]
+    fn registered_contexts_expose_declared_configuration_fragments() {
+        let source = r#"def takes_string(value: str) -> None: pass
+
+def declared(context):
+    takes_string(context.fragments.apple.single_arch_cpu)
+    context.fragments.apple.missing_member
+    return []
+
+parent = rule(implementation = declared, fragments = ["apple"], extendable = True)
+
+def inherited(context):
+    takes_string(context.fragments.apple.single_arch_cpu)
+    return []
+
+child = rule(implementation = inherited, parent = parent)
+
+def undeclared(context):
+    context.fragments.apple
+    return []
+
+other = rule(implementation = undeclared)
+
+def aspect_impl(target, context):
+    takes_string(context.fragments.apple.single_arch_cpu)
+    return []
+
+apple_aspect = aspect(implementation = aspect_impl, fragments = ("apple", "apple"))
+
+def invalid_fragment(context):
+    context.fragments.File
+    return []
+
+invalid = rule(implementation = invalid_fragment, fragments = ["File"])
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic.id().as_str(),
+                    &source[diagnostic.range().unwrap()],
+                )
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            [
+                (
+                    "unresolved-attribute",
+                    "context.fragments.apple.missing_member"
+                ),
+                ("unresolved-attribute", "context.fragments.apple"),
+                ("unresolved-attribute", "context.fragments.File"),
+            ]
+        );
     }
 
     #[test]

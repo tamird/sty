@@ -110,6 +110,7 @@ pub(super) struct RuleData {
     /// Additional context attributes, when all possible names are known but
     /// these attributes are only present on some paths.
     pub(super) conditional_context_attributes: Option<Box<[RuleAttributeData]>>,
+    pub(super) fragments: Box<[Name]>,
     pub(super) complete: bool,
     /// Whether the generated call signature has no unresolved shape requirements.
     call_shape_complete: bool,
@@ -1203,7 +1204,7 @@ fn keyword_is_omitted_or<'db>(
     }
 }
 
-fn literal_sequence_elements(expression: &Expr) -> Option<&[Expr]> {
+pub(super) fn literal_sequence_elements(expression: &Expr) -> Option<&[Expr]> {
     let elements = match expression {
         Expr::List(list) => {
             let ruff_python_ast::ExprList {
@@ -1344,6 +1345,16 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         let data = parent.provided_data(db, &environment)?;
         data.downcast_ref::<RuleData>()
     });
+    let fragments =
+        if matches!(kind, RuleKind::Build) && db.environment().options(db).infer_ctx_attributes {
+            let mut fragments = parent_data.map_or_else(Vec::new, |data| data.fragments.to_vec());
+            fragments.extend(super::context::fragments_for_call(db, call));
+            fragments.sort_unstable();
+            fragments.dedup();
+            fragments.into_boxed_slice()
+        } else {
+            Box::default()
+        };
     let inherited_initializer =
         parent.is_some() && parent_data.is_none_or(|data| data.may_have_initializer);
     let may_have_initializer = matches!(kind, RuleKind::Build)
@@ -1891,6 +1902,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     documentation,
                     attributes: descriptors.into_boxed_slice(),
                     conditional_context_attributes,
+                    fragments,
                     complete,
                     call_shape_complete,
                     may_have_initializer,
