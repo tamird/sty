@@ -616,6 +616,7 @@ fn declarations(
                 | "PackageSpecificationInfo"
                 | "FilesToRunProvider"
                 | "Target"
+                | "struct"
                 | "depset"
                 | "runfiles"
                 | "select"
@@ -1080,7 +1081,7 @@ fn declarations(
         // common/java/java_common.bzl exports this fixed struct. JavaCommonApi
         // defines the call modes; JavaStarlarkCommon validates collection elements.
         body.push_str(
-            r#"    class _JavaCommonInternal(struct[_starpls_builtins.object]):
+            r#"    class _JavaCommonInternalMethods(_starpls_typing.Protocol):
         def create_compilation_action(
             self,
             ctx: _starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object],
@@ -1147,6 +1148,7 @@ fn declarations(
         def incompatible_disable_non_executable_java_binary(self) -> _starpls_builtins.bool: ...
         def incompatible_java_info_merge_runtime_module_flags(self) -> _starpls_builtins.bool: ...
         def target_kind(self, target: _starpls_builtins.object, /) -> _starpls_builtins.str: ...
+    type _JavaCommonInternal = _starpls_ty_extensions.Intersection[struct[_starpls_builtins.object], _JavaCommonInternalMethods]
 "#,
         );
     }

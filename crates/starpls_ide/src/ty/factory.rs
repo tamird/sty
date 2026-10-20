@@ -3966,7 +3966,7 @@ wrong_argument = record.callback("wrong")
             ("label", "Label"),
             ("items", "depset[int]"),
             ("integer", "int"),
-            ("boolean", "bool"),
+            ("boolean", "Literal[True]"),
             ("sequence", "list[int]"),
         ] {
             assert_eq!(values[name], expected, "{name}");

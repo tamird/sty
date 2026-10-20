@@ -18,6 +18,7 @@ use ty_python_semantic::provided::BuiltinUsage;
 use ty_python_semantic::provided::ProvidedBindingResolution;
 use ty_python_semantic::provided::ProvidedBindingValue;
 use ty_python_semantic::types::KnownClass;
+use ty_python_semantic::types::KnownInstanceType;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::AnalysisSettings;
 use ty_python_semantic::Db as _;
@@ -302,10 +303,11 @@ impl Database {
                     matches!(
                         self.annotation_builtin(file, name),
                         Some(
-                            ty_python_semantic::types::Type::ClassLiteral(_)
-                                | ty_python_semantic::types::Type::GenericAlias(_)
-                                | ty_python_semantic::types::Type::Dynamic(_)
-                                | ty_python_semantic::types::Type::SpecialForm(_)
+                            Type::ClassLiteral(_)
+                                | Type::GenericAlias(_)
+                                | Type::KnownInstance(KnownInstanceType::TypeAliasType(_))
+                                | Type::Dynamic(_)
+                                | Type::SpecialForm(_)
                         )
                     )
                 })
