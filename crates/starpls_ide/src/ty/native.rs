@@ -2170,6 +2170,7 @@ fn annotation(
                 "Unknown" => "_starpls_typing.Any",
                 "unknown" => "_starpls_typing.Any",
                 "Any" => "_starpls_typing.Any",
+                "object" => "_starpls_builtins.object",
                 "None" => "None",
                 "NoneType" => "None",
                 "int" => "_starpls_builtins.int",
@@ -6506,6 +6507,8 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
         let source = r#"def metadata(context: repository_ctx, attrs: dict[str, str], schema: dict[{"checksum": str}]) -> None:
     context.repo_metadata(attrs_for_reproducibility=attrs)
     context.repo_metadata(attrs_for_reproducibility=schema)
+
+platform_common.ToolchainInfo(runtime=struct(path="tool"))
 "#;
         analysis.update_file(file, source.into());
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();

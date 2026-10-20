@@ -274,7 +274,7 @@
         "params": [
           {
             "name": "kwargs",
-            "type": "Unknown",
+            "type": "object",
             "doc": "",
             "default_value": "",
             "is_mandatory": false,
