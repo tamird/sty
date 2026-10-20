@@ -66,6 +66,20 @@ The `function` annotation describes a Starlark `def` or `lambda` value. A
 `Callable` annotation describes a call signature and also accepts other kinds
 of callable values, including builtins.
 
+### Materialized types
+
+sty exposes ty's experimental `Top[T]` in its annotation namespace. It describes
+the union of every fully static form of `T`. For example, a `.bzli` predicate
+can use `Top[list[Unknown]]` to accept a list with any element type and preserve
+an already known element type during narrowing:
+
+```starlark
+def is_list(value: object) -> TypeIs[Top[list[Unknown]]]: ...
+```
+
+Elements of an otherwise unknown list can be read as `object`; adding an element
+requires knowing that the list's element type accepts it.
+
 ### Overloaded functions
 
 Use `@overload` on consecutive declarations with the same name to describe

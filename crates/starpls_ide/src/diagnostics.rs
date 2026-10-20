@@ -582,6 +582,46 @@ forward(select({"//:condition": ["selected"]}))
     }
 
     #[test]
+    fn top_materialization_preserves_list_constraints() {
+        let source = r#"
+def is_list(value: object) -> TypeIs[Top[list[Unknown]]]:
+    return type(value) == "list"
+
+def branch(value: list[str] | tuple[int, ...]) -> str | int:
+    if is_list(value):
+        return value[0].upper()
+    return value[0] + 1
+
+def join(left: object, right: object) -> Sequence[object]:
+    if is_list(left) and is_list(right):
+        return left + right
+    return ()
+
+def mutate(value: object) -> None:
+    if is_list(value):
+        value.append(42)
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        let range = diagnostics[0].range().unwrap();
+        assert_eq!(
+            &source[range.start().to_usize()..range.end().to_usize()],
+            "42"
+        );
+    }
+
+    #[test]
     fn type_names_narrow_native_values() {
         let source = r#"
 DEPSET_TYPE = type(depset())

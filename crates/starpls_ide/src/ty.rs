@@ -262,6 +262,7 @@ impl Database {
                     "ProviderKey",
                     "JavaCommonInternal",
                     "Intersection",
+                    "Top",
                     "KeywordArgs",
                 ])
                 .chain(

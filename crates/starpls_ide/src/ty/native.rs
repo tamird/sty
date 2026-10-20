@@ -1264,6 +1264,7 @@ fn declarations(
     output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");
     output.push_str("_starpls_annotation_ProviderInstance = _starpls_types.ProviderInstance\n");
     output.push_str("_starpls_annotation_Intersection = _starpls_ty_extensions.Intersection\n");
+    output.push_str("_starpls_annotation_Top = _starpls_ty_extensions.Top\n");
     if java_common_available {
         output.push_str(
             "_starpls_annotation_JavaCommonInternal = _starpls_types._JavaCommonInternal\n",
