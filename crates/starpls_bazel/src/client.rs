@@ -52,6 +52,8 @@ enum MappingFormat {
 struct MappingState {
     values: HashMap<Box<[u8]>, Weak<HashMap<String, String>>>,
     format: MappingFormat,
+    // Extension prefix -> repository for which Bazel supplied provenance.
+    extension_repositories: Option<HashMap<String, RepositoryWitness>>,
 }
 
 struct MappingOutput {
@@ -59,7 +61,100 @@ struct MappingOutput {
     empty_stdout: bool,
 }
 
+struct MappingQuery<'a> {
+    repositories: Vec<&'a str>,
+    projection: Vec<usize>,
+    witnesses: HashMap<usize, RepositoryWitness>,
+}
+
+#[derive(Clone)]
+struct RepositoryWitness {
+    original: String,
+    canonical: String,
+}
+
+impl<'a> MappingQuery<'a> {
+    // Bazel constructs every generated repository's mapping from one
+    // ModuleExtensionRepoMappingEntriesValue. Identify an extension only from
+    // repository provenance already returned by Bazel, then verify the current
+    // mapping resolves the original names back to the requested repositories.
+    // Canonical repository names are Bazel implementation details; callers
+    // must first establish that this Bazel release uses the audited layout.
+    fn new(repositories: &[&'a str], extensions: &HashMap<String, RepositoryWitness>) -> Self {
+        let mut query = Self {
+            repositories: Vec::with_capacity(repositories.len()),
+            projection: Vec::with_capacity(repositories.len()),
+            witnesses: HashMap::new(),
+        };
+        let mut representative = HashMap::<&str, usize>::new();
+        for &repository in repositories {
+            let extension = repository
+                .rsplit_once('+')
+                .and_then(|(prefix, _)| extensions.get(prefix).map(|witness| (prefix, witness)));
+            if let Some((prefix, witness)) = extension {
+                if let Some(&index) = representative.get(prefix) {
+                    query.projection.push(index);
+                    query
+                        .witnesses
+                        .entry(index)
+                        .or_insert_with(|| witness.clone());
+                    continue;
+                }
+                representative.insert(prefix, query.repositories.len());
+            }
+            let index = query.repositories.len();
+            query.repositories.push(repository);
+            query.projection.push(index);
+        }
+        query
+    }
+
+    fn expand(&self, requested: &[&str], mappings: &[RepoMapping]) -> Vec<Option<RepoMapping>> {
+        let mut confirmed = vec![false; mappings.len()];
+        for (&index, witness) in &self.witnesses {
+            let mapping = &mappings[index];
+            let representative = self.repositories[index];
+            let (_, name) = representative
+                .rsplit_once('+')
+                .expect("extension repository has a prefix");
+            confirmed[index] = mapping.get(&witness.original) == Some(&witness.canonical)
+                && mapping.get(name).map(String::as_str) == Some(representative);
+        }
+        requested
+            .iter()
+            .zip(&self.projection)
+            .map(|(&repository, &index)| {
+                let mapping = &mappings[index];
+                (repository == self.repositories[index]
+                    || (confirmed[index]
+                        && repository.rsplit_once('+').is_some_and(|(_, name)| {
+                            mapping.get(name).map(String::as_str) == Some(repository)
+                        })))
+                .then(|| Arc::clone(mapping))
+            })
+            .collect()
+    }
+}
+
 impl MappingState {
+    fn record_extension_repository(&mut self, canonical: &str, original: String) {
+        let Some(extensions) = &mut self.extension_repositories else {
+            return;
+        };
+        let Some((prefix, suffix)) = canonical.rsplit_once('+') else {
+            return;
+        };
+        if prefix.contains('+') && suffix == original {
+            extensions.insert(
+                prefix.to_owned(),
+                RepositoryWitness {
+                    original,
+                    canonical: canonical.to_owned(),
+                },
+            );
+        }
+    }
+
     fn intern(&mut self, json: &[u8]) -> anyhow::Result<RepoMapping> {
         if let Some(mapping) = self.values.get(json).and_then(Weak::upgrade) {
             return Ok(mapping);
@@ -153,6 +248,90 @@ impl BazelCLI {
         }
         Ok(output.stdout)
     }
+
+    fn query_repo_mappings(
+        &self,
+        repos: &[&str],
+        state: &mut MappingState,
+    ) -> anyhow::Result<Vec<RepoMapping>> {
+        let mut mappings = Vec::with_capacity(repos.len());
+        let mut batch_len = repos.len();
+        while mappings.len() < repos.len() {
+            let batch = &repos[mappings.len()..(mappings.len() + batch_len).min(repos.len())];
+            let mut command = Command::new(&self.executable);
+            command.args(["mod", "--enable_bzlmod", "dump_repo_mapping"]);
+            if state.format == MappingFormat::Compact {
+                command.arg("--output=compact_json");
+            }
+            command.args(batch);
+            if let Some(directory) = &self.working_directory {
+                command.current_dir(directory);
+            }
+            let mut child = match command
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+            {
+                Ok(child) => child,
+                Err(error) => {
+                    if error.kind() == std::io::ErrorKind::ArgumentListTooLong && batch.len() > 1 {
+                        batch_len = batch.len() / 2;
+                        continue;
+                    }
+                    return Err(error.into());
+                }
+            };
+            let stdout = child.stdout.take().expect("stdout was piped");
+            let mut stderr = child.stderr.take().expect("stderr was piped");
+            let (result, status, errors) = std::thread::scope(|scope| -> anyhow::Result<_> {
+                let errors = scope.spawn(move || {
+                    let mut bytes = Vec::new();
+                    stderr.read_to_end(&mut bytes).map(|_| bytes)
+                });
+                let result =
+                    parse_repo_mappings(std::io::BufReader::new(stdout), batch.len(), state);
+                if result.is_err() {
+                    // A malformed stream can leave the child blocked on stdout.
+                    let _ = child.kill();
+                }
+                let status = child.wait()?;
+                let errors = errors.join().expect("stderr reader panicked")?;
+                Ok((result, status, errors))
+            })?;
+            let MappingOutput {
+                mappings: batch_mappings,
+                empty_stdout,
+            } = result.with_context(|| {
+                format!(
+                    "Bazel repository mapping query ({status}): {}",
+                    String::from_utf8_lossy(&errors)
+                )
+            })?;
+            if state.format == MappingFormat::Compact
+                && empty_stdout
+                && status.code() == Some(2)
+                && unsupported_compact_mapping_format(&errors)
+            {
+                state.format = MappingFormat::Json;
+                continue;
+            }
+            if !status.success() {
+                bail!(
+                    "failed to query repository mappings with {status}: {}",
+                    String::from_utf8_lossy(&errors)
+                );
+            }
+            if batch_mappings.len() != batch.len() {
+                bail!(
+                    "expected {} repository mappings, received {}",
+                    batch.len(),
+                    batch_mappings.len()
+                );
+            }
+            mappings.extend(batch_mappings);
+        }
+        Ok(mappings)
+    }
 }
 
 impl BazelClient for BazelCLI {
@@ -199,7 +378,7 @@ impl BazelClient for BazelCLI {
             }
         }
 
-        Ok(BazelInfo {
+        let info = BazelInfo {
             output_base: output_base
                 .ok_or_else(|| anyhow!("failed to determine output_base from `bazel info`"))?
                 .into(),
@@ -213,7 +392,13 @@ impl BazelClient for BazelCLI {
                 .ok_or_else(|| anyhow!("failed to determine workspace from `bazel info`"))?
                 .into(),
             workspace_name,
-        })
+        };
+        self.mappings
+            .lock()
+            .expect("mapping state was poisoned")
+            .extension_repositories =
+            supports_extension_mapping_reuse(&info.release).then(HashMap::new);
+        Ok(info)
     }
 
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()> {
@@ -282,83 +467,38 @@ impl BazelClient for BazelCLI {
         // Serialize mapping readers before they can contend for Bazel's server
         // lock with an unread stdout pipe and this interner lock held elsewhere.
         let mut state = self.mappings.lock().expect("mapping state was poisoned");
-        let mut mappings = Vec::with_capacity(repos.len());
-        let mut batch_len = repos.len();
-        while mappings.len() < repos.len() {
-            let batch = &repos[mappings.len()..(mappings.len() + batch_len).min(repos.len())];
-            let mut command = Command::new(&self.executable);
-            command.args(["mod", "--enable_bzlmod", "dump_repo_mapping"]);
-            if state.format == MappingFormat::Compact {
-                command.arg("--output=compact_json");
-            }
-            command.args(batch);
-            if let Some(directory) = &self.working_directory {
-                command.current_dir(directory);
-            }
-            let mut child = match command
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-            {
-                Ok(child) => child,
-                Err(error) => {
-                    if error.kind() == std::io::ErrorKind::ArgumentListTooLong && batch.len() > 1 {
-                        batch_len = batch.len() / 2;
-                        continue;
+        if let Some(extensions) = state
+            .extension_repositories
+            .as_ref()
+            .filter(|extensions| !extensions.is_empty() && state.format == MappingFormat::Json)
+        {
+            let query = MappingQuery::new(repos, extensions);
+            if query.repositories.len() < repos.len() {
+                if let Ok(mappings) = self.query_repo_mappings(&query.repositories, &mut state) {
+                    let mut expanded = query.expand(repos, &mappings);
+                    let unresolved: Vec<_> = repos
+                        .iter()
+                        .zip(&expanded)
+                        .filter_map(|(&repo, mapping)| mapping.is_none().then_some(repo))
+                        .collect();
+                    if !unresolved.is_empty() {
+                        if let Ok(repaired) = self.query_repo_mappings(&unresolved, &mut state) {
+                            for (slot, mapping) in expanded
+                                .iter_mut()
+                                .filter(|slot| slot.is_none())
+                                .zip(repaired)
+                            {
+                                *slot = Some(mapping);
+                            }
+                        }
                     }
-                    return Err(error.into());
+                    if let Some(mappings) = expanded.into_iter().collect() {
+                        return Ok(mappings);
+                    }
                 }
-            };
-            let stdout = child.stdout.take().expect("stdout was piped");
-            let mut stderr = child.stderr.take().expect("stderr was piped");
-            let (result, status, errors) = std::thread::scope(|scope| -> anyhow::Result<_> {
-                let errors = scope.spawn(move || {
-                    let mut bytes = Vec::new();
-                    stderr.read_to_end(&mut bytes).map(|_| bytes)
-                });
-                let result =
-                    parse_repo_mappings(std::io::BufReader::new(stdout), batch.len(), &mut state);
-                if result.is_err() {
-                    // A malformed stream can leave the child blocked on stdout.
-                    let _ = child.kill();
-                }
-                let status = child.wait()?;
-                let errors = errors.join().expect("stderr reader panicked")?;
-                Ok((result, status, errors))
-            })?;
-            let MappingOutput {
-                mappings: batch_mappings,
-                empty_stdout,
-            } = result.with_context(|| {
-                format!(
-                    "Bazel repository mapping query ({status}): {}",
-                    String::from_utf8_lossy(&errors)
-                )
-            })?;
-            if state.format == MappingFormat::Compact
-                && empty_stdout
-                && status.code() == Some(2)
-                && unsupported_compact_mapping_format(&errors)
-            {
-                state.format = MappingFormat::Json;
-                continue;
             }
-            if !status.success() {
-                bail!(
-                    "failed to query repository mappings with {status}: {}",
-                    String::from_utf8_lossy(&errors)
-                );
-            }
-            if batch_mappings.len() != batch.len() {
-                bail!(
-                    "expected {} repository mappings, received {}",
-                    batch.len(),
-                    batch_mappings.len()
-                );
-            }
-            mappings.extend(batch_mappings);
         }
-        Ok(mappings)
+        self.query_repo_mappings(repos, &mut state)
     }
 
     fn selected_module(&self, canonical_repo: &str) -> anyhow::Result<Option<SelectedModule>> {
@@ -388,7 +528,11 @@ impl BazelClient for BazelCLI {
                 "cannot identify @@{canonical_repo}; module graph query failed: {graph_error:#}"
             )
                 })?;
-            if is_extension_repository(&output, canonical_repo)? {
+            if let Some(original) = extension_repository_original_name(&output, canonical_repo)? {
+                self.mappings
+                    .lock()
+                    .expect("mapping state was poisoned")
+                    .record_extension_repository(canonical_repo, original);
                 return Ok(None);
             }
         }
@@ -447,6 +591,25 @@ fn unsupported_compact_mapping_format(stderr: &[u8]) -> bool {
     })
 }
 
+fn supports_extension_mapping_reuse(release: &str) -> bool {
+    // Bazel's canonical repository name format is explicitly not an API. These
+    // releases were checked for the prefix-free extension naming convention
+    // and shared ModuleExtensionRepoMappingEntriesValue in
+    // https://github.com/bazelbuild/bazel/tree/9.3.0/src/main/java/com/google/devtools/build/lib/bazel/bzlmod
+    // and https://github.com/dzbarsky/bazel/tree/c9e799a41461893607df3b93d95c77d00c597032/src/main/java/com/google/devtools/build/lib/bazel/bzlmod.
+    matches!(
+        release,
+        "release 9.0.0"
+            | "release 9.0.1"
+            | "release 9.0.2"
+            | "release 9.1.0"
+            | "release 9.1.1"
+            | "release 9.2.0"
+            | "release 9.3.0"
+            | "release 9.4.0-dzbarsky1"
+    )
+}
+
 fn selected_module_from_graph(
     output: &[u8],
     canonical_repo: &str,
@@ -498,7 +661,10 @@ fn selected_module_from_graph(
     }))
 }
 
-fn is_extension_repository(output: &[u8], canonical_repo: &str) -> anyhow::Result<bool> {
+fn extension_repository_original_name(
+    output: &[u8],
+    canonical_repo: &str,
+) -> anyhow::Result<Option<String>> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Repository {
@@ -515,14 +681,14 @@ fn is_extension_repository(output: &[u8], canonical_repo: &str) -> anyhow::Resul
     }] = repositories.as_slice()
     else {
         if repositories.is_empty() {
-            return Ok(false);
+            return Ok(None);
         }
         bail!("expected one repository description for @@{canonical_repo}");
     };
     if canonical_name != canonical_repo {
         bail!("expected repository @@{canonical_repo}, got @@{canonical_name}");
     }
-    Ok(original_name.as_ref().is_some_and(|name| !name.is_empty()))
+    Ok(original_name.clone().filter(|name| !name.is_empty()))
 }
 
 impl Default for BazelCLI {
@@ -537,7 +703,7 @@ impl Default for BazelCLI {
 
 #[cfg(test)]
 mod tests {
-    use super::is_extension_repository;
+    use super::extension_repository_original_name;
     use super::selected_module_from_graph;
     use super::SelectedModule;
 
@@ -910,25 +1076,139 @@ exit "$status"
 
     #[test]
     fn nonmodules_require_positive_repository_provenance() {
-        assert!(is_extension_repository(
-            br#"{"canonicalName":"repo","originalName":"generated"}"#,
-            "repo"
-        )
-        .unwrap());
+        assert_eq!(
+            extension_repository_original_name(
+                br#"{"canonicalName":"repo","originalName":"generated"}"#,
+                "repo"
+            )
+            .unwrap()
+            .as_deref(),
+            Some("generated"),
+        );
         for output in [
             b"".as_slice(),
             br#"{"canonicalName":"repo"}"#,
             br#"{"canonicalName":"repo","originalName":""}"#,
         ] {
-            assert!(!is_extension_repository(output, "repo").unwrap());
+            assert!(extension_repository_original_name(output, "repo")
+                .unwrap()
+                .is_none());
         }
         for output in [
             b"{}".as_slice(),
             br#"{"canonicalName":"other","originalName":"generated"}"#,
             b"{\"canonicalName\":\"repo\"}\n{\"canonicalName\":\"repo\"}",
         ] {
-            assert!(is_extension_repository(output, "repo").is_err());
+            assert!(extension_repository_original_name(output, "repo").is_err());
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn legacy_mapping_queries_share_only_confirmed_extension_repositories() {
+        use std::os::unix::fs::PermissionsExt;
+
+        use super::BazelClient;
+
+        let root = tempfile::tempdir_in(std::env::var_os("TEST_TMPDIR").unwrap()).unwrap();
+        let executable = root.path().join("bazel");
+        std::fs::write(
+            &executable,
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> "${0%/*}/calls"
+case "$1 $2" in
+  'info execution_root') read release < "${0%/*}/release"; printf '%s\n' 'output_base: /output' "release: $release" 'starlark-semantics: enable_bzlmod=true' 'workspace: /workspace' ;;
+  'mod graph') exit 1 ;;
+  'mod show_repo') printf '{"canonicalName":"%s","originalName":"seed"}\n' "${3#@@}" ;;
+  'mod --enable_bzlmod')
+    shift 3
+    if test "$1" = '--output=compact_json'; then
+      printf '%s\n' "ERROR: While parsing option --output=compact_json: Not a valid output format: 'compact_json' (should be text, json, graph, streamed_proto or streamed_jsonproto)" >&2
+      exit 2
+    fi
+    for repo; do
+      case "$repo" in
+        'rules++ext+one'|'rules++ext+two') printf '%s\n' '{"seed":"rules++ext+seed","one":"rules++ext+one","two":"rules++ext+two","override":"other+"}' ;;
+        'rules++ext+override') printf '%s\n' '{"actual":"different+"}' ;;
+        'isolated++ext+one') printf '%s\n' '{"one":"isolated++ext+one"}' ;;
+        '') printf '%s\n' '{}' ;;
+        *) exit 3 ;;
+      esac
+    done ;;
+  *) exit 4 ;;
+esac
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::write(root.path().join("release"), "release 9.2.0\n").unwrap();
+        let client = super::BazelCLI::new(&executable);
+        client.info().unwrap();
+        client.dump_repo_mapping("").unwrap();
+        assert_eq!(client.selected_module("rules++ext+seed").unwrap(), None);
+        assert_eq!(client.selected_module("isolated++ext+seed").unwrap(), None);
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        let mappings = client
+            .dump_repo_mappings(&[
+                "rules++ext+one",
+                "isolated++ext+one",
+                "rules++ext+two",
+                "rules++ext+one",
+            ])
+            .unwrap();
+        assert_eq!(mappings.len(), 4);
+        assert!(std::sync::Arc::ptr_eq(&mappings[0], &mappings[2]));
+        assert!(std::sync::Arc::ptr_eq(&mappings[0], &mappings[3]));
+        assert_eq!(mappings[1]["one"], "isolated++ext+one");
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("calls")).unwrap(),
+            "mod --enable_bzlmod dump_repo_mapping rules++ext+one isolated++ext+one\n"
+        );
+
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        let mappings = client
+            .dump_repo_mappings(&[
+                "rules++ext+one",
+                "isolated++ext+one",
+                "rules++ext+two",
+                "rules++ext+override",
+            ])
+            .unwrap();
+        assert!(std::sync::Arc::ptr_eq(&mappings[0], &mappings[2]));
+        assert_eq!(mappings[3]["actual"], "different+");
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("calls")).unwrap(),
+            "mod --enable_bzlmod dump_repo_mapping rules++ext+one isolated++ext+one\nmod --enable_bzlmod dump_repo_mapping rules++ext+override\n"
+        );
+
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        assert!(client
+            .dump_repo_mappings(&["rules++ext+one", "rules++ext+two", "unknown"])
+            .is_err());
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("calls")).unwrap(),
+            "mod --enable_bzlmod dump_repo_mapping rules++ext+one unknown\nmod --enable_bzlmod dump_repo_mapping rules++ext+one rules++ext+two unknown\n"
+        );
+
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        assert!(client
+            .dump_repo_mappings(&["rules++ext+one", "rules++ext+missing"])
+            .is_err());
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("calls")).unwrap(),
+            "mod --enable_bzlmod dump_repo_mapping rules++ext+one\nmod --enable_bzlmod dump_repo_mapping rules++ext+missing\nmod --enable_bzlmod dump_repo_mapping rules++ext+one rules++ext+missing\n"
+        );
+
+        std::fs::write(root.path().join("release"), "release 10.0.0\n").unwrap();
+        client.info().unwrap();
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        client
+            .dump_repo_mappings(&["rules++ext+one", "rules++ext+two"])
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("calls")).unwrap(),
+            "mod --enable_bzlmod dump_repo_mapping rules++ext+one rules++ext+two\n"
+        );
     }
 
     #[cfg(unix)]
