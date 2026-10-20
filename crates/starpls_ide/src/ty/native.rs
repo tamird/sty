@@ -988,9 +988,10 @@ fn declarations(
                             _ => None,
                         }
                     } else if matches!(
-                        (class.name.as_str(), field.name.as_str()),
-                        ("TemplateVariableInfo", "variables")
-                            | ("configuration", "default_shell_env")
+                        (dialect, class.name.as_str(), field.name.as_str()),
+                        (_, "TemplateVariableInfo", "variables")
+                            | (_, "configuration", "default_shell_env")
+                            | (Dialect::Bazel, "repository_os", "environ")
                     ) && matches!(
                         env::normalize_doc(&field.r#type, true).as_str(),
                         "dict" | "Dict" | "Dictionary"
@@ -1781,7 +1782,8 @@ fn write_function(
                     .then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Args]")
             }
             // Template expansion casts the dictionary keys and values to strings.
-            (CallableKind::Method("actions"), "expand_template", "substitutions") => {
+            (CallableKind::Method("actions"), "expand_template", "substitutions")
+            | (CallableKind::Method("repository_ctx"), "template", "substitutions") => {
                 (env::normalize_doc(r#type, true) == "dict")
                     .then_some("_starpls_builtins.dict[_StringKey, _StringValue] | _DictSchema[_starpls_builtins.str]")
             }
@@ -2876,6 +2878,10 @@ def variables(context: ctx[object, object]) -> dict[str, str]:
     return context.var
 def shell_environment(context: ctx[object, object]) -> dict[str, str]:
     return context.configuration.default_shell_env
+def repository_environment(context: repository_ctx) -> dict[str, str]:
+    return context.os.environ
+def module_environment(context: module_ctx) -> dict[str, str]:
+    return context.os.environ
 ";
         let file = analysis
             .open_document(
@@ -2891,7 +2897,7 @@ def shell_environment(context: ctx[object, object]) -> dict[str, str]:
         for invalid in ["dict[int, str]", "dict[str, int]"] {
             analysis.update_file(file, source.replace("dict[str, str]", invalid));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+            assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
             assert!(diagnostics
                 .iter()
                 .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
@@ -6731,12 +6737,15 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
             )
             .unwrap(),
         );
-        let source = r#"def check(context: ctx[object, object], template: File, output: File, substitutions: dict[str, str]) -> None:
+        let source = r#"def check(context: ctx[object, object], repository: repository_ctx, template: File, output: File, substitutions: dict[str, str]) -> None:
     narrow: dict[Literal["{KEY}"], Literal["value"]] = {"{KEY}": "value"}
     schema: dict[{"{KEY}": str}] = {"{KEY}": "value"}
     context.actions.expand_template(template=template, output=output, substitutions=substitutions)
     context.actions.expand_template(template=template, output=output, substitutions=narrow)
     context.actions.expand_template(template=template, output=output, substitutions=schema)
+    repository.template("out", "template", substitutions)
+    repository.template("out", "template", narrow)
+    repository.template("out", "template", schema)
 "#;
         let file = analysis
             .open_document(
@@ -6752,14 +6761,14 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
         for invalid in ["{42: 'value'}", "{'key': 42}", "('key', 'value')"] {
             analysis.update_file(
                 file,
-                format!("{source}    context.actions.expand_template(template=template, output=output, substitutions={invalid})\n"),
+                format!("{source}    context.actions.expand_template(template=template, output=output, substitutions={invalid})\n    repository.template('out', 'template', {invalid})\n"),
             );
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            let [diagnostic] = diagnostics.as_slice() else {
-                panic!("{invalid}: {diagnostics:?}");
-            };
-            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
-            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+            assert_eq!(diagnostics.len(), 2, "{invalid}: {diagnostics:?}");
+            for diagnostic in diagnostics {
+                assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+                assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+            }
         }
     }
 
