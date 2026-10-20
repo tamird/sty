@@ -19,6 +19,8 @@ use serde::Deserialize;
 use serde_json::Deserializer;
 
 const DEFAULT_WORKSPACE_NAMES: &[&str] = &["__main__", "_main"];
+// Amortize the extra Bazel command over a substantial reduction in legacy mapping output.
+const MIN_REPOSITORIES_FOR_PROVENANCE: usize = 64;
 
 fn repository_argument_bytes(repo: &str) -> usize {
     "--repo=@@".len() + repo.len() + 1
@@ -52,8 +54,8 @@ enum MappingFormat {
 struct MappingState {
     values: HashMap<Box<[u8]>, Weak<HashMap<String, String>>>,
     format: MappingFormat,
-    // Extension prefix -> repository for which Bazel supplied provenance.
-    extension_repositories: Option<HashMap<String, RepositoryWitness>>,
+    // Extension prefix -> Bazel provenance. A missing witness records a failed attempt.
+    extension_repositories: Option<HashMap<String, Option<RepositoryWitness>>>,
 }
 
 struct MappingOutput {
@@ -80,7 +82,10 @@ impl<'a> MappingQuery<'a> {
     // mapping resolves the original names back to the requested repositories.
     // Canonical repository names are Bazel implementation details; callers
     // must first establish that this Bazel release uses the audited layout.
-    fn new(repositories: &[&'a str], extensions: &HashMap<String, RepositoryWitness>) -> Self {
+    fn new(
+        repositories: &[&'a str],
+        extensions: &HashMap<String, Option<RepositoryWitness>>,
+    ) -> Self {
         let mut query = Self {
             repositories: Vec::with_capacity(repositories.len()),
             projection: Vec::with_capacity(repositories.len()),
@@ -88,9 +93,12 @@ impl<'a> MappingQuery<'a> {
         };
         let mut representative = HashMap::<&str, usize>::new();
         for &repository in repositories {
-            let extension = repository
-                .rsplit_once('+')
-                .and_then(|(prefix, _)| extensions.get(prefix).map(|witness| (prefix, witness)));
+            let extension = repository.rsplit_once('+').and_then(|(prefix, _)| {
+                extensions
+                    .get(prefix)
+                    .and_then(Option::as_ref)
+                    .map(|witness| (prefix, witness))
+            });
             if let Some((prefix, witness)) = extension {
                 if let Some(&index) = representative.get(prefix) {
                     query.projection.push(index);
@@ -137,6 +145,30 @@ impl<'a> MappingQuery<'a> {
 }
 
 impl MappingState {
+    fn provenance_candidate<'a>(&mut self, repositories: &[&'a str]) -> Option<&'a str> {
+        let extensions = self.extension_repositories.as_mut()?;
+        let mut counts = HashMap::new();
+        let mut largest = MIN_REPOSITORIES_FOR_PROVENANCE - 1;
+        let mut candidate = None;
+        for &repository in repositories {
+            let Some((prefix, _)) = repository.rsplit_once('+') else {
+                continue;
+            };
+            if !prefix.contains('+') || extensions.contains_key(prefix) {
+                continue;
+            }
+            let count = counts.entry(prefix).or_insert(0);
+            *count += 1;
+            if *count > largest {
+                largest = *count;
+                candidate = Some((prefix, repository));
+            }
+        }
+        let (prefix, repository) = candidate?;
+        extensions.insert(prefix.to_owned(), None);
+        Some(repository)
+    }
+
     fn record_extension_repository(&mut self, canonical: &str, original: String) {
         let Some(extensions) = &mut self.extension_repositories else {
             return;
@@ -147,10 +179,10 @@ impl MappingState {
         if prefix.contains('+') && suffix == original {
             extensions.insert(
                 prefix.to_owned(),
-                RepositoryWitness {
+                Some(RepositoryWitness {
                     original,
                     canonical: canonical.to_owned(),
-                },
+                }),
             );
         }
     }
@@ -249,6 +281,63 @@ impl BazelCLI {
         Ok(output.stdout)
     }
 
+    fn query_extension_repository(&self, canonical_repo: &str) -> anyhow::Result<Option<String>> {
+        let output = self.run_command([
+            "mod",
+            "show_repo",
+            &format!("@@{canonical_repo}"),
+            "--output=streamed_jsonproto",
+        ])?;
+        extension_repository_original_name(&output, canonical_repo)
+    }
+
+    fn query_mappings_with_reuse(
+        &self,
+        repos: &[&str],
+        state: &mut MappingState,
+    ) -> anyhow::Result<Vec<RepoMapping>> {
+        if state.format != MappingFormat::Json {
+            return self.query_repo_mappings(repos, state);
+        }
+        if let Some(repository) = state.provenance_candidate(repos) {
+            if let Ok(Some(original)) = self.query_extension_repository(repository) {
+                state.record_extension_repository(repository, original);
+            }
+        }
+        if let Some(extensions) = state
+            .extension_repositories
+            .as_ref()
+            .filter(|extensions| !extensions.is_empty())
+        {
+            let query = MappingQuery::new(repos, extensions);
+            if query.repositories.len() < repos.len() {
+                if let Ok(mappings) = self.query_repo_mappings(&query.repositories, state) {
+                    let mut expanded = query.expand(repos, &mappings);
+                    let unresolved: Vec<_> = repos
+                        .iter()
+                        .zip(&expanded)
+                        .filter_map(|(&repo, mapping)| mapping.is_none().then_some(repo))
+                        .collect();
+                    if !unresolved.is_empty() {
+                        if let Ok(repaired) = self.query_repo_mappings(&unresolved, state) {
+                            for (slot, mapping) in expanded
+                                .iter_mut()
+                                .filter(|slot| slot.is_none())
+                                .zip(repaired)
+                            {
+                                *slot = Some(mapping);
+                            }
+                        }
+                    }
+                    if let Some(mappings) = expanded.into_iter().collect() {
+                        return Ok(mappings);
+                    }
+                }
+            }
+        }
+        self.query_repo_mappings(repos, state)
+    }
+
     fn query_repo_mappings(
         &self,
         repos: &[&str],
@@ -313,7 +402,8 @@ impl BazelCLI {
                 && unsupported_compact_mapping_format(&errors)
             {
                 state.format = MappingFormat::Json;
-                continue;
+                mappings.extend(self.query_mappings_with_reuse(&repos[mappings.len()..], state)?);
+                return Ok(mappings);
             }
             if !status.success() {
                 bail!(
@@ -467,38 +557,7 @@ impl BazelClient for BazelCLI {
         // Serialize mapping readers before they can contend for Bazel's server
         // lock with an unread stdout pipe and this interner lock held elsewhere.
         let mut state = self.mappings.lock().expect("mapping state was poisoned");
-        if let Some(extensions) = state
-            .extension_repositories
-            .as_ref()
-            .filter(|extensions| !extensions.is_empty() && state.format == MappingFormat::Json)
-        {
-            let query = MappingQuery::new(repos, extensions);
-            if query.repositories.len() < repos.len() {
-                if let Ok(mappings) = self.query_repo_mappings(&query.repositories, &mut state) {
-                    let mut expanded = query.expand(repos, &mappings);
-                    let unresolved: Vec<_> = repos
-                        .iter()
-                        .zip(&expanded)
-                        .filter_map(|(&repo, mapping)| mapping.is_none().then_some(repo))
-                        .collect();
-                    if !unresolved.is_empty() {
-                        if let Ok(repaired) = self.query_repo_mappings(&unresolved, &mut state) {
-                            for (slot, mapping) in expanded
-                                .iter_mut()
-                                .filter(|slot| slot.is_none())
-                                .zip(repaired)
-                            {
-                                *slot = Some(mapping);
-                            }
-                        }
-                    }
-                    if let Some(mappings) = expanded.into_iter().collect() {
-                        return Ok(mappings);
-                    }
-                }
-            }
-        }
-        self.query_repo_mappings(repos, &mut state)
+        self.query_mappings_with_reuse(repos, &mut state)
     }
 
     fn selected_module(&self, canonical_repo: &str) -> anyhow::Result<Option<SelectedModule>> {
@@ -516,19 +575,14 @@ impl BazelClient for BazelCLI {
         if !canonical_repo.is_empty() {
             // Extension repositories have no module graph node. Bazel 9's
             // repository metadata can establish their extension provenance.
-            let output = self
-                .run_command([
-                    "mod",
-                    "show_repo",
-                    &format!("@@{canonical_repo}"),
-                    "--output=streamed_jsonproto",
-                ])
+            let original = self
+                .query_extension_repository(canonical_repo)
                 .with_context(|| {
                     format!(
                 "cannot identify @@{canonical_repo}; module graph query failed: {graph_error:#}"
             )
                 })?;
-            if let Some(original) = extension_repository_original_name(&output, canonical_repo)? {
+            if let Some(original) = original {
                 self.mappings
                     .lock()
                     .expect("mapping state was poisoned")
@@ -1103,6 +1157,26 @@ exit "$status"
         }
     }
 
+    #[test]
+    fn provenance_candidate_prefers_the_largest_group() {
+        let mut state = super::MappingState {
+            extension_repositories: Some(Default::default()),
+            ..Default::default()
+        };
+        let repositories: Vec<_> = (0..super::MIN_REPOSITORIES_FOR_PROVENANCE)
+            .map(|index| format!("first++extension+{index}"))
+            .chain(
+                (0..=super::MIN_REPOSITORIES_FOR_PROVENANCE)
+                    .map(|index| format!("largest++extension+{index}")),
+            )
+            .collect();
+        let repositories: Vec<_> = repositories.iter().map(String::as_str).collect();
+        assert_eq!(
+            state.provenance_candidate(&repositories),
+            repositories.last().copied()
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn legacy_mapping_queries_share_only_confirmed_extension_repositories() {
@@ -1119,7 +1193,9 @@ printf '%s\n' "$*" >> "${0%/*}/calls"
 case "$1 $2" in
   'info execution_root') read release < "${0%/*}/release"; printf '%s\n' 'output_base: /output' "release: $release" 'starlark-semantics: enable_bzlmod=true' 'workspace: /workspace' ;;
   'mod graph') exit 1 ;;
-  'mod show_repo') printf '{"canonicalName":"%s","originalName":"seed"}\n' "${3#@@}" ;;
+  'mod show_repo')
+    test ! -f "${0%/*}/fail-provenance" || exit 3
+    printf '{"canonicalName":"%s","originalName":"%s"}\n' "${3#@@}" "${3##*+}" ;;
   'mod --enable_bzlmod')
     shift 3
     if test "$1" = '--output=compact_json'; then
@@ -1131,6 +1207,7 @@ case "$1 $2" in
         'rules++ext+one'|'rules++ext+two') printf '%s\n' '{"seed":"rules++ext+seed","one":"rules++ext+one","two":"rules++ext+two","override":"other+"}' ;;
         'rules++ext+override') printf '%s\n' '{"actual":"different+"}' ;;
         'isolated++ext+one') printf '%s\n' '{"one":"isolated++ext+one"}' ;;
+        'generated++ext+'*) cat "${0%/*}/generated-mapping" ;;
         '') printf '%s\n' '{}' ;;
         *) exit 3 ;;
       esac
@@ -1209,6 +1286,61 @@ esac
             std::fs::read_to_string(root.path().join("calls")).unwrap(),
             "mod --enable_bzlmod dump_repo_mapping rules++ext+one rules++ext+two\n"
         );
+
+        let generated: Vec<_> = (0..super::MIN_REPOSITORIES_FOR_PROVENANCE)
+            .map(|index| format!("generated++ext+{index}"))
+            .collect();
+        let mapping: std::collections::HashMap<_, _> = generated
+            .iter()
+            .enumerate()
+            .map(|(index, repository)| (index.to_string(), repository))
+            .collect();
+        std::fs::write(
+            root.path().join("generated-mapping"),
+            format!("{}\n", serde_json::to_string(&mapping).unwrap()),
+        )
+        .unwrap();
+        let requested: Vec<_> = generated.iter().map(String::as_str).collect();
+        let full_query = format!(
+            "mod --enable_bzlmod dump_repo_mapping {}",
+            requested.join(" ")
+        );
+
+        std::fs::write(root.path().join("release"), "release 9.2.0\n").unwrap();
+        let fresh_client = super::BazelCLI::new(&executable);
+        fresh_client.info().unwrap();
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        let mappings = fresh_client.dump_repo_mappings(&requested).unwrap();
+        assert_eq!(mappings.len(), requested.len());
+        assert!(mappings.iter().all(|item| item.len() == requested.len()));
+        let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+        let calls: Vec<_> = calls.lines().collect();
+        assert_eq!(calls.len(), 3);
+        assert!(
+            calls[0].starts_with("mod --enable_bzlmod dump_repo_mapping --output=compact_json ")
+        );
+        assert!(calls[1].starts_with("mod show_repo @@generated++ext+"));
+        assert_eq!(
+            calls[2],
+            "mod --enable_bzlmod dump_repo_mapping generated++ext+0"
+        );
+
+        let failed_client = super::BazelCLI::new(&executable);
+        failed_client.info().unwrap();
+        failed_client.dump_repo_mapping("").unwrap();
+        std::fs::write(root.path().join("fail-provenance"), "").unwrap();
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                failed_client.dump_repo_mappings(&requested).unwrap().len(),
+                requested.len()
+            );
+        }
+        let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+        let calls: Vec<_> = calls.lines().collect();
+        assert_eq!(calls.len(), 3);
+        assert!(calls[0].starts_with("mod show_repo @@generated++ext+"));
+        assert_eq!(calls[1..], [full_query.as_str(), full_query.as_str()]);
     }
 
     #[cfg(unix)]
