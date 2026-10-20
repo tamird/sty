@@ -1,5 +1,7 @@
 //! Starlark validation over Ruff's recovered AST and original tokens.
 
+use std::collections::HashSet;
+
 use ruff_python_ast as py;
 use ruff_python_ast::token::parentheses_iterator;
 use ruff_python_ast::token::TokenKind;
@@ -44,6 +46,7 @@ pub fn validate(
         excluded: Vec::new(),
         statement_node: None,
         annotation_mode,
+        type_alias_names: HashSet::new(),
         in_annotation: false,
         in_interface_class: false,
     };
@@ -156,6 +159,7 @@ struct Validator<'a> {
     excluded: Vec<NodeIndex>,
     statement_node: Option<NodeIndex>,
     annotation_mode: AnnotationMode,
+    type_alias_names: HashSet<py::name::Name>,
     in_annotation: bool,
     in_interface_class: bool,
 }
@@ -169,6 +173,7 @@ impl Validator<'_> {
             excluded: _,
             statement_node: _,
             annotation_mode: _,
+            type_alias_names: _,
             in_annotation: _,
             in_interface_class: _,
         } = self;
@@ -193,6 +198,7 @@ impl Validator<'_> {
             excluded: _,
             statement_node: _,
             annotation_mode: _,
+            type_alias_names: _,
             in_annotation: _,
             in_interface_class: _,
         } = self;
@@ -239,7 +245,7 @@ impl Validator<'_> {
         }
     }
 
-    fn statement(&mut self, stmt: &Stmt) {
+    fn statement(&mut self, stmt: &Stmt, top_level: bool) {
         if self.annotation_mode == AnnotationMode::Interface && !interface_statement(stmt) {
             self.excluded.push(stmt.node_index().load());
             self.error(
@@ -249,7 +255,7 @@ impl Validator<'_> {
             return;
         }
         match stmt {
-            Stmt::TypeAlias(alias) if self.annotation_mode == AnnotationMode::Interface => {
+            Stmt::TypeAlias(alias) if self.annotation_mode != AnnotationMode::Disabled => {
                 let py::StmtTypeAlias {
                     node_index: _,
                     range: _,
@@ -257,6 +263,36 @@ impl Validator<'_> {
                     type_params,
                     value,
                 } = alias;
+                let source_error = if self.annotation_mode != AnnotationMode::Source {
+                    None
+                } else if !top_level {
+                    Some("Starlark type aliases must be top-level declarations")
+                } else if type_params.as_ref().is_some_and(|parameters| {
+                    parameters.iter().any(|parameter| {
+                        !matches!(parameter, py::TypeParam::TypeVar(variable) if variable.bound.is_none() && variable.default.is_none())
+                    })
+                }) {
+                    Some("Starlark type alias parameters must be plain names")
+                } else {
+                    None
+                };
+                if let Some(error) = source_error {
+                    self.excluded.push(stmt.node_index().load());
+                    self.error(stmt.range(), error);
+                    return;
+                }
+                if self.annotation_mode == AnnotationMode::Source {
+                    if let Some(name) = name.as_name_expr() {
+                        if !self.type_alias_names.insert(name.id.clone()) {
+                            self.excluded.push(stmt.node_index().load());
+                            self.error(
+                                name.range(),
+                                format!("Type alias `{}` is already defined", name.id),
+                            );
+                            return;
+                        }
+                    }
+                }
                 self.visit_expr(name);
                 if let Some(parameters) = type_params {
                     self.visit_type_params(parameters);
@@ -661,7 +697,9 @@ fn interface_statement(statement: &Stmt) -> bool {
 impl<'a> SourceOrderVisitor<'a> for Validator<'_> {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         let previous = self.statement_node.replace(stmt.node_index().load());
-        stacker::maybe_grow(32 * 1024, 1024 * 1024, || self.statement(stmt));
+        stacker::maybe_grow(32 * 1024, 1024 * 1024, || {
+            self.statement(stmt, previous.is_none())
+        });
         self.statement_node = previous;
     }
 
@@ -779,6 +817,38 @@ mod tests {
                 super::AnnotationMode::Source,
                 &mut |error| errors.push(error),
             );
+            assert_eq!(errors.is_empty(), valid, "{source}: {errors:?}");
+            assert_eq!(excluded.is_empty(), valid, "{source}");
+        }
+    }
+
+    #[test]
+    fn source_type_aliases_follow_bazel_syntax() {
+        use super::AnnotationMode;
+
+        for (source, mode, valid) in [
+            ("type Name = str", AnnotationMode::Source, true),
+            (
+                "type Pair[T, U] = tuple[T, U]",
+                AnnotationMode::Source,
+                true,
+            ),
+            (
+                "def f():\n    type Name = str",
+                AnnotationMode::Source,
+                false,
+            ),
+            ("type Name[T: str] = T", AnnotationMode::Source, false),
+            ("type Name[T = str] = T", AnnotationMode::Source, false),
+            ("type Name[*Ts] = tuple[*Ts]", AnnotationMode::Source, false),
+            ("type Name = str", AnnotationMode::Disabled, false),
+        ] {
+            let parsed = ruff_python_parser::parse_unchecked_source(
+                source,
+                ruff_python_ast::PySourceType::Python,
+            );
+            let mut errors = Vec::new();
+            let excluded = super::validate(source, &parsed, mode, &mut |error| errors.push(error));
             assert_eq!(errors.is_empty(), valid, "{source}: {errors:?}");
             assert_eq!(excluded.is_empty(), valid, "{source}");
         }

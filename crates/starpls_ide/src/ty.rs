@@ -478,6 +478,11 @@ impl ty_python_core::Db for Database {
         !file.path(self).is_vendored_path()
     }
 
+    fn type_aliases_bind_runtime_names(&self, file: ProgramFile<'_>) -> bool {
+        self.starlark_file(file)
+            .is_none_or(|file| file.annotation_mode(self) != starpls_syntax::AnnotationMode::Source)
+    }
+
     fn source_exclusions(&self, file: ProgramFile<'_>) -> ty_python_core::SourceExclusions {
         let Some(file) = self.starlark_file(file) else {
             return ty_python_core::SourceExclusions::default();

@@ -869,6 +869,79 @@ answer = identity(1)
     }
 
     #[test]
+    fn source_type_aliases_are_type_only() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = r#"type Result = Name
+type Name = str
+type Names[T] = list[T]
+type Node = str | list[Node]
+def first(values: Names[Name]) -> Result:
+    return values[0]
+def node(value: Node) -> Node:
+    return value
+def shadow(Name: str) -> str:
+    return Name
+"#;
+        let definition = fixture.add_file(&mut analysis.db, "//:defs.bzl", source);
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "//:caller.bzl",
+            "load('//:defs.bzl', 'first')\nfirst(['ok'])\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        for file in [definition, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+
+        for (file, changed, expected) in [
+            (
+                definition,
+                source.replace("return values[0]", "return 1"),
+                "invalid-return-type",
+            ),
+            (
+                definition,
+                format!("{source}print(Name)\n"),
+                "unresolved-reference",
+            ),
+            (
+                caller,
+                "load('//:defs.bzl', 'first')\nfirst([1])\n".into(),
+                "invalid-argument-type",
+            ),
+            (
+                caller,
+                "load('//:defs.bzl', 'Name')\n".into(),
+                "unresolved-import",
+            ),
+        ] {
+            analysis.update_file(definition, source.into());
+            analysis.update_file(file, changed);
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{expected}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected);
+        }
+
+        for source in [
+            "value = 42\ntype value = str\nresult: int = value\ntyped: value = 'ok'\n",
+            "type value = str\nvalue = 42\nresult: int = value\ntyped: value = 'ok'\n",
+        ] {
+            analysis.update_file(definition, source.into());
+            let diagnostics = analysis.snapshot().diagnostics(definition).unwrap();
+            assert!(diagnostics.is_empty(), "{source}: {diagnostics:?}");
+        }
+
+        analysis.update_file(definition, "type Name = str\ntype Name = int\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(definition).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(diagnostics[0]
+            .headline_message()
+            .contains("already defined"));
+    }
+
+    #[test]
     fn native_assignments_check_initialization_and_reassignment() {
         let source = "value: int = 1 # type: string\nvalue = 2\nvalues: list[int] = []\nvalues.append(value)\n";
         let (mut analysis, fixture) = native_analysis(source);

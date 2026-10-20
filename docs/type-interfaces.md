@@ -48,6 +48,11 @@ imports in its registered stub. Source lexical bindings take precedence over
 these names. Stub declarations are available in annotations and type comments;
 runtime expressions use the implementation's own bindings.
 
+Bazel 9 `.bzl` files can declare top-level aliases such as `type Name = str`
+and `type Names[T] = list[T]` when type syntax is enabled. sty resolves these
+names in type expressions. In Bazel's default syntax-only mode, an alias is
+separate from runtime bindings and module exports.
+
 This body correspondence requires a unique top-level source function with the
 same parameter layout. Decorated functions and partially mixed source and stub
 generic annotations produce an `invalid-function-interface` diagnostic when
