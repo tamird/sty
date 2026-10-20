@@ -945,11 +945,23 @@ fn declarations(
                             writeln!(body, "            ...")?;
                         }
                     } else {
+                        let mut callable = Cow::Borrowed(callable);
+                        if dialect == Dialect::Bazel
+                            && class.name == "path"
+                            && field.name == "readdir"
+                            && matches!(
+                                env::normalize_doc(&callable.return_type, true).as_str(),
+                                "list" | "List"
+                            )
+                        {
+                            // Bazel returns a path for each directory entry.
+                            callable.to_mut().return_type = "list of paths".to_owned();
+                        }
                         write_function(
                             &mut body,
                             "        ",
                             field,
-                            callable,
+                            &callable,
                             CallableKind::Method(&class.name),
                             AnnotationUse::Value,
                             &declared_classes,
@@ -4358,6 +4370,41 @@ def inspect(value: path) -> path:
             diagnostic.range().unwrap(),
             ruff_text_size::TextRange::new(invalid.into(), (invalid + 1).into()),
         );
+    }
+
+    #[test]
+    fn path_readdir_returns_paths() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = "\
+def entries(directory: path) -> list[path]:
+    return directory.readdir()
+
+def names(directory: path) -> list[str]:
+    return directory.readdir()
+";
+        let invalid = u32::try_from(source.rfind("directory.readdir()").unwrap()).unwrap();
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(u32::from(diagnostic.range().unwrap().start()), invalid);
     }
 
     #[test]
