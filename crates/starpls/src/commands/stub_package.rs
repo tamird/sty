@@ -23,7 +23,7 @@ pub(super) struct StubPackage {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 struct Manifest {
     format_version: u32,
-    source: Source,
+    source: Option<Source>,
     files: BTreeMap<PathBuf, PathBuf>,
 }
 
@@ -96,7 +96,12 @@ pub(super) fn load(
     let mappings = packages
         .iter()
         .zip(&manifests)
-        .filter(|(_, manifest)| !manifest.source.repository.starts_with("@@"))
+        .filter(|(_, manifest)| {
+            manifest
+                .source
+                .as_ref()
+                .is_some_and(|source| !source.repository.starts_with("@@"))
+        })
         .map(|(package, _)| package.repository.name.clone())
         .collect::<Vec<_>>();
     loader.prepare_repository_mappings(&mappings);
@@ -104,14 +109,26 @@ pub(super) fn load(
         .iter()
         .zip(&manifests)
         .map(|(package, manifest)| {
-            source_repository(loader, package, &manifest.source)
+            manifest
+                .source
+                .as_ref()
+                .map(|source| source_repository(loader, package, source))
+                .transpose()
                 .with_context(|| package.context(&path))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
-    fetch_repositories(loader, &path, packages.iter().zip(&sources))?;
+    fetch_repositories(
+        loader,
+        &path,
+        packages
+            .iter()
+            .zip(&sources)
+            .filter_map(|(package, source)| source.as_ref().map(|source| (package, source))),
+    )?;
     let mut files = Vec::new();
     for ((package, manifest), source) in packages.iter().zip(manifests).zip(sources) {
-        let registrations = register_files(loader, package, manifest.files, &source)
+        let source = source.as_ref().unwrap_or(&package.repository);
+        let registrations = register_files(loader, package, manifest.files, source)
             .with_context(|| package.context(&path))?;
         files.extend(registrations);
     }
@@ -163,7 +180,7 @@ fn manifest_location(
 
 fn read_manifest(loader: &DefaultFileLoader, package: &mut Package) -> anyhow::Result<Manifest> {
     let Package {
-        selection: _,
+        selection,
         path,
         repository,
     } = package;
@@ -181,11 +198,17 @@ fn read_manifest(loader: &DefaultFileLoader, package: &mut Package) -> anyhow::R
             manifest.format_version
         );
     }
-    let Source {
+    let Some(Source {
         repository: source_repository,
         module,
         versions,
-    } = &manifest.source;
+    }) = &manifest.source
+    else {
+        if selection.allow_unversioned {
+            bail!("allow-unversioned requires an explicit source repository");
+        }
+        return Ok(manifest);
+    };
     if module.is_empty() || versions.is_empty() || versions.iter().any(String::is_empty) {
         bail!("source.module and source.versions must contain nonempty names and versions");
     }

@@ -738,15 +738,29 @@ select stub packages in `sty.toml` at the workspace root:
 
 ```toml
 [[stub-packages]]
-manifest = "@rules_foo_stubs//:stubs.toml"
+manifest = "@rules_foo//:stubs.toml"
 ```
 
 Manifest labels use the main repository's mapping. A local manifest can be
 specified by a path relative to the configuration file, such as
 `stubs/rules_foo/stubs.toml`.
 
-The package manifest defines the source repository, supported versions, and
-file mappings:
+A ruleset can ship stubs in its own Bazel repository:
+
+```toml
+# stubs.toml
+format-version = 1
+
+[files]
+"foo/defs.bzl" = "foo/defs.bzli"
+```
+
+With no `[source]` table, source files belong to the canonical Bazel repository
+containing the manifest. The source and stubs share the selected artifact.
+
+A separately distributed stub package is selected through its own repository,
+such as `@rules_foo_stubs//:stubs.toml`. Its manifest identifies the source
+repository and accepted module versions:
 
 ```toml
 # stubs.toml
@@ -783,18 +797,19 @@ identifies the source file and both registrations.
 ## Version compatibility
 
 `format-version` identifies the manifest schema. Stub packages have independent
-Bazel release versions. `source.versions` is a nonempty list of accepted source
-module versions.
+Bazel release versions. An explicit `[source]` table requires `repository`,
+`module`, and a nonempty `versions` list.
 
 Bazel's selected module name must equal `source.module`, and its selected
 version must appear in `source.versions`. Bazel dependency declarations specify
 minimum versions; compatibility is checked against the resolved module graph.
 
-When Bazel reports no source version, stubs shipped in the same canonical
-repository as their source are accepted as part of that selected artifact.
-A separate stub package requires `allow-unversioned = true` in its consumer's
-`stub-packages` entry. Any available module name must match `source.module`,
-and every available version must match `source.versions`.
+When an explicit `[source]` table identifies a repository with no selected
+version, stubs in that same canonical repository are accepted as part of the
+selected artifact. A separate stub package requires `allow-unversioned = true`
+in its consumer's `stub-packages` entry. This option requires an explicit
+`[source]` table. Any available module name must match `source.module`, and
+every available version must match `source.versions`.
 
 Incompatible versions, unsupported manifest schemas, unknown fields, unresolved
 repositories, unreadable files, and failed Bazel queries are configuration errors.

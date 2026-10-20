@@ -544,9 +544,14 @@ mod tests {
             .unwrap();
             let caller_text = "load('@rules//:defs.bzl', 'declared', 'inferred')\nresult = inferred('source')\nvalue = declared('ok').name\n";
             std::fs::write(workspace.join("caller.bzl"), caller_text).unwrap();
+            let source_metadata = if colocated {
+                ""
+            } else {
+                "[source]\nrepository = '@rules'\nmodule = 'rules'\nversions = ['1.0']\n"
+            };
             std::fs::write(
                 stubs.join("stubs.toml"),
-                "format-version = 1\n[source]\nrepository = '@rules'\nmodule = 'rules'\nversions = ['1.0']\n[files]\n'defs.bzl' = 'defs.bzli'\n",
+                format!("format-version = 1\n{source_metadata}[files]\n'defs.bzl' = 'defs.bzli'\n"),
             )
             .unwrap();
             std::fs::write(
@@ -604,7 +609,7 @@ mod tests {
                     true,
                 ));
                 let prepared = super::TypeInterfaceOptions::default().prepare(&loader, &workspace);
-                if version != "1.0" {
+                if !colocated && version != "1.0" {
                     let message = format!("{:#}", prepared.unwrap_err());
                     assert!(
                         message.contains("selected version 1.1") && message.contains("accepts 1.0"),
@@ -709,9 +714,12 @@ mod tests {
             "format-version = 1\n[source]\nrepository = '@'\nmodule = 'local'\nversions = ['1']\n[files]\n'{source}' = '{interface}'\n"
         )
         };
+        let colocated_manifest = |source: &str, interface: &str| {
+            format!("format-version = 1\n[files]\n'{source}' = '{interface}'\n")
+        };
         let package = |name: &str| format!("[[stub-packages]]\nmanifest = 'stubs/{name}.toml'\n");
         let first = manifest("one.bzl", "one.bzli");
-        let second = manifest("two.bzl", "two.bzli");
+        let second = colocated_manifest("two.bzl", "two.bzli");
         std::fs::write(stubs.join("first.toml"), &first).unwrap();
         std::fs::write(stubs.join("second.toml"), &second).unwrap();
         let configuration = package("first") + &package("second");
@@ -769,12 +777,22 @@ mod tests {
             (package("first"), first.replace("['1']", "[]"), "nonempty"),
             (
                 package("first"),
-                manifest("../outside.bzl", "one.bzli"),
+                first.replace("versions = ['1']\n", ""),
+                "missing field `versions`",
+            ),
+            (
+                package("first") + "allow-unversioned = true\n",
+                colocated_manifest("one.bzl", "one.bzli"),
+                "allow-unversioned requires an explicit source repository",
+            ),
+            (
+                package("first"),
+                colocated_manifest("../outside.bzl", "one.bzli"),
                 "outside repository",
             ),
             (
                 package("first"),
-                manifest("one.bzl", "../../outside.bzli"),
+                colocated_manifest("one.bzl", "../../outside.bzli"),
                 "outside repository",
             ),
             (
@@ -800,7 +818,7 @@ mod tests {
         std::fs::write(stubs.join("first.toml"), &first).unwrap();
         std::fs::write(
             stubs.join("second.toml"),
-            manifest("nested/../one.bzl", "two.bzli"),
+            colocated_manifest("nested/../one.bzl", "two.bzli"),
         )
         .unwrap();
         std::fs::write(workspace.join("sty.toml"), &configuration).unwrap();
