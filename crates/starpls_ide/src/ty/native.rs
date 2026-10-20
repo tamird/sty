@@ -1769,6 +1769,11 @@ fn write_function(
                 (classes.contains("Args") && env::normalize_doc(r#type, true) == "sequence")
                     .then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Args]")
             }
+            // Template expansion casts the dictionary keys and values to strings.
+            (CallableKind::Method("actions"), "expand_template", "substitutions") => {
+                (env::normalize_doc(r#type, true) == "dict")
+                    .then_some("_starpls_builtins.dict[_StringKey, _StringValue] | _DictSchema[_starpls_builtins.str]")
+            }
             // Spawn actions copy each dictionary independently into string maps.
             (CallableKind::Method("actions"), "run" | "run_shell", "env") => {
                 (env::normalize_doc(r#type, true) == "dict; or None")
@@ -6620,6 +6625,54 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
                     2,
                 )
                 .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
+    fn template_substitutions_have_string_keys_and_values() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def check(context: ctx[object, object], template: File, output: File, substitutions: dict[str, str]) -> None:
+    narrow: dict[Literal["{KEY}"], Literal["value"]] = {"{KEY}": "value"}
+    schema: dict[{"{KEY}": str}] = {"{KEY}": "value"}
+    context.actions.expand_template(template=template, output=output, substitutions=substitutions)
+    context.actions.expand_template(template=template, output=output, substitutions=narrow)
+    context.actions.expand_template(template=template, output=output, substitutions=schema)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/template.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for invalid in ["{42: 'value'}", "{'key': 42}", "('key', 'value')"] {
+            analysis.update_file(
+                file,
+                format!("{source}    context.actions.expand_template(template=template, output=output, substitutions={invalid})\n"),
+            );
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{invalid}: {diagnostics:?}");
