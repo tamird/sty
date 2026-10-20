@@ -1315,6 +1315,21 @@ fn declarations(
     );
     output.push_str(&body);
     output.push('\n');
+    if dialect == Dialect::Bazel
+        && classes.contains_key("repository_ctx")
+        && classes.contains_key("struct")
+    {
+        // A schema replaces the native gradual attribute view. A separate
+        // subclass preserves the non-generic context used by bare annotations.
+        writeln!(
+            output,
+            r#"class repository_ctx(_starpls_types.repository_ctx, _starpls_typing.Generic[_ContextAttrs]):
+    attr: _starpls_typing.Final[_starpls_ty_extensions.Intersection[_ContextAttrs, _starpls_types.struct[_starpls_builtins.object]]]
+_starpls_annotation_{} = repository_ctx
+"#,
+            super::context::REPOSITORY_CONTEXT_SCHEMA
+        )?;
+    }
     output.push_str("class _DictSchema[_Value](_starpls_typing.TypedDict, extra_items=_starpls_typing.ReadOnly[_Value]): ...\n\n");
     if classes.contains_key("struct") {
         output.push_str("_starpls_annotation__PendingDownload = _starpls_types._PendingDownload\n");

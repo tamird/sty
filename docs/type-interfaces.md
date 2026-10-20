@@ -647,7 +647,9 @@ label value unknown. The kind describes the dependency view, not the number
 of outgoing configurations.
 
 `ctx[Value, Attrs]` specifies the build-setting value and the fields of
-`ctx.attr`. A protocol describes the attribute fields a helper requires:
+`ctx.attr`. `repository_ctx[Attrs]` specifies the fields of
+`repository_ctx.attr`. A protocol describes the attribute fields a helper
+requires:
 
 ```starlark
 class _Attrs(Protocol):
@@ -658,10 +660,8 @@ def exported(context: ctx[object, _Attrs]) -> Sequence[Target]: ...
 ```
 
 These contexts retain their native methods and work with native functions.
-`ctx` and `ctx[Value]` use the native open `struct[object]` view for attributes;
-an attribute without a declared schema has type `object`.
-With context inference enabled, eligible rule and aspect registrations supply
-schemas from their attribute descriptors.
+With context inference enabled, eligible rule, aspect, and repository-rule
+registrations supply schemas from their attribute descriptors.
 
 ## Protocols
 

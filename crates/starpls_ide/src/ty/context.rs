@@ -29,6 +29,8 @@ use ty_python_semantic::provided::ProvidedClass;
 use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::provided::ProvidedFieldImplication;
 use ty_python_semantic::provided::ProvidedInstanceFields;
+use ty_python_semantic::provided::ProvidedTypeApplication;
+use ty_python_semantic::provided::TypeExpressionContext;
 use ty_python_semantic::types::ide_support::resolved_call_signature;
 use ty_python_semantic::types::ide_support::CallSignatureDetails;
 use ty_python_semantic::types::CheckedArgument;
@@ -42,6 +44,7 @@ use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::Parameters;
 use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
+use ty_python_semantic::types::TypeDefinition;
 use ty_python_semantic::types::TypedDictFieldBuilder;
 use ty_python_semantic::types::TypedDictOpenness;
 use ty_python_semantic::types::TypedDictSchema;
@@ -59,6 +62,48 @@ use super::factory::AttributeUse;
 use super::factory::BuiltinFunction;
 use super::factory::RuleAttributeData;
 use crate::Database;
+
+pub(super) const REPOSITORY_CONTEXT_SCHEMA: &str = "_RepositoryContext";
+
+pub(super) fn type_application<'db>(
+    db: &'db Database,
+    application: &ProvidedTypeApplication<'_, 'db>,
+    context: &mut dyn TypeExpressionContext<'db>,
+) -> Option<Type<'db>> {
+    let file = db.starlark_file(context.program_file())?;
+    if file.dialect != Dialect::Bazel
+        || db.annotation_builtin(file, "repository_ctx") != Some(application.value_type)
+    {
+        return None;
+    }
+    let environment = ProgramEnvironment::from_file(context.program_file());
+    let TypeDefinition::StaticClass(definition) =
+        application.value_type.definition(db, &environment)?
+    else {
+        return None;
+    };
+    let schema = match application.expression.slice.as_ref() {
+        Expr::Tuple(tuple) => {
+            let [schema] = tuple.elts.as_slice() else {
+                context.report_invalid_type_form(
+                    tuple.range(),
+                    "repository_ctx expects one attribute schema",
+                );
+                return Some(Type::unknown());
+            };
+            schema
+        }
+        schema => schema,
+    };
+    let schema = context.infer_type_expression(schema);
+    factory::specialized_native_instance(
+        db,
+        &environment,
+        definition.program_file(db),
+        REPOSITORY_CONTEXT_SCHEMA,
+        vec![schema],
+    )
+}
 
 pub(super) fn contextual_parameters(db: &Database, definition: Definition<'_>) -> Box<[Name]> {
     if !db.environment().options(db).infer_ctx_attributes {
@@ -815,82 +860,85 @@ fn context_type<'db>(
             source: None,
         });
     }
-    let name = if context_kind == ContextKind::Repository {
-        "repository_ctx"
-    } else {
-        "ctx"
+    let attribute_view = context_fields
+        .iter()
+        .find(|field| field.name == "attr")
+        .expect("every context has an attribute view")
+        .ty;
+    if context_kind == ContextKind::Repository {
+        return factory::specialized_native_instance(
+            db,
+            &environment,
+            declarations,
+            REPOSITORY_CONTEXT_SCHEMA,
+            vec![attribute_view],
+        );
+    }
+    let build_setting = match rule.and_then(|rule| rule.build_setting) {
+        Some(setting) => setting.value_type(db, &environment),
+        None => {
+            // The native default describes every successful build-setting read,
+            // even when the exact descriptor is unavailable.
+            let instance = factory::native_class(db, declarations, "ctx")?
+                .to_instance_approximation(db, &environment)?;
+            let (_, specialization) = instance.class_specialization(db, &environment)?;
+            let [value, _attrs] = specialization.types(db) else {
+                return None;
+            };
+            *value
+        }
     };
-    let base = if context_kind == ContextKind::Repository {
-        factory::native_class(db, declarations, name)?
-    } else {
-        let build_setting = match rule.and_then(|rule| rule.build_setting) {
-            Some(setting) => setting.value_type(db, &environment),
-            None => {
-                // The native default describes every successful build-setting read,
-                // even when the exact descriptor is unavailable.
-                let instance = factory::native_class(db, declarations, name)?
-                    .to_instance_approximation(db, &environment)?;
-                let (_, specialization) = instance.class_specialization(db, &environment)?;
-                let [value, _attrs] = specialization.types(db) else {
-                    return None;
-                };
-                *value
-            }
-        };
-        let attributes = context_fields
-            .iter()
-            .find(|field| field.name == "attr")
-            .expect("every context has an attribute view")
-            .ty;
-        factory::specialized_native_class(db, declarations, name, vec![build_setting, attributes])?
-    };
+    let base = factory::specialized_native_class(
+        db,
+        declarations,
+        "ctx",
+        vec![build_setting, attribute_view],
+    )?;
     let mut implications = Vec::new();
     // A valid single-file or executable prerequisite has a Target in ctx.attr
     // exactly when it has a File in its enabled views. These types describe
     // accepted inputs; Bazel can record prerequisite errors during context
     // construction and still invoke the implementation.
-    if context_kind != ContextKind::Repository {
-        for RuleAttributeData {
-            name,
-            descriptor,
-            source: _,
-        } in attributes
+    for RuleAttributeData {
+        name,
+        descriptor,
+        source: _,
+    } in attributes
+    {
+        let Some(attribute) = descriptor else {
+            continue;
+        };
+        if attribute.kind != AttributeKind::Label
+            || attribute.configuration != AttributeConfiguration::Ordinary
+            || attribute.has_non_none_value()
         {
-            let Some(attribute) = descriptor else {
-                continue;
-            };
-            if attribute.kind != AttributeKind::Label
-                || attribute.configuration != AttributeConfiguration::Ordinary
-                || attribute.has_non_none_value()
-            {
+            continue;
+        }
+        for (view, enabled) in [
+            (View::File, attribute.single_file),
+            (View::Executable, attribute.executable),
+        ] {
+            if enabled != Some(true) {
                 continue;
             }
-            for (view, enabled) in [
-                (View::File, attribute.single_file),
-                (View::Executable, attribute.executable),
-            ] {
-                if enabled != Some(true) {
-                    continue;
-                }
-                let file_class = factory::native_class(db, declarations, "File")?;
-                let ty = file_class.to_instance_approximation(db, &environment)?;
+            let file_class = factory::native_class(db, declarations, "File")?;
+            let ty = file_class.to_instance_approximation(db, &environment)?;
+            implications.push(ProvidedFieldImplication {
+                guard: Box::from([Name::new("attr"), name.clone()]),
+                target: Box::from([Name::new(view.name()), name.clone()]),
+                ty,
+            });
+            if let Some(ty) = analyzed_target_type(db, &environment, declarations, attribute) {
                 implications.push(ProvidedFieldImplication {
-                    guard: Box::from([Name::new("attr"), name.clone()]),
-                    target: Box::from([Name::new(view.name()), name.clone()]),
+                    guard: Box::from([Name::new(view.name()), name.clone()]),
+                    target: Box::from([Name::new("attr"), name.clone()]),
                     ty,
                 });
-                if let Some(ty) = analyzed_target_type(db, &environment, declarations, attribute) {
-                    implications.push(ProvidedFieldImplication {
-                        guard: Box::from([Name::new(view.name()), name.clone()]),
-                        target: Box::from([Name::new("attr"), name.clone()]),
-                        ty,
-                    });
-                }
             }
         }
     }
     make_class(
-        name,
+        "ctx",
         base,
         context_fields.into_boxed_slice(),
         false,
@@ -2830,6 +2878,60 @@ example = make_aspect(implementation=implementation, attrs={
                 assert_eq!(diagnostics.len(), errors, "{attrs}: {diagnostics:?}");
                 if let [diagnostic] = diagnostics.as_slice() {
                     assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repository_context_satisfies_named_attribute_schema() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        enable_context(&mut analysis);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.add_file(&mut analysis.db, "//:defs.bzl", "");
+        let interface = fixture.add_file(&mut analysis.db, "//:defs.bzli", "");
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(file, interface)]).unwrap();
+        for schema in [
+            "type _Attrs = struct[{\"location\": str}, ...]",
+            "class _Attrs(Protocol):\n    @property\n    def location(self) -> str: ...",
+        ] {
+            analysis.update_file(interface, format!("{schema}\ndef _read(context: repository_ctx[_Attrs]) -> str: ...\ndef _host(context: repository_ctx) -> str: ...\n"));
+            for (attrs, errors) in [
+                ("{'location': attr.string()}", 0),
+                ("{'location': attr.int()}", 1),
+                ("{'other': attr.string()}", 1),
+            ] {
+                let source = format!(
+                    r#"def _host(context):
+    return context.os.name
+def _accept_struct(value: struct[object]) -> None: pass
+def _read(context):
+    _host(context)
+    _accept_struct(context.attr)
+    context.path(context.attr.location)
+    return context.attr.location
+def implementation(context) -> None:
+    _read(context)
+example = repository_rule(implementation=implementation, attrs={attrs})
+"#
+                );
+                analysis.update_file(file, source.clone());
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert_eq!(
+                    diagnostics.len(),
+                    errors,
+                    "{schema}, {attrs}: {diagnostics:?}"
+                );
+                if let [diagnostic] = diagnostics.as_slice() {
+                    assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+                    assert_eq!(&source[diagnostic.range().unwrap()], "context");
                 }
             }
         }

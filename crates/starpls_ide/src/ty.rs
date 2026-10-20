@@ -554,6 +554,7 @@ impl ty_python_semantic::Db for Database {
     ) -> Option<Type<'db>> {
         keywords::type_application(self, &application, context)
             .or_else(|| providers::type_application(self, &application, context))
+            .or_else(|| context::type_application(self, &application, context))
             .or_else(|| shapes::type_application(self, application, context))
     }
 
