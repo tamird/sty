@@ -587,7 +587,10 @@ mod tests {
             ("sty.toml", config),
             (
                 "source.bzl",
-                "def convert(value): return value + 1\ndef unchecked(value: list): return value\ndef inspect(value: object) -> None:\n    if type(value) == 'list':\n        value.append(42)\nvalid = 1  # ty: ignore[division-by-zero, unused-ignore-comment]\nmissing = missing_name  # type: ignore\n",
+                concat!(
+                    "def convert(value): return value + 1\ndef unchecked(value: list): return value\ndef inspect(value: object) -> None:\n    if type(value) == 'list':\n        value.append(42)\nvalid = 1  # ty: ignore[division-by-zero, unused-ignore-comment]\nmissing = missing_name  # type: ignore\n",
+                    "original = {'marker': None}\nalias = original\nalias['marker'] = 1\n",
+                ),
             ),
             ("source.bzli", "def convert(value: str) -> str: ...\n"),
             ("packaged.bzl", "def value(): return 'bad'\n"),
@@ -597,16 +600,21 @@ mod tests {
                 "format-version = 1\n[source]\nrepository = '@@'\nmodule = 'local'\nversions = ['1']\n[files]\n'packaged.bzl' = 'packaged.bzli'\n",
             ),
         ];
-        for (index, (name, overrides, strict, require_suppressions, missing_severity)) in [
-            ("project", vec![], false, false, "error"),
+        for (
+            index,
+            (name, overrides, strict, require_suppressions, precise_singletons, missing_severity),
+        ) in [
+            ("project", vec![], false, false, false, "error"),
             (
                 "ordered",
                 vec![
                     "analysis.strict-generic-narrowing=true",
                     "analysis.require-valid-suppressions=true",
+                    "analysis.widen-singleton-collection-elements=false",
                     "rules.missing-type-argument='ignore'",
                     "rules.missing-type-argument='warn'",
                 ],
+                true,
                 true,
                 true,
                 "warning",
@@ -618,13 +626,16 @@ mod tests {
                     "analysis.strict-generic-narrowing=false",
                     "analysis.require-valid-suppressions=true",
                     "analysis.require-valid-suppressions=false",
+                    "analysis.widen-singleton-collection-elements=false",
+                    "analysis.widen-singleton-collection-elements=true",
                 ],
+                false,
                 false,
                 false,
                 "error",
             ),
             // A later invocation reloads the project policy without CLI changes.
-            ("project-again", vec![], false, false, "error"),
+            ("project-again", vec![], false, false, false, "error"),
         ]
         .into_iter()
         .enumerate()
@@ -681,6 +692,9 @@ mod tests {
             ];
             if strict {
                 expected.push(("invalid-argument-type", "error"));
+            }
+            if precise_singletons {
+                expected.push(("invalid-assignment", "error"));
             }
             if require_suppressions {
                 expected.push(("blanket-ignore-comment", "error"));

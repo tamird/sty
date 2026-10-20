@@ -148,6 +148,12 @@ explicit value for a setting wins. Project interface and stub package
 selections remain in effect. Overrides do not modify files or editor
 settings, and invalid settings are rejected.
 
+Set `analysis.widen-singleton-collection-elements = false` to infer exact
+singleton element types for mutable collections: `{"key": None}` becomes
+`dict[str, None]`. The default widens singleton elements to permit later
+mutation. With exact inference, additions whose types cannot be inferred from
+the collection's uses require an explicit collection annotation.
+
 Suppress a diagnostic on its source line with a rule-specific comment:
 
 ```starlark

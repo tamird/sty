@@ -33,6 +33,7 @@ pub(super) struct BazelOptions {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(super) struct AnalysisOptions {
     pub strict_generic_narrowing: Option<bool>,
+    pub widen_singleton_collection_elements: Option<bool>,
     pub require_valid_suppressions: Option<bool>,
 }
 
@@ -76,12 +77,16 @@ impl ConfigOverride {
             analysis:
                 AnalysisOptions {
                     strict_generic_narrowing,
+                    widen_singleton_collection_elements,
                     require_valid_suppressions,
                 },
         } = self;
         config.rules.extend(rules.clone());
         if let Some(value) = strict_generic_narrowing {
             config.analysis.strict_generic_narrowing = Some(*value);
+        }
+        if let Some(value) = widen_singleton_collection_elements {
+            config.analysis.widen_singleton_collection_elements = Some(*value);
         }
         if let Some(value) = require_valid_suppressions {
             config.analysis.require_valid_suppressions = Some(*value);

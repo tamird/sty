@@ -202,7 +202,7 @@ pub(crate) struct CheckSettings {
     #[returns(ref)]
     pub rules: DiagnosticRules,
     #[returns(ref)]
-    pub analysis: ty_python_semantic::AnalysisSettings,
+    pub analysis: crate::ty::FileAnalysisSettings,
 }
 
 fn default_rules(use_code_flow_analysis: bool) -> RuleSelection {

@@ -283,10 +283,9 @@ impl PreparedInterfaces {
             return Err(error);
         }
         analysis.set_rules(rules);
-        analysis.set_strict_generic_narrowing(
-            analysis_options
-                .strict_generic_narrowing
-                .unwrap_or_default(),
+        analysis.set_analysis_options(
+            analysis_options.strict_generic_narrowing,
+            analysis_options.widen_singleton_collection_elements,
         );
         Ok(())
     }

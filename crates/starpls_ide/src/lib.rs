@@ -244,14 +244,26 @@ pub struct Analysis {
 }
 
 impl Analysis {
-    pub fn set_strict_generic_narrowing(&mut self, enabled: bool) {
+    pub fn set_analysis_options(
+        &mut self,
+        strict_generic_narrowing: Option<bool>,
+        widen_singleton_collection_elements: Option<bool>,
+    ) {
         let settings = self
             .db
             .check_settings
             .expect("database initialization is complete");
-        let mut analysis = settings.analysis(&self.db).clone();
-        analysis.strict_generic_narrowing = enabled;
-        settings.set_analysis(&mut self.db).to(analysis);
+        let mut support = ty_python_semantic::AnalysisSettings::default();
+        if let Some(enabled) = strict_generic_narrowing {
+            support.strict_generic_narrowing = enabled;
+        }
+        let mut source = support.clone();
+        if let Some(enabled) = widen_singleton_collection_elements {
+            source.widen_singleton_collection_elements = enabled;
+        }
+        settings
+            .set_analysis(&mut self.db)
+            .to(ty::FileAnalysisSettings { source, support });
     }
 
     pub fn set_rules(&mut self, rules: DiagnosticRules) {
@@ -304,7 +316,7 @@ impl Analysis {
         db.check_settings = Some(ty::CheckSettings::new(
             &db,
             DiagnosticRules::default(),
-            ty_python_semantic::AnalysisSettings::default(),
+            ty::FileAnalysisSettings::default(),
         ));
         for dialect in [Dialect::Standard, Dialect::Bazel] {
             db.set_builtin_defs(dialect, Builtins::default(), Default::default())

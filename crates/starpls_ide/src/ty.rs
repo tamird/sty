@@ -50,6 +50,13 @@ pub(crate) struct SemanticSettings {
     program: ProgramSettings,
 }
 
+/// Source-specific inference settings and the Python settings used for support declarations.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct FileAnalysisSettings {
+    pub source: AnalysisSettings,
+    pub support: AnalysisSettings,
+}
+
 impl SemanticSettings {
     pub(crate) fn new(vendored: &VendoredFileSystem) -> Self {
         let mut program = ProgramSettings::empty(vendored);
@@ -764,10 +771,18 @@ impl ty_python_semantic::Db for Database {
         diagnostics::registry()
     }
 
-    fn analysis_settings(&self, _file: File) -> &AnalysisSettings {
-        self.check_settings
+    fn analysis_settings(&self, file: File) -> &AnalysisSettings {
+        let settings = self
+            .check_settings
             .expect("database initialization is complete")
-            .analysis(self)
+            .analysis(self);
+        // Checked Starlark files have system paths; generated and vendored Python
+        // declarations have virtual and vendored paths, respectively.
+        if file.path(self).is_system_path() {
+            &settings.source
+        } else {
+            &settings.support
+        }
     }
 
     fn dependency_metadata(&self, _file: File) -> Option<&DependencyMetadata> {
@@ -798,6 +813,7 @@ mod tests {
 
     use ruff_db::files::FileRootKind;
     use ruff_db::system::SystemPath;
+    use ruff_db::system::SystemVirtualPathBuf;
     use ruff_db::Db as _;
     use ruff_python_ast::Stmt;
     use salsa::plumbing::AsId;
@@ -810,10 +826,51 @@ mod tests {
     use starpls_common::FileInfo;
     use starpls_hir::Fixture;
     use ty_python_semantic::types::Type;
+    use ty_python_semantic::Db as _;
     use ty_python_semantic::HasType;
     use ty_python_semantic::SemanticModel;
 
     use crate::Analysis;
+
+    #[test]
+    fn config_overrides_preserve_python_support_inference() {
+        let source = "original = {'marker': None}\nalias = original\nalias['marker'] = 1\n";
+        let (mut analysis, _) = Analysis::new_for_test();
+        let source_file = analysis
+            .open_document(
+                Path::new("/source.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let support_path: SystemVirtualPathBuf = "/support.py".to_owned().into();
+        analysis
+            .db
+            .install_native_source(super::native::DeclarationSource {
+                path: support_path.clone(),
+                contents: source.into(),
+            });
+        let diagnostics = |analysis: &Analysis| {
+            let db = &analysis.db;
+            let source = db.starlark_program_file(source_file);
+            let support =
+                db.program_file(db.files().try_virtual_file(&support_path).unwrap().file());
+            [source, support].map(|file| {
+                ty_python_semantic::check_file_unwrap(db, file)
+                    .iter()
+                    .map(|diagnostic| diagnostic.id().to_string())
+                    .collect::<Vec<_>>()
+            })
+        };
+        assert_eq!(diagnostics(&analysis), [Vec::<String>::new(), Vec::new()]);
+        analysis.set_analysis_options(None, Some(false));
+        assert_eq!(
+            diagnostics(&analysis),
+            [vec!["invalid-assignment".to_owned()], Vec::new()]
+        );
+    }
 
     #[salsa::tracked(returns(copy))]
     fn loaded_program_file(
