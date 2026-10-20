@@ -251,6 +251,11 @@
       "name": "cpp",
       "type": "cpp",
       "doc": "C++ configuration, available to rules that request the cpp fragment."
+    },
+    {
+      "name": "platform",
+      "type": "platform",
+      "doc": "Platform configuration, available to every rule."
     }
   ],
   "native": [

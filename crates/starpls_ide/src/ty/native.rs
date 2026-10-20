@@ -3705,7 +3705,7 @@ def sdk(config: XcodeVersionConfig, platform: apple_platform) -> DottedVersion:
     }
 
     #[test]
-    fn cpp_fragment_uses_exported_member_types() {
+    fn configuration_fragments_use_exported_member_types() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
@@ -3722,6 +3722,19 @@ def flags(ctx: ctx):
     ctx.fragments.cpp.apple_generate_dsym + 1
 
 example = rule(implementation = flags, fragments = ["cpp"])
+
+def platform_labels(ctx: ctx) -> tuple[Label, Label]:
+    return ctx.fragments.platform.platform, ctx.fragments.platform.host_platform
+
+def platform_impl(ctx: ctx):
+    platform_labels(ctx)
+    ctx.fragments.platform.no_such_member
+    return []
+
+universal = rule(implementation = platform_impl)
+
+def invalid_platform(ctx: ctx) -> str:
+    return ctx.fragments.platform.platform
 "#;
         let file = analysis
             .open_document(
@@ -3736,7 +3749,7 @@ example = rule(implementation = flags, fragments = ["cpp"])
             )
             .unwrap();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        assert_eq!(diagnostics.len(), 5, "{diagnostics:?}");
         for (diagnostic, (expected_id, expected_source)) in diagnostics.iter().zip([
             ("unresolved-attribute", "ctx.fragments.cpp.no_such_option"),
             ("unresolved-attribute", "ctx.fragments.no_such_fragment"),
@@ -3744,6 +3757,11 @@ example = rule(implementation = flags, fragments = ["cpp"])
                 "unsupported-operator",
                 "ctx.fragments.cpp.apple_generate_dsym + 1",
             ),
+            (
+                "unresolved-attribute",
+                "ctx.fragments.platform.no_such_member",
+            ),
+            ("invalid-return-type", "ctx.fragments.platform.platform"),
         ]) {
             assert_eq!(diagnostic.id().as_str(), expected_id);
             let range = diagnostic.range().unwrap();
