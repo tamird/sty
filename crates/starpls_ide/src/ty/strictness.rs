@@ -1157,6 +1157,25 @@ last: int = max(3, 1, key=lambda value: str(value))
     }
 
     #[test]
+    fn generic_callable_protocol_is_fully_static() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "callback.bzli",
+            r#"
+class Callback(Protocol):
+    def __call__[T: int | str](self, __value: T | None) -> T | None: ...
+def accept(callback: Callback) -> None: ...
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_rules(rules(&["non-static-type"]));
+        let diagnostics = analysis.snapshot().diagnostics(interface).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
     fn imported_callbacks_and_stub_variables_expose_incomplete_contracts() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
