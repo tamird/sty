@@ -987,13 +987,14 @@ fn declarations(
                             "inherited_environment" => Some("_starpls_builtins.list[_starpls_builtins.str]"),
                             _ => None,
                         }
-                    } else if class.name == "TemplateVariableInfo"
-                        && field.name == "variables"
-                        && matches!(
-                            env::normalize_doc(&field.r#type, true).as_str(),
-                            "dict" | "Dict" | "Dictionary"
-                        )
-                    {
+                    } else if matches!(
+                        (class.name.as_str(), field.name.as_str()),
+                        ("TemplateVariableInfo", "variables")
+                            | ("configuration", "default_shell_env")
+                    ) && matches!(
+                        env::normalize_doc(&field.r#type, true).as_str(),
+                        "dict" | "Dict" | "Dictionary"
+                    ) {
                         Some("_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]")
                     } else if class.name == "runfiles" {
                         // RunfilesApi's Java declarations omit these depset
@@ -2864,7 +2865,12 @@ def output(context: ctx) -> File | list[File] | None:
             )
             .unwrap(),
         );
-        let source = "def variables(context: ctx[object, object]) -> dict[str, str]:\n    return context.var\n";
+        let source = "\
+def variables(context: ctx[object, object]) -> dict[str, str]:
+    return context.var
+def shell_environment(context: ctx[object, object]) -> dict[str, str]:
+    return context.configuration.default_shell_env
+";
         let file = analysis
             .open_document(
                 Path::new("/main.bzl"),
@@ -2879,10 +2885,10 @@ def output(context: ctx) -> File | list[File] | None:
         for invalid in ["dict[int, str]", "dict[str, int]"] {
             analysis.update_file(file, source.replace("dict[str, str]", invalid));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            let [diagnostic] = diagnostics.as_slice() else {
-                panic!("{diagnostics:?}");
-            };
-            assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+            assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+            assert!(diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
         }
     }
 
