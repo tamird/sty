@@ -868,6 +868,57 @@ def saved_optional(
     }
 
     #[test]
+    fn struct_callback_context_checks_variadic_lambdas() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "builder.bzl",
+            r#"def _reset(attrs, self):
+    # type: (tuple[str, ...], Builder) -> Builder
+    return self
+def make_builder():
+    self = struct(reset_on_attrs = lambda *attrs: _reset(attrs, self))  # type: Builder
+    return self
+make_builder().reset_on_attrs("deps")
+make_builder().reset_on_attrs()
+"#,
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "builder.bzli",
+            r#"class _Reset(Protocol):
+    def __call__(self, *attrs: Unpack[tuple[str, Unpack[tuple[str, ...]]]]) -> Builder: ...
+type Builder = struct[{"reset_on_attrs": _Reset}]
+def make_builder() -> Builder: ...
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(ids, ["missing-argument"], "{diagnostics:?}");
+    }
+
+    #[test]
     fn optional_struct_fields_preserve_presence_and_types() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
