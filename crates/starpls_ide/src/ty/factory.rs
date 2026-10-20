@@ -906,6 +906,11 @@ fn attribute<'db>(
 ) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(call.file());
     let declarations = call.declaration()?.program_file(db);
+    let is_native_instance = |value: Type<'db>, name: &str| {
+        native_class(db, declarations, name)
+            .and_then(|class| class.to_instance_approximation(db, &environment))
+            .is_some_and(|instance| value.is_subtype_of(db, &environment, instance))
+    };
     let mandatory = any_enabled([
         boolean_argument(call, "mandatory"),
         mandatory_attribute_flag(db, call),
@@ -983,18 +988,13 @@ fn attribute<'db>(
             };
             // Bazel names direct and computed implicit attributes with `$`; late-bound
             // defaults use `:`. The inferred type can leave the source undecided.
-            let is_marker = |name| {
-                native_class(db, declarations, name)
-                    .and_then(|class| class.to_instance_approximation(db, &environment))
-                    .is_some_and(|marker| ty.is_subtype_of(db, &environment, marker))
-            };
             let accepts_implicit_input = if ty.is_none(db)
                 || ty.is_subtype_of(db, &environment, input)
                 || matches!(ty, Type::FunctionLiteral(_))
-                || is_marker("NativeComputedDefault")
+                || is_native_instance(ty, "NativeComputedDefault")
             {
                 Some(true)
-            } else if is_marker("LateBoundDefault") {
+            } else if is_native_instance(ty, "LateBoundDefault") {
                 Some(false)
             } else {
                 None
@@ -1055,6 +1055,8 @@ fn attribute<'db>(
         CheckedArgument::Value { ty, expression: _ } => {
             if ty == Type::none(db, &environment)
                 || matches!(ty.string_literal_value(db), Some("target" | "exec"))
+                // Native execution transitions have one destination configuration.
+                || is_native_instance(ty, "ExecTransitionFactory")
             {
                 AttributeConfiguration::Ordinary
             } else {

@@ -4302,16 +4302,30 @@ def erased_attribute(change: transition) -> Attribute:
     return attr.label(cfg=change)
 def unknown() -> transition:
     return config.target()
+def execution() -> ExecTransitionFactory:
+    return config.exec()
+def uncertain_execution() -> transition[Literal['split']] | ExecTransitionFactory:
+    return execution()
 def rule_impl(ctx):
     ctx.attr.split
     ctx.attr.helper
     ctx.attr.ordinary
+    ctx.attr.exec_label
+    ctx.attr._exec_late_bound
+    ctx.attr.uncertain_exec
     ctx.attr.unknown
     ctx.split_attr.split
 example = rule(implementation=rule_impl, attrs={
     'split': attr.label(cfg=create()),
     'helper': split_attribute(create()),
     'ordinary': attr.label(cfg=config.none()),
+    'exec_label': attr.label(default=Label('//:tool'), executable=True, cfg=execution()),
+    '_exec_late_bound': attr.label(
+        default=configuration_field(fragment='coverage', name='output_generator'),
+        executable=True,
+        cfg=config.exec(),
+    ),
+    'uncertain_exec': attr.label(cfg=uncertain_execution()),
     'unknown': erased_attribute(create()),
 })
 "#;
@@ -4334,6 +4348,12 @@ example = rule(implementation=rule_impl, attrs={
                 "ctx.attr.helper",
                 "Sequence[Target[FilesToRunProvider[File | None] | None]]",
             ),
+            ("ctx.attr.exec_label", "Target[FilesToRunProvider[File]]"),
+            (
+                "ctx.attr._exec_late_bound",
+                "Target[FilesToRunProvider[File]] | None",
+            ),
+            ("ctx.attr.uncertain_exec", "Unknown"),
             ("ctx.attr.unknown", "Unknown"),
         ] {
             check_field(&snapshot, file, source, expression, expected, "");
@@ -4343,6 +4363,7 @@ example = rule(implementation=rule_impl, attrs={
             "split_attribute(config.none())",
             "split_attribute(config.target())",
             "split_attribute(unknown())",
+            "rule(implementation=lambda ctx: [], cfg=config.exec())",
         ] {
             analysis.update_file(file, format!("{source}{statement}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
