@@ -150,6 +150,10 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         }
     }
     for class in &mut builtins.r#type {
+        if matches!(class.name.as_str(), "repository_ctx" | "module_ctx") {
+            refine_execute_environment(class, version >= (8, 0));
+            continue;
+        }
         if class.name != "attr" {
             continue;
         }
@@ -197,6 +201,37 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             }
         }
     }
+}
+
+fn refine_execute_environment(class: &mut Type, nullable_values: bool) {
+    let Some(environment) = class
+        .field
+        .iter_mut()
+        .find(|method| method.name == "execute")
+        .and_then(|method| method.callable.as_mut())
+        .and_then(|callable| {
+            callable
+                .param
+                .iter_mut()
+                .find(|parameter| parameter.name == "environment")
+        })
+    else {
+        return;
+    };
+    if !matches!(
+        normalize_doc(&environment.r#type, true).as_str(),
+        "dict" | "Dict" | "Dictionary"
+    ) {
+        return;
+    }
+    // Bazel 8 permits None values to remove inherited variables.
+    // https://github.com/bazelbuild/bazel/commit/ad0ef02eb05842a5fc48871f4a90bce6e8d1bfc7
+    environment.r#type = if nullable_values {
+        "Dictionary: string -> string or None"
+    } else {
+        "Dictionary: string -> string"
+    }
+    .to_owned();
 }
 
 /// Bazel 9 added a dictionary-valued dependency attribute. Its parameters
