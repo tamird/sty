@@ -4136,6 +4136,46 @@ target_test(name="missing")
     }
 
     #[test]
+    fn comprehension_attributes_preserve_call_schema() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(
+            r#"def implementation(ctx): return []
+attrs = {key: attr.string() for key in ("setting_a",)}
+target = rule(implementation, attrs=attrs | {"exports": attr.label(mandatory=True)})
+target(name="valid", exports="//:input", setting_a="fast")
+target(name="wrong", exports="//:input", setting_a=42)
+target(name="invented", exports="//:input", invented="fast")
+target(name="missing", setting_a="fast")
+"#,
+        );
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "invalid-argument-type",
+                "unknown-argument",
+                "missing-argument"
+            ],
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn mutated_rule_attributes_keep_types_and_requiredness() {
         let (mut analysis, _) = Analysis::new_for_test();
         let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
