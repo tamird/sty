@@ -1288,6 +1288,9 @@ fn declarations(
     output.push_str(
         "_DownloadResult = _starpls_typing.TypeVar(\"_DownloadResult\", covariant=True)\n",
     );
+    output.push_str(
+        "_RepositoryAttributeValue = _starpls_typing.TypeVar(\"_RepositoryAttributeValue\")\n",
+    );
     let context_attrs = if classes.contains_key("struct") {
         "_starpls_types.struct[_starpls_unknown]"
     } else {
@@ -1667,6 +1670,8 @@ fn write_function(
             // Bazel reads string-keyed dictionaries. Mapping also admits dictionary
             // schemas without promising mutation through their required fields.
             (CallableKind::Method("repository_ctx" | "module_ctx"), "download" | "download_and_extract", "auth") => Some("_starpls_typing.Mapping[_StringKey, _DownloadAuth]"),
+            // repoMetadata casts a concrete dictionary to string keys and arbitrary values.
+            (CallableKind::Method("repository_ctx"), "repo_metadata", "attrs_for_reproducibility") => (env::normalize_doc(r#type, true) == "Dictionary: string -> object").then_some("_starpls_builtins.dict[_StringKey, _RepositoryAttributeValue] | _DictSchema[_starpls_builtins.object]"),
             // Fill the inventory's missing element type. Remotable repository
             // rules further exclude paths.
             (CallableKind::Method("repository_ctx" | "module_ctx"), "execute", "arguments") => (classes.contains("Label") && classes.contains("path") && env::normalize_doc(r#type, true).eq_ignore_ascii_case("sequence")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.path]"),
@@ -6470,6 +6475,7 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
             "_wrong: list[int] = files; _wrong",
             "ctx.repo_metadata(reproducible='yes')",
             "ctx.repo_metadata(attrs_for_reproducibility={1: 'value'})",
+            "ctx.repo_metadata(attrs_for_reproducibility=[('checksum', 'abc')])",
             "ctx.repo_metadata(True)",
             "metadata.missing",
         ] {
@@ -6491,6 +6497,19 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
                 "{invalid}: {diagnostic:?}"
             );
         }
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def metadata(context: repository_ctx, attrs: dict[str, str], schema: dict[{"checksum": str}]) -> None:
+    context.repo_metadata(attrs_for_reproducibility=attrs)
+    context.repo_metadata(attrs_for_reproducibility=schema)
+"#;
+        analysis.update_file(file, source.into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
