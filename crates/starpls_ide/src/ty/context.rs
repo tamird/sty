@@ -2176,8 +2176,11 @@ example(name="test", dep="//:explicit")
     }
 
     #[test]
-    fn unknown_rule_parents_preserve_only_proven_own_contracts() {
-        let parent = "def implementation(ctx): return []\nbase = rule(implementation=implementation, extendable=True, attrs={'dep': attr.label(), 'unseen': attr.bool()})\n";
+    fn unknown_rule_parents_preserve_proven_analysis_fields() {
+        let parent = r#"def implementation(ctx): return []
+def initializer(name, **kwargs): return {"dep": "//:dep", "own": "value"}
+base = rule(implementation=implementation, initializer=initializer, extendable=True, attrs={"unseen": attr.bool()})
+"#;
         let source = r#"load("parent.bzl", "base")
 def opaque(value): return value
 def implementation(ctx):
@@ -2189,6 +2192,8 @@ example = rule(parent=opaque(base), implementation=implementation, attrs={
     "own": attr.string(mandatory=True),
 })
 example(name="ok", own="value", unseen=True)
+example(name="filled")
+example(name="rewritten", own=1, dep=1)
 "#;
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
@@ -2217,23 +2222,12 @@ example(name="ok", own="value", unseen=True)
         );
         check_field(&snapshot, file, source, "ctx.attr.own", "str", "\"own\"");
         drop(snapshot);
-        for invalid in [
-            "example(name='bad', own=1)",
-            "example(name='bad')",
-            "example(name='bad', own='value', dep=1)",
-        ] {
-            analysis
-                .open_document(
-                    std::path::Path::new("/main.bzl"),
-                    starpls_common::Dialect::Bazel,
-                    None,
-                    format!("{source}{invalid}\n"),
-                    2,
-                )
-                .unwrap();
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
-        }
+        analysis.update_file(file, format!("{source}example(name=1)\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
     }
 
     #[test]
