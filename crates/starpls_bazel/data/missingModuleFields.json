@@ -226,6 +226,26 @@
       }
     }
   ],
+  "config_common": [
+    {
+      "name": "FeatureFlagInfo",
+      "doc": "Creates a provider containing the configured feature flag value.",
+      "callable": {
+        "params": [
+          {
+            "name": "value",
+            "type": "string",
+            "doc": "The configured feature flag value.",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "FeatureFlagInfo"
+      }
+    }
+  ],
   "fragments": [
     {
       "name": "cpp",

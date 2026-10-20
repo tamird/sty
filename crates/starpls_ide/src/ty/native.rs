@@ -4799,6 +4799,47 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
     }
 
     #[test]
+    fn feature_flag_provider_preserves_constructor_and_identity() {
+        let source = r#"def check(target: Target) -> tuple[FeatureFlagInfo, FeatureFlagInfo, FeatureFlagInfo]:
+    return (config_common.FeatureFlagInfo("enabled"), config_common.FeatureFlagInfo(value="enabled"), target[config_common.FeatureFlagInfo])
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (invalid, expected) in [
+            ("config_common.FeatureFlagInfo()", "missing-argument"),
+            (
+                "config_common.FeatureFlagInfo(value=42)",
+                "invalid-argument-type",
+            ),
+            (
+                "wrong: CcInfo = target[config_common.FeatureFlagInfo]; wrong",
+                "invalid-assignment",
+            ),
+        ] {
+            analysis.update_file(
+                file,
+                format!("{source}\ndef invalid(target: Target):\n    {invalid}\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{invalid}");
+        }
+    }
+
+    #[test]
     fn execution_declarations_preserve_native_contracts() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
