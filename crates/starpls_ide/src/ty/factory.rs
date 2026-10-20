@@ -1618,7 +1618,11 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             .provided_data(db, &environment)
             .and_then(|data| data.downcast_ref::<Attribute>());
         if matches!(kind, RuleKind::Build) && attribute.is_none() {
-            call_shape_complete = false;
+            call_shape_complete &= is_optional_descriptor(db, &environment, value);
+            if name.starts_with('_') {
+                // An unresolved private descriptor may expose an implicit `$name` input.
+                complete = false;
+            }
         }
         if parent.is_some() {
             if let Some(inherited) = attributes.iter_mut().find(|entry| entry.name == name) {
@@ -4439,6 +4443,58 @@ target_test(name="missing")
         let diagnostics = analysis.snapshot().diagnostics(file_id).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0].id().as_str(), "missing-argument");
+    }
+
+    #[test]
+    fn conditional_descriptors_preserve_guaranteed_rule_inputs() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(
+            r#"def implementation(context: ctx[object, object]) -> list[DefaultInfo]: return [DefaultInfo()]
+def register(flag: bool) -> None:
+    extra = {"_mode": attr.string(default="fast")} if flag else {"_mode": attr.string(default="slow")}
+    target = rule(implementation, attrs={"src": attr.label(mandatory=True), "count": attr.int()} | extra)
+    target($0name="valid", src="//:input", count=1)
+    target(name="missing")
+    target(name="wrong", src="//:input", count="bad")
+    uncertain = rule(implementation, attrs={"mode": attr.string(mandatory=True)} if flag else {"mode": attr.string()})
+    uncertain(name="missing")
+"#,
+        );
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let snapshot = analysis.snapshot();
+        let (file_id, pos) = fixture.cursor_pos.unwrap();
+        let help = snapshot
+            .signature_help(FilePosition { file_id, pos })
+            .unwrap()
+            .unwrap();
+        assert!(help.signatures[0].label.contains("**kwargs"), "{help:?}");
+        let diagnostics = snapshot.diagnostics(file_id).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "missing-argument",
+                "invalid-argument-type",
+                "non-static-type"
+            ],
+            "{diagnostics:?}"
+        );
     }
 
     #[test]
