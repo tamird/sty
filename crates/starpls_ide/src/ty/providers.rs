@@ -1550,6 +1550,69 @@ def from_target(target: Target):
     }
 
     #[test]
+    fn generic_provider_fields_survive_loop_carried_calls() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let api = fixture.add_file(
+            &mut analysis.db,
+            "api.bzl",
+            "Info = provider(fields=['value'])\ndef merge(left, right): return left\n",
+        );
+        let api_interface = fixture.add_file(
+            &mut analysis.db,
+            "api.bzli",
+            "def Info[T](*, value: T) -> record[{'value': T}]: ...\ndef merge[T](left: Info[T], right: Info[object]) -> Info[T]: ...\n",
+        );
+        let body = r#"load("api.bzl", "merge")
+def fold(items):
+    result = items[0]
+    for item in items[1:]:
+        result = merge(result, item)
+    return result
+"#;
+        let source = fixture.add_file(&mut analysis.db, "fold.bzl", body);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "fold.bzli",
+            r#"load("api.bzl", "Info")
+def fold[T](items: list[Info[T]]) -> Info[T]: ...
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis
+            .set_type_interfaces([(api, api_interface), (source, interface)])
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            source,
+            body.replace("merge(result, item)", "merge(result, 42)"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn recursive_generic_provider_fields_are_diagnosed() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
