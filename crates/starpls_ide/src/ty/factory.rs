@@ -109,6 +109,8 @@ pub(super) struct RuleData {
     pub(super) complete: bool,
     /// Whether the generated call signature has no unresolved shape requirements.
     call_shape_complete: bool,
+    /// Whether this rule or an ancestor may run an initializer.
+    may_have_initializer: bool,
     pub(super) executable: Option<bool>,
     pub(super) build_setting: Option<BuildSetting>,
 }
@@ -266,6 +268,59 @@ impl Attribute {
                     .map(|value| Type::int_literal(i64::from(*value))),
             ),
         })
+    }
+
+    fn input_parameter<'db>(
+        &self,
+        db: &'db Database,
+        environment: &ProgramEnvironment<'db>,
+        declarations: ProgramFile<'db>,
+        kind: &RuleKind,
+        mut parameter: Parameter<'db>,
+        rewritable: bool,
+    ) -> Option<Parameter<'db>> {
+        let input = attribute_value_type(
+            db,
+            environment,
+            declarations,
+            &self.kind,
+            AttributeUse::Input,
+        )?;
+        let allowed_values = if rewritable {
+            None
+        } else {
+            self.allowed_value_type(db, environment)
+        };
+        let ty = allowed_values.unwrap_or(input);
+        let ty = if !matches!(kind, RuleKind::Repository) && self.configurable() != Some(false) {
+            let allows_selected_none = rewritable
+                || self
+                    .values
+                    .as_ref()
+                    .is_none_or(ScalarValues::allows_selected_none);
+            configurable_input(db, environment, declarations, ty, allows_selected_none)?
+        } else {
+            ty
+        };
+        parameter = parameter.with_annotated_type(ty);
+        if self.mandatory != Some(true) {
+            parameter = match self.default {
+                Some(source) => {
+                    let default_type = if allowed_values.is_some() {
+                        self.default_value.literal_type(db).unwrap_or(input)
+                    } else {
+                        ty
+                    };
+                    parameter.with_default(ParameterDefault::Source {
+                        ty: default_type,
+                        source,
+                    })
+                }
+                None => parameter.with_default_type(Type::unknown()),
+            };
+            parameter = optional_attribute(db, environment, parameter);
+        }
+        Some(parameter)
     }
 
     pub(super) fn has_non_none_value(&self) -> bool {
@@ -1253,6 +1308,11 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         let data = parent.provided_data(db, &environment)?;
         data.downcast_ref::<RuleData>()
     });
+    let inherited_initializer =
+        parent.is_some() && parent_data.is_none_or(|data| data.may_have_initializer);
+    let may_have_initializer = matches!(kind, RuleKind::Build)
+        && (inherited_initializer
+            || !keyword_is_omitted_or(call, "initializer", |ty, _| ty.is_none(db)));
     let test = if matches!(kind, RuleKind::Build) && parent.is_none() {
         any_enabled([
             boolean_argument(call, "test"),
@@ -1418,7 +1478,13 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         RuleKind::Repository => true,
         RuleKind::Macro => {
             inherit_common
-                || inherit_macro_attributes(db, call, &mut attributes, &mut documentation)
+                || inherit_macro_attributes(
+                    db,
+                    call,
+                    declarations,
+                    &mut attributes,
+                    &mut documentation,
+                )
         }
     };
     let uncertain_parent = parent.is_some() && !complete;
@@ -1453,6 +1519,21 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         first_entry: _,
     } = own_attributes;
     let is_complete = is_complete && items.iter().all(DictionaryItem::is_required);
+    // Initializers receive supplied public Starlark attributes after base-type
+    // conversion, but before mandatory and allowed-value checks.
+    let initializer_preserves_call_shape = matches!(kind, RuleKind::Build)
+        && parent.is_none()
+        && is_complete
+        && match call.argument("initializer") {
+            CheckedArgument::Value { ty, expression: _ } => {
+                initializer_accepts_rule_attributes(db, &environment, ty)
+            }
+            CheckedArgument::Omitted | CheckedArgument::Indeterminate => false,
+        }
+        && items.iter().all(|item| {
+            item.name.as_str() != "_legacy_any_type_attrs"
+                && is_optional_descriptor(db, &environment, item.ty)
+        });
     // Unenumerated optional declarations add no required caller inputs. The
     // rule base, initializer and subrules can also change which calls succeed.
     let mut call_shape_complete = generated_required_inputs_known
@@ -1463,7 +1544,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     && keyword_is_omitted_or(call, "dependency_resolution_rule", |ty, _| {
                         ty.as_bool_literal() == Some(false)
                     })
-                    && keyword_is_omitted_or(call, "initializer", |ty, _| ty.is_none(db))
+                    && (!may_have_initializer || initializer_preserves_call_shape)
                     && keyword_is_omitted_or(call, "subrules", |_, expression| {
                         expression
                             .and_then(literal_sequence_elements)
@@ -1595,48 +1676,24 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                 .with_annotated_type(Type::Never)
                 .with_default_type(Type::unknown());
         } else if let Some(attribute) = attribute {
-            let input = attribute_value_type(
-                db,
-                &environment,
-                declarations,
-                &attribute.kind,
-                AttributeUse::Input,
-            )?;
-            let allowed_values = attribute.allowed_value_type(db, &environment);
-            let ty = allowed_values.unwrap_or(input);
-            let ty = if !matches!(kind, RuleKind::Repository)
-                && attribute.configurable() != Some(false)
-            {
-                let allows_selected_none = attribute
-                    .values
-                    .as_ref()
-                    .is_none_or(ScalarValues::allows_selected_none);
-                configurable_input(db, &environment, declarations, ty, allows_selected_none)?
+            parameter = if inherited_initializer {
+                // An ancestor initializer can fill or replace an attribute first
+                // declared by this child before Bazel checks the child descriptor.
+                parameter.with_default_type(Type::unknown())
             } else {
-                ty
+                attribute.input_parameter(
+                    db,
+                    &environment,
+                    declarations,
+                    &kind,
+                    parameter,
+                    initializer_preserves_call_shape && !name.starts_with('_'),
+                )?
             };
-            parameter = parameter.with_annotated_type(ty);
             if let Some(doc) = &attribute.documentation {
                 documentation
                     .parameters
                     .push((Name::new(name), doc.clone()));
-            }
-            if attribute.mandatory != Some(true) {
-                parameter = match attribute.default {
-                    Some(source) => {
-                        let default_type = if allowed_values.is_some() {
-                            attribute.default_value.literal_type(db).unwrap_or(input)
-                        } else {
-                            ty
-                        };
-                        parameter.with_default(ParameterDefault::Source {
-                            ty: default_type,
-                            source,
-                        })
-                    }
-                    None => parameter.with_default_type(Type::unknown()),
-                };
-                parameter = optional_attribute(db, &environment, parameter);
             }
             if uncertain_input {
                 // An unresolved source may expose `$name` with this input type, or may
@@ -1786,6 +1843,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     attributes: descriptors.into_boxed_slice(),
                     complete,
                     call_shape_complete,
+                    may_have_initializer,
                     executable,
                     build_setting: setting_kind,
                 })),
@@ -1794,6 +1852,52 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         },
     )
     .to_instance_approximation(db, &environment)
+}
+
+fn initializer_accepts_rule_attributes<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    initializer: Type<'db>,
+) -> bool {
+    if !matches!(initializer, Type::FunctionLiteral(_)) {
+        return false;
+    }
+    let Some(signature) = initializer.single_callable_signature(db, environment) else {
+        return false;
+    };
+    if signature.is_generic()
+        || !signature.parameters().is_standard()
+        || !signature.parameters().iter().all(|parameter| {
+            matches!(
+                parameter.kind(),
+                ParameterKind::PositionalOrKeyword {
+                    name: _,
+                    default_type: _,
+                } | ParameterKind::KeywordOnly {
+                    name: _,
+                    default_type: _,
+                } | ParameterKind::KeywordVariadic { name: _ }
+            )
+        })
+    {
+        return false;
+    }
+    let object = KnownClass::Object.to_instance(db, environment);
+    let initializer = Type::function_like_callable(db, signature.clone().with_return_type(object));
+    // Bazel supplies `name` and any caller-supplied public Starlark attributes.
+    // This broader domain avoids duplicating Bazel's value conversions.
+    let domain = Type::function_like_callable(
+        db,
+        Signature::new(
+            Parameters::standard([
+                Parameter::keyword_only(Name::new("name"))
+                    .with_annotated_type(KnownClass::Str.to_instance(db, environment)),
+                Parameter::keyword_variadic(Name::new("kwargs")).with_annotated_type(object),
+            ]),
+            object,
+        ),
+    );
+    initializer.is_assignable_to(db, environment, domain)
 }
 
 fn is_optional_descriptor<'db>(
@@ -1960,10 +2064,11 @@ fn any_enabled(flags: [Option<bool>; 2]) -> Option<bool> {
     }
 }
 
-/// Compose the parent's public attributes from its existing callable contract.
+/// Compose a macro's inherited public attribute contract.
 fn inherit_macro_attributes<'db>(
     db: &'db Database,
     call: &CheckedCall<'_, 'db>,
+    declarations: ProgramFile<'db>,
     attributes: &mut Vec<RuleAttribute<'db>>,
     documentation: &mut Documentation,
 ) -> bool {
@@ -2009,7 +2114,11 @@ fn inherit_macro_attributes<'db>(
         .unwrap_or_default();
     let mut complete = true;
     for parameter in signature.parameters().iter() {
-        let ParameterKind::KeywordOnly { name, default_type } = parameter.kind() else {
+        let ParameterKind::KeywordOnly {
+            name,
+            default_type: _,
+        } = parameter.kind()
+        else {
             // Native fallback signatures retain nominal identity but have no schema.
             complete = false;
             continue;
@@ -2032,12 +2141,6 @@ fn inherit_macro_attributes<'db>(
         }) {
             continue;
         }
-        let parameter = if default_type.is_some() {
-            optional_attribute(db, &environment, parameter.clone())
-                .with_default_type(Type::none(db, &environment))
-        } else {
-            parameter.clone()
-        };
         let doc = parent_documentation
             .and_then(|doc| {
                 doc.parameters
@@ -2054,24 +2157,48 @@ fn inherit_macro_attributes<'db>(
         if let Some(doc) = doc {
             documentation.parameters.push((name.clone(), doc));
         }
-        let mut descriptor = parent_data
-            .and_then(|data| data.attributes.iter().find(|entry| entry.name == *name))
+        let parent_attribute =
+            parent_data.and_then(|data| data.attributes.iter().find(|entry| entry.name == *name));
+        let source = parent_attribute.and_then(|entry| entry.source);
+        let mut descriptor = parent_attribute
             .and_then(|entry| entry.descriptor.clone())
             .or_else(|| inherited_native_attribute(db, definition?, name.as_str()));
+        let mut parameter = match (parent_data, descriptor.as_ref(), source) {
+            (Some(data), Some(descriptor), Some(source)) if data.may_have_initializer => {
+                // Macros inherit physical descriptors, independent of the rule's
+                // initializer and its caller-facing contract.
+                descriptor
+                    .input_parameter(
+                        db,
+                        &environment,
+                        declarations,
+                        &RuleKind::Macro,
+                        Parameter::keyword_only(name.clone()).with_source_range(source),
+                        false,
+                    )
+                    .unwrap_or_else(|| {
+                        complete = false;
+                        parameter.clone()
+                    })
+            }
+            _ => parameter.clone(),
+        };
         if let Some(descriptor) = &mut descriptor {
             if descriptor.mandatory != Some(true) {
                 descriptor.default = None;
                 descriptor.default_value = DefaultValue::None;
             }
         }
+        if parameter.has_default() {
+            parameter = optional_attribute(db, &environment, parameter)
+                .with_default_type(Type::none(db, &environment));
+        }
         attributes.push(RuleAttribute {
             name: name.clone(),
             parameter: Some(parameter),
             descriptor,
             analyzed_type: None,
-            source: parent_data
-                .and_then(|data| data.attributes.iter().find(|entry| entry.name == *name))
-                .and_then(|entry| entry.source),
+            source,
         });
     }
     complete
@@ -3063,6 +3190,171 @@ example(name="bad", retries=0, dynamic_default=bad_compression)"#,
             };
             assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
             assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
+        }
+    }
+
+    #[test]
+    fn rule_initializer_exposes_caller_attribute_types() {
+        let source = r#"def implementation(ctx): return []
+def initialize(**kwargs): return {"stamp": 1}
+target = rule(implementation, initializer=initialize, attrs={
+    "srcs": attr.label_list(),
+    "stamp": attr.int(values=[1]),
+    "_hidden": attr.int(default=1, values=[1]),
+})
+def forward(**kwargs: Unpack[KeywordArgs[target]]) -> None:
+    target(**kwargs)
+def macro_impl(name, visibility, **kwargs): pass
+wrapped = macro(implementation=macro_impl, inherit_attrs=target)
+forward(name="valid", srcs=["//:data"], stamp=42, tags=["manual"])
+forward(name="selected", stamp=select({"//conditions:default": None}))
+wrapped(name="valid", stamp=1)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for invalid in [
+            r#"forward(name="bad_srcs", srcs=42)"#,
+            r#"forward(name="bad_stamp", stamp="wrong")"#,
+            r#"target(name="bad_private", **{"$hidden": 42})"#,
+            r#"wrapped(name="bad", stamp=42)"#,
+        ] {
+            analysis.update_file(file, format!("{source}{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        }
+        for (callback, attributes) in [
+            (
+                "def callback(name, extra, **kwargs): return {}",
+                r#"{"extra": attr.string()}"#,
+            ),
+            ("def callback(*args, **kwargs): return {}", "{}"),
+            (
+                "def callback(**kwargs: str): return {}",
+                r#"{"stamp": attr.int()}"#,
+            ),
+            (
+                "callback = initialize",
+                r#"{"stamp": attr.int(mandatory=True)}"#,
+            ),
+            (
+                "callback = initialize",
+                r#"{"stamp": attr.int(), "_legacy_any_type_attrs": attr.string_list(default=["stamp"])}"#,
+            ),
+        ] {
+            let declaration = format!(
+                "{callback}\nuncertain = rule(implementation, initializer=callback, attrs={attributes})"
+            );
+            analysis.update_file(
+                file,
+                format!("{source}{declaration}\ndef use(**kwargs: Unpack[KeywordArgs[uncertain]]) -> None: pass\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{declaration}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-type-form");
+        }
+    }
+
+    #[test]
+    fn rule_initializer_can_rewrite_descendant_attributes() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        fixture.add_file(
+            &mut analysis.db,
+            "//:base.bzl",
+            r#"def implementation(ctx): return []
+def initialize(name, **kwargs):
+    if name.startswith("grandchild"):
+        return {"child": "ok", "grandchild": 1}
+    return {"child": "ok"}
+base = rule(implementation, initializer=initialize, attrs={"stamp": attr.int(default=1, values=[1])})
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:child.bzl",
+            r#"load("//:base.bzl", "base", "implementation")
+child = rule(implementation, parent=base, attrs={"child": attr.string(mandatory=True)})
+"#,
+        );
+        let descendants = fixture.add_file(
+            &mut analysis.db,
+            "//:descendants.bzl",
+            r#"load("//:base.bzl", "implementation")
+load("//:child.bzl", "child")
+grandchild = rule(implementation, parent=child, attrs={"grandchild": attr.int(mandatory=True)})
+def macro_impl(name, visibility, **kwargs): pass
+wrapped = macro(implementation=macro_impl, inherit_attrs=child)
+def forward(**kwargs: Unpack[KeywordArgs[grandchild]]) -> None: pass
+"#,
+        );
+        let source = r#"load("//:child.bzl", "child")
+load("//:descendants.bzl", "grandchild", "wrapped")
+child(name="child_omitted")
+child(name="child_rewritten", child=42)
+grandchild(name="grandchild_omitted")
+grandchild(name="grandchild_rewritten", child=42, grandchild="wrong")
+wrapped(name="macro_valid", child="ok", stamp=1)
+"#;
+        let caller = fixture.add_file_with_options(
+            &mut analysis.db,
+            "BUILD.bazel",
+            source,
+            starpls_common::Dialect::Bazel,
+            Some(starpls_common::FileInfo::Bazel {
+                api_context: starpls_bazel::APIContext::Build,
+                is_external: false,
+            }),
+        );
+        loader.add_files_from_fixture(&fixture);
+        let diagnostics = analysis.snapshot().diagnostics(descendants).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-type-form");
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (invalid, id) in [
+            ("wrapped(name='macro_missing')", "missing-argument"),
+            (
+                "wrapped(name='macro_bad_child', child=42)",
+                "invalid-argument-type",
+            ),
+            (
+                "wrapped(name='macro_bad_stamp', child='ok', stamp=42)",
+                "invalid-argument-type",
+            ),
+        ] {
+            analysis.update_file(caller, format!("{source}{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), id, "{invalid}");
         }
     }
 
