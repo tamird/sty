@@ -881,7 +881,11 @@ def saved_optional(
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[
+                    ("unsound-return-statement".into(), "error".into()),
+                    ("non-static-type".into(), "error".into()),
+                ]
+                .into(),
             )
             .unwrap(),
         );
