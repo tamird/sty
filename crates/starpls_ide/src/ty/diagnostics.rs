@@ -37,7 +37,6 @@ use ty_python_semantic::types::check_types_with_overload_analysis;
 use ty_python_semantic::types::ide_support::resolved_call_signature;
 use ty_python_semantic::types::ide_support::unreachable_ranges;
 use ty_python_semantic::types::ide_support::unused_definitions;
-use ty_python_semantic::types::OverloadBodyAnalysis;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::ProgramEnvironment;
 use ty_python_semantic::SemanticModel;
@@ -81,6 +80,13 @@ pub(super) static INVALID_FUNCTION_INTERFACE: LintMetadata = lint(
     "invalid-function-interface",
     "Reports function implementations that cannot satisfy their stub declarations.",
 );
+pub(super) static UNVERIFIED_OVERLOAD: LintMetadata = LintMetadata {
+    default_level: Level::Error,
+    ..lint(
+        "unverified-overload",
+        "Reports overload promises that could not be checked against a paired implementation.",
+    )
+};
 pub(super) static MISSING_PARAMETER_ANNOTATION: LintMetadata = LintMetadata {
     default_level: Level::Ignore,
     ..lint(
@@ -119,6 +125,7 @@ pub(super) fn registry() -> &'static LintRegistry {
             &INVALID_PROVIDER_INTERFACE,
             &INVALID_BUILD_ANNOTATION,
             &INVALID_FUNCTION_INTERFACE,
+            &UNVERIFIED_OVERLOAD,
             &MISSING_PARAMETER_ANNOTATION,
             &MISSING_RETURN_ANNOTATION,
             &EXPLICIT_ANY,
@@ -251,10 +258,6 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
     diagnostics.extend(interface_diagnostics);
     diagnostics.extend(super::annotations::diagnostics(db, file));
     diagnostics.extend(super::context::diagnostics(db, file));
-    let overload_bodies: Vec<_> = overload_bodies
-        .into_iter()
-        .map(|function| OverloadBodyAnalysis::new(db, function))
-        .collect();
     diagnostics.extend(super::strictness::diagnostics(db, file, &overload_bodies));
     if !options.allow_unused_definitions {
         let index = semantic_index(db, program_file);

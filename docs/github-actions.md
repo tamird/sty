@@ -60,6 +60,9 @@ possibly-unresolved-reference = "error"
 division-by-zero = "error"
 ```
 
+An `unverified-overload` error means a paired implementation could not be checked
+against every declared overload.
+
 `code-flow-analysis: false` disables the additional flow diagnostics supplied by
 the flag; explicitly configured rules retain their configured severity. Set
 `audit-loads: true` to resolve every transitive load and check cycles. Load auditing

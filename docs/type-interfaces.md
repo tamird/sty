@@ -139,8 +139,12 @@ source interpretation.
 For example, an overload promising `str` when a flag is `True` rejects `return 42`
 in that branch even when the shared implementation permits `int | str`. Captures,
 loops, comprehensions, and unsupported mutation or escape paths retain checking
-under the shared implementation signature; the affected overload's individual
-promise remains unproved. The original `**kwargs` dictionary supports reads,
+under the shared implementation signature. Checking the paired source reports
+`unverified-overload` when ty cannot check every overload against that body.
+Function aliases also receive this diagnostic because the paired overloads do
+not apply to the target body. Other callable values require a static signature
+that satisfies every overload. Ordinary checks and supported overload checks
+still run. The original `**kwargs` dictionary supports reads,
 copies, and keyword expansion. Direct mutation, storage in another variable or
 container, and returning that dictionary require the shared-signature check.
 
