@@ -1666,6 +1666,9 @@ fn write_function(
             // Bazel reads string-keyed dictionaries. Mapping also admits dictionary
             // schemas without promising mutation through their required fields.
             (CallableKind::Method("repository_ctx" | "module_ctx"), "download" | "download_and_extract", "auth") => Some("_starpls_typing.Mapping[_StringKey, _DownloadAuth]"),
+            // Fill the inventory's missing element type. Remotable repository
+            // rules further exclude paths.
+            (CallableKind::Method("repository_ctx" | "module_ctx"), "execute", "arguments") => (classes.contains("Label") && classes.contains("path") && env::normalize_doc(r#type, true).eq_ignore_ascii_case("sequence")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.path]"),
             // StarlarkPath.getChild casts every variadic component to String.
             (CallableKind::Method("path"), "get_child", "relative_paths") => Some("_starpls_builtins.str"),
             (CallableKind::Method("apple_common"), "apple_host_system_env", "xcode_config") => classes.contains("XcodeVersionConfig").then_some("_starpls_types.XcodeVersionConfig | None"),
@@ -4385,6 +4388,54 @@ def inspect(value: path) -> path:
                 assert_eq!(diagnostics.len(), 1, "{context}, {call}: {diagnostics:?}");
                 assert_eq!(diagnostics[0].id().as_str(), "unresolved-attribute");
             }
+        }
+    }
+
+    #[test]
+    fn execute_checks_command_argument_types() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for host in ["repository_ctx", "module_ctx"] {
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins.clone(), Default::default())
+                .unwrap();
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("non-static-type".into(), "error".into())].into(),
+                )
+                .unwrap(),
+            );
+            let source = format!(
+                "def run(ctx: {host}, label: Label, location: path) -> None:\n    ctx.execute(['tool', label, location])\n    ctx.execute(('tool', label, location))\n"
+            );
+            let file = analysis
+                .open_document(
+                    Path::new("/main.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source.clone(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{host}: {diagnostics:?}");
+
+            analysis.set_rules(crate::DiagnosticRules::default());
+            analysis.update_file(
+                file,
+                format!("{source}    ctx.execute([1])\n    ctx.execute('tool')\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 2, "{host}: {diagnostics:?}");
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+                "{host}: {diagnostics:?}"
+            );
         }
     }
 
