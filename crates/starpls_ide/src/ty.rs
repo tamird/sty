@@ -20,6 +20,8 @@ use ty_python_semantic::provided::ProvidedBindingValue;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::KnownInstanceType;
 use ty_python_semantic::types::Type;
+use ty_python_semantic::types::TypedDictType;
+use ty_python_semantic::types::UnionType;
 use ty_python_semantic::AnalysisSettings;
 use ty_python_semantic::Db as _;
 use ty_python_semantic::ProgramEnvironment;
@@ -685,9 +687,13 @@ impl ty_python_semantic::Db for Database {
             "range" => KnownClass::Range.to_instance(self, &environment),
             "function" => KnownClass::FunctionType.to_instance(self, &environment),
             "list" => KnownClass::List.to_specialized_instance(self, &environment, &[unknown]),
-            "dict" => {
-                KnownClass::Dict.to_specialized_instance(self, &environment, &[unknown, unknown])
-            }
+            "dict" => UnionType::from_two_elements(
+                self,
+                &environment,
+                KnownClass::Dict.to_specialized_instance(self, &environment, &[unknown, unknown]),
+                // The implicitly open empty schema includes every schema-typed dictionary.
+                Type::TypedDict(TypedDictType::from_schema_items(self, Default::default())),
+            ),
             "set" => KnownClass::Set.to_specialized_instance(self, &environment, &[unknown]),
             "tuple" => Type::homogeneous_tuple(self, &environment, unknown),
             "File" | "Label" | "Target" | "rule" | "macro" | "select" | "depset" | "runfiles"
@@ -1302,6 +1308,42 @@ def register(name: str, visibility: list[str] | None):
             }
             let diagnostics = snapshot.diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{tag}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
+    fn native_dictionary_type_test_preserves_schema() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        analysis.set_analysis_options(Some(true), None);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        for (value, valid) in [("value[\"group\"]", true), ("value[\"group\"] + 1", false)] {
+            let source = format!(
+                r#"def group(value: dict[{{"group": str}}, ...] | struct[{{"group": str}}, ...] | str) -> str:
+    if not value:
+        return ""
+    if type(value) == "dict":
+        return {value}
+    if type(value) == "string":
+        return value
+    return value.group
+"#
+            );
+            analysis.update_file(file, source);
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.is_empty(), valid, "{diagnostics:?}");
+            if !valid {
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+                assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
+            }
         }
     }
 
