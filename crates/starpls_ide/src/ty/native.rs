@@ -1989,6 +1989,11 @@ fn write_function(
         (CallableKind::Method("repository_ctx" | "module_ctx"), "download_and_extract") => {
             classes.contains("struct").then_some("_starpls_types.struct[_starpls_builtins.bool | _starpls_builtins.str | _starpls_builtins.int]")
         }
+        (CallableKind::Method("repository_ctx" | "module_ctx"), "which") => {
+            (classes.contains("path")
+                && env::normalize_doc(&callable.return_type, true) == "path")
+                .then_some("_starpls_types.path | None")
+        }
         (CallableKind::Function, "transition") => {
             let declared = env::normalize_doc(&callable.return_type, true);
             (classes.contains("transition")
@@ -2943,6 +2948,44 @@ def module_environment(context: module_ctx) -> dict[str, str]:
                 .iter()
                 .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
         }
+    }
+
+    #[test]
+    fn which_result_can_be_missing() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = r#"
+def repository_lookup(context: repository_ctx) -> path:
+    result = context.which("tool")
+    if result == None:
+        return 42
+    return result
+
+def module_lookup(context: module_ctx) -> path:
+    return context.which("tool")
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
     }
 
     #[test]
