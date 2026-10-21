@@ -154,6 +154,10 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             refine_execute_environment(class, version >= (8, 0));
             continue;
         }
+        if class.name == "cpp" && version >= (8, 0) {
+            add_cpp_fdo_methods(class);
+            continue;
+        }
         if class.name != "attr" {
             continue;
         }
@@ -200,6 +204,34 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
                 }
             }
         }
+    }
+}
+
+fn add_cpp_fdo_methods(class: &mut Type) {
+    // Bazel 8 moved FDO analysis into allowlisted Starlark. These undocumented
+    // methods are omitted from the exported inventory; Bazel still enforces
+    // its C++ Starlarkification allowlist when they are called.
+    // https://github.com/bazelbuild/bazel/blob/8.0.0/src/main/java/com/google/devtools/build/lib/rules/cpp/CppConfiguration.java
+    for (name, return_type) in [
+        ("compilation_mode", "string"),
+        ("fdo_path", "string; or None"),
+        ("cs_fdo_path", "string; or None"),
+        ("propeller_optimize_absolute_cc_profile", "string; or None"),
+        ("propeller_optimize_absolute_ld_profile", "string; or None"),
+        ("proto_profile", "bool"),
+    ] {
+        if class.field.iter().any(|field| field.name == name) {
+            continue;
+        }
+        class.field.push(Value {
+            name: name.to_owned(),
+            doc: "Private Bazel API restricted by the C++ Starlarkification allowlist.".to_owned(),
+            callable: Some(Callable {
+                return_type: return_type.to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
     }
 }
 
@@ -411,6 +443,44 @@ pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cpp_fdo_methods_follow_bazel_release() {
+        let supplied = Value {
+            name: "compilation_mode".to_owned(),
+            callable: Some(Callable {
+                return_type: "supplied type".to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let original = Builtins {
+            r#type: vec![Type {
+                name: "cpp".to_owned(),
+                field: vec![supplied.clone()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        for release in ["development version", "release 7.4.0"] {
+            let mut builtins = original.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            assert_eq!(builtins, original);
+        }
+        let mut builtins = original;
+        apply_versioned_signatures(&mut builtins, "release 8.0.0");
+        let fields = &builtins.r#type[0].field;
+        assert_eq!(fields.len(), 6);
+        assert_eq!(fields[0], supplied);
+        assert_eq!(
+            fields[1].callable.as_ref().unwrap().return_type,
+            "string; or None"
+        );
+        assert_eq!(fields[5].callable.as_ref().unwrap().return_type, "bool");
+        let once = builtins.clone();
+        apply_versioned_signatures(&mut builtins, "release 9.0.0");
+        assert_eq!(builtins, once);
+    }
 
     #[test]
     fn platform_types_follow_bazel_release() {
