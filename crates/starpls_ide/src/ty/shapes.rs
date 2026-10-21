@@ -477,6 +477,7 @@ def wrong(a: dict[{"name": str}], b: dict[{"name": int}]):
             "features.bzl",
             r#"globals = struct(
     ProtoInfo = getattr(getattr(native, "legacy_globals", None), "ProtoInfo", None),
+    CcInfo = getattr(getattr(native, "legacy_globals", None), "CcInfo", None),
     macro = macro,
     set = set,
     DefaultInfo = DefaultInfo,
@@ -534,7 +535,7 @@ def mixed(value: struct[{"count": int}], name: Literal["count", "missing"]) -> i
         );
         let gradual = r#"load("features.bzl", "bazel_features")
 def unresolved() -> object:
-    return getattr(bazel_features.globals, "ProtoInfo", None)
+    return getattr(bazel_features.globals, "CcInfo", None)
 "#;
         analysis.update_file(caller, gradual.to_owned());
         let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
@@ -543,7 +544,7 @@ def unresolved() -> object:
                 diagnostic.id().as_str() == "non-static-type"
                     && diagnostic.headline_message().contains("call result")
                     && diagnostic.range().is_some_and(|range| {
-                        &gradual[range] == "getattr(bazel_features.globals, \"ProtoInfo\", None)"
+                        &gradual[range] == "getattr(bazel_features.globals, \"CcInfo\", None)"
                     })
             }),
             "{diagnostics:?}"

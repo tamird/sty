@@ -144,20 +144,28 @@ impl<'db> Checks<'_, 'db> {
 
     fn is_fully_static_invocation(&self, callee: Type<'db>) -> bool {
         let expanded = callee.expand_top_level_aliases(self.db, &self.model.program_environment());
-        if !self.contains_generated_rule(expanded) {
-            return self.is_fully_static(callee);
-        }
-        // A nominal rule's identity can be fully static while its bound call
-        // signature is incomplete. Composite rule types need a stronger proof.
-        matches!(expanded, Type::NominalInstance(_))
-            && expanded
+        if matches!(
+            expanded,
+            Type::NominalInstance(_) | Type::Union(_) | Type::Intersection(_)
+        ) {
+            if !matches!(expanded, Type::NominalInstance(_))
+                && self.contains_generated_rule(expanded)
+            {
+                // Composite generated rule types need a stronger proof.
+                return false;
+            }
+            // Nominal identities can be fully static even when their bound
+            // call signatures are incomplete. Inspect every callable alternative.
+            return expanded
                 .map_callable_signatures(
                     self.db,
                     &self.model.program_environment(),
                     CallableTypeKind::Regular,
                     std::convert::identity,
                 )
-                .is_some_and(|callable| self.is_fully_static(callable))
+                .is_some_and(|callable| self.is_fully_static(callable));
+        }
+        self.is_fully_static(callee)
     }
 
     fn expression_type(&self, expression: &Expr) -> Option<Type<'db>> {

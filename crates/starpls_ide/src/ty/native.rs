@@ -39,6 +39,13 @@ const STANDARD_PATH: &str = "starpls-native:standard.pyi";
 const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
 const STORED_GLOB: &str = "_starpls_native_stored_glob";
 const EXISTING_RULE_VIEW: &str = "_ExistingRuleView";
+const LEGACY_PROVIDER_GLOBALS: &[&str] = &[
+    "CcSharedLibraryHintInfo",
+    "CcSharedLibraryInfo",
+    "JavaInfo",
+    "JavaPluginInfo",
+    "ProtoInfo",
+];
 pub(super) const MODULE_EXTENSION_TYPE: &str = "ModuleExtension";
 
 /// Bazel type constructor names and the corresponding type names in API metadata.
@@ -630,6 +637,8 @@ fn declarations(
         );
     }
     let mut legacy_python_declarations = false;
+    let legacy_provider_declarations =
+        dialect == Dialect::Bazel && classes.contains_key("Provider");
     let legacy_py_cc_link_params = dialect == Dialect::Bazel
         && ["Provider", "CcInfo", "LinkingContext"]
             .iter()
@@ -687,16 +696,23 @@ fn declarations(
             r#"    @_starpls_typing.final
     class _LegacyGlobals:
         if _starpls_native_rule_available:
-            AndroidIdeInfo: _starpls_typing.Any = ...
+"#,
+        )?;
+        for name in LEGACY_PROVIDER_GLOBALS {
+            let annotation = if legacy_provider_declarations {
+                format!("_LegacyProvider[_Legacy{name}]")
+            } else {
+                "_starpls_typing.Any".to_owned()
+            };
+            writeln!(body, "            {name}: {annotation} = ...")?;
+        }
+        write!(
+            body,
+            r#"            AndroidIdeInfo: _starpls_typing.Any = ...
             CcInfo: _starpls_typing.Any = ...
-            CcSharedLibraryHintInfo: _starpls_typing.Any = ...
-            CcSharedLibraryInfo: _starpls_typing.Any = ...
             CcToolchainConfigInfo: _starpls_typing.Any = ...
             DebugPackageInfo: _starpls_typing.Any = ...
-            JavaInfo: _starpls_typing.Any = ...
-            JavaPluginInfo: _starpls_typing.Any = ...
             ProguardSpecProvider: _starpls_typing.Any = ...
-            ProtoInfo: _starpls_typing.Any = ...
             PyCcLinkParamsProvider: {py_cc_link_params_provider} = ...
             PyInfo: {py_info} = ...
             PyRuntimeInfo: {py_runtime_info} = ...
@@ -1521,6 +1537,26 @@ _starpls_annotation_{} = repository_ctx
     }
     if legacy_python_declarations {
         output.push_str(include_str!("legacy_python.pyi"));
+    }
+    if legacy_provider_declarations {
+        // Bazel 7.4's builtins_bzl/common/exports.bzl exports these original
+        // provider keys. AutoloadSymbols may retain them in legacy_globals.
+        // The inventory omits their constructor and field schemas; keep those
+        // boundaries gradual while preserving each original provider identity.
+        output.push_str(
+            r#"class _LegacyProvider(_starpls_types.Provider[_ProviderValue]):
+    def __call__(self, *args: _starpls_unknown, **kwargs: _starpls_unknown) -> _ProviderValue: ...
+class _LegacyProviderInstance(_starpls_types.ProviderInstance):
+    @_starpls_typing.type_check_only
+    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_unknown: ...
+"#,
+        );
+        for name in LEGACY_PROVIDER_GLOBALS {
+            writeln!(
+                output,
+                "@_starpls_typing.final\nclass _Legacy{name}(_LegacyProviderInstance): ..."
+            )?;
+        }
     }
     if legacy_py_cc_link_params {
         output.push_str(include_str!("legacy_py_cc_link_params.pyi"));
@@ -4140,6 +4176,10 @@ nested_proto_aspect = getattr(getattr(native, "legacy_globals", None), "cc_proto
 direct_default = getattr(native.legacy_globals, "PyInfo", None)
 cc = native.legacy_globals.CcInfo
 java = native.legacy_globals.JavaInfo
+plugin = native.legacy_globals.JavaPluginInfo
+proto = native.legacy_globals.ProtoInfo
+shared = native.legacy_globals.CcSharedLibraryInfo
+hint = native.legacy_globals.CcSharedLibraryHintInfo
 nested_java = getattr(getattr(native, "legacy_globals", None), "JavaInfo", None)
 java_default = getattr(getattr(native, "legacy_globals", None), "JavaInfo", 42)
 other_default = getattr(native.legacy_globals, "CcInfo", None)
@@ -4179,7 +4219,7 @@ def use_keys(target: Target, files: depset[File]) -> str:
             .filter_map(Stmt::as_assign_stmt)
             .map(|assignment| assignment.value.inferred_type(&model).unwrap())
             .collect();
-        let [py, runtime, proto_aspect, direct_aspect, nested_py, nested_runtime, nested_proto_aspect, direct_default, cc, java, nested_java, java_default, other_default, _name, computed, no_default, missing, native_rule, nested_missing] =
+        let [py, runtime, proto_aspect, direct_aspect, nested_py, nested_runtime, nested_proto_aspect, direct_default, cc, java, plugin, proto, shared, hint, nested_java, java_default, other_default, _name, computed, no_default, missing, native_rule, nested_missing] =
             types.as_slice()
         else {
             panic!("expected the legacy member observations: {types:?}");
@@ -4187,11 +4227,17 @@ def use_keys(target: Target, files: depset[File]) -> str:
         assert_ne!(py, runtime);
         assert_eq!(proto_aspect, direct_aspect);
         assert!(proto_aspect.is_fully_static(db, &environment));
+        let original_keys = [java, plugin, proto, shared, hint];
+        for (index, key) in original_keys.iter().enumerate() {
+            assert!(key.is_fully_static(db, &environment));
+            assert!(original_keys[..index].iter().all(|other| *other != *key));
+        }
         for (member, actual) in [
             (py, nested_py),
             (runtime, nested_runtime),
             (proto_aspect, nested_proto_aspect),
             (py, direct_default),
+            (java, nested_java),
         ] {
             assert_eq!(
                 *actual,
@@ -4204,17 +4250,17 @@ def use_keys(target: Target, files: depset[File]) -> str:
             );
         }
         let gradual = TyType::Dynamic(DynamicType::Any);
-        for actual in [cc, java, no_default] {
+        for actual in [cc, no_default] {
             assert_eq!(*actual, gradual);
         }
         let optional_gradual =
             UnionType::from_two_elements(db, &environment, gradual, TyType::none(db, &environment));
-        for actual in [nested_java, other_default, computed] {
+        for actual in [other_default, computed] {
             assert_eq!(*actual, optional_gradual);
         }
         assert_eq!(
             *java_default,
-            UnionType::from_two_elements(db, &environment, gradual, TyType::int_literal(42))
+            UnionType::from_two_elements(db, &environment, *java, TyType::int_literal(42))
         );
         for actual in [missing, native_rule, nested_missing] {
             assert_eq!(*actual, TyType::bool_literal(false));
@@ -4281,6 +4327,100 @@ def inspect_legacy(bridge: _starpls_types._LegacyGlobals, py: _RequiredPy, runti
         for required in [py, runtime] {
             assert!(!bridge.is_assignable_to(db, &model.program_environment(), *required));
         }
+    }
+
+    #[test]
+    fn legacy_provider_keys_keep_identity_without_inventing_schemas() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def inspect(target: Target, condition: bool) -> None:
+    key = native.legacy_globals.JavaInfo
+    other = native.legacy_globals.JavaPluginInfo
+    present = key in target
+    instance = target[key]
+    other_instance = target[other]
+    constructed = key(unverified = 42)
+    field = instance.unverified
+    wrong: str = instance
+    key()
+    selected = key if condition else other
+    selected(unverified = 42)
+    renamed = selected
+    renamed()
+def inspect_intersection(composite: Intersection[ProviderKey, Callable[..., ProviderInstance]]) -> None:
+    composite()
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/legacy.bzl"),
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Bzl,
+                    is_external: false,
+                }),
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let snapshot = analysis.snapshot();
+        let db = &snapshot.db;
+        let program = db.starlark_program_file(file);
+        let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+        let model = SemanticModel::new(db, program);
+        let function = parsed.suite()[0].as_function_def_stmt().unwrap();
+        let types: Vec<_> = function
+            .body
+            .iter()
+            .filter_map(Stmt::as_assign_stmt)
+            .map(|assignment| assignment.value.inferred_type(&model).unwrap())
+            .collect();
+        let [key, other, _present, instance, other_instance, constructed, field, _selected, _renamed] =
+            types.as_slice()
+        else {
+            panic!("unexpected observations: {types:?}");
+        };
+        let environment = model.program_environment();
+        assert!(!key.is_assignable_to(db, &environment, *other));
+        assert!(!instance.is_assignable_to(db, &environment, *other_instance));
+        assert_eq!(instance, constructed);
+        assert!(!field.is_fully_static(db, &environment));
+        let diagnostics = snapshot.diagnostics(file).unwrap();
+        for call in [
+            "key(unverified",
+            "key()",
+            "selected(unverified",
+            "renamed()",
+            "composite()",
+        ] {
+            let offset = source.find(call).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic
+                            .range()
+                            .is_some_and(|range| range.start().to_usize() == offset)
+                }),
+                "{call}: {diagnostics:?}"
+            );
+        }
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-assignment"),
+            "{diagnostics:?}"
+        );
     }
 
     #[test]
