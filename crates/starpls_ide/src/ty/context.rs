@@ -550,6 +550,7 @@ fn registration_parameter_type<'db>(
         BuiltinFunction::Struct => return None,
         BuiltinFunction::StructGetattr => return None,
         BuiltinFunction::Getattr => return None,
+        BuiltinFunction::Type => return None,
         BuiltinFunction::Provider => return None,
         BuiltinFunction::Select => return None,
         BuiltinFunction::Download { always_blocking: _ } => return None,

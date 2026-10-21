@@ -595,6 +595,7 @@ pub(super) enum BuiltinFunction {
     Struct,
     StructGetattr,
     Getattr,
+    Type,
     Provider,
     Select,
     Download { always_blocking: bool },
@@ -683,6 +684,7 @@ pub(super) fn declaration<'db>(
         "tag_class" => BuiltinFunction::TagClass,
         "module_extension" => BuiltinFunction::ModuleExtension,
         "use_extension" => BuiltinFunction::UseExtension,
+        "type" => BuiltinFunction::Type,
         "struct" => BuiltinFunction::Struct,
         "provider" => BuiltinFunction::Provider,
         "select" => BuiltinFunction::Select,
@@ -721,6 +723,14 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
         BuiltinFunction::Select => selector(db, call),
         BuiltinFunction::StructGetattr => None,
         BuiltinFunction::Getattr => super::shapes::getattr_call_result(db, call),
+        BuiltinFunction::Type => {
+            let CheckedArgument::Value { ty, expression: _ } = call.argument_at(0) else {
+                return None;
+            };
+            (!call.has_binding_errors() && matches!(ty, Type::Dynamic(_))).then(|| {
+                KnownClass::Str.to_instance(db, &ProgramEnvironment::from_file(call.file()))
+            })
+        }
         BuiltinFunction::Provider => provider(db, call),
         BuiltinFunction::Download { always_blocking } => download(db, call, always_blocking),
     }

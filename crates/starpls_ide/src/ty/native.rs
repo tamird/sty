@@ -9542,6 +9542,75 @@ def stop():
     }
 
     #[test]
+    fn starlark_type_result_is_static_for_gradual_inputs() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = "def inspect(value):\n    return type(value)\ndef shadowed(type, value):\n    return type(value)\ndef wrong(value):\n    # type: (...) -> int\n    return type(value)\n";
+        let file = analysis
+            .open_document(
+                Path::new("/type_result.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let snapshot = analysis.snapshot();
+        let program = snapshot.db.starlark_program_file(file);
+        let parsed =
+            ruff_db::parsed::parsed_module(&snapshot.db, program.python_file(&snapshot.db))
+                .load(&snapshot.db);
+        let model = SemanticModel::new(&snapshot.db, program);
+        let types: Vec<_> = parsed
+            .suite()
+            .iter()
+            .map(|statement| {
+                let Stmt::FunctionDef(function) = statement else {
+                    panic!("expected function")
+                };
+                let Stmt::Return(returned) = function.body.last().unwrap() else {
+                    panic!("expected return")
+                };
+                returned
+                    .value
+                    .as_ref()
+                    .unwrap()
+                    .inferred_type(&model)
+                    .unwrap()
+                    .display(&snapshot.db, &model.program_environment())
+                    .to_string()
+            })
+            .collect();
+        assert_eq!(types, ["str", "Unknown", "str"]);
+        let diagnostics = snapshot.diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+        let argument_start = source.find("type(value)").unwrap() + "type(".len();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic
+                    .concise_message()
+                    .to_string()
+                    .contains("argument: `Unknown`")
+                    && diagnostic.range().is_some_and(|range| {
+                        range.start().to_usize() == argument_start
+                            && range.end().to_usize() == argument_start + "value".len()
+                    })
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn starlark_intrinsic_parameter_kinds() {
         for (source, parameter, index, signatures) in [
             ("enumerate(list=[1$0])", "list:", 0, 1),
