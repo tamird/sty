@@ -38,6 +38,7 @@ use ty_python_semantic::ResolvedDefinition;
 const STANDARD_PATH: &str = "starpls-native:standard.pyi";
 const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
 const STORED_GLOB: &str = "_starpls_native_stored_glob";
+const EXISTING_RULE_VIEW: &str = "_ExistingRuleView";
 pub(super) const MODULE_EXTENSION_TYPE: &str = "ModuleExtension";
 
 /// Bazel type constructor names and the corresponding type names in API metadata.
@@ -276,6 +277,21 @@ fn refine_builtin_signature(dialect: Dialect, value: &mut Value, builtins: &Buil
         }
         _ => {}
     }
+}
+
+fn existing_rule_view_result(value: &Value) -> Option<&'static str> {
+    let result = match value.name.as_str() {
+        "existing_rule" => "_starpls_types._ExistingRuleView[_starpls_builtins.object] | None",
+        "existing_rules" => {
+            "_starpls_types._ExistingRuleView[_starpls_types._ExistingRuleView[_starpls_builtins.object]]"
+        }
+        _ => return None,
+    };
+    value.callable.as_ref().and_then(|callable| {
+        env::normalize_doc(&callable.return_type, true)
+            .eq_ignore_ascii_case("unknown")
+            .then_some(result)
+    })
 }
 
 fn declarations(
@@ -548,7 +564,7 @@ fn declarations(
                 ..Default::default()
             });
     }
-    let declared_classes: BTreeSet<_> = classes.keys().cloned().collect();
+    let mut declared_classes: BTreeSet<_> = classes.keys().cloned().collect();
     for extension in extensions {
         anyhow::ensure!(
             declared_classes.contains(extension),
@@ -556,6 +572,40 @@ fn declarations(
         );
     }
     let mut body = String::new();
+    if dialect == Dialect::Bazel
+        && builtins
+            .global
+            .iter()
+            .chain(
+                classes
+                    .get("native")
+                    .into_iter()
+                    .flat_map(|class| &class.field),
+            )
+            .any(|value| existing_rule_view_result(value).is_some())
+    {
+        declared_classes.insert(EXISTING_RULE_VIEW.to_owned());
+        // StarlarkNativeModule.DictLikeView defines the read operations shared
+        // by existing_rule and existing_rules. Bazel can also return a dictionary,
+        // so lookup keys must be hashable. Sequence results differ from Python
+        // Mapping's set-like views; attribute values remain heterogeneous.
+        write!(
+            body,
+            r#"    class {EXISTING_RULE_VIEW}[_Value](_starpls_typing.Protocol):
+        def __iter__(self) -> _starpls_typing.Iterator[_starpls_builtins.str]: ...
+        def __len__(self) -> _starpls_builtins.int: ...
+        def __contains__(self, key: _starpls_typing.Hashable) -> _starpls_builtins.bool: ...
+        def __getitem__(self, key: _starpls_builtins.str) -> _Value: ...
+        @_starpls_typing.overload
+        def get(self, key: _starpls_typing.Hashable, /) -> _Value | None: ...
+        @_starpls_typing.overload
+        def get[_Default](self, key: _starpls_typing.Hashable, /, default: _Default) -> _Value | _Default: ...
+        def keys(self) -> _starpls_typing.Sequence[_starpls_builtins.str]: ...
+        def values(self) -> _starpls_typing.Sequence[_Value]: ...
+        def items(self) -> _starpls_typing.Sequence[_starpls_builtins.tuple[_starpls_builtins.str, _Value]]: ...
+"#
+        )?;
+    }
     if propagation_context_available {
         // These nested native types are not exported by Bazel's API inventory.
         // Their fields come from StarlarkAspectPropagationContextApi (Bazel 9).
@@ -2059,6 +2109,13 @@ fn write_function(
         output.push_str(", stripPrefix: _starpls_builtins.str = ''");
     }
     let return_type = match (kind, value.name.as_str()) {
+        (CallableKind::Function | CallableKind::Method("native"), "existing_rule" | "existing_rules") => {
+            if classes.contains(EXISTING_RULE_VIEW) {
+                existing_rule_view_result(value)
+            } else {
+                None
+            }
+        }
         (CallableKind::Method("repository_ctx" | "module_ctx"), "download") => {
             classes.contains("struct").then_some("_starpls_types.struct[_starpls_builtins.bool | _starpls_builtins.str | _starpls_builtins.int] | _starpls_types._PendingDownload[_starpls_types.struct[_starpls_builtins.bool | _starpls_builtins.str | _starpls_builtins.int]]")
         }
@@ -4513,6 +4570,94 @@ selected(name="shell", srcs=["//:input"], use_bash_launcher=True)
                 ruff_text_size::TextRange::new(invalid.into(), (invalid + 1).into()),
             );
         }
+    }
+
+    #[test]
+    fn existing_rule_queries_return_readonly_views() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        let source = r#"def inspect() -> tuple[str, str, int, object] | None:
+    rule = native.existing_rule("target")
+    if rule == None:
+        return None
+    return (rule.keys()[0], rule.items()[0][0], len(rule), rule.get(42, default="missing"))
+
+def inspect_all() -> str:
+    rule = native.existing_rules().get("target")
+    return rule.keys()[0] if rule != None else "missing"
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for (invalid, expected) in [
+            ("native.existing_rule(42)", "invalid-argument-type"),
+            ("native.existing_rules().clear()", "unresolved-attribute"),
+            ("native.existing_rules().get([])", "invalid-argument-type"),
+            ("[] in native.existing_rules()", "unsupported-operator"),
+            ("native.existing_rules()[42]", "invalid-argument-type"),
+            (
+                "native.existing_rules()[\"target\"].keys().append(\"extra\")",
+                "unresolved-attribute",
+            ),
+        ] {
+            analysis.update_file(file, format!("{source}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{invalid}");
+        }
+
+        let build = analysis
+            .open_document(
+                Path::new("/BUILD.bazel"),
+                Dialect::Bazel,
+                None,
+                "existing_rules()[\"target\"].keys().append(\"extra\")\n".to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(build).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+
+        let native = builtins
+            .r#type
+            .iter_mut()
+            .find(|ty| ty.name == "native")
+            .unwrap();
+        let existing = native
+            .field
+            .iter_mut()
+            .find(|field| field.name == "existing_rules")
+            .unwrap();
+        existing.callable.as_mut().unwrap().return_type = "string".to_owned();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.update_file(
+            file,
+            "def inspect() -> str:\n    return native.existing_rules()\n".to_owned(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
