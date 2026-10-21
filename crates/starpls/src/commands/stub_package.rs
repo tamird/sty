@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::bail;
 use anyhow::Context;
 use serde::Deserialize;
+use starpls_bazel::client::SelectedModule;
+use starpls_bazel::client::SelectedModuleRequest;
 use starpls_bazel::Label;
 
 use crate::document::DefaultFileLoader;
@@ -105,15 +108,51 @@ pub(super) fn load(
         .map(|(package, _)| package.repository.name.clone())
         .collect::<Vec<_>>();
     loader.prepare_repository_mappings(&mappings);
+    // Batch module identities using the prepared namespace mappings. Keep errors in
+    // package order and defer source-root watches until each package is validated.
+    let mut resolved = Vec::with_capacity(packages.len());
+    for (package, manifest) in packages.iter().zip(&manifests) {
+        let source = manifest
+            .source
+            .as_ref()
+            .map(|source| {
+                resolve_source_repository_name(loader, package, source)
+                    .map(|repository| (repository, source))
+            })
+            .transpose();
+        let failed = source.is_err();
+        resolved.push(source);
+        if failed {
+            break;
+        }
+    }
+    let requests: Vec<_> = resolved
+        .iter()
+        .filter_map(|source| {
+            let (repository, source) = source.as_ref().ok()?.as_ref()?;
+            Some(SelectedModuleRequest {
+                canonical_repository: repository,
+                module_name: &source.module,
+            })
+        })
+        .collect();
+    let mut selected: HashMap<_, _> = loader
+        .prefetch_selected_modules(&requests)
+        .into_iter()
+        .map(|(repository, module)| (repository, Some(module)))
+        .collect();
     let sources = packages
         .iter()
-        .zip(&manifests)
-        .map(|(package, manifest)| {
-            manifest
-                .source
-                .as_ref()
-                .map(|source| source_repository(loader, package, source))
-                .transpose()
+        .zip(resolved)
+        .map(|(package, source)| {
+            source
+                .and_then(|source| {
+                    source
+                        .map(|(repository, source)| {
+                            source_repository(loader, package, source, repository, &mut selected)
+                        })
+                        .transpose()
+                })
                 .with_context(|| package.context(&path))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -218,23 +257,40 @@ fn read_manifest(loader: &DefaultFileLoader, package: &mut Package) -> anyhow::R
     Ok(manifest)
 }
 
+fn resolve_source_repository_name(
+    loader: &DefaultFileLoader,
+    package: &Package,
+    source: &Source,
+) -> anyhow::Result<String> {
+    let source_label = format!("{}//:__stub_source__", source.repository);
+    let source_label = Label::parse(&source_label)
+        .map_err(|error| error.err)
+        .context("invalid source.repository")?;
+    loader
+        .resolve_repository_name(&source_label, &package.repository)?
+        .context("source.repository must name a Bazel repository")
+}
+
 fn source_repository(
     loader: &DefaultFileLoader,
     package: &Package,
     source: &Source,
+    source_repository: String,
+    selected_modules: &mut HashMap<String, Option<SelectedModule>>,
 ) -> anyhow::Result<Repository> {
+    let source_repository = loader.canonical_repository(source_repository)?;
+    let selected = match selected_modules.entry(source_repository.name.clone()) {
+        std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            entry.insert(loader.selected_module(&source_repository)?)
+        }
+    };
     let Source {
-        repository: source_repository,
+        repository: _,
         module,
         versions,
     } = source;
-    let source_label = format!("{source_repository}//:__stub_source__");
-    let source_label = Label::parse(&source_label)
-        .map_err(|error| error.err)
-        .context("invalid source.repository")?;
-    let source_repository = loader.resolve_repository(&source_label, &package.repository)?;
-    let selected = loader.selected_module(&source_repository)?;
-    if let Some(selected) = &selected {
+    if let Some(selected) = selected.as_ref() {
         if selected.name != *module {
             bail!(
                 "repository @@{} selects module {:?}, but the stub package requires {:?}",
@@ -244,9 +300,12 @@ fn source_repository(
             );
         }
     }
-    match selected.and_then(|module| module.version) {
+    match selected
+        .as_ref()
+        .and_then(|module| module.version.as_deref())
+    {
         Some(version) => {
-            if !versions.contains(&version) {
+            if !versions.iter().any(|accepted| accepted == version) {
                 bail!(
                     "module {module} selected version {version}, but the stub package accepts {}",
                     versions.join(", ")
@@ -327,6 +386,54 @@ mod tests {
     use crate::document::DefaultFileLoader;
 
     #[test]
+    fn an_early_version_error_preserves_source_watch_scope() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("stub-package-early-version-error");
+        std::fs::create_dir_all(&root).unwrap();
+        let mut packages = Vec::new();
+        for name in ["first", "second"] {
+            let manifest = format!("{name}.toml");
+            std::fs::write(
+                root.join(&manifest),
+                format!("format-version = 1\n[source]\nrepository = '@@{name}+'\nmodule = '{name}'\nversions = ['1']\n[files]\n"),
+            )
+            .unwrap();
+            packages.push(super::StubPackage {
+                manifest,
+                allow_unversioned: false,
+            });
+        }
+        let mut client = TestBazelClient::default();
+        client.selected_modules.insert(
+            "first+".into(),
+            SelectedModule {
+                name: "first".into(),
+                version: Some("2".into()),
+            },
+        );
+        let client = Arc::new(client);
+        let (sender, _) = crossbeam_channel::unbounded();
+        let external = root.join("external");
+        let loader = DefaultFileLoader::new(
+            client.clone(),
+            root.clone(),
+            None,
+            external.clone(),
+            sender,
+            true,
+        );
+        let error = super::load(&loader, &root, packages).unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("first.toml"), "{message}");
+        assert!(message.contains("selected version 2"), "{message}");
+        let watched = loader.configuration_paths();
+        assert!(watched.contains(&external.join("first+/MODULE.bazel")));
+        assert!(!watched.contains(&external.join("second+/MODULE.bazel")));
+        assert!(client.fetch_requests.lock().unwrap().is_empty());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn unversioned_stubs_require_the_same_repository() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("stub-package-version-identity");
@@ -384,13 +491,40 @@ mod tests {
                 module: "rules".into(),
                 versions: vec!["1".into()],
             };
-            let result = super::source_repository(&loader, &package, &source);
+            let repository =
+                super::resolve_source_repository_name(&loader, &package, &source).unwrap();
+            let mut selected = std::collections::HashMap::new();
+            let result = super::source_repository(
+                &loader,
+                &package,
+                &source,
+                repository.clone(),
+                &mut selected,
+            );
             match expected_error {
                 Some(expected) => {
                     let error = result.unwrap_err().to_string();
                     assert!(error.contains(expected), "{error}");
                 }
-                None => assert!(result.is_ok(), "{result:?}"),
+                None => {
+                    assert!(result.is_ok(), "{result:?}");
+                    let source = super::Source {
+                        module: "different".into(),
+                        ..source
+                    };
+                    let error = super::source_repository(
+                        &loader,
+                        &package,
+                        &source,
+                        repository,
+                        &mut selected,
+                    )
+                    .unwrap_err();
+                    assert!(
+                        error.to_string().contains("requires \"different\""),
+                        "{error}"
+                    );
+                }
             }
         }
     }

@@ -1,3 +1,5 @@
+use std::collections::hash_map::Entry;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::BufRead;
@@ -8,6 +10,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 use std::str;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Weak;
@@ -213,6 +217,11 @@ pub struct SelectedModule {
     pub version: Option<String>,
 }
 
+pub struct SelectedModuleRequest<'a> {
+    pub canonical_repository: &'a str,
+    pub module_name: &'a str,
+}
+
 pub trait BazelClient: Send + Sync + 'static {
     fn build_language(&self) -> anyhow::Result<Vec<u8>>;
     fn info(&self) -> anyhow::Result<BazelInfo>;
@@ -236,12 +245,21 @@ pub trait BazelClient: Send + Sync + 'static {
     }
     /// Returns None when no module name is available (an extension or unnamed root).
     fn selected_module(&self, canonical_repo: &str) -> anyhow::Result<Option<SelectedModule>>;
+    /// Prefetch positively identified modules keyed by canonical repository name.
+    /// Missing entries still require `selected_module`; they are not unversioned modules.
+    fn prefetch_selected_modules(
+        &self,
+        _requests: &[SelectedModuleRequest<'_>],
+    ) -> HashMap<String, SelectedModule> {
+        HashMap::new()
+    }
 }
 
 pub struct BazelCLI {
     executable: PathBuf,
     working_directory: Option<PathBuf>,
     mappings: Mutex<MappingState>,
+    repository_metadata: AtomicBool,
 }
 
 impl BazelCLI {
@@ -488,6 +506,10 @@ impl BazelClient for BazelCLI {
             .expect("mapping state was poisoned")
             .extension_repositories =
             supports_extension_mapping_reuse(&info.release).then(HashMap::new);
+        self.repository_metadata.store(
+            supports_repository_metadata(&info.release),
+            Ordering::Relaxed,
+        );
         Ok(info)
     }
 
@@ -592,6 +614,35 @@ impl BazelClient for BazelCLI {
         }
         Err(graph_error).with_context(|| format!("cannot identify module for @@{canonical_repo}"))
     }
+
+    fn prefetch_selected_modules(
+        &self,
+        requests: &[SelectedModuleRequest<'_>],
+    ) -> HashMap<String, SelectedModule> {
+        if !self.repository_metadata.load(Ordering::Relaxed) {
+            return HashMap::new();
+        }
+        let requested: HashMap<_, _> = requests
+            .iter()
+            .filter(|request| {
+                !request.canonical_repository.is_empty() && is_module_argument(request.module_name)
+            })
+            .map(|request| (request.canonical_repository, request.module_name))
+            .collect();
+        if requested.len() < 2 {
+            return HashMap::new();
+        }
+        // Module arguments make Bazel emit the selected module key together with
+        // its canonical repository name. A graph batch does not retain this pair.
+        let modules: BTreeSet<_> = requested.values().copied().collect();
+        let arguments = ["mod", "show_repo", "--output=streamed_jsonproto"]
+            .into_iter()
+            .chain(modules);
+        let Ok(output) = self.run_command(arguments) else {
+            return HashMap::new();
+        };
+        selected_modules_from_metadata(&output, &requested).unwrap_or_default()
+    }
 }
 
 fn parse_repo_mappings(
@@ -664,6 +715,54 @@ fn supports_extension_mapping_reuse(release: &str) -> bool {
     )
 }
 
+fn supports_repository_metadata(release: &str) -> bool {
+    // Machine-readable `mod show_repo` output was introduced in Bazel 9.
+    release
+        .strip_prefix("release ")
+        .and_then(|release| release.split_once('.'))
+        .and_then(|(major, _)| major.parse::<u64>().ok())
+        .is_some_and(|major| major >= 9)
+}
+
+fn is_module_argument(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes.next().is_some_and(|byte| byte.is_ascii_lowercase())
+        && bytes.all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte)
+        })
+}
+
+fn selected_modules_from_metadata(
+    output: &[u8],
+    requested: &HashMap<&str, &str>,
+) -> anyhow::Result<HashMap<String, SelectedModule>> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Repository {
+        canonical_name: String,
+        module_key: String,
+    }
+
+    let mut modules = HashMap::new();
+    for repository in Deserializer::from_slice(output).into_iter::<Repository>() {
+        let Repository {
+            canonical_name,
+            module_key,
+        } = repository?;
+        let Some(expected) = requested.get(canonical_name.as_str()) else {
+            continue;
+        };
+        let module = selected_module_from_key(&module_key)?;
+        match modules.entry(canonical_name) {
+            Entry::Vacant(entry) if module.name == *expected => {
+                entry.insert(module);
+            }
+            _ => bail!("ambiguous selected module metadata"),
+        }
+    }
+    Ok(modules)
+}
+
 fn selected_module_from_graph(
     output: &[u8],
     canonical_repo: &str,
@@ -701,6 +800,10 @@ fn selected_module_from_graph(
     let [Module { key }] = dependencies.as_slice() else {
         bail!("expected one selected module for @@{canonical_repo}");
     };
+    selected_module_from_key(key).map(Some)
+}
+
+fn selected_module_from_key(key: &str) -> anyhow::Result<SelectedModule> {
     let Some((name, version)) = key.split_once('@') else {
         bail!("invalid Bazel module key {key:?}");
     };
@@ -709,10 +812,10 @@ fn selected_module_from_graph(
     }
     // Module keys mark non-registry overrides with `_`. The separate JSON
     // version field may still contain the override's declared MODULE version.
-    Ok(Some(SelectedModule {
+    Ok(SelectedModule {
         name: name.to_owned(),
         version: (version != "_").then(|| version.to_owned()),
-    }))
+    })
 }
 
 fn extension_repository_original_name(
@@ -751,6 +854,7 @@ impl Default for BazelCLI {
             executable: "bazel".into(),
             working_directory: None,
             mappings: Default::default(),
+            repository_metadata: AtomicBool::new(false),
         }
     }
 }
@@ -760,6 +864,88 @@ mod tests {
     use super::extension_repository_original_name;
     use super::selected_module_from_graph;
     use super::SelectedModule;
+
+    #[cfg(unix)]
+    #[test]
+    fn selected_modules_prefetch_by_canonical_identity() {
+        use std::os::unix::fs::PermissionsExt;
+
+        use super::BazelCLI;
+        use super::BazelClient;
+        use super::SelectedModuleRequest;
+
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("bazel");
+        std::fs::write(
+            &executable,
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> "${0%/*}/calls"
+if test "$1" = info; then
+  printf 'execution_root: /tmp/workspace\noutput_base: /tmp\nrelease: release 9.0.0\nstarlark-semantics: default\nworkspace: /tmp\n'
+else
+  cat "${0%/*}/response"
+  read status < "${0%/*}/status"
+  exit "$status"
+fi
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let requests = [
+            ("rules_v1", "rules"),
+            ("rules_v2", "rules"),
+            ("other", "other"),
+            ("", "root"),
+            ("unsafe", "--config=invalid"),
+        ]
+        .map(
+            |(canonical_repository, module_name)| SelectedModuleRequest {
+                canonical_repository,
+                module_name,
+            },
+        );
+        let client = BazelCLI::new(&executable);
+        assert!(client.prefetch_selected_modules(&requests).is_empty());
+        assert!(!root.path().join("calls").exists());
+        client.info().unwrap();
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        std::fs::write(root.path().join("status"), "0\n").unwrap();
+        std::fs::write(
+            root.path().join("response"),
+            r#"{"canonicalName":"rules_v2","moduleKey":"rules@2"}
+{"canonicalName":"other","moduleKey":"other@_"}
+{"canonicalName":"rules_v1","moduleKey":"rules@1"}
+{"canonicalName":"rules_v3","moduleKey":"rules@3"}
+"#,
+        )
+        .unwrap();
+        let selected = client.prefetch_selected_modules(&requests);
+        assert_eq!(selected.len(), 3);
+        assert_eq!(selected["rules_v1"].version.as_deref(), Some("1"));
+        assert_eq!(selected["rules_v2"].version.as_deref(), Some("2"));
+        assert_eq!(selected["other"].version, None);
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("calls")).unwrap(),
+            "mod show_repo --output=streamed_jsonproto other rules\n"
+        );
+
+        std::fs::write(
+            root.path().join("response"),
+            "{\"canonicalName\":\"rules_v1\",\"moduleKey\":\"rules@1\"}\n{\"canonicalName\":\"rules_v1\",\"moduleKey\":\"rules@2\"}\n",
+        )
+        .unwrap();
+        assert!(client.prefetch_selected_modules(&requests).is_empty());
+        std::fs::write(root.path().join("status"), "1\n").unwrap();
+        assert!(client.prefetch_selected_modules(&requests).is_empty());
+        assert!(client.prefetch_selected_modules(&requests[..1]).is_empty());
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("calls"))
+                .unwrap()
+                .lines()
+                .count(),
+            3
+        );
+    }
 
     #[cfg(unix)]
     #[test]

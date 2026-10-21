@@ -752,17 +752,41 @@ impl DefaultFileLoader {
         }
     }
 
+    pub(crate) fn prefetch_selected_modules(
+        &self,
+        requests: &[starpls_bazel::client::SelectedModuleRequest<'_>],
+    ) -> HashMap<String, starpls_bazel::client::SelectedModule> {
+        if self.bzlmod_enabled {
+            self.bazel_client.prefetch_selected_modules(requests)
+        } else {
+            HashMap::new()
+        }
+    }
+
     pub(crate) fn resolve_repository(
         &self,
         label: &Label,
         from: &Repository,
     ) -> anyhow::Result<Repository> {
         self.watch_repository(&from.root);
+        match self.resolve_repository_name(label, from)? {
+            None => Ok(from.clone()),
+            Some(name) => self.canonical_repository(name),
+        }
+    }
+
+    /// Resolve a name without registering the repository root as a configuration input.
+    /// `None` retains the exact current repository context; `Some("")` names the main repository.
+    pub(crate) fn resolve_repository_name(
+        &self,
+        label: &Label,
+        from: &Repository,
+    ) -> anyhow::Result<Option<String>> {
         if !self.is_ready() && self.label_needs_bazel_context(label, from) {
             bail!("Bazel configuration is loading");
         }
         let name = match label.kind() {
-            RepoKind::Current => return Ok(from.clone()),
+            RepoKind::Current => return Ok(None),
             RepoKind::Canonical => label.repo().to_owned(),
             RepoKind::Apparent => {
                 if self.bzlmod_enabled {
@@ -784,7 +808,7 @@ impl DefaultFileLoader {
                 }
             }
         };
-        self.canonical_repository(name)
+        Ok(Some(name))
     }
 
     pub(crate) fn canonical_repository(&self, name: String) -> anyhow::Result<Repository> {
