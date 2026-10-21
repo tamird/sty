@@ -519,6 +519,7 @@ pub(super) enum BuiltinFunction {
     BuildSetting(BuildSetting),
     Rule { repository: bool },
     Aspect,
+    Subrule,
     Macro,
     ModuleExtension,
     Struct,
@@ -607,6 +608,7 @@ pub(super) fn declaration<'db>(
         "rule" => BuiltinFunction::Rule { repository: false },
         "repository_rule" => BuiltinFunction::Rule { repository: true },
         "aspect" => BuiltinFunction::Aspect,
+        "subrule" => BuiltinFunction::Subrule,
         "macro" => BuiltinFunction::Macro,
         "module_extension" => BuiltinFunction::ModuleExtension,
         "struct" => BuiltinFunction::Struct,
@@ -639,7 +641,9 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
             },
         ),
         BuiltinFunction::Macro => rule(db, call, RuleKind::Macro),
-        BuiltinFunction::Aspect | BuiltinFunction::ModuleExtension => None,
+        BuiltinFunction::Aspect | BuiltinFunction::Subrule | BuiltinFunction::ModuleExtension => {
+            None
+        }
         BuiltinFunction::Struct => structure(db, call),
         BuiltinFunction::Select => selector(db, call),
         BuiltinFunction::StructGetattr => None,
