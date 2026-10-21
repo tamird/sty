@@ -828,6 +828,8 @@ fn supports_extension_mapping_reuse(release: &str) -> bool {
     // and shared ModuleExtensionRepoMappingEntriesValue in
     // https://github.com/bazelbuild/bazel/tree/9.3.0/src/main/java/com/google/devtools/build/lib/bazel/bzlmod
     // and https://github.com/dzbarsky/bazel/tree/c9e799a41461893607df3b93d95c77d00c597032/src/main/java/com/google/devtools/build/lib/bazel/bzlmod.
+    // The fork kept that code unchanged through 9.4.0-dzbarsky3:
+    // https://github.com/dzbarsky/bazel/compare/c9e799a41461893607df3b93d95c77d00c597032...936b87fb56f12c7be262c4a5bbe853f4fc9bbd45
     matches!(
         release,
         "release 9.0.0"
@@ -838,6 +840,7 @@ fn supports_extension_mapping_reuse(release: &str) -> bool {
             | "release 9.2.0"
             | "release 9.3.0"
             | "release 9.4.0-dzbarsky1"
+            | "release 9.4.0-dzbarsky3"
     )
 }
 
@@ -1729,8 +1732,9 @@ esac
             "mod --enable_bzlmod dump_repo_mapping rules++ext+one\nmod --enable_bzlmod dump_repo_mapping rules++ext+missing\nmod --enable_bzlmod dump_repo_mapping rules++ext+one rules++ext+missing\n"
         );
 
-        std::fs::write(root.path().join("release"), "release 10.0.0\n").unwrap();
+        std::fs::write(root.path().join("release"), "release 9.4.0-dzbarsky4\n").unwrap();
         client.info().unwrap();
+        assert_eq!(client.selected_module("rules++ext+seed").unwrap(), None);
         std::fs::write(root.path().join("calls"), "").unwrap();
         client
             .dump_repo_mappings(&["rules++ext+one", "rules++ext+two"])
@@ -1759,7 +1763,7 @@ esac
             requested.join(" ")
         );
 
-        std::fs::write(root.path().join("release"), "release 9.2.0\n").unwrap();
+        std::fs::write(root.path().join("release"), "release 9.4.0-dzbarsky3\n").unwrap();
         let fresh_client = super::BazelCLI::new(&executable);
         fresh_client.info().unwrap();
         std::fs::write(root.path().join("calls"), "").unwrap();
