@@ -81,6 +81,7 @@ enum CallableKind<'a> {
     Function,
     EmptyDepset,
     Method(&'a str),
+    ResolveCommand,
     Rule(&'a starpls_bazel::build::RuleDefinition),
     Provider(Option<&'a str>),
 }
@@ -1081,7 +1082,14 @@ fn declarations(
                             "        ",
                             field,
                             &callable,
-                            CallableKind::Method(&class.name),
+                            if dialect == Dialect::Bazel
+                                && class.name == "ctx"
+                                && field.name == "resolve_command"
+                            {
+                                CallableKind::ResolveCommand
+                            } else {
+                                CallableKind::Method(&class.name)
+                            },
                             AnnotationUse::Value,
                             &declared_classes,
                         )?;
@@ -1418,6 +1426,19 @@ fn declarations(
     );
     if classes.contains_key("repository_ctx") || classes.contains_key("module_ctx") {
         output.push_str("_ExecuteEnvironmentValue = _starpls_typing.TypeVar(\"_ExecuteEnvironmentValue\", bound=\"_starpls_builtins.str | None\")\n");
+    }
+    if dialect == Dialect::Bazel
+        && classes.get("ctx").is_some_and(|context| {
+            context
+                .field
+                .iter()
+                .any(|field| field.name == "resolve_command" && field.callable.is_some())
+        })
+    {
+        output.push_str("_ResolveCommandExecutionValue = _starpls_typing.TypeVar(\"_ResolveCommandExecutionValue\", bound=_starpls_builtins.str)\n");
+        if classes.contains_key("File") {
+            output.push_str("_ResolveCommandFiles = _starpls_typing.TypeVar(\"_ResolveCommandFiles\", bound=\"_starpls_typing.Iterable[_starpls_types.File]\")\n");
+        }
     }
     writeln!(output, "_JsonValue = {decoded_json}")?;
     output.push_str(
@@ -1954,6 +1975,17 @@ fn write_function(
                 (env::normalize_doc(r#type, true) == "dict")
                     .then_some(STRING_DICTIONARY_INPUT)
             }
+            // resolve_command reads these dictionaries independently. Their
+            // distinct type variables preserve narrower concrete inputs.
+            (CallableKind::ResolveCommand, _, "make_variables") => {
+                (env::normalize_doc(r#type, true) == "dict; or None").then_some("_starpls_builtins.dict[_StringKey, _StringValue] | _DictSchema[_starpls_builtins.str] | None")
+            }
+            (CallableKind::ResolveCommand, _, "execution_requirements") => {
+                (env::normalize_doc(r#type, true) == "dict").then_some("_starpls_builtins.dict[_ExecutionRequirementKey, _ResolveCommandExecutionValue] | _DictSchema[_starpls_builtins.str]")
+            }
+            (CallableKind::ResolveCommand, _, "label_dict") => {
+                (classes.contains("Label") && classes.contains("File") && env::normalize_doc(r#type, true) == "dict").then_some("_starpls_builtins.dict[_starpls_types.Label, _ResolveCommandFiles]")
+            }
             // Spawn actions copy each dictionary independently into string maps.
             (CallableKind::Method("actions"), "run" | "run_shell", "env") => {
                 (env::normalize_doc(r#type, true) == "dict; or None")
@@ -2109,6 +2141,12 @@ fn write_function(
         output.push_str(", stripPrefix: _starpls_builtins.str = ''");
     }
     let return_type = match (kind, value.name.as_str()) {
+        (CallableKind::ResolveCommand, _) => {
+            // Bazel 7 returned immutable runfiles suppliers in the third
+            // component; later releases return an empty immutable list.
+            (classes.contains("File") && env::normalize_doc(&callable.return_type, true).eq_ignore_ascii_case("tuple"))
+                .then_some("_starpls_builtins.tuple[_starpls_builtins.list[_starpls_types.File], _starpls_builtins.list[_starpls_builtins.str], _starpls_typing.Sequence[_starpls_builtins.object]]")
+        }
         (CallableKind::Function | CallableKind::Method("native"), "existing_rule" | "existing_rules") => {
             if classes.contains(EXISTING_RULE_VIEW) {
                 existing_rule_view_result(value)
@@ -4887,6 +4925,126 @@ def names(directory: path) -> list[str]:
                 .collect::<Vec<_>>();
             assert_eq!(actual, expected, "{release}: {diagnostics:?}");
         }
+    }
+
+    #[test]
+    fn resolve_command_checks_inputs_and_result() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def check(context: ctx[object, object], file: File, label: Label, make: dict[Literal["A"], Literal["one"]], requirements: dict[Literal["B"], Literal["two"]], schema: dict[{"KEY": str}], mapping: Mapping[str, str], label_mapping: Mapping[Label, tuple[File]]) -> None:
+    files, argv, manifests = context.resolve_command(make_variables=make, execution_requirements=requirements, label_dict={label: (file,)})
+    files.append(file)
+    argv.append("argument")
+    context.resolve_command(make_variables=None, label_dict={label: {file: 1}})
+    context.resolve_command(make_variables=schema, execution_requirements=schema)
+    print(len(manifests))
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/command.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.set_rules(crate::DiagnosticRules::default());
+        let invalid = r#"    context.resolve_command(make_variables={1: "value"})
+    context.resolve_command(make_variables={"key": 1})
+    context.resolve_command(execution_requirements={1: "value"})
+    context.resolve_command(execution_requirements={"key": 1})
+    context.resolve_command(execution_requirements=None)
+    context.resolve_command(label_dict={"label": [file]})
+    context.resolve_command(label_dict={label: [1]})
+    context.resolve_command(make_variables=mapping)
+    context.resolve_command(label_dict=label_mapping)
+    files.append("not a file")
+    argv.append(file)
+    manifests.append(file)
+"#;
+        analysis.update_file(file, format!("{source}{invalid}"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let actual = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let range = diagnostic.range().unwrap();
+                let offset = usize::from(range.start()) - source.len();
+                (
+                    diagnostic.id().as_str(),
+                    &invalid[offset..offset + usize::from(range.len())],
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual,
+            [
+                ("invalid-argument-type", "make_variables={1: \"value\"}"),
+                ("invalid-argument-type", "make_variables={\"key\": 1}"),
+                (
+                    "invalid-argument-type",
+                    "execution_requirements={1: \"value\"}"
+                ),
+                (
+                    "invalid-argument-type",
+                    "execution_requirements={\"key\": 1}"
+                ),
+                ("invalid-argument-type", "execution_requirements=None"),
+                ("invalid-argument-type", "label_dict={\"label\": [file]}"),
+                ("invalid-argument-type", "label_dict={label: [1]}"),
+                ("invalid-argument-type", "make_variables=mapping"),
+                ("invalid-argument-type", "label_dict=label_mapping"),
+                ("invalid-argument-type", "\"not a file\""),
+                ("invalid-argument-type", "file"),
+                ("unresolved-attribute", "manifests.append"),
+            ],
+            "{diagnostics:?}"
+        );
+
+        let method = builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "ctx")
+            .unwrap()
+            .field
+            .iter_mut()
+            .find(|field| field.name == "resolve_command")
+            .unwrap()
+            .callable
+            .as_mut()
+            .unwrap();
+        for parameter in &mut method.param {
+            if matches!(
+                parameter.name.as_str(),
+                "make_variables" | "execution_requirements" | "label_dict"
+            ) {
+                parameter.r#type = "int".into();
+            }
+        }
+        method.return_type = "string".into();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.update_file(
+            file,
+            "def check(context: ctx[object, object]) -> str:\n    return context.resolve_command(make_variables=42, execution_requirements=42, label_dict=42)\n".to_owned(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
