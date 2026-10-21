@@ -588,7 +588,7 @@ fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
             ));
             continue;
         };
-        let actual = model.definition_type(definition);
+        let mut actual = model.definition_type(definition);
         let mut expected = stub_model.definition_type(*stub_definition);
         let mut incomplete_overload = false;
         let mut value_overload = None;
@@ -630,6 +630,17 @@ fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
             }
             match (definition.kind(db), actual) {
                 (DefinitionKind::Function(_), Type::FunctionLiteral(source)) => {
+                    let Some(implementation) =
+                        source.iter_overloads_and_implementation(db).next_back()
+                    else {
+                        diagnostics.push(invalid(
+                            source_range,
+                            declaration.name.range(),
+                            "Cannot resolve the source implementation".into(),
+                        ));
+                        continue;
+                    };
+                    actual = Type::single_callable(db, implementation.signature(db));
                     let analysis = OverloadBodyAnalysis::new(db, source);
                     incomplete_overload = !analysis.is_complete();
                     overload_bodies.push(analysis);
@@ -640,8 +651,7 @@ fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
                 }
                 _ => value_overload = Some(expected),
             }
-            // Ty also checks supported source bodies under each donor overload.
-            // The broad signature still governs ordinary source inference.
+            // Compare implementation signatures; callers use the overloads.
             expected = Type::single_callable(db, signature);
         }
         // Function literals identify declarations; compare their callable signatures.
@@ -1743,7 +1753,7 @@ mod tests {
     fn function_stubs_check_overload_implementations() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
-        let body = "def rewrite(value, rewrite_label):\n    return value\n";
+        let body = "def rewrite(value, rewrite_label):\n    return value\nlocal: str = rewrite('value', lambda label: label)\n";
         let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
         let overloads = r#"
 type Value = str | list[str] | dict[str, str] | tuple[str, ...]
@@ -1778,6 +1788,13 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
         let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0].id().as_str(), "no-matching-overload");
+        analysis.update_file(
+            source,
+            format!("{body}rewrite(('value',), lambda label: label)\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "no-matching-overload");
 
         analysis.update_file(
             source,
@@ -1790,6 +1807,7 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
         for body in [
             "def rewrite(value: int, rewrite_label: Callable[[str], str]) -> int:\n    return value\n",
             "def rewrite(value, rewrite_label):\n    # type: (int, object) -> int\n    return value\n",
+            "def rewrite(other, rewrite_label):\n    return other\n",
         ] {
             analysis.update_file(source, body.into());
             let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
@@ -1797,6 +1815,13 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
             assert_eq!(diagnostics[0].id().as_str(), "invalid-function-interface");
         }
         analysis.update_file(source, body.into());
+        analysis.update_file(
+            stub,
+            format!("{overloads}def rewrite(value: Value, rewrite_label: Callable[[str], str] = ...) -> Value: ...\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-function-interface");
         // Ty owns both parameter coverage and return compatibility for the donor family.
         for implementation in [
             "def rewrite(value: str, rewrite_label: Callable[[str], str]) -> Value: ...\n",
