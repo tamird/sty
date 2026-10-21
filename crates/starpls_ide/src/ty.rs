@@ -717,7 +717,12 @@ impl ty_python_semantic::Db for Database {
                 Type::TypedDict(TypedDictType::from_schema_items(self, Default::default())),
             ),
             "set" => KnownClass::Set.to_specialized_instance(self, &environment, &[unknown]),
-            "tuple" => Type::homogeneous_tuple(self, &environment, unknown),
+            "tuple" => Type::homogeneous_tuple(
+                self,
+                &environment,
+                // Tuple elements are covariant, so object covers every element type.
+                KnownClass::Object.to_instance(self, &environment),
+            ),
             "File" | "Label" | "Target" | "rule" | "macro" | "select" | "depset" | "runfiles"
             | "FilesToRunProvider" => {
                 let binding = self.language_builtin(file, tag, BuiltinUsage::Annotation)?;
@@ -1346,6 +1351,7 @@ def register(name: str, visibility: list[str] | None):
                 "tuple[int, str]",
                 "Target",
             ),
+            ("tuple[Any, ...] | None", "tuple", "tuple[Any, ...]", "None"),
             ("set[str] | Target", "set", "set[str]", "Target"),
             ("Label | str", "Label", "Label", "str"),
             ("Target | str", "Target", "Target", "str"),

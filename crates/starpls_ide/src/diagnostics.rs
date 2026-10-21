@@ -710,6 +710,39 @@ def sequence(value: list[File] | tuple[File, ...] | None) -> list[File]:
     }
 
     #[test]
+    fn tuple_type_test_requires_element_checks() {
+        let source = r#"def checked(value: object) -> list[str]:
+    if type(value) != "tuple":
+        fail("expected tuple")
+    result: list[str] = []
+    for element in value:
+        if type(element) != "string":
+            fail("expected string")
+        result.append(element)
+    return result
+
+def unchecked(value: object) -> str:
+    if type(value) == "tuple":
+        return value[0]
+    return ""
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(&source[diagnostics[0].range().unwrap()], "value[0]");
+    }
+
+    #[test]
     fn collection_annotations_preserve_element_types() {
         let source = r#"
 def collect(values):
