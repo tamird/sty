@@ -203,6 +203,109 @@ enum RepositoryContext {
     Displaced,
 }
 
+#[derive(Default)]
+struct BazelLoadContext {
+    packages: HashMap<PathBuf, BazelPackage>,
+}
+
+struct BazelPackage {
+    repository: String,
+    name: String,
+}
+
+impl BazelLoadContext {
+    fn from_labels(
+        loader: &DefaultFileLoader,
+        labels: Vec<String>,
+        sources: &[PathBuf],
+    ) -> anyhow::Result<Self> {
+        let mut required = HashMap::<String, HashMap<PathBuf, PathBuf>>::new();
+        for source in sources {
+            let source = starpls_common::absolute_path(source)?;
+            let repository = loader.repository_for_path(&source)?.with_context(|| {
+                format!("cannot determine Bazel repository for {}", source.display())
+            })?;
+            let relative = source.strip_prefix(&repository.root).with_context(|| {
+                format!(
+                    "{} is outside repository {}",
+                    source.display(),
+                    repository.root.display()
+                )
+            })?;
+            required
+                .entry(repository.name)
+                .or_default()
+                .insert(relative.to_path_buf(), source);
+        }
+        let mut context = Self::default();
+        for spelling in labels {
+            let (prefix, path) = spelling
+                .split_once("//")
+                .with_context(|| format!("invalid Bazel loadfiles label {spelling:?}"))?;
+            let (package, target) = path
+                .split_once(':')
+                .with_context(|| format!("invalid Bazel loadfiles label {spelling:?}"))?;
+            // The general source-label parser accepts fewer characters in
+            // package and target names than Bazel does. Only use it for the
+            // repository prefix; preserve Bazel's package and target spelling.
+            let repository_label = format!("{prefix}//:_");
+            let label = Label::parse(&repository_label)
+                .map_err(|error| anyhow!("invalid Bazel loadfiles label {spelling:?}: {error}"))?;
+            let valid_path = |path: &str| {
+                path.split('/').all(|component| {
+                    !matches!(component, "" | "." | "..") && !component.contains(':')
+                })
+            };
+            // `--consistent_labels` prints Starlark `Label` strings. Main may
+            // use `//`; legacy non-Bzlmod output uses `@` with the canonical name.
+            anyhow::ensure!(
+                label.has_leading_slashes()
+                    && (label.kind() != RepoKind::Apparent || !loader.bzlmod_enabled)
+                    && (package.is_empty() || valid_path(package))
+                    && valid_path(target)
+                    && (target.ends_with(".bzl") || target.ends_with(".scl")),
+                "invalid Bazel loadfiles label {spelling:?}"
+            );
+            let Some(source) = required
+                .get(label.repo())
+                .and_then(|sources| sources.get(&Path::new(package).join(target)))
+            else {
+                continue;
+            };
+            let observed = context
+                .packages
+                .entry(source.clone())
+                .or_insert_with(|| BazelPackage {
+                    repository: label.repo().to_owned(),
+                    name: package.to_owned(),
+                });
+            anyhow::ensure!(
+                observed.repository == label.repo() && observed.name == package,
+                "conflicting Bazel loadfiles packages for {}: {:?} and {package:?}",
+                source.display(),
+                observed.name
+            );
+        }
+        if let Some(source) = required
+            .values()
+            .flat_map(HashMap::values)
+            .filter(|source| !context.packages.contains_key(*source))
+            .min()
+        {
+            anyhow::bail!(
+                "required Bazel load-context source {} was not loaded by the target packages",
+                source.display()
+            );
+        }
+        Ok(context)
+    }
+
+    fn package<'a>(&'a self, repository: &Repository, path: &Path) -> Option<&'a str> {
+        let package = self.packages.get(path)?;
+        (package.repository == repository.name).then_some(package.name.as_str())
+    }
+}
+
 pub(crate) struct DefaultFileLoader {
     bazel_client: Arc<dyn BazelClient>,
     workspace: PathBuf,
@@ -211,6 +314,7 @@ pub(crate) struct DefaultFileLoader {
     fetch_repo_sender: Sender<Task>,
     bzlmod_enabled: bool,
     repositories: RwLock<HashMap<PathBuf, RepositoryContext>>,
+    bazel_load_context: BazelLoadContext,
     configuration_inputs: RwLock<HashMap<PathBuf, Option<Vec<u8>>>>,
     repository_roots: RwLock<HashSet<PathBuf>>,
     configuration_revision: Option<u64>,
@@ -242,6 +346,7 @@ impl DefaultFileLoader {
             fetch_repo_sender,
             bzlmod_enabled,
             repositories: Default::default(),
+            bazel_load_context: Default::default(),
             configuration_inputs: Default::default(),
             repository_roots: Default::default(),
             configuration_revision: None,
@@ -255,6 +360,23 @@ impl DefaultFileLoader {
         };
         loader.watch_repository(&loader.workspace);
         loader
+    }
+
+    /// Labels must come from a successful Bazel `loadfiles` query.
+    pub(crate) fn with_bazel_load_context(
+        mut self,
+        labels: Vec<String>,
+        sources: &[PathBuf],
+    ) -> anyhow::Result<Self> {
+        self.bazel_load_context = BazelLoadContext::from_labels(&self, labels, sources)?;
+        Ok(self)
+    }
+
+    pub(crate) fn bazel_load_context_paths(&self) -> impl Iterator<Item = &Path> {
+        self.bazel_load_context
+            .packages
+            .keys()
+            .map(PathBuf::as_path)
     }
 
     pub(crate) fn with_context(
@@ -628,6 +750,18 @@ pub(crate) struct ResolvedLabel {
 }
 
 impl DefaultFileLoader {
+    fn package_for_path(
+        &self,
+        system: &dyn ruff_db::system::System,
+        path: &Path,
+        repository: &Repository,
+    ) -> anyhow::Result<PathBuf> {
+        if let Some(package) = self.bazel_load_context.package(repository, path) {
+            return Ok(repository.root.join(package));
+        }
+        package_for_path(system, path, &repository.root)
+    }
+
     fn label_needs_bazel_context(&self, label: &Label, from: &Repository) -> bool {
         // Before configuration arrives, false does not yet mean legacy mode:
         // even an empty apparent name may require a Bzlmod mapping.
@@ -656,15 +790,24 @@ impl DefaultFileLoader {
             return Ok(None);
         }
         let repository = self.resolve_repository(label, &repository)?;
-        let resolved_path =
-            if label.is_relative() && from.api_context() != Some(APIContext::Module) {
-                package_for_path(db.system(), from_path, &repository.root)?
-            } else {
-                // Module-file labels are relative to the module repository root,
-                // including labels in files selected by `include`.
-                repository.root.join(label.package())
-            }
-            .join(label.target());
+        let package = if label.is_relative() && from.api_context() != Some(APIContext::Module) {
+            self.package_for_path(db.system(), from_path, &repository)?
+        } else {
+            // Module-file labels are relative to the module repository root,
+            // including labels in files selected by `include`.
+            repository.root.join(label.package())
+        };
+        let resolved_path = package.join(label.target());
+        if let Some(expected) = self.bazel_load_context.package(&repository, &resolved_path) {
+            anyhow::ensure!(
+                package == repository.root.join(expected),
+                "{} belongs to Bazel package @@{}//{}, not {}",
+                resolved_path.display(),
+                repository.name,
+                expected,
+                package.display()
+            );
+        }
 
         Ok(Some(ResolvedLabel {
             resolved_path,
@@ -1228,12 +1371,12 @@ impl FileLoader for DefaultFileLoader {
 
                 let repository = self.resolve_repository(&label, &repository)?;
                 self.ensure_repository(&repository)?;
-                let root = repository.root;
                 let package = if label.is_relative() {
-                    package_for_path(db.system(), &from_path, &root)?
+                    self.package_for_path(db.system(), &from_path, &repository)?
                 } else {
                     PathBuf::new()
                 };
+                let root = repository.root;
 
                 match err {
                     Some(ParseError::EmptyPackage) => {
@@ -1477,6 +1620,75 @@ pub(crate) mod source_tests {
     use starpls_ide::FilePosition;
 
     use super::DefaultFileLoader;
+
+    #[test]
+    fn bazel_load_context_rejects_unusable_evidence() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("bazel-load-context-evidence");
+        let workspace = root.join("workspace");
+        let external = root.join("external");
+        let loader = |bzlmod_enabled| {
+            let (sender, _) = crossbeam_channel::unbounded();
+            DefaultFileLoader::new(
+                Arc::new(TestBazelClient::default()),
+                workspace.clone(),
+                None,
+                external.clone(),
+                sender,
+                bzlmod_enabled,
+            )
+        };
+        let bzlmod = loader(true);
+        let required = workspace.join("owner/ignored/defs.bzl");
+        let main = super::BazelLoadContext::from_labels(
+            &bzlmod,
+            vec![
+                "//owner:ignored/defs.bzl".to_owned(),
+                "@@//other package:élève`.bzl".to_owned(),
+            ],
+            std::slice::from_ref(&required),
+        )
+        .unwrap();
+        assert_eq!(
+            main.package(&bzlmod.main_repository(), &required),
+            Some("owner")
+        );
+        assert_eq!(main.packages.len(), 1);
+        let legacy = loader(false);
+        let legacy_source = external.join("repo/owner/defs.bzl");
+        let context = super::BazelLoadContext::from_labels(
+            &legacy,
+            vec!["@repo//owner:defs.bzl".to_owned()],
+            std::slice::from_ref(&legacy_source),
+        )
+        .unwrap();
+        assert_eq!(
+            context.package(
+                &legacy.repository_for_path(&legacy_source).unwrap().unwrap(),
+                &legacy_source
+            ),
+            Some("owner")
+        );
+        for labels in [
+            vec![],
+            vec!["@@//other:defs.bzl"],
+            vec!["@repo//owner:defs.bzl"],
+            vec!["@@//owner/defs.bzl"],
+            vec!["@@//owner:../defs.bzl"],
+            vec!["@@//owner:defs.txt"],
+            vec!["@@//owner:ignored/defs.bzl", "@@//owner/ignored:defs.bzl"],
+        ] {
+            assert!(
+                super::BazelLoadContext::from_labels(
+                    &bzlmod,
+                    labels.iter().copied().map(str::to_owned).collect(),
+                    std::slice::from_ref(&required),
+                )
+                .is_err(),
+                "{labels:?}"
+            );
+        }
+    }
 
     #[derive(Default)]
     pub(crate) struct TestBazelClient {

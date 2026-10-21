@@ -315,6 +315,27 @@ impl BazelCLI {
         Ok(self)
     }
 
+    /// Return the canonical labels of Starlark files loaded by these targets' packages.
+    pub fn query_load_context(&self, targets: &[String]) -> anyhow::Result<Vec<String>> {
+        anyhow::ensure!(!targets.is_empty(), "load context requires a Bazel target");
+        let targets = targets
+            .iter()
+            .map(|target| quote_query_target(target))
+            .collect::<anyhow::Result<Vec<_>>>()?
+            .join(" ");
+        let expression = format!("loadfiles(set({targets}))");
+        let output = self.run_command([
+            "query",
+            "--consistent_labels",
+            "--output=label",
+            &expression,
+        ])?;
+        Ok(str::from_utf8(&output)?
+            .lines()
+            .map(str::to_owned)
+            .collect())
+    }
+
     fn run_command<I, S>(&self, args: I) -> anyhow::Result<Vec<u8>>
     where
         I: IntoIterator<Item = S>,
@@ -477,6 +498,27 @@ impl BazelCLI {
         }
         Ok(mappings)
     }
+}
+
+fn quote_query_target(target: &str) -> anyhow::Result<String> {
+    let label = crate::Label::parse(target)
+        .map_err(|error| anyhow!("invalid Bazel load-context target {target:?}: {error}"))?;
+    anyhow::ensure!(
+        label.has_leading_slashes()
+            && label.package().split('/').next_back() != Some("...")
+            && !(target.contains(':') && matches!(label.target(), "all" | "all-targets" | "*")),
+        "Bazel load context requires an explicit target label, got {target:?}"
+    );
+    // Bazel query's quoted words do not support escape sequences. Use the
+    // other delimiter when a label contains one kind of quote.
+    let quote = if !target.contains('\'') {
+        '\''
+    } else if !target.contains('"') {
+        '"'
+    } else {
+        bail!("Bazel load-context target contains both query quote delimiters: {target:?}")
+    };
+    Ok(format!("{quote}{target}{quote}"))
 }
 
 impl BazelClient for BazelCLI {
@@ -983,6 +1025,28 @@ mod tests {
     use super::extension_repository_original_name;
     use super::selected_module_from_graph;
     use super::SelectedModule;
+
+    #[test]
+    fn load_context_targets_cannot_expand_the_query() {
+        for (target, quoted) in [
+            ("//pkg:target", "'//pkg:target'"),
+            ("@@repo+//pkg:foo+bar", "'@@repo+//pkg:foo+bar'"),
+            ("//pkg:foo'bar", "\"//pkg:foo'bar\""),
+        ] {
+            assert_eq!(super::quote_query_target(target).unwrap(), quoted);
+        }
+        for target in [
+            ":target",
+            "//pkg/...",
+            "//pkg:all",
+            "//pkg:all-targets",
+            "//pkg:*",
+            "//pkg:foo'\"bar",
+            "//pkg:target) + //...",
+        ] {
+            assert!(super::quote_query_target(target).is_err(), "{target}");
+        }
+    }
 
     #[cfg(unix)]
     #[test]

@@ -49,6 +49,20 @@ pub(crate) struct CheckCommand {
     #[clap(long, value_name = "PATH")]
     files_from: Option<PathBuf>,
 
+    /// Query the files loaded by TARGET's package. Repeat for more targets in the same Bazel query.
+    /// The query evaluates the target packages and must succeed before checking.
+    #[clap(long, value_name = "TARGET", requires = "required_bazel_load_context")]
+    bazel_load_context: Vec<String>,
+
+    /// Require Bazel package identity for an already selected SOURCE. Repeat for more sources.
+    /// Checking fails if a source is not selected or is absent from the queried load graph.
+    #[clap(
+        long = "require-bazel-load-context",
+        value_name = "SOURCE",
+        requires = "bazel_load_context"
+    )]
+    required_bazel_load_context: Vec<PathBuf>,
+
     /// Read a Bazel source from PHYSICAL and check it at LOGICAL; repeat for more files.
     #[clap(long, value_name = "LOGICAL=PHYSICAL")]
     source_overlay: Vec<SourceOverlay>,
@@ -248,6 +262,171 @@ mod tests {
             .prepare_analysis(loader, &info, Default::default())
             .unwrap();
         Checker::new(analysis, info, paths, &[], loader, receiver, &options).unwrap()
+    }
+
+    #[test]
+    fn bazel_load_context_preserves_repository_and_effective_package() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("checker-bazel-load-context");
+        let workspace = root.join("workspace");
+        let external = root.join("output/external");
+        let defs = "load(':dep.bzl', 'value')\nexported = value\n";
+        for (path, contents) in [
+            (
+                workspace.join("BUILD"),
+                "load('//owner:ignored/defs.bzl', 'exported')\nload('@@other+//owner/ignored:defs.bzl', external_exported = 'exported')\nload(':unselected.bzl', 'value')\nfilegroup(name = 'seed')\n",
+            ),
+            (
+                workspace.join("REPO.bazel"),
+                "ignore_directories(['owner/ignored'])\n",
+            ),
+            (workspace.join("owner/BUILD"), ""),
+            (workspace.join("owner/dep.bzl"), "value = 1\n"),
+            (workspace.join("owner/ignored/BUILD"), ""),
+            (workspace.join("owner/ignored/defs.bzl"), defs),
+            (workspace.join("owner/ignored/dep.bzl"), "value = 'wrong'\n"),
+            (external.join("other+/owner/ignored/BUILD"), ""),
+            (external.join("other+/owner/ignored/defs.bzl"), defs),
+            (external.join("other+/owner/ignored/dep.bzl"), "value = 'external'\n"),
+            (workspace.join("unselected.bzl"), "value = True\n"),
+            (
+                workspace.join("valid.bzl"),
+                "load('//owner:ignored/defs.bzl', root_value = 'exported')\nload('@@other+//owner/ignored:defs.bzl', external_value = 'exported')\nroot_result = root_value  # type: int\nexternal_result = external_value  # type: str\n",
+            ),
+            (
+                workspace.join("invalid.bzl"),
+                "load('//owner/ignored:defs.bzl', 'exported')\n",
+            ),
+        ] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, contents).unwrap();
+        }
+        let required = workspace.join("owner/ignored/defs.bzl");
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        let loader = DefaultFileLoader::new(
+            Arc::new(TestBazelClient::default()),
+            workspace.clone(),
+            None,
+            external.clone(),
+            sender,
+            false,
+        )
+        .with_bazel_load_context(
+            [
+                "@@//owner:ignored/defs.bzl",
+                "@@//owner:dep.bzl",
+                "@@other+//owner/ignored:defs.bzl",
+                "@@other+//owner/ignored:dep.bzl",
+                "@@//:unselected.bzl",
+            ]
+            .map(str::to_owned)
+            .into(),
+            std::slice::from_ref(&required),
+        )
+        .unwrap();
+        let info = starpls_bazel::client::BazelInfo {
+            output_base: root.join("output"),
+            workspace: workspace.clone(),
+            ..Default::default()
+        };
+        let options = CheckCommand {
+            audit_loads: true,
+            output_format: super::OutputFormat::JsonLines,
+            bazel_load_context: vec!["//:seed".to_owned()],
+            required_bazel_load_context: vec![required.clone()],
+            ..Default::default()
+        };
+        let (analysis, loader) = options
+            .prepare_analysis(loader, &info, Default::default())
+            .unwrap();
+        let paths = [
+            required,
+            external.join("other+/owner/ignored/defs.bzl"),
+            workspace.join("valid.bzl"),
+        ]
+        .into_iter()
+        .map(|path| path.to_str().unwrap().to_owned())
+        .collect();
+        let mut checker =
+            Checker::new(analysis, info, paths, &[], loader, receiver, &options).unwrap();
+        assert_eq!(checker.files.len(), 3);
+        assert_eq!(checker.loader.bazel_load_context_paths().count(), 1);
+        let mut diagnostics = Vec::new();
+        let report_path = root.join("report.json");
+        assert_eq!(
+            checker
+                .report_diagnostics_to(Some(&report_path), &mut diagnostics, &mut Vec::new())
+                .unwrap(),
+            ExitCode::SUCCESS,
+            "{}",
+            String::from_utf8_lossy(&diagnostics)
+        );
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+        let dependencies: std::collections::BTreeSet<_> = report["loaded_dependencies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|file| std::path::PathBuf::from(file["path"].as_str().unwrap()))
+            .collect();
+        assert_eq!(
+            dependencies,
+            [
+                workspace.join("owner/dep.bzl"),
+                external.join("other+/owner/ignored/dep.bzl"),
+            ]
+            .into()
+        );
+        checker
+            .load_file(&workspace.join("invalid.bzl"), true, &[], false)
+            .unwrap();
+        diagnostics.clear();
+        assert!(checker
+            .report_diagnostics_to(None, &mut diagnostics, &mut Vec::new())
+            .is_err());
+        assert!(
+            String::from_utf8_lossy(&diagnostics).contains("belongs to Bazel package @@//owner"),
+            "{}",
+            String::from_utf8_lossy(&diagnostics)
+        );
+        let result = Checker::new(
+            checker.analysis,
+            checker.bazel_info,
+            vec![workspace.join("valid.bzl").to_str().unwrap().to_owned()],
+            &[],
+            checker.loader,
+            checker.fetch_repo_receiver,
+            &options,
+        );
+        assert!(
+            result
+                .err()
+                .is_some_and(|error| error.to_string().contains("is not selected for checking")),
+            "a dependency must not satisfy the selected-source requirement"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn bazel_load_context_requires_both_inputs() {
+        let command = <CheckCommand as clap::Args>::augment_args(clap::Command::new("check"));
+        assert!(command
+            .clone()
+            .try_get_matches_from(["check", "--bazel-load-context", "//:seed"])
+            .is_err());
+        assert!(command
+            .clone()
+            .try_get_matches_from(["check", "--require-bazel-load-context", "defs.bzl"])
+            .is_err());
+        assert!(command
+            .try_get_matches_from([
+                "check",
+                "--bazel-load-context",
+                "//:seed",
+                "--require-bazel-load-context",
+                "defs.bzl",
+            ])
+            .is_ok());
     }
 
     #[test]
@@ -2553,6 +2732,13 @@ impl CheckCommand {
         let bazel_client = Arc::new(BazelCLI::default());
         let bazel_cx = BazelContext::new(&*bazel_client)
             .map_err(|err| anyhow!("failed to initialize Bazel context: {}", err))?;
+        let load_context = if self.bazel_load_context.is_empty() {
+            Vec::new()
+        } else {
+            bazel_client
+                .query_load_context(&self.bazel_load_context)
+                .context("cannot determine Bazel load context")?
+        };
         let (fetch_repo_sender, fetch_repo_receiver) = crossbeam_channel::unbounded();
         let loader = DefaultFileLoader::new(
             bazel_client,
@@ -2561,7 +2747,8 @@ impl CheckCommand {
             bazel_cx.info.output_base.join("external"),
             fetch_repo_sender,
             bazel_cx.bzlmod_enabled,
-        );
+        )
+        .with_bazel_load_context(load_context, &self.required_bazel_load_context)?;
         loader.finish_mapping(String::new(), Ok(bazel_cx.main_repo_mapping));
         let (analysis, loader) = self.prepare_analysis(loader, &bazel_cx.info, bazel_cx.rules)?;
 
@@ -3020,6 +3207,19 @@ impl Checker {
                     message: "no implementations were selected; configure a local type interface or select a source file"
                         .to_owned(),
                 });
+            }
+        }
+        let mut required: HashSet<_> = checker.loader.bazel_load_context_paths().collect();
+        if !required.is_empty() {
+            let snapshot = checker.analysis.snapshot();
+            for file in &checker.files {
+                required.remove(snapshot.path(*file));
+            }
+            if let Some(path) = required.into_iter().min() {
+                anyhow::bail!(
+                    "required Bazel load-context source {} is not selected for checking",
+                    path.display()
+                );
             }
         }
         Ok(checker)
