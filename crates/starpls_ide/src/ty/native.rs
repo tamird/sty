@@ -3663,6 +3663,167 @@ def required_with_unknown_flags(flags: Sequence[str]) -> None: ...
     }
 
     #[test]
+    fn loaded_fresh_attribute_dictionaries_preserve_descriptor_facts() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "attributes.bzl",
+            r#"
+def _required():
+    return {"_dep": attr.label(default = "//:dep")}
+helpers = struct(required = _required)
+"#,
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "attributes.bzli",
+            "def _required() -> dict[{\"_dep\": Attribute[Target]}]: ...\n",
+        );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            r#"
+load("attributes.bzl", "helpers")
+def _impl(ctx):
+    return [DefaultInfo()]
+generated = rule(
+    implementation = _impl,
+    attrs = helpers.required() | {"value": attr.string(mandatory = True)},
+)
+generated(name = "ok", value = "ok")
+generated(name = "typo", value = "ok", invented = True)
+generated(name = "bad", value = 42)
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>(),
+            ["unknown-argument", "invalid-argument-type"],
+            "{diagnostics:?}"
+        );
+        analysis.update_file(
+            source,
+            "def _required():\n    return {\"_dep\": attr.string(default = \"wrong type\")}\nhelpers = struct(required = _required)\n".to_owned(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>(),
+            ["invalid-argument-type"],
+            "{diagnostics:?}"
+        );
+        analysis.update_file(
+            source,
+            r#"
+def _required():
+    attrs = {"_dep": attr.label(default = "//:dep")}
+    return attrs
+helpers = struct(required = _required)
+"#
+            .to_owned(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>(),
+            ["invalid-argument-type"],
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn loaded_fresh_attribute_merges_have_independent_mutations() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "attributes.bzl",
+            r#"
+def _attributes():
+    return {"value": attr.string(mandatory = True)}
+def _nested():
+    return {"nested": {"value": "initial"}}
+helpers = struct(attributes = _attributes, nested = _nested)
+"#,
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "attributes.bzli",
+            r#"
+def _attributes() -> dict[{"value": Attribute[str]}]: ...
+def _nested() -> dict[{"nested": object}]: ...
+"#,
+        );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            r#"
+load("attributes.bzl", "helpers")
+def implementation(ctx):
+    return []
+first = helpers.attributes() | {}
+first["value"] = attr.string()
+optional = rule(implementation, attrs = first)
+required = rule(implementation, attrs = helpers.attributes() | {})
+optional(name = "valid")
+required(name = "missing")
+required(name = "valid", value = "present")
+def consume_int(value):
+    # type: (int) -> None
+    pass
+first_nested = struct(**(helpers.nested() | {}))
+first_nested.nested.clear()
+second_nested = struct(**(helpers.nested() | {}))
+consume_int(second_nested.nested["value"])
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>(),
+            ["missing-argument", "invalid-argument-type"],
+            "{diagnostics:?}"
+        );
+        assert!(
+            diagnostics[1].concise_message().to_string().contains("str"),
+            "{:?}",
+            diagnostics[1]
+        );
+    }
+
+    #[test]
     fn bundled_metadata_uses_recursive_native_declarations() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"

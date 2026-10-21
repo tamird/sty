@@ -745,6 +745,25 @@ impl ty_python_semantic::Db for Database {
         })
     }
 
+    fn provided_module_precedes_call(
+        &self,
+        scope: ty_python_core::scope::ScopeId<'_>,
+        callee: &ruff_python_ast::Expr,
+        owner: ProgramFile<'_>,
+    ) -> bool {
+        let caller = scope.program_file(self);
+        if caller == owner
+            || !self.provided_exports_are_frozen(caller)
+            || !self.provided_exports_are_frozen(owner)
+        {
+            return false;
+        }
+        let Some(owner) = self.starlark_file(owner) else {
+            return false;
+        };
+        load::callee_loaded_from(self, scope, callee, owner)
+    }
+
     fn provided_builtin<'db>(
         &'db self,
         file: ProgramFile<'db>,

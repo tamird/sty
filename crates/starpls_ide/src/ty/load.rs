@@ -25,6 +25,7 @@ use ty_python_core::definition::ProvidedBinding;
 use ty_python_core::definition::ProvidedStatement;
 use ty_python_core::global_scope;
 use ty_python_core::place_table;
+use ty_python_core::scope::ScopeId;
 use ty_python_core::use_def_map;
 use ty_python_core::ProgramFile;
 use ty_python_semantic::provided::ProvidedBindingResolution;
@@ -211,6 +212,44 @@ pub(crate) fn binding_names(
         .expect("load binding target belongs to its statement");
     let name = spelling.remote;
     Some((source_file, module_name, name))
+}
+
+/// Resolve only the load that supplied this module-level callee's root binding.
+pub(super) fn callee_loaded_from(
+    db: &Database,
+    scope: ScopeId<'_>,
+    mut callee: &Expr,
+    owner: starpls_common::File,
+) -> bool {
+    if !scope.file_scope_id(db).is_global() {
+        return false;
+    }
+    while let Expr::Attribute(attribute) = callee {
+        callee = &attribute.value;
+    }
+    let Expr::Name(name) = callee else {
+        return false;
+    };
+    let index = ty_python_core::semantic_index(db, scope.program_file(db));
+    let Some(use_id) = index.try_expression_use_id(name.into()) else {
+        return false;
+    };
+    let mut bindings = index
+        .use_def_map(scope.file_scope_id(db))
+        .bindings_at_use(use_id);
+    let Some(definition) = bindings
+        .next()
+        .and_then(|binding| binding.binding.definition())
+    else {
+        return false;
+    };
+    if bindings.next().is_some() {
+        return false;
+    }
+    let Some((caller, module, _)) = binding_names(db, definition) else {
+        return false;
+    };
+    matches!(resolve_dependency(db, caller, &module), LoadResolution::Resolved(file) if file == owner)
 }
 
 /// A load introduces a local binding, but only a declaration or assignment exports it again.
@@ -889,6 +928,34 @@ def unrelated():
             panic!("{help:?}")
         };
         assert_eq!(signature.label, "def compute(value: int) -> int");
+        assert_eq!(*loader.requests.lock().unwrap(), ["defs.bzl"]);
+    }
+
+    #[test]
+    fn loaded_fresh_call_witness_resolves_only_the_callee_binding() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        let owner = fixture.add_file(&mut analysis.db, "defs.bzl", "def make():\n    return {}\n");
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            "load(\"unrelated.bzl\", \"unused\")\nload(\"defs.bzl\", \"make\")\nresult = make()\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        let program = analysis.db.starlark_program_file(caller);
+        let parsed =
+            ruff_db::parsed::parsed_module(&analysis.db, program.python_file(&analysis.db))
+                .load(&analysis.db);
+        let Stmt::Assign(assignment) = parsed.suite().last().unwrap() else {
+            panic!("fixture ends in an assignment")
+        };
+        let call = assignment.value.as_call_expr().unwrap();
+        assert!(ty_python_semantic::Db::provided_module_precedes_call(
+            &analysis.db,
+            ty_python_core::global_scope(&analysis.db, program),
+            &call.func,
+            analysis.db.starlark_program_file(owner),
+        ));
         assert_eq!(*loader.requests.lock().unwrap(), ["defs.bzl"]);
     }
 }
