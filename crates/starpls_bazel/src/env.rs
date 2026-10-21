@@ -216,6 +216,10 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         }
     }
     for class in &mut builtins.r#type {
+        if class.name == "actions" && version >= (9, 0) {
+            complete_action_write_parameters(class, version);
+            continue;
+        }
         if matches!(class.name.as_str(), "repository_ctx" | "module_ctx") {
             refine_execute_environment(class, version >= (8, 0));
             continue;
@@ -269,6 +273,56 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
                     parameter.r#type.push_str("; or dict");
                 }
             }
+        }
+    }
+}
+
+fn complete_action_write_parameters(class: &mut Type, version: (u32, u32)) {
+    let Some(callable) = class
+        .field
+        .iter_mut()
+        .find(|field| field.name == "write")
+        .and_then(|field| field.callable.as_mut())
+    else {
+        return;
+    };
+    // https://github.com/bazelbuild/bazel/commit/34673f3371229fe310b433cf6ade353b9610f9fb
+    // https://github.com/bazelbuild/bazel/commit/2e4abf8b2252512947298300a03750574f050ce6
+    for (name, parameter_type, introduced) in [
+        ("mnemonic", "string; or None", (9, 0)),
+        ("execution_requirements", "dict; or None", (9, 1)),
+    ] {
+        if version >= introduced
+            && !callable
+                .param
+                .iter()
+                .any(|parameter| parameter.name == name)
+        {
+            callable.param.push(Param {
+                name: name.to_owned(),
+                r#type: parameter_type.to_owned(),
+                default_value: "None".to_owned(),
+                ..Default::default()
+            });
+        }
+    }
+    if let Some(index) = callable.param.iter().position(|parameter| {
+        matches!(
+            parameter.name.as_str(),
+            "mnemonic" | "execution_requirements"
+        )
+    }) {
+        if !callable.param[..index]
+            .iter()
+            .any(|parameter| parameter.is_star_arg)
+        {
+            callable.param.insert(
+                index,
+                Param {
+                    is_star_arg: true,
+                    ..Default::default()
+                },
+            );
         }
     }
 }

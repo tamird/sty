@@ -2175,7 +2175,7 @@ fn write_function(
                 (env::normalize_doc(r#type, true) == "dict; or None")
                     .then_some("_starpls_typing.Mapping[_StringKey, _starpls_builtins.str] | None")
             }
-            (CallableKind::Method("actions"), "run" | "run_shell", "execution_requirements") => {
+            (CallableKind::Method("actions"), "run" | "run_shell" | "write", "execution_requirements") => {
                 (env::normalize_doc(r#type, true) == "dict; or None")
                     .then_some("_starpls_typing.Mapping[_ExecutionRequirementKey, _starpls_builtins.str] | None")
             }
@@ -8057,6 +8057,55 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
             for diagnostic in diagnostics {
                 assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
                 assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+            }
+        }
+    }
+
+    #[test]
+    fn bazel_action_api_write_follows_release() {
+        let source = r#"def check(context: ctx[object, object], output: File) -> None:
+    context.actions.write(output, "content", mnemonic="CppModuleMap")
+    context.actions.write(output, context.actions.args(), execution_requirements={"no-cache": "1"})
+"#;
+        for (release, expected) in [
+            ("release 8.4.0", 2),
+            ("release 9.0.0", 1),
+            ("release 9.1.0", 0),
+        ] {
+            let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+                "../../../starpls/src/builtin/builtin.pb"
+            ))
+            .unwrap();
+            env::apply_versioned_signatures(&mut builtins, release);
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let file = analysis
+                .open_document(
+                    Path::new("/actions.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source.into(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), expected, "{release}: {diagnostics:?}");
+            assert!(diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "unknown-argument"));
+            if expected == 0 {
+                analysis.update_file(file, format!("{source}    context.actions.write(output, 'content', False, 'CppModuleMap')\n    context.actions.write(output, context.actions.args(), execution_requirements={{'no-cache': 1}})\n"));
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let ids = diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.id().as_str())
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    ids,
+                    ["too-many-positional-arguments", "invalid-argument-type"]
+                );
             }
         }
     }
