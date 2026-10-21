@@ -6,7 +6,7 @@
 from types import NotImplementedType
 from typing import Collection, TYPE_CHECKING
 from typing_extensions import Never
-from _starpls_allocations import dict as _AllocatedDict
+from _starpls_allocations import _MappingEntries, dict as _AllocatedDict
 
 # Starlark accepts every fallback value. Keep its type without the Python
 # compatibility overloads that erase list and dictionary parameters to Any.
@@ -318,7 +318,7 @@ class set(AbstractSet[_T]):
         """Add elements from the other collections."""
 
 @disjoint_base
-class dict(Mapping[_KT, _VT]):
+class dict(Mapping[_KT, _VT], _MappingEntries[_KT, _VT]):
     @type_check_only
     class _SupportsROr(Protocol[_T_contra, _T_co]):
         @type_check_only
@@ -329,6 +329,9 @@ class dict(Mapping[_KT, _VT]):
     @overload
     @type_check_only
     def __init__(self) -> None: ...
+    @overload
+    @type_check_only
+    def __init__(self, pairs: _MappingEntries[_KT, _VT], /) -> None: ...
     @overload
     @type_check_only
     def __init__(self, pairs: SupportsKeysAndGetItem[_KT, _VT] | Iterable[tuple[_KT, _VT]], /) -> None: ...

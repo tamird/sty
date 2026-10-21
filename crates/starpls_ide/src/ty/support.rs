@@ -689,6 +689,64 @@ element = values.pop()
     }
 
     #[test]
+    fn dictionary_copy_respects_context() {
+        let source = r#"
+def widen(values):
+    # type: (dict[str, int]) -> dict[str | int, int]
+    result = dict(values)  # type: dict[str | int, int]
+    result[1] = "wrong"
+    values[1] = 42
+    return result
+
+def direct(values):
+    # type: (dict[str, int]) -> dict[str | int, int]
+    return dict(values)
+
+def iterable(values):
+    # type: (dict[str, int]) -> dict[str | int, int]
+    return dict(values.items())
+
+def widen_value(values):
+    # type: (dict[str, int]) -> dict[str, int | str]
+    return dict(values)
+
+def alias(values):
+    # type: (dict[str, int]) -> dict[str | int, int]
+    return values
+"#;
+        let (mut analysis, _) = Analysis::new_for_test();
+        let file = analysis
+            .open_document(
+                Path::new("/dictionary_copy.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let start = usize::from(diagnostic.range().unwrap().start());
+                let line_start = source[..start].rfind('\n').map_or(0, |index| index + 1);
+                (
+                    diagnostic.id().as_str(),
+                    source[line_start..].lines().next().unwrap().trim(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            [
+                ("invalid-assignment", "result[1] = \"wrong\""),
+                ("invalid-assignment", "values[1] = 42"),
+                ("invalid-return-type", "return values"),
+            ],
+        );
+    }
+
+    #[test]
     fn empty_lists_have_false_truthiness() {
         let source = r#"
 def inspect(empty, strings, gradual):
