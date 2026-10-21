@@ -6,7 +6,10 @@ package(default_visibility = ["//visibility:public"])
 rust_library(
     name = "sty_lib",
     srcs = glob(["src/**/*.rs"], exclude = ["src/main.rs"]),
-    compile_data = [":src/builtin/builtin.pb"],
+    compile_data = [
+        ":src/builtin/bazel_tools/tools/build_defs/repo/utils.bzli",
+        ":src/builtin/builtin.pb",
+    ],
     crate_name = "sty",
     rustc_env_files = [":generate_rustc_env_file"],
     deps = all_crate_deps() + [
