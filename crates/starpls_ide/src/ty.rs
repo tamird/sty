@@ -132,12 +132,9 @@ fn starlark_program_file(
         default.resolver_environment(db),
         &namespace,
     );
-    let python_file = ruff_db::PythonFile::new_with_source_type(
-        db,
-        source,
-        program.python_version(db),
-        ruff_python_ast::PySourceType::Python,
-    );
+    let python_file = file
+        .source_mode(db)
+        .python_file(db, source, program.python_version(db));
     let kind = if file.is_type_interface(db) {
         ty_python_core::ProgramFileKind::Stub
     } else {
@@ -1068,6 +1065,51 @@ consume(**invalid)
                 >= source.find("consume(**invalid)").unwrap(),
             "{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn bazel_string_literals_preserve_file_byte_identity() {
+        let source = r#"def physical() -> Literal["é"]:
+    return "\303\251"
+
+def raw() -> Literal["\303\251"]:
+    return r"é"
+
+def mixed() -> Literal["a\n\303\251\351"]:
+    return """a
+é\351"""
+
+def commented():
+    # type: () -> Literal["é"]
+    return "\303\251"
+
+def wrong() -> Literal["é"]:
+    return "\351"
+"#;
+        let (analysis, fixture) = Analysis::from_single_file_fixture(source);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert!(
+            usize::from(diagnostics[0].range().unwrap().start())
+                >= source.find("def wrong").unwrap(),
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
+    fn transformed_forward_annotation_is_not_resolved_from_source() {
+        let source = "def consume(value: \"é\"):\n    pass\n";
+        let (analysis, fixture) = Analysis::from_single_file_fixture(source);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-type-form");
     }
 
     #[test]
@@ -2304,5 +2346,18 @@ text(maybe("ok"))
                 assert_eq!(db.starlark_file(program_file), Some(contextual_file));
             }
         }
+        let cquery = starpls_common::File {
+            info: Some(FileInfo::Bazel {
+                api_context: APIContext::Cquery,
+                is_external: false,
+            }),
+            ..file
+        };
+        let cquery_program = db.starlark_program_file(cquery);
+        assert_ne!(default.python_file(db), cquery_program.python_file(db));
+        assert!(std::ptr::eq(
+            starpls_common::parsed_module(db, cquery),
+            ruff_db::parsed::parsed_module(db, cquery_program.python_file(db)),
+        ));
     }
 }

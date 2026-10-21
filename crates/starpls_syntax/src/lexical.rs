@@ -7,9 +7,15 @@ use ruff_text_size::TextSize;
 
 use crate::unescape::unescape_byte_string;
 use crate::unescape::unescape_string;
+use crate::StringMode;
 use crate::SyntaxError;
 
-pub(super) fn validate(source: &str, tokens: &Tokens, errors: &mut dyn FnMut(SyntaxError)) {
+pub(super) fn validate(
+    source: &str,
+    tokens: &Tokens,
+    mode: StringMode,
+    errors: &mut dyn FnMut(SyntaxError),
+) {
     let mut line_start = true;
     let mut previous_end = TextSize::new(0);
     for token in tokens.iter() {
@@ -95,7 +101,7 @@ pub(super) fn validate(source: &str, tokens: &Tokens, errors: &mut dyn FnMut(Syn
                     unescape_string(
                         contents,
                         prefix.contains('r'),
-                        triple,
+                        mode,
                         &mut |range, result| {
                             if let Err(err) = result {
                                 report(range, crate::unescape::error_message(err));

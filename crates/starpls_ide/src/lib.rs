@@ -148,6 +148,12 @@ impl ruff_db::Db for Database {
         } = self;
         files
     }
+    fn string_literal_decoder(
+        &self,
+        namespace: &'static str,
+    ) -> Option<ruff_db::StringLiteralDecoder> {
+        starpls_common::string_literal_decoder(namespace)
+    }
 }
 #[salsa::db]
 impl starpls_common::Db for Database {
@@ -604,11 +610,8 @@ impl AnalysisSnapshot {
         self.query(|db| ty::load::resolve_dependency(db, file, module))
     }
 
-    /// Return source locations without resolving loads.
-    pub fn load_statement_locations(
-        &self,
-        file: File,
-    ) -> Cancellable<Vec<(Box<str>, ruff_text_size::TextRange)>> {
+    /// Return syntactic load edges without resolving their paths.
+    pub fn load_statement_locations(&self, file: File) -> Cancellable<Vec<LoadDependency>> {
         self.query(|db| ty::load::statement_locations(db, file).to_vec())
     }
 

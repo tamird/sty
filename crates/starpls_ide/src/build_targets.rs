@@ -9,6 +9,7 @@ use ruff_python_ast::Stmt;
 use ruff_text_size::Ranged;
 use starpls_syntax::source::expr_range;
 use starpls_syntax::source::string_value;
+use starpls_syntax::StringMode;
 
 pub(crate) fn calls<'a>(
     module: &'a ModModule,
@@ -39,8 +40,9 @@ pub(crate) fn names<'a>(
     call: &'a ExprCall,
     source: &'a str,
     tokens: &'a Tokens,
+    string_mode: StringMode,
 ) -> impl Iterator<Item = Box<str>> + 'a {
-    call.arguments.keywords.iter().filter_map(|keyword| {
+    call.arguments.keywords.iter().filter_map(move |keyword| {
         let Keyword {
             node_index: _,
             range: _,
@@ -58,7 +60,7 @@ pub(crate) fn names<'a>(
         {
             return None;
         }
-        string_value(&source[value.range()]).map(|(value, _)| value)
+        string_value(&source[value.range()], string_mode).map(|(value, _)| value)
     })
 }
 
@@ -70,7 +72,7 @@ mod tests {
     fn retains_literal_names_and_top_level_call_policy() {
         let source = r#"
 rule(name=1, name="first", name="second")
-(rule)(name="\x61")
+(rule)(name="\141")
 rule(name="first")
 rule(name="")
 (rule(name="parenthesized call"))
@@ -88,7 +90,13 @@ if True:
             starpls_common::parsed_module(&analysis.db, fixture.main_file()).load(&analysis.db);
         let targets = super::calls(parsed.syntax(), parsed.tokens())
             .filter_map(|call| {
-                let names = super::names(call, source, parsed.tokens()).collect::<Vec<_>>();
+                let names = super::names(
+                    call,
+                    source,
+                    parsed.tokens(),
+                    fixture.main_file().source_mode(&analysis.db).string_mode(),
+                )
+                .collect::<Vec<_>>();
                 (!names.is_empty()).then(|| (&source[call.range()], names))
             })
             .collect::<Vec<_>>();
@@ -99,7 +107,7 @@ if True:
                     r#"rule(name=1, name="first", name="second")"#,
                     vec!["first".into(), "second".into()]
                 ),
-                (r#"(rule)(name="\x61")"#, vec!["a".into()]),
+                (r#"(rule)(name="\141")"#, vec!["a".into()]),
                 (r#"rule(name="first")"#, vec!["first".into()]),
                 (r#"rule(name="")"#, vec!["".into()]),
             ]

@@ -19,6 +19,7 @@ use ruff_python_parser::UnsupportedSyntaxErrorKind;
 use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 
+use crate::StringMode;
 use crate::SyntaxError;
 
 /// Annotation syntax admitted by the host for this file.
@@ -36,9 +37,10 @@ pub fn validate(
     source: &str,
     parsed: &Parsed<py::ModModule>,
     annotation_mode: AnnotationMode,
+    string_mode: StringMode,
     errors: &mut dyn FnMut(SyntaxError),
 ) -> Vec<NodeIndex> {
-    crate::lexical::validate(source, parsed.tokens(), errors);
+    crate::lexical::validate(source, parsed.tokens(), string_mode, errors);
     let mut validator = Validator {
         tokens: parsed.tokens(),
         errors,
@@ -815,6 +817,7 @@ mod tests {
                 source,
                 &parsed,
                 super::AnnotationMode::Source,
+                crate::StringMode::Standard,
                 &mut |error| errors.push(error),
             );
             assert_eq!(errors.is_empty(), valid, "{source}: {errors:?}");
@@ -848,7 +851,13 @@ mod tests {
                 ruff_python_ast::PySourceType::Python,
             );
             let mut errors = Vec::new();
-            let excluded = super::validate(source, &parsed, mode, &mut |error| errors.push(error));
+            let excluded = super::validate(
+                source,
+                &parsed,
+                mode,
+                crate::StringMode::Standard,
+                &mut |error| errors.push(error),
+            );
             assert_eq!(errors.is_empty(), valid, "{source}: {errors:?}");
             assert_eq!(excluded.is_empty(), valid, "{source}");
         }
@@ -955,6 +964,7 @@ mod tests {
                 source,
                 &parsed,
                 super::AnnotationMode::Interface,
+                crate::StringMode::Standard,
                 &mut |error| errors.push(error),
             );
             assert_eq!(errors.is_empty(), valid, "{source}: {errors:?}");
@@ -976,6 +986,7 @@ mod tests {
             source,
             &parsed,
             super::AnnotationMode::Disabled,
+            crate::StringMode::Standard,
             &mut |error| errors.push(error.message),
         );
         assert!(
@@ -1004,6 +1015,7 @@ mod tests {
             source,
             &parsed,
             super::AnnotationMode::Disabled,
+            crate::StringMode::Standard,
             &mut |error| errors.push(error),
         );
         assert_eq!(errors.len(), 3, "{errors:?}");
@@ -1053,6 +1065,7 @@ mod tests {
                 source,
                 &parsed,
                 super::AnnotationMode::Disabled,
+                crate::StringMode::Standard,
                 &mut |error| errors.push(error.message),
             );
             assert_eq!(errors, expected, "{source}");
@@ -1063,11 +1076,25 @@ mod tests {
 #[cfg(test)]
 mod dialect_tests {
     fn validate_source(source: &str, errors: &mut dyn FnMut(crate::SyntaxError)) {
+        validate_source_with_mode(source, crate::StringMode::Standard, errors);
+    }
+
+    fn validate_source_with_mode(
+        source: &str,
+        mode: crate::StringMode,
+        errors: &mut dyn FnMut(crate::SyntaxError),
+    ) {
         let parsed = ruff_python_parser::parse_unchecked_source(
             source,
             ruff_python_ast::PySourceType::Python,
         );
-        super::validate(source, &parsed, super::AnnotationMode::Disabled, errors);
+        super::validate(
+            source,
+            &parsed,
+            super::AnnotationMode::Disabled,
+            mode,
+            errors,
+        );
     }
 
     #[test]
@@ -1154,7 +1181,7 @@ mod dialect_tests {
             validate_source(source, &mut |error| errors.push(error));
             assert_eq!(errors, [], "{source}");
             assert_eq!(
-                crate::source::string_value(&source[4..])
+                crate::source::string_value(&source[4..], crate::StringMode::Standard)
                     .unwrap()
                     .0
                     .as_ref(),
@@ -1164,6 +1191,39 @@ mod dialect_tests {
         let mut errors = Vec::new();
         validate_source("x = b'é'", &mut |error| errors.push(error));
         assert_eq!(errors, []);
+    }
+
+    #[test]
+    fn bazel_file_string_escapes() {
+        for (source, valid) in [
+            (r#"x = "\177""#, true),
+            (r#"x = "\200""#, true),
+            (r#"x = "\377""#, true),
+            (r#"x = "\400""#, false),
+            (r#"x = "\777""#, false),
+            (r#"x = "\x7f""#, false),
+            (r#"x = "\xE9""#, false),
+            (r#"x = "\u00e9""#, false),
+        ] {
+            let mut errors = Vec::new();
+            validate_source_with_mode(source, crate::StringMode::BazelFile, &mut |error| {
+                errors.push(error)
+            });
+            assert_eq!(errors.is_empty(), valid, "{source}: {errors:?}");
+        }
+    }
+
+    #[test]
+    fn bazel_string_text_consumers_decode_utf8() {
+        for source in [r#""café.bzl""#, r#""caf\303\251.bzl""#] {
+            let (value, prefix) =
+                crate::source::string_value(source, crate::StringMode::BazelFile).unwrap();
+            assert_eq!(&*value, "café.bzl");
+            assert_eq!(prefix, 1);
+        }
+        assert!(
+            crate::source::string_value(r#""caf\351.bzl""#, crate::StringMode::BazelFile).is_none()
+        );
     }
 
     #[test]

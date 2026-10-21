@@ -413,14 +413,17 @@ fn string_context(
             if !sema.is_load_stmt(file, call) {
                 return None;
             }
-            Some(match string_value(&source[token.range()]) {
-                Some((text, offset)) => StringContext::LoadModule {
-                    file_id: file,
-                    text,
-                    body_start: TextSize::from(u32::from(token.start())) + TextSize::from(offset),
+            Some(
+                match string_value(&source[token.range()], file.source_mode(db).string_mode()) {
+                    Some((text, offset)) => StringContext::LoadModule {
+                        file_id: file,
+                        text,
+                        body_start: TextSize::from(u32::from(token.start()))
+                            + TextSize::from(offset),
+                    },
+                    None => StringContext::Unavailable,
                 },
-                None => StringContext::Unavailable,
-            })
+            )
         }
         Selection::LoadItem { call, item: _ } => Some(match sema.resolve_load_stmt(file, call) {
             Some(loaded_file) => StringContext::LoadItem { loaded_file },
@@ -450,7 +453,8 @@ fn string_context(
                     });
                 }
             }
-            let (text, _) = string_value(&source[token.range()])?;
+            let (text, _) =
+                string_value(&source[token.range()], file.source_mode(db).string_mode())?;
             if text.starts_with("//") || text.starts_with(':') {
                 Some(StringContext::Label {
                     file_id: file,

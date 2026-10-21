@@ -1174,6 +1174,26 @@ mod tests {
     }
 
     #[test]
+    fn non_utf8_load_paths_are_reported_as_incomplete() {
+        for audit in [false, true] {
+            let mut checker = local_checker(
+                &format!("checker-non-utf8-load-{audit}"),
+                &[("BUILD", "load(\"caf\\351.bzl\", \"value\")\n")],
+                audit,
+            );
+            let report_path = checker.bazel_info.workspace.join("coverage.json");
+            assert!(checker.report_diagnostics(Some(&report_path)).is_err());
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+            assert_eq!(report["complete"], false, "{report}");
+            let loads = report["unresolved_loads"].as_array().unwrap();
+            assert_eq!(loads.len(), 1, "{report}");
+            assert_eq!(loads[0]["module"], "\"caf\\351.bzl\"");
+            assert!(loads[0]["message"].as_str().unwrap().contains("UTF-8"));
+        }
+    }
+
+    #[test]
     fn demanded_transitive_failures_survive_cached_queries() {
         let (mut checker, client, external) = fetch_checker("checker-demanded-failure", true);
         client.fetch_files.lock().unwrap().insert(
@@ -3049,20 +3069,18 @@ impl Checker {
             let dependencies = match self.load_scope {
                 LoadScope::Transitive => snapshot.load_dependencies(file)?,
                 LoadScope::Requested => {
-                    let Some(modules) = requests.get(&file) else {
-                        continue;
-                    };
+                    let modules = requests.get(&file);
                     let mut dependencies = Vec::new();
-                    for (module, range) in snapshot.load_statement_locations(file)? {
-                        if !modules.contains(module.as_ref()) {
-                            continue;
+                    for mut edge in snapshot.load_statement_locations(file)? {
+                        if edge.resolution == LoadResolution::Pending {
+                            if !modules
+                                .is_some_and(|modules| modules.contains(edge.module.as_ref()))
+                            {
+                                continue;
+                            }
+                            edge.resolution = snapshot.resolve_load(file, &edge.module)?;
                         }
-                        let resolution = snapshot.resolve_load(file, &module)?;
-                        dependencies.push(LoadDependency {
-                            module,
-                            range,
-                            resolution,
-                        });
+                        dependencies.push(edge);
                     }
                     dependencies
                 }

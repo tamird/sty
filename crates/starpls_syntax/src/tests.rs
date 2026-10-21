@@ -16,6 +16,7 @@ fn check(input: &str, expected: ExpectFile) {
         input,
         &parsed,
         crate::AnnotationMode::Disabled,
+        crate::StringMode::Standard,
         &mut |error| errors.push(error),
     );
     let comments =

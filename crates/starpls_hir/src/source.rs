@@ -14,6 +14,7 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use starpls_common::Diagnostic;
 use starpls_common::File;
+use starpls_common::SourceMode;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::source::parameter_range;
 use starpls_syntax::source::string_value;
@@ -73,39 +74,42 @@ struct SourceInfo {
 }
 
 fn source_info(db: &dyn Db, file: File) -> &SourceInfo {
-    match file.annotation_mode(db) {
-        starpls_syntax::AnnotationMode::Disabled => source_info_disabled(db, file.source),
-        starpls_syntax::AnnotationMode::Source => source_info_source(db, file.source),
-        starpls_syntax::AnnotationMode::Interface => source_info_interface(db, file.source),
+    match file.source_mode(db) {
+        SourceMode::Standard => source_info_standard(db, file.source),
+        SourceMode::BazelFile => source_info_bazel_file(db, file.source),
+        SourceMode::BazelSource => source_info_source(db, file.source),
+        SourceMode::BazelInterface => source_info_interface(db, file.source),
     }
 }
 
 // Keep source metadata on the same stable File keys as syntax metadata.
 #[salsa::tracked(returns(ref))]
-fn source_info_disabled(db: &dyn Db, source: ruff_db::files::File) -> SourceInfo {
-    source_info_impl(db, source, starpls_syntax::AnnotationMode::Disabled)
+fn source_info_standard(db: &dyn Db, source: ruff_db::files::File) -> SourceInfo {
+    source_info_impl(db, source, SourceMode::Standard)
+}
+
+#[salsa::tracked(returns(ref))]
+fn source_info_bazel_file(db: &dyn Db, source: ruff_db::files::File) -> SourceInfo {
+    source_info_impl(db, source, SourceMode::BazelFile)
 }
 
 #[salsa::tracked(returns(ref))]
 fn source_info_source(db: &dyn Db, source: ruff_db::files::File) -> SourceInfo {
-    source_info_impl(db, source, starpls_syntax::AnnotationMode::Source)
+    source_info_impl(db, source, SourceMode::BazelSource)
 }
 
 #[salsa::tracked(returns(ref))]
 fn source_info_interface(db: &dyn Db, source: ruff_db::files::File) -> SourceInfo {
-    source_info_impl(db, source, starpls_syntax::AnnotationMode::Interface)
+    source_info_impl(db, source, SourceMode::BazelInterface)
 }
 
-fn source_info_impl(
-    db: &dyn Db,
-    file: ruff_db::files::File,
-    mode: starpls_syntax::AnnotationMode,
-) -> SourceInfo {
+fn source_info_impl(db: &dyn Db, file: ruff_db::files::File, mode: SourceMode) -> SourceInfo {
     let source = ruff_db::source::source_text(db, file);
-    let parsed = starpls_common::parsed_module(db, file).load(db);
+    let parsed = starpls_common::parsed_module_for_mode(db, file, mode).load(db);
     let syntax = starpls_common::syntax_info_for_mode(db, file, mode);
     let mut visitor = SourceVisitor {
         source: &source,
+        string_mode: mode.string_mode(),
         tokens: parsed.tokens(),
         comments: &syntax.comments,
         excluded: syntax.excluded.iter().copied().collect(),
@@ -141,6 +145,7 @@ fn source_info_impl(
 
 struct SourceVisitor<'a> {
     source: &'a str,
+    string_mode: starpls_syntax::StringMode,
     tokens: &'a Tokens,
     comments: &'a [TypeComment],
     excluded: FxHashSet<NodeIndex>,
@@ -273,12 +278,9 @@ impl<'a> SourceVisitor<'a> {
                         .as_name_expr()
                         .is_some_and(|name| name.id == "load")
                     {
-                        if let Some(module) = call
-                            .arguments
-                            .args
-                            .first()
-                            .and_then(|module| string_value(&self.source[module.range()]))
-                        {
+                        if let Some(module) = call.arguments.args.first().and_then(|module| {
+                            string_value(&self.source[module.range()], self.string_mode)
+                        }) {
                             self.info.loads.insert(call.node_index().load(), module.0);
                         }
                         return;

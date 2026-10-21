@@ -188,7 +188,8 @@ pub(crate) fn hover(
                 ArgOrKeyword::Arg(expr) => (expr.into(), expr),
                 ArgOrKeyword::Keyword(keyword) => (keyword.into(), &keyword.value),
             };
-            let (name, _) = string_value(&source[value.range()])?;
+            let (name, _) =
+                string_value(&source[value.range()], file.source_mode(db).string_mode())?;
             let index = ty_python_core::semantic_index(db, model.program_file());
             let [definition] = index.try_definitions(target)? else {
                 return None;
@@ -294,7 +295,11 @@ fn module_doc(sema: &Source<'_>, file: File) -> Option<Box<str>> {
     {
         return None;
     }
-    string_value(&source[stmt.value.range()]).map(|(doc, _)| doc)
+    string_value(
+        &source[stmt.value.range()],
+        file.source_mode(sema.db).string_mode(),
+    )
+    .map(|(doc, _)| doc)
 }
 
 pub(crate) fn is_function_type(ty: Type<'_>) -> bool {

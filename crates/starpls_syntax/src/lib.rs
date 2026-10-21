@@ -7,6 +7,7 @@ pub use crate::parser::ParseTree;
 pub use crate::parser::SyntaxError;
 pub use crate::parser::TypeComment;
 pub use crate::syntax_kind::SyntaxKind;
+pub use crate::unescape::StringMode;
 pub use crate::validation::supports_expr;
 pub use crate::validation::validate;
 pub use crate::validation::AnnotationMode;

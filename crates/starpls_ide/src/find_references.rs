@@ -523,6 +523,7 @@ pub(crate) fn rename(
     candidates: &[File],
     new_name: Option<&str>,
 ) -> anyhow::Result<Option<Rename>> {
+    let file = pos.file_id;
     let Some(mut search) = select(db, pos) else {
         return Ok(None);
     };
@@ -534,6 +535,7 @@ pub(crate) fn rename(
             name,
             &parsed,
             starpls_syntax::AnnotationMode::Source,
+            file.source_mode(db).string_mode(),
             &mut |error| errors.push(error),
         );
         let valid = matches!(parsed.suite().as_slice(), [Stmt::Expr(statement)] if matches!(statement.value.as_ref(), Expr::Name(identifier) if identifier.id == name));
@@ -924,7 +926,7 @@ mod tests {
         }
         analysis.update_file(
             caller,
-            r#"load("defs.bzl", alias="e\x63ho")
+            r#"load("defs.bzl", alias="e\143ho")
 alias(1)
 "#
             .into(),

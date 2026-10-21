@@ -122,7 +122,13 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
     let targets =
         crate::build_targets::calls(parsed.syntax(), parsed.tokens()).filter_map(|call| {
             let range = crate::util::text_range(call.range());
-            let name = crate::build_targets::names(call, &source, parsed.tokens()).next()?;
+            let name = crate::build_targets::names(
+                call,
+                &source,
+                parsed.tokens(),
+                file.source_mode(db).string_mode(),
+            )
+            .next()?;
             Some(DocumentSymbol {
                 name: format!(":{}", name),
                 detail: None,

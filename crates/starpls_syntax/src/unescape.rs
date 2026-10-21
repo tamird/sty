@@ -4,6 +4,14 @@ use std::str::Chars;
 #[cfg(test)]
 mod tests;
 
+/// Interpretation of string literals in a source file.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StringMode {
+    Standard,
+    /// Bazel parses file bytes as Latin-1 before interpreting escapes.
+    BazelFile,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum EscapeError {
     /// Escaped `\` character without continuation.
@@ -12,7 +20,7 @@ pub enum EscapeError {
     InvalidEscape,
 
     // Octal escape-related errors.
-    /// Value of octal escape is greater than 127 for normal strings, or 255 for byte strings.
+    /// Value of an octal escape exceeds the active string mode's maximum.
     InvalidOctalEscape,
 
     // Hexadecimal escape-related errors.
@@ -36,7 +44,7 @@ pub enum EscapeError {
     OutOfRangeUnicodeEscape,
 }
 
-pub fn unescape_string<F>(input: &str, raw: bool, _triple_quoted: bool, callback: &mut F)
+pub(super) fn unescape_string<F>(input: &str, raw: bool, mode: StringMode, callback: &mut F)
 where
     F: FnMut(Range<usize>, Result<char, EscapeError>),
 {
@@ -45,7 +53,31 @@ where
     // Iterate over the input character by character, processing escape sequences as we see them.
     while let Some(c) = chars.next() {
         let start = input.len() - chars.as_str().len() - c.len_utf8();
+        if mode == StringMode::BazelFile && c != '\\' {
+            emit_bazel_source_char(c, start..input.len() - chars.as_str().len(), callback);
+            continue;
+        }
         let res = match c {
+            '\\' if raw && mode == StringMode::BazelFile => match chars.next() {
+                Some(c) => {
+                    callback(start..start + 1, Ok('\\'));
+                    let c = if c == '\r' {
+                        if chars.clone().next() == Some('\n') {
+                            chars.next();
+                        }
+                        '\n'
+                    } else {
+                        c
+                    };
+                    emit_bazel_source_char(
+                        c,
+                        start + 1..input.len() - chars.as_str().len(),
+                        callback,
+                    );
+                    continue;
+                }
+                None => Err(EscapeError::LoneSlash),
+            },
             '\\' if raw => match chars.next() {
                 Some(c @ ('"' | '\'')) => Ok(c),
                 Some(c) => {
@@ -55,7 +87,7 @@ where
                 }
                 None => Err(EscapeError::LoneSlash),
             },
-            '\\' => match scan_string_escape(&mut chars) {
+            '\\' => match scan_string_escape(&mut chars, mode) {
                 Ok(Some(c)) => Ok(c),
                 Ok(None) => continue,
                 Err(err) => Err(err),
@@ -64,6 +96,20 @@ where
         };
         let end = input.len() - chars.as_str().len();
         callback(start..end, res);
+    }
+}
+
+fn emit_bazel_source_char<F>(c: char, range: Range<usize>, callback: &mut F)
+where
+    F: FnMut(Range<usize>, Result<char, EscapeError>),
+{
+    if c.is_ascii() {
+        callback(range, Ok(c));
+        return;
+    }
+    let mut bytes = [0; 4];
+    for byte in c.encode_utf8(&mut bytes).as_bytes() {
+        callback(range.clone(), Ok(char::from(*byte)));
     }
 }
 
@@ -87,7 +133,10 @@ where
     }
 }
 
-fn scan_string_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError> {
+fn scan_string_escape(
+    chars: &mut Chars<'_>,
+    mode: StringMode,
+) -> Result<Option<char>, EscapeError> {
     let c = match chars.next().ok_or(EscapeError::LoneSlash)? {
         // Traditional escape sequences.
         // Taken from https://github.com/bazelbuild/starlark/blob/master/spec.md#string-escapes.
@@ -105,20 +154,22 @@ fn scan_string_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError
         '"' => '"',
         '\'' => '\'',
         '\n' => return Ok(None), // escaped newlines are ignored
-        '\r' if chars.clone().next() == Some('\n') => {
-            chars.next();
+        '\r' if mode == StringMode::BazelFile || chars.clone().next() == Some('\n') => {
+            if chars.clone().next() == Some('\n') {
+                chars.next();
+            }
             return Ok(None);
         }
 
         // octal escapes immediately begin with digits
         c @ '0'..='7' => {
-            scan_string_octal_escape(chars, c.to_digit(8).expect("invalid octal digit"))?
+            scan_string_octal_escape(chars, c.to_digit(8).expect("invalid octal digit"), mode)?
         }
 
         // hexadecimal escapes start with `x`
-        'x' => scan_string_hexadecimal_escape(chars)?, // hexadecimal escapes start with `x`
+        'x' if mode == StringMode::Standard => scan_string_hexadecimal_escape(chars)?,
 
-        'u' | 'U' => scan_unicode_escape(chars)?, // unicode escapes start with either `u` or `U`
+        'u' | 'U' if mode == StringMode::Standard => scan_unicode_escape(chars)?,
 
         _ => return Err(EscapeError::InvalidEscape),
     };
@@ -190,9 +241,14 @@ fn scan_byte_string_escape<F>(
 fn scan_string_octal_escape(
     chars: &mut Chars<'_>,
     initial_value: u32,
+    mode: StringMode,
 ) -> Result<char, EscapeError> {
     let value = scan_octal_escape(chars, initial_value);
-    if value > 127 {
+    let max = match mode {
+        StringMode::Standard => 127,
+        StringMode::BazelFile => 255,
+    };
+    if value > max {
         Err(EscapeError::InvalidOctalEscape)
     } else {
         Ok(char::from_u32(value).expect("invalid char value"))

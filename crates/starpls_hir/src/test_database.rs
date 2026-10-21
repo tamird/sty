@@ -52,6 +52,12 @@ impl ruff_db::Db for TestDatabase {
     fn files(&self) -> &ruff_db::files::Files {
         &self.files
     }
+    fn string_literal_decoder(
+        &self,
+        namespace: &'static str,
+    ) -> Option<ruff_db::StringLiteralDecoder> {
+        starpls_common::string_literal_decoder(namespace)
+    }
 }
 #[salsa::db]
 impl starpls_common::Db for TestDatabase {

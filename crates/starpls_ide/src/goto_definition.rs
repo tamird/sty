@@ -104,7 +104,10 @@ impl<'db> GotoDefinitionHandler<'db> {
             Selection::String(expr) => {
                 // The node must be admitted by the Starlark frontend.
                 model.scope(expr.into())?;
-                let (value, _) = string_value(&source[expr.range()])?;
+                let (value, _) = string_value(
+                    &source[expr.range()],
+                    file.source_mode(sema.db).string_mode(),
+                )?;
                 self.string_location(&value)
             }
             Selection::Definition(_) => None,
@@ -240,8 +243,13 @@ impl<'db> GotoDefinitionHandler<'db> {
                 let parsed = starpls_common::parsed_module(sema.db, build_file).load(sema.db);
                 let range = crate::build_targets::calls(parsed.syntax(), parsed.tokens())
                     .find(|call| {
-                        crate::build_targets::names(call, &source, parsed.tokens())
-                            .any(|name| *name == target)
+                        crate::build_targets::names(
+                            call,
+                            &source,
+                            parsed.tokens(),
+                            build_file.source_mode(sema.db).string_mode(),
+                        )
+                        .any(|name| *name == target)
                     })
                     .map(|call| text_range(call.range()))
                     .unwrap_or_default();

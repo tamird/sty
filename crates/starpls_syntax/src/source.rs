@@ -12,6 +12,8 @@ use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 use ruff_text_size::TextSize;
 
+use crate::StringMode;
+
 /// A suite includes trailing comments and whitespace up to its dedent. Missing
 /// colons have no suite, even if Python's recovery supplied body statements.
 pub fn suite_range(
@@ -69,9 +71,22 @@ pub fn expr_range(expr: &Expr, parent: AnyNodeRef<'_>, tokens: &Tokens) -> TextR
         .unwrap_or_else(|| expr.range())
 }
 
-/// Decode Starlark strings from their original token, retaining the body offset.
-/// Starlark's raw escapes and byte rules differ from Python's decoded values.
-pub fn string_value(text: &str) -> Option<(Box<str>, u32)> {
+/// Decodes a source token for a text consumer, such as a path or documentation.
+/// Invalid UTF-8 in Bazel's byte-valued strings cannot name a UTF-8 text value.
+pub fn string_value(text: &str, mode: StringMode) -> Option<(Box<str>, u32)> {
+    let DecodedString::Text { value, prefix } = decode_string_value(text, mode)? else {
+        return None;
+    };
+    Some((value, prefix))
+}
+
+pub enum DecodedString {
+    Text { value: Box<str>, prefix: u32 },
+    NonUtf8,
+}
+
+/// Distinguishes a valid byte-valued string from an invalid source token.
+pub fn decode_string_value(text: &str, mode: StringMode) -> Option<DecodedString> {
     let mut cursor = Cursor::new(text);
     let mut is_raw = false;
     let mut is_bytes = false;
@@ -138,19 +153,39 @@ pub fn string_value(text: &str) -> Option<(Box<str>, u32)> {
     crate::unescape::unescape_string(
         &cursor.text()[..cursor.text().len() - suffix.len()],
         is_raw,
-        suffix.len() == 3,
+        mode,
         &mut |_, res| match res {
             Ok(c) => s.push(c),
             Err(_) => ok = false,
         },
     );
 
-    ok.then(|| {
-        (
-            s.into_boxed_str(),
-            (text.len() - cursor.text().len()) as u32,
-        )
+    if !ok {
+        return None;
+    }
+    let value = match mode {
+        StringMode::Standard => s,
+        StringMode::BazelFile if s.is_ascii() => s,
+        StringMode::BazelFile => {
+            let bytes = s
+                .chars()
+                .map(|c| u8::try_from(u32::from(c)).expect("Bazel string decoder emits bytes"))
+                .collect();
+            let Ok(value) = String::from_utf8(bytes) else {
+                return Some(DecodedString::NonUtf8);
+            };
+            value
+        }
+    };
+    Some(DecodedString::Text {
+        value: value.into_boxed_str(),
+        prefix: (text.len() - cursor.text().len()) as u32,
     })
+}
+
+/// Bazel reads source-file bytes as Latin-1 before interpreting escapes.
+pub fn bazel_string_source(source: &str) -> Option<Box<str>> {
+    (!source.is_ascii()).then(|| source.bytes().map(char::from).collect())
 }
 
 struct Cursor<'a> {

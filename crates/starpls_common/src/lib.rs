@@ -23,6 +23,57 @@ pub enum Dialect {
     Bazel,
 }
 
+/// The grammar and literal interpretation used for source metadata.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceMode {
+    Standard,
+    BazelFile,
+    BazelSource,
+    BazelInterface,
+}
+
+impl SourceMode {
+    pub fn annotation_mode(self) -> starpls_syntax::AnnotationMode {
+        match self {
+            Self::Standard | Self::BazelFile => starpls_syntax::AnnotationMode::Disabled,
+            Self::BazelSource => starpls_syntax::AnnotationMode::Source,
+            Self::BazelInterface => starpls_syntax::AnnotationMode::Interface,
+        }
+    }
+
+    pub fn string_mode(self) -> starpls_syntax::StringMode {
+        match self {
+            Self::Standard => starpls_syntax::StringMode::Standard,
+            Self::BazelFile | Self::BazelSource | Self::BazelInterface => {
+                starpls_syntax::StringMode::BazelFile
+            }
+        }
+    }
+
+    pub fn python_file<'db>(
+        self,
+        db: &'db dyn Db,
+        source: ruff_db::files::File,
+        version: ruff_python_ast::PythonVersion,
+    ) -> ruff_db::PythonFile<'db> {
+        let namespace = (self.string_mode() == starpls_syntax::StringMode::BazelFile)
+            .then_some(BAZEL_STRING_NAMESPACE);
+        ruff_db::PythonFile::new_with_parse_options(
+            db,
+            source,
+            version,
+            ruff_python_ast::PySourceType::Python,
+            namespace,
+        )
+    }
+}
+
+const BAZEL_STRING_NAMESPACE: &str = "starpls:bazel-file-bytes";
+
+pub fn string_literal_decoder(namespace: &'static str) -> Option<ruff_db::StringLiteralDecoder> {
+    (namespace == BAZEL_STRING_NAMESPACE).then_some(starpls_syntax::source::bazel_string_source)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LoadItemCandidateKind {
     Directory,
@@ -175,6 +226,27 @@ impl File {
         }
     }
 
+    pub fn source_mode(self, db: &dyn Db) -> SourceMode {
+        match self.annotation_mode(db) {
+            starpls_syntax::AnnotationMode::Source => SourceMode::BazelSource,
+            starpls_syntax::AnnotationMode::Interface => SourceMode::BazelInterface,
+            starpls_syntax::AnnotationMode::Disabled => {
+                if self.dialect == Dialect::Bazel
+                    && self.api_context() != Some(APIContext::Cquery)
+                    && !self.source.path(db).as_system_path().is_some_and(|path| {
+                        path.as_std_path()
+                            .extension()
+                            .is_some_and(|extension| extension == "scl")
+                    })
+                {
+                    SourceMode::BazelFile
+                } else {
+                    SourceMode::Standard
+                }
+            }
+        }
+    }
+
     pub fn is_external(self) -> Option<bool> {
         let Self {
             source: _,
@@ -246,31 +318,30 @@ pub const PARSER_VERSION: ruff_python_ast::PythonVersion =
     ruff_python_ast::PythonVersion::latest_ty();
 
 /// The canonical Python-shaped parse. Starlark validation is applied separately.
-pub fn parsed_module(
+pub fn parsed_module(db: &dyn Db, file: File) -> &ruff_db::parsed::ParsedModule {
+    parsed_module_for_mode(db, file.source, file.source_mode(db))
+}
+
+pub fn parsed_module_for_mode(
     db: &dyn Db,
-    file: impl Into<ruff_db::files::File>,
+    source: ruff_db::files::File,
+    mode: SourceMode,
 ) -> &ruff_db::parsed::ParsedModule {
-    let file = ruff_db::PythonFile::new_with_source_type(
-        db,
-        file.into(),
-        PARSER_VERSION,
-        ruff_python_ast::PySourceType::Python,
-    );
-    ruff_db::parsed::parsed_module(db, file)
+    ruff_db::parsed::parsed_module(db, mode.python_file(db, source, PARSER_VERSION))
 }
 
 /// Starlark validation and type comments for the canonical parsed revision.
 pub fn syntax_info(db: &dyn Db, file: File) -> &[starpls_syntax::TypeComment] {
-    &syntax_info_for_mode(db, file.source, file.annotation_mode(db)).comments
+    &syntax_info_for_mode(db, file.source, file.source_mode(db)).comments
 }
 
 /// Unsupported subtrees from the same canonical validation result as syntax diagnostics.
 pub fn syntax_exclusions(db: &dyn Db, file: File) -> &[ruff_python_ast::NodeIndex] {
-    &syntax_info_for_mode(db, file.source, file.annotation_mode(db)).excluded
+    &syntax_info_for_mode(db, file.source, file.source_mode(db)).excluded
 }
 
 pub fn syntax_diagnostics(db: &dyn Db, file: File) -> &[Diagnostic] {
-    &syntax_info_for_mode(db, file.source, file.annotation_mode(db)).diagnostics
+    &syntax_info_for_mode(db, file.source, file.source_mode(db)).diagnostics
 }
 
 // Semantic annotation callbacks read this query during fixpoint inference,
@@ -282,41 +353,43 @@ pub struct SyntaxInfo {
     diagnostics: Box<[Diagnostic]>,
 }
 
-/// Uses the physical source as the query key while preserving annotation mode.
+/// Uses the physical source as the query key while preserving source interpretation.
 pub fn syntax_info_for_mode(
     db: &dyn Db,
     source: ruff_db::files::File,
-    mode: starpls_syntax::AnnotationMode,
+    mode: SourceMode,
 ) -> &SyntaxInfo {
     match mode {
-        starpls_syntax::AnnotationMode::Disabled => syntax_info_disabled(db, source),
-        starpls_syntax::AnnotationMode::Source => syntax_info_source(db, source),
-        starpls_syntax::AnnotationMode::Interface => syntax_info_interface(db, source),
+        SourceMode::Standard => syntax_info_standard(db, source),
+        SourceMode::BazelFile => syntax_info_bazel_file(db, source),
+        SourceMode::BazelSource => syntax_info_source(db, source),
+        SourceMode::BazelInterface => syntax_info_interface(db, source),
     }
 }
 
 // Separate entries keep the memo on the source File. A synthesized (File, mode)
 // key can be reclaimed while validation temporarily queries other files.
 #[salsa::tracked(returns(ref))]
-fn syntax_info_disabled(db: &dyn Db, source: ruff_db::files::File) -> SyntaxInfo {
-    syntax_info_impl(db, source, starpls_syntax::AnnotationMode::Disabled)
+fn syntax_info_standard(db: &dyn Db, source: ruff_db::files::File) -> SyntaxInfo {
+    syntax_info_impl(db, source, SourceMode::Standard)
+}
+
+#[salsa::tracked(returns(ref))]
+fn syntax_info_bazel_file(db: &dyn Db, source: ruff_db::files::File) -> SyntaxInfo {
+    syntax_info_impl(db, source, SourceMode::BazelFile)
 }
 
 #[salsa::tracked(returns(ref))]
 fn syntax_info_source(db: &dyn Db, source: ruff_db::files::File) -> SyntaxInfo {
-    syntax_info_impl(db, source, starpls_syntax::AnnotationMode::Source)
+    syntax_info_impl(db, source, SourceMode::BazelSource)
 }
 
 #[salsa::tracked(returns(ref))]
 fn syntax_info_interface(db: &dyn Db, source: ruff_db::files::File) -> SyntaxInfo {
-    syntax_info_impl(db, source, starpls_syntax::AnnotationMode::Interface)
+    syntax_info_impl(db, source, SourceMode::BazelInterface)
 }
 
-fn syntax_info_impl(
-    db: &dyn Db,
-    file: ruff_db::files::File,
-    mode: starpls_syntax::AnnotationMode,
-) -> SyntaxInfo {
+fn syntax_info_impl(db: &dyn Db, file: ruff_db::files::File, mode: SourceMode) -> SyntaxInfo {
     let contents = ruff_db::source::source_text(db, file);
     let mut diagnostics = Vec::new();
     if let Some(error) = contents.read_error() {
@@ -329,7 +402,7 @@ fn syntax_info_impl(
             [],
         ));
     }
-    let parsed = parsed_module(db, file).load(db);
+    let parsed = parsed_module_for_mode(db, file, mode).load(db);
     let mut errors = |err: starpls_syntax::SyntaxError| {
         diagnostics.push(diagnostic(
             file,
@@ -340,7 +413,13 @@ fn syntax_info_impl(
             [],
         ));
     };
-    let excluded = starpls_syntax::validate(&contents, &parsed, mode, &mut errors);
+    let excluded = starpls_syntax::validate(
+        &contents,
+        &parsed,
+        mode.annotation_mode(),
+        mode.string_mode(),
+        &mut errors,
+    );
     let comments = starpls_syntax::parse_type_comments(&contents, parsed.tokens(), &mut errors);
     SyntaxInfo {
         comments,

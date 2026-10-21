@@ -10,7 +10,7 @@ use super::*;
 fn test_unescape_string() {
     fn check(input: &str, raw: bool, expect: Expect) {
         let mut actual = String::new();
-        unescape_string(input, raw, false, &mut |range, res| {
+        unescape_string(input, raw, StringMode::Standard, &mut |range, res| {
             write!(&mut actual, "{:?} ", range).unwrap();
             match res {
                 Ok(c) => {

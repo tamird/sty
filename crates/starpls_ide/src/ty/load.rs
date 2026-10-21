@@ -15,7 +15,10 @@ use ruff_text_size::TextSize;
 use rustc_hash::FxHashMap;
 use starpls_common::Db;
 use starpls_hir::Db as _;
+use starpls_syntax::source::decode_string_value;
 use starpls_syntax::source::string_value;
+use starpls_syntax::source::DecodedString;
+use starpls_syntax::StringMode;
 use ty_python_core::definition::Definition;
 use ty_python_core::definition::DefinitionKind;
 use ty_python_core::definition::ProvidedBinding;
@@ -38,7 +41,7 @@ pub(crate) struct LoadSpelling {
     pub(crate) plain: bool,
 }
 
-fn spellings(call: &ExprCall, source: &str) -> Vec<LoadSpelling> {
+fn spellings(call: &ExprCall, source: &str, string_mode: StringMode) -> Vec<LoadSpelling> {
     call.arguments
         .iter_source_order()
         .skip(1)
@@ -52,7 +55,7 @@ fn spellings(call: &ExprCall, source: &str) -> Vec<LoadSpelling> {
                 ),
             };
             let text = &source[expression.range()];
-            let (remote, prefix) = string_value(text)?;
+            let (remote, prefix) = string_value(text, string_mode)?;
             let suffix = if text.ends_with("\"\"\"") || text.ends_with("'''") {
                 3
             } else {
@@ -103,7 +106,7 @@ pub(crate) fn bindings(db: &Database, file: starpls_common::File) -> Vec<Load<'_
         let Some(call) = load_call(&statement.value) else {
             continue;
         };
-        for spelling in spellings(call, &source) {
+        for spelling in spellings(call, &source, file.source_mode(db).string_mode()) {
             let Some(definition) = definitions.iter().find(|definition| {
                 matches!(definition.kind(db), DefinitionKind::ProvidedBinding(binding) if binding.binding.target == spelling.binding.target)
             }) else { continue; };
@@ -129,7 +132,7 @@ pub(super) fn statements(db: &dyn Db, file: starpls_common::File) -> Vec<Provide
             let call = load_call(&statement.value)?;
             Some(ProvidedStatement {
                 statement: statement.node_index().load(),
-                bindings: spellings(call, &source)
+                bindings: spellings(call, &source, file.source_mode(db).string_mode())
                     .into_iter()
                     .map(|spelling| spelling.binding)
                     .collect(),
@@ -200,8 +203,9 @@ pub(crate) fn binding_names(
     let call = load_call(&statement.value).expect("supplied statement is a load");
     let source = source_file.contents(db);
     let module = call.arguments.args.first()?;
-    let (module_name, _) = string_value(&source[module.range()])?;
-    let spelling = spellings(call, &source)
+    let string_mode = source_file.source_mode(db).string_mode();
+    let (module_name, _) = string_value(&source[module.range()], string_mode)?;
+    let spelling = spellings(call, &source, string_mode)
         .into_iter()
         .find(|spelling| spelling.binding.target == binding.binding.target)
         .expect("load binding target belongs to its statement");
@@ -232,6 +236,7 @@ fn is_loaded_alias(db: &Database, file: ProgramFile<'_>, name: &str) -> bool {
 /// A syntactic load edge, including files whose exported values are unused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LoadDependency {
+    /// The module path, or the original source literal if it cannot be represented as UTF-8.
     pub module: Box<str>,
     pub range: TextRange,
     pub resolution: LoadResolution,
@@ -262,10 +267,12 @@ fn direct_loads(
     };
     statement_locations(db, file)
         .iter()
-        .map(|(module, range)| LoadDependency {
-            module: module.clone(),
-            range: *range,
-            resolution: resolve_dependency(db, file, module),
+        .cloned()
+        .map(|mut edge| {
+            if edge.resolution == LoadResolution::Pending {
+                edge.resolution = resolve_dependency(db, file, &edge.module);
+            }
+            edge
         })
         .collect()
 }
@@ -284,10 +291,7 @@ pub(crate) fn resolve_dependency(
 }
 
 /// Reading source locations must not resolve other loads in the same file.
-pub(crate) fn statement_locations(
-    db: &dyn Db,
-    file: starpls_common::File,
-) -> &[(Box<str>, TextRange)] {
+pub(crate) fn statement_locations(db: &dyn Db, file: starpls_common::File) -> &[LoadDependency] {
     load_statements(db, file.source, (file.dialect, file.info))
 }
 
@@ -296,7 +300,7 @@ fn load_statements(
     db: &dyn Db,
     source: ruff_db::files::File,
     context: (starpls_common::Dialect, Option<starpls_common::FileInfo>),
-) -> Vec<(Box<str>, TextRange)> {
+) -> Vec<LoadDependency> {
     let (dialect, info) = context;
     let file = starpls_common::File {
         source,
@@ -315,8 +319,23 @@ fn load_statements(
             };
             let call = load_call(&statement.value)?;
             let module = call.arguments.args.first()?;
-            let (name, _) = string_value(&source[module.range()])?;
-            Some((name, module.range()))
+            let range = module.range();
+            let literal = &source[range];
+            let (module, resolution) =
+                match decode_string_value(literal, file.source_mode(db).string_mode())? {
+                    DecodedString::Text { value, .. } => (value, LoadResolution::Pending),
+                    DecodedString::NonUtf8 => (
+                        literal.into(),
+                        LoadResolution::Failed(
+                            "load path is not valid UTF-8; module shows the source literal".into(),
+                        ),
+                    ),
+                };
+            Some(LoadDependency {
+                module,
+                range,
+                resolution,
+            })
         })
         .collect()
 }
@@ -390,7 +409,7 @@ pub(super) fn diagnostics(db: &Database, file: ProgramFile<'_>) -> Vec<Diagnosti
             }
             LoadResolution::Pending => continue,
             LoadResolution::Failed(error) => {
-                format!("Could not resolve module \"{module}\": {error}")
+                format!("Could not resolve module {module:?}: {error}")
             }
         };
         let mut diagnostic =
@@ -564,6 +583,25 @@ mod tests {
         assert!(diagnostics[0]
             .headline_message()
             .starts_with("Could not resolve module"));
+    }
+
+    #[test]
+    fn bazel_load_paths_decode_utf8_bytes() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        fixture.add_file(&mut analysis.db, "café.bzl", "value = 1\n");
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "main.bzl",
+            r#"load("café.bzl", first = "value")
+load("caf\303\251.bzl", second = "value")
+def result() -> int:
+    return first + second
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
