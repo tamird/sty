@@ -744,12 +744,13 @@ impl DefaultFileLoader {
         Ok(self.fetch_repositories(&repositories, progress))
     }
 
-    pub(crate) fn selected_module(
+    pub(crate) fn selected_module<'a>(
         &self,
         repository: &Repository,
-    ) -> anyhow::Result<Option<starpls_bazel::client::SelectedModule>> {
+        selected: &'a mut starpls_bazel::client::SelectedModules,
+    ) -> anyhow::Result<Option<&'a starpls_bazel::client::SelectedModule>> {
         if self.bzlmod_enabled {
-            self.bazel_client.selected_module(&repository.name)
+            selected.resolve(self.bazel_client.as_ref(), &repository.name)
         } else {
             Ok(None)
         }
@@ -758,11 +759,11 @@ impl DefaultFileLoader {
     pub(crate) fn prefetch_selected_modules(
         &self,
         requests: &[starpls_bazel::client::SelectedModuleRequest<'_>],
-    ) -> HashMap<String, starpls_bazel::client::SelectedModule> {
+    ) -> starpls_bazel::client::SelectedModules {
         if self.bzlmod_enabled {
             self.bazel_client.prefetch_selected_modules(requests)
         } else {
-            HashMap::new()
+            starpls_bazel::client::SelectedModules::default()
         }
     }
 

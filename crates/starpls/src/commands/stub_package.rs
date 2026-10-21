@@ -1,13 +1,12 @@
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::bail;
 use anyhow::Context;
 use serde::Deserialize;
-use starpls_bazel::client::SelectedModule;
 use starpls_bazel::client::SelectedModuleRequest;
+use starpls_bazel::client::SelectedModules;
 use starpls_bazel::Label;
 
 use crate::document::DefaultFileLoader;
@@ -136,11 +135,7 @@ pub(super) fn load(
             })
         })
         .collect();
-    let mut selected: HashMap<_, _> = loader
-        .prefetch_selected_modules(&requests)
-        .into_iter()
-        .map(|(repository, module)| (repository, Some(module)))
-        .collect();
+    let mut selected = loader.prefetch_selected_modules(&requests);
     let sources = packages
         .iter()
         .zip(resolved)
@@ -276,21 +271,16 @@ fn source_repository(
     package: &Package,
     source: &Source,
     source_repository: String,
-    selected_modules: &mut HashMap<String, Option<SelectedModule>>,
+    selected_modules: &mut SelectedModules,
 ) -> anyhow::Result<Repository> {
     let source_repository = loader.canonical_repository(source_repository)?;
-    let selected = match selected_modules.entry(source_repository.name.clone()) {
-        std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            entry.insert(loader.selected_module(&source_repository)?)
-        }
-    };
+    let selected = loader.selected_module(&source_repository, selected_modules)?;
     let Source {
         repository: _,
         module,
         versions,
     } = source;
-    if let Some(selected) = selected.as_ref() {
+    if let Some(selected) = selected {
         if selected.name != *module {
             bail!(
                 "repository @@{} selects module {:?}, but the stub package requires {:?}",
@@ -300,10 +290,7 @@ fn source_repository(
             );
         }
     }
-    match selected
-        .as_ref()
-        .and_then(|module| module.version.as_deref())
-    {
+    match selected.and_then(|module| module.version.as_deref()) {
         Some(version) => {
             if !versions.iter().any(|accepted| accepted == version) {
                 bail!(
@@ -493,7 +480,7 @@ mod tests {
             };
             let repository =
                 super::resolve_source_repository_name(&loader, &package, &source).unwrap();
-            let mut selected = std::collections::HashMap::new();
+            let mut selected = Default::default();
             let result = super::source_repository(
                 &loader,
                 &package,

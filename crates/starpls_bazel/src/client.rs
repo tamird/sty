@@ -222,6 +222,39 @@ pub struct SelectedModuleRequest<'a> {
     pub module_name: &'a str,
 }
 
+/// Repository identities for one configuration load.
+#[derive(Default)]
+pub struct SelectedModules {
+    values: HashMap<String, Option<SelectedModule>>,
+    pending_extensions: Vec<String>,
+}
+
+impl SelectedModules {
+    pub fn resolve<'a>(
+        &'a mut self,
+        client: &dyn BazelClient,
+        canonical_repository: &str,
+    ) -> anyhow::Result<Option<&'a SelectedModule>> {
+        if self
+            .pending_extensions
+            .binary_search_by(|repository| repository.as_str().cmp(canonical_repository))
+            .is_ok()
+        {
+            // Defer the second metadata query until validation reaches an unresolved
+            // source, preserving earlier errors and their source-root watch scope.
+            let pending = std::mem::take(&mut self.pending_extensions);
+            for repository in client.prefetch_extension_repositories(&pending) {
+                self.values.entry(repository).or_insert(None);
+            }
+        }
+        let selected = match self.values.entry(canonical_repository.to_owned()) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(client.selected_module(canonical_repository)?),
+        };
+        Ok(selected.as_ref())
+    }
+}
+
 pub trait BazelClient: Send + Sync + 'static {
     fn build_language(&self) -> anyhow::Result<Vec<u8>>;
     fn info(&self) -> anyhow::Result<BazelInfo>;
@@ -245,13 +278,17 @@ pub trait BazelClient: Send + Sync + 'static {
     }
     /// Returns None when no module name is available (an extension or unnamed root).
     fn selected_module(&self, canonical_repo: &str) -> anyhow::Result<Option<SelectedModule>>;
-    /// Prefetch positively identified modules keyed by canonical repository name.
-    /// Missing entries still require `selected_module`; they are not unversioned modules.
+    /// Prefetch repository identities without changing ordered source validation.
     fn prefetch_selected_modules(
         &self,
         _requests: &[SelectedModuleRequest<'_>],
-    ) -> HashMap<String, SelectedModule> {
-        HashMap::new()
+    ) -> SelectedModules {
+        SelectedModules::default()
+    }
+    /// Identify extension-generated repositories among sorted, unique canonical names.
+    /// Missing entries retain the ordinary `selected_module` lookup.
+    fn prefetch_extension_repositories(&self, _repositories: &[String]) -> Vec<String> {
+        Vec::new()
     }
 }
 
@@ -615,12 +652,9 @@ impl BazelClient for BazelCLI {
         Err(graph_error).with_context(|| format!("cannot identify module for @@{canonical_repo}"))
     }
 
-    fn prefetch_selected_modules(
-        &self,
-        requests: &[SelectedModuleRequest<'_>],
-    ) -> HashMap<String, SelectedModule> {
+    fn prefetch_selected_modules(&self, requests: &[SelectedModuleRequest<'_>]) -> SelectedModules {
         if !self.repository_metadata.load(Ordering::Relaxed) {
-            return HashMap::new();
+            return SelectedModules::default();
         }
         let requested: HashMap<_, _> = requests
             .iter()
@@ -630,7 +664,7 @@ impl BazelClient for BazelCLI {
             .map(|request| (request.canonical_repository, request.module_name))
             .collect();
         if requested.len() < 2 {
-            return HashMap::new();
+            return SelectedModules::default();
         }
         // Module arguments make Bazel emit the selected module key together with
         // its canonical repository name. A graph batch does not retain this pair.
@@ -639,9 +673,59 @@ impl BazelClient for BazelCLI {
             .into_iter()
             .chain(modules);
         let Ok(output) = self.run_command(arguments) else {
-            return HashMap::new();
+            return SelectedModules::default();
         };
-        selected_modules_from_metadata(&output, &requested).unwrap_or_default()
+        let Ok(modules) = selected_modules_from_metadata(&output, &requested) else {
+            return SelectedModules::default();
+        };
+        let mut pending_extensions: Vec<_> = requested
+            .keys()
+            .filter(|repository| !modules.contains_key(**repository))
+            .map(|repository| (*repository).to_owned())
+            .collect();
+        if pending_extensions.len() < 2 {
+            pending_extensions.clear();
+        } else {
+            pending_extensions.sort_unstable();
+        }
+        SelectedModules {
+            values: modules
+                .into_iter()
+                .map(|(repository, module)| (repository, Some(module)))
+                .collect(),
+            pending_extensions,
+        }
+    }
+
+    fn prefetch_extension_repositories(&self, repositories: &[String]) -> Vec<String> {
+        if repositories.len() < 2 || !self.repository_metadata.load(Ordering::Relaxed) {
+            return Vec::new();
+        }
+        let mut confirmed = Vec::new();
+        let mut remaining = repositories;
+        while !remaining.is_empty() {
+            // The fetch argument bound is conservative for the shorter @@name arguments.
+            let (batch, rest) = remaining.split_at(repository_fetch_batch_len(remaining));
+            let arguments = ["mod", "show_repo", "--output=streamed_jsonproto"]
+                .into_iter()
+                .map(str::to_owned)
+                .chain(batch.iter().map(|repository| format!("@@{repository}")));
+            let Ok(output) = self.run_command(arguments) else {
+                break;
+            };
+            let Ok(original_names) = repository_original_names(&output, batch) else {
+                break;
+            };
+            let mut mappings = self.mappings.lock().expect("mapping state was poisoned");
+            for (canonical, original) in original_names {
+                if let Some(original) = original {
+                    mappings.record_extension_repository(&canonical, original);
+                    confirmed.push(canonical);
+                }
+            }
+            remaining = rest;
+        }
+        confirmed
     }
 }
 
@@ -822,6 +906,19 @@ fn extension_repository_original_name(
     output: &[u8],
     canonical_repo: &str,
 ) -> anyhow::Result<Option<String>> {
+    Ok(repository_original_names(output, &[canonical_repo])?
+        .remove(canonical_repo)
+        .flatten())
+}
+
+/// Read sorted, unique canonical-name requests, requiring positive extension
+/// provenance for each confirmed repository. Bazel only sets `originalName` on
+/// extension-generated repository definitions; an omitted record or field
+/// establishes no identity.
+fn repository_original_names(
+    output: &[u8],
+    requested: &[impl AsRef<str>],
+) -> anyhow::Result<HashMap<String, Option<String>>> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Repository {
@@ -832,20 +929,42 @@ fn extension_repository_original_name(
         .into_iter::<Repository>()
         .collect::<Result<Vec<_>, _>>()
         .context("invalid Bazel repository metadata JSON")?;
-    let [Repository {
-        canonical_name,
-        original_name,
-    }] = repositories.as_slice()
-    else {
-        if repositories.is_empty() {
-            return Ok(None);
+    if let [expected] = requested {
+        if repositories.len() > 1 {
+            bail!(
+                "expected one repository description for @@{}",
+                expected.as_ref()
+            );
         }
-        bail!("expected one repository description for @@{canonical_repo}");
-    };
-    if canonical_name != canonical_repo {
-        bail!("expected repository @@{canonical_repo}, got @@{canonical_name}");
     }
-    Ok(original_name.clone().filter(|name| !name.is_empty()))
+    let mut originals = HashMap::new();
+    for repository in repositories {
+        let Repository {
+            canonical_name,
+            original_name,
+        } = repository;
+        if requested
+            .binary_search_by(|repository| repository.as_ref().cmp(&canonical_name))
+            .is_err()
+        {
+            if let [expected] = requested {
+                bail!(
+                    "expected repository @@{}, got @@{canonical_name}",
+                    expected.as_ref()
+                );
+            }
+            bail!("unexpected repository @@{canonical_name}");
+        }
+        match originals.entry(canonical_name) {
+            Entry::Vacant(entry) => {
+                entry.insert(original_name.filter(|name| !name.is_empty()));
+            }
+            Entry::Occupied(entry) => {
+                bail!("expected one repository description for @@{}", entry.key());
+            }
+        }
+    }
+    Ok(originals)
 }
 
 impl Default for BazelCLI {
@@ -895,6 +1014,9 @@ fi
             ("rules_v1", "rules"),
             ("rules_v2", "rules"),
             ("other", "other"),
+            ("rules++ext+one", "rules"),
+            ("rules++ext+two", "rules"),
+            ("rules++ext+unknown", "rules"),
             ("", "root"),
             ("unsafe", "--config=invalid"),
         ]
@@ -905,7 +1027,10 @@ fi
             },
         );
         let client = BazelCLI::new(&executable);
-        assert!(client.prefetch_selected_modules(&requests).is_empty());
+        assert!(client
+            .prefetch_selected_modules(&requests)
+            .values
+            .is_empty());
         assert!(!root.path().join("calls").exists());
         client.info().unwrap();
         std::fs::write(root.path().join("calls"), "").unwrap();
@@ -919,11 +1044,30 @@ fi
 "#,
         )
         .unwrap();
-        let selected = client.prefetch_selected_modules(&requests);
-        assert_eq!(selected.len(), 3);
-        assert_eq!(selected["rules_v1"].version.as_deref(), Some("1"));
-        assert_eq!(selected["rules_v2"].version.as_deref(), Some("2"));
-        assert_eq!(selected["other"].version, None);
+        let mut selected = client.prefetch_selected_modules(&requests);
+        assert_eq!(selected.values.len(), 3);
+        assert_eq!(
+            selected
+                .resolve(&client, "rules_v1")
+                .unwrap()
+                .unwrap()
+                .version
+                .as_deref(),
+            Some("1")
+        );
+        assert_eq!(
+            selected
+                .resolve(&client, "rules_v2")
+                .unwrap()
+                .unwrap()
+                .version
+                .as_deref(),
+            Some("2")
+        );
+        assert_eq!(
+            selected.resolve(&client, "other").unwrap().unwrap().version,
+            None
+        );
         assert_eq!(
             std::fs::read_to_string(root.path().join("calls")).unwrap(),
             "mod show_repo --output=streamed_jsonproto other rules\n"
@@ -931,19 +1075,71 @@ fi
 
         std::fs::write(
             root.path().join("response"),
+            "{\"canonicalName\":\"rules++ext+two\",\"originalName\":\"two\"}\n{\"canonicalName\":\"rules++ext+one\",\"originalName\":\"one\"}\n",
+        )
+        .unwrap();
+        assert_eq!(selected.resolve(&client, "rules++ext+one").unwrap(), None);
+        assert_eq!(selected.resolve(&client, "rules++ext+two").unwrap(), None);
+        std::fs::write(
+            root.path().join("response"),
+            r#"{"key":"<root>","dependencies":[{"key":"rules@7"}],"indirectDependencies":[]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            selected
+                .resolve(&client, "rules++ext+unknown")
+                .unwrap()
+                .unwrap()
+                .version
+                .as_deref(),
+            Some("7")
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("calls")).unwrap(),
+            "mod show_repo --output=streamed_jsonproto other rules\nmod show_repo --output=streamed_jsonproto @@rules++ext+one @@rules++ext+two @@rules++ext+unknown\nmod graph --from=@@rules++ext+unknown --depth=1 --output=json\n"
+        );
+
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        std::fs::write(
+            root.path().join("response"),
             "{\"canonicalName\":\"rules_v1\",\"moduleKey\":\"rules@1\"}\n{\"canonicalName\":\"rules_v1\",\"moduleKey\":\"rules@2\"}\n",
         )
         .unwrap();
-        assert!(client.prefetch_selected_modules(&requests).is_empty());
+        let failed = client.prefetch_selected_modules(&requests);
+        assert!(failed.values.is_empty());
+        assert!(failed.pending_extensions.is_empty());
         std::fs::write(root.path().join("status"), "1\n").unwrap();
-        assert!(client.prefetch_selected_modules(&requests).is_empty());
-        assert!(client.prefetch_selected_modules(&requests[..1]).is_empty());
+        let failed = client.prefetch_selected_modules(&requests);
+        assert!(failed.values.is_empty());
+        assert!(failed.pending_extensions.is_empty());
+        assert!(client
+            .prefetch_selected_modules(&requests[..1])
+            .values
+            .is_empty());
         assert_eq!(
             std::fs::read_to_string(root.path().join("calls"))
                 .unwrap()
                 .lines()
                 .count(),
-            3
+            2
+        );
+
+        std::fs::write(root.path().join("calls"), "").unwrap();
+        std::fs::write(root.path().join("status"), "0\n").unwrap();
+        std::fs::write(root.path().join("response"), "").unwrap();
+        let mut selected = client.prefetch_selected_modules(&requests);
+        std::fs::write(root.path().join("status"), "1\n").unwrap();
+        assert!(selected.resolve(&client, "rules++ext+one").is_err());
+        assert!(selected.resolve(&client, "rules++ext+two").is_err());
+        let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+        assert_eq!(calls.lines().count(), 6, "{calls}");
+        assert_eq!(
+            calls
+                .lines()
+                .filter(|line| line.contains("@@rules++ext+one @@rules++ext+two"))
+                .count(),
+            1,
+            "{calls}"
         );
     }
 
@@ -1340,6 +1536,13 @@ exit "$status"
             b"{\"canonicalName\":\"repo\"}\n{\"canonicalName\":\"repo\"}",
         ] {
             assert!(extension_repository_original_name(output, "repo").is_err());
+        }
+        for output in [
+            b"{\"canonicalName\":\"first\",\"originalName\":\"generated\"}\n{}".as_slice(),
+            b"{\"canonicalName\":\"first\"}\n{\"canonicalName\":\"first\",\"originalName\":\"generated\"}",
+            b"{\"canonicalName\":\"first\",\"originalName\":\"generated\"}\n{\"canonicalName\":\"unrequested\",\"originalName\":\"other\"}",
+        ] {
+            assert!(super::repository_original_names(output, &["first", "second"]).is_err());
         }
     }
 
