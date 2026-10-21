@@ -432,6 +432,67 @@ text = result["name"]
     }
 
     #[test]
+    fn dictionary_shape_pop_accepts_named_default() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = r#"
+def sink(**kwargs): pass
+
+def forward(**kwargs):
+    value = kwargs.pop("value", default = 0)
+    sink(value = value, **kwargs)
+
+def fallback(values):
+    return values.pop("value", default = "missing")
+
+def invalid(**kwargs): pass
+"#;
+        let file = fixture.add_file(&mut analysis.db, "main.bzl", source);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "main.bzli",
+            r#"
+type _Fields = dict[{"value": NotRequired[int]}]
+def sink(**kwargs: Unpack[_Fields]) -> None: ...
+def forward(**kwargs: Unpack[_Fields]) -> None: ...
+def fallback(values: _Fields) -> int | str: ...
+def invalid(**kwargs: Unpack[_Fields]) -> None: ...
+"#,
+        );
+        analysis.set_type_interfaces([(file, interface)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for invalid in [
+            "kwargs.pop(key = \"value\", default = 0)",
+            "kwargs.pop(\"value\", 0, default = 0)",
+        ] {
+            analysis.update_file(
+                file,
+                source.replace(
+                    "def invalid(**kwargs): pass",
+                    &format!(
+                        "def invalid(**kwargs):\n    {invalid}\n    sink(value = 0, **kwargs)"
+                    ),
+                ),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == "no-matching-overload"),
+                "{invalid}: {diagnostics:?}"
+            );
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == "parameter-already-assigned"),
+                "{invalid}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
     fn dictionary_shapes_check_union_assignments() {
         let (mut analysis, _) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

@@ -143,6 +143,19 @@ fn starlark_program_file(
     ProgramFile::from_python_file_with_kind(db, python_file, program, kind)
 }
 
+fn starlark_program_dialect(db: &Database, program: Program<'_>) -> Option<Dialect> {
+    let namespace = program.semantic_namespace(db).as_ref()?;
+    let mut parts = namespace.as_str().split(':');
+    if parts.next()? != "starpls" {
+        return None;
+    }
+    match parts.next()? {
+        "standard" => Some(Dialect::Standard),
+        "bazel" => Some(Dialect::Bazel),
+        _ => None,
+    }
+}
+
 impl Database {
     pub(crate) fn set_native_metadata(
         &mut self,
@@ -529,6 +542,10 @@ impl ty_python_core::Db for Database {
 
 #[salsa::db]
 impl ty_python_semantic::Db for Database {
+    fn provided_dict_pop_keyword_default(&self, program: Program<'_>) -> bool {
+        starlark_program_dialect(self, program) == Some(Dialect::Bazel)
+    }
+
     fn provided_function_is_builtin(&self, definition: Definition<'_>) -> bool {
         native::is_builtin_function(self, definition)
     }
@@ -613,16 +630,7 @@ impl ty_python_semantic::Db for Database {
         if class != KnownClass::Dict {
             return None;
         }
-        let namespace = program.semantic_namespace(self).as_ref()?;
-        let mut parts = namespace.as_str().split(':');
-        if parts.next()? != "starpls" {
-            return None;
-        }
-        let dialect = match parts.next()? {
-            "standard" => Dialect::Standard,
-            "bazel" => Dialect::Bazel,
-            _ => return None,
-        };
+        let dialect = starlark_program_dialect(self, program)?;
         let declarations = self.get_builtin_defs(&dialect);
         declarations.builtins(self);
         let native_file = self.files.try_virtual_file(&native::path(dialect))?;
