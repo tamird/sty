@@ -64,6 +64,7 @@ use super::factory::RuleAttributeData;
 use crate::Database;
 
 pub(super) const REPOSITORY_CONTEXT_SCHEMA: &str = "_RepositoryContext";
+pub(super) const ASPECT_CONTEXT_SCHEMA: &str = "_AspectContext";
 
 pub(super) fn type_application<'db>(
     db: &'db Database,
@@ -71,37 +72,55 @@ pub(super) fn type_application<'db>(
     context: &mut dyn TypeExpressionContext<'db>,
 ) -> Option<Type<'db>> {
     let file = db.starlark_file(context.program_file())?;
-    if file.dialect != Dialect::Bazel
-        || db.annotation_builtin(file, "repository_ctx") != Some(application.value_type)
-    {
+    if file.dialect != Dialect::Bazel {
         return None;
     }
+    let (name, arguments) = match application.expression.slice.as_ref() {
+        Expr::Tuple(tuple)
+            if tuple.elts.len() == 3
+                && db.annotation_builtin(file, "ctx") == Some(application.value_type) =>
+        {
+            (ASPECT_CONTEXT_SCHEMA, tuple.elts.as_slice())
+        }
+        expression
+            if db.annotation_builtin(file, "repository_ctx") == Some(application.value_type) =>
+        {
+            let schema = match expression {
+                Expr::Tuple(tuple) => {
+                    let [schema] = tuple.elts.as_slice() else {
+                        context.report_invalid_type_form(
+                            tuple.range(),
+                            "repository_ctx expects one attribute schema",
+                        );
+                        return Some(Type::unknown());
+                    };
+                    schema
+                }
+                schema => schema,
+            };
+            (REPOSITORY_CONTEXT_SCHEMA, std::slice::from_ref(schema))
+        }
+        _ => return None,
+    };
     let environment = ProgramEnvironment::from_file(context.program_file());
     let TypeDefinition::StaticClass(definition) =
         application.value_type.definition(db, &environment)?
     else {
         return None;
     };
-    let schema = match application.expression.slice.as_ref() {
-        Expr::Tuple(tuple) => {
-            let [schema] = tuple.elts.as_slice() else {
-                context.report_invalid_type_form(
-                    tuple.range(),
-                    "repository_ctx expects one attribute schema",
-                );
-                return Some(Type::unknown());
-            };
-            schema
-        }
-        schema => schema,
-    };
-    let schema = context.infer_type_expression(schema);
+    let declarations = definition.program_file(db);
+    // Leave argument inference to the ordinary path when host metadata does
+    // not provide the specialized class.
+    factory::native_class(db, declarations, name)?;
     factory::specialized_native_instance(
         db,
         &environment,
-        definition.program_file(db),
-        REPOSITORY_CONTEXT_SCHEMA,
-        vec![schema],
+        declarations,
+        name,
+        arguments
+            .iter()
+            .map(|argument| context.infer_type_expression(argument))
+            .collect(),
     )
 }
 

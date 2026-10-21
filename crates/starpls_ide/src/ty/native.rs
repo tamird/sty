@@ -1568,6 +1568,37 @@ _starpls_annotation_{} = repository_ctx
             super::context::REPOSITORY_CONTEXT_SCHEMA
         )?;
     }
+    if dialect == Dialect::Bazel
+        && classes.contains_key("struct")
+        && [
+            ("ctx", "rule", "rule_attributes"),
+            ("rule_attributes", "attr", "struct"),
+        ]
+        .into_iter()
+        .all(|(class, field, expected)| {
+            classes.get(class).is_some_and(|class| {
+                class.field.iter().any(|value| {
+                    value.name == field
+                        && value.callable.is_none()
+                        && env::normalize_doc(&value.r#type, true) == expected
+                })
+            })
+        })
+    {
+        // A separate specialization preserves the staticness of two-argument
+        // ctx contracts while retaining the native subject rule's other views.
+        writeln!(
+            output,
+            r#"_AspectSubjectAttrs = _starpls_typing.TypeVar("_AspectSubjectAttrs", default=_starpls_builtins.object, covariant=True)
+class _AspectRuleAttributes(_starpls_types.rule_attributes, _starpls_typing.Generic[_AspectSubjectAttrs]):
+    attr: _starpls_typing.Final[_AspectSubjectAttrs]
+class ctx(_starpls_types.ctx[_BuildSettingValue, _ContextAttrs], _starpls_typing.Generic[_BuildSettingValue, _ContextAttrs, _AspectSubjectAttrs]):
+    rule: _starpls_typing.Final[_AspectRuleAttributes[_AspectSubjectAttrs]]
+_starpls_annotation_{} = ctx
+"#,
+            super::context::ASPECT_CONTEXT_SCHEMA
+        )?;
+    }
     output.push_str("class _DictSchema[_Value](_starpls_typing.TypedDict, extra_items=_starpls_typing.ReadOnly[_Value]): ...\n\n");
     if classes.contains_key("struct") {
         output.push_str("_starpls_annotation__PendingDownload = _starpls_types._PendingDownload\n");
@@ -3384,6 +3415,89 @@ def module_lookup(context: module_ctx) -> path:
             panic!("{diagnostics:?}");
         };
         assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
+    fn aspect_subject_attributes_preserve_context_domains() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        let source = r#"def read(context: ctx[bool, struct[{"own": str}], struct[{"weight": int}]]) -> tuple[bool, str, int, Label]:
+    return context.build_setting_value, context.attr.own, context.rule.attr.weight, context.label
+
+def wrong(context: ctx[object, object, struct[{"weight": int}]]) -> str:
+    return context.rule.attr.weight
+
+def missing(context: ctx[object, object, struct[{"weight": int}]]) -> int:
+    return context.rule.attr.missing
+
+def widen(context: ctx[object, object, struct[{"weight": int}]]) -> ctx[object, object, struct[{"weight": object}]]:
+    return context
+
+def narrow(context: ctx[object, object, struct[{"weight": object}]]) -> ctx[object, object, struct[{"weight": int}]]:
+    return context
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/main.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| (
+                    diagnostic.id().as_str(),
+                    &source[diagnostic.range().unwrap()]
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("invalid-return-type", "context.rule.attr.weight"),
+                ("unresolved-attribute", "context.rule.attr.missing"),
+                ("invalid-return-type", "context"),
+            ],
+        );
+        builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "ctx")
+            .unwrap()
+            .field
+            .iter_mut()
+            .find(|field| field.name == "rule")
+            .unwrap()
+            .r#type = "string".into();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.update_file(
+            file,
+            "def supplied(context: ctx[object, object]) -> str:\n    return context.rule\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            file,
+            "def unavailable(context: ctx[object, object, MissingSubject]) -> None:\n    pass\n"
+                .into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>(),
+            ["unresolved-reference", "invalid-type-arguments"],
+        );
     }
 
     #[test]

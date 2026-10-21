@@ -651,9 +651,12 @@ label value unknown. The kind describes the dependency view, not the number
 of outgoing configurations.
 
 `ctx[Value, Attrs]` specifies the build-setting value and the fields of
-`ctx.attr`. `repository_ctx[Attrs]` specifies the fields of
-`repository_ctx.attr`. A protocol describes the attribute fields a helper
-requires:
+`ctx.attr`. In an aspect callback, `ctx[Value, Attrs, SubjectAttrs]` also
+specifies the fields the callback requires from the analyzed subject's
+`ctx.rule.attr`. This requirement does not establish which targets the aspect
+visits or prove that their rules supply those fields. `repository_ctx[Attrs]`
+specifies the fields of `repository_ctx.attr`. A protocol describes the
+attribute fields a helper requires:
 
 ```starlark
 class _Attrs(Protocol):
