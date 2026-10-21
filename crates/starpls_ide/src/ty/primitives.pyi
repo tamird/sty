@@ -371,6 +371,8 @@ class dict(Mapping[_KT, _VT], _MappingEntries[_KT, _VT]):
     def get(self, key: object, /, default: None = None) -> _VT | None:
         """Return the value for key, or default when the key is absent."""
     @overload
+    def get(self, key: object, /, default: _VT) -> _VT: ...
+    @overload
     def get(self, key: object, /, default: _T) -> _VT | _T: ...
     def items(self) -> list[tuple[_KT, _VT]]:
         """Return a new list of key/value pairs in iteration order."""

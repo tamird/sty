@@ -747,6 +747,54 @@ def alias(values):
     }
 
     #[test]
+    fn mapping_get_contextualizes_default_values() {
+        let source = r#"
+def nested(config):
+    # type: (Mapping[str, Mapping[str, str]]) -> str | None
+    return config.get("source", {}).get("index")
+
+def concrete(config):
+    # type: (dict[str, dict[str, str]]) -> str | None
+    return config.get("source", default={}).get("index")
+
+def wrong(config):
+    # type: (Mapping[str, Mapping[str, str]]) -> str | None
+    return config.get("source", {"index": 42}).get("index")
+"#;
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = analysis
+            .open_document(
+                Path::new("/mapping_default.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let range = diagnostic.range().unwrap();
+                (diagnostic.id().as_str(), &source[range])
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            [(
+                "invalid-return-type",
+                "config.get(\"source\", {\"index\": 42}).get(\"index\")"
+            )],
+        );
+    }
+
+    #[test]
     fn empty_lists_have_false_truthiness() {
         let source = r#"
 def inspect(empty, strings, gradual):
