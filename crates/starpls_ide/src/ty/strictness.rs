@@ -30,11 +30,24 @@ use ty_python_semantic::types::OverloadBodyView;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::Db as _;
 use ty_python_semantic::HasType;
+use ty_python_semantic::ProgramEnvironment;
 use ty_python_semantic::SemanticModel;
 
 use super::diagnostics::EXPLICIT_ANY;
 use super::diagnostics::NON_STATIC_TYPE;
 use crate::Database;
+
+pub(super) fn is_fully_static<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    ty: Type<'db>,
+) -> bool {
+    // Materialization also inspects lazy function signatures, which the
+    // stored-type query skips. Equivalence preserves callable variance and
+    // lets Ty handle recursive types and externally visible overloads.
+    ty.is_fully_static(db, environment)
+        && ty.is_equivalent_to(db, environment, ty.top_materialization(db, environment))
+}
 
 pub(super) fn diagnostics<'db>(
     db: &'db Database,
@@ -117,12 +130,7 @@ impl<'db> Checks<'_, 'db> {
     }
 
     fn is_fully_static(&self, ty: Type<'_>) -> bool {
-        let env = self.model.program_environment();
-        // Materialization also inspects lazy function signatures, which the
-        // stored-type query skips. Equivalence preserves callable variance and
-        // lets Ty handle recursive types and externally visible overloads.
-        ty.is_fully_static(self.db, &env)
-            && ty.is_equivalent_to(self.db, &env, ty.top_materialization(self.db, &env))
+        is_fully_static(self.db, &self.model.program_environment(), ty)
     }
 
     fn contains_generated_rule(&self, ty: Type<'db>) -> bool {

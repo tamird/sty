@@ -45,7 +45,7 @@ pub(super) fn mapping_argument(expression: &Expr) -> Option<(&Expr, &ExprDict, b
     }
 }
 
-/// A dynamic field name preserves a struct's uniform value bound.
+/// Refines Starlark getattr calls after ordinary argument and field inference.
 pub(super) fn getattr_call_result<'db>(
     db: &'db Database,
     call: &CheckedCall<'_, 'db>,
@@ -69,10 +69,8 @@ pub(super) fn getattr_call_result<'db>(
             .all(|name| name.string_literal_value(db).is_some()),
         name => name.string_literal_value(db).is_some(),
     };
-    // Ty owns finite lookups, including gradual recovery. A declined lookup
-    // must not replace the selected field with unrelated fields' types.
     if finite_names {
-        return None;
+        return opaque_getattr_result(db, call, &environment);
     }
     let file = db.starlark_file(call.file())?;
     let definitions = db.get_builtin_defs(&file.dialect);
@@ -111,6 +109,30 @@ pub(super) fn getattr_call_result<'db>(
         *value,
         default,
     ))
+}
+
+fn opaque_getattr_result<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    environment: &ProgramEnvironment<'db>,
+) -> Option<Type<'db>> {
+    let CheckedArgument::Value { ty: receiver, .. } = call.argument_at(0) else {
+        return None;
+    };
+    let object = KnownClass::Object.to_instance(db, environment);
+    if receiver.expand_top_level_aliases(db, environment) != object
+        || db.starlark_file(call.file()).is_none()
+    {
+        return None;
+    }
+    let CheckedArgument::Value { ty: default, .. } = call.argument_at(2) else {
+        return None;
+    };
+    // A successful lookup on an opaque value returns another opaque value.
+    // Keep Ty's finite lookup when available and preserve gradual defaults.
+    (super::strictness::is_fully_static(db, environment, default)
+        && call.getattr_return_type(db).is_none())
+    .then_some(object)
 }
 
 pub(super) fn getattr_result<'db>(
@@ -608,6 +630,76 @@ def unresolved() -> object:
                         &gradual[range] == "getattr(bazel_features.globals, \"CcInfo\", None)"
                     })
             }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn opaque_getattr_preserves_provenance() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let file = fixture.add_file(
+            &mut analysis.db,
+            "main.bzl",
+            r#"def opaque(receiver: object) -> object:
+    return getattr(receiver, "payload", None)
+def other_default(receiver: object) -> object:
+    return getattr(receiver, "payload", False)
+def guarded(receiver: object) -> str:
+    value = getattr(receiver, "payload", None)
+    if type(value) != "string":
+        fail("expected string")
+    return value
+"#,
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for source in [
+            "def gradual_receiver() -> object:\n    return getattr(json.decode('{}'), 'payload', None)",
+            "def gradual_default(receiver: object) -> object:\n    return getattr(receiver, 'payload', json.decode('{}'))",
+            "def untyped(value): return value\ndef gradual_callable(receiver: object) -> object:\n    return getattr(receiver, 'payload', untyped)",
+            "def recursive(receiver: object):\n    return getattr(receiver, 'payload', recursive)",
+            "def dynamic_name(receiver: object, name: str) -> object:\n    return getattr(receiver, name, None)",
+            "def no_default(receiver: object) -> object:\n    return getattr(receiver, 'payload')",
+        ] {
+            analysis.update_file(file, source.into());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic.headline_message().contains("call result")
+                        && diagnostic
+                            .range()
+                            .is_some_and(|range| source[range].starts_with("getattr("))
+                }),
+                "{source}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(
+            file,
+            "def unguarded(receiver: object) -> str:\n    return getattr(receiver, 'payload', None)".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
             "{diagnostics:?}"
         );
     }
