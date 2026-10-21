@@ -269,6 +269,26 @@ impl AttributeInput {
 }
 
 impl Attribute {
+    /// The evaluated value in repository contexts and module extension tags.
+    pub(super) fn repository_value_type<'db>(
+        &self,
+        db: &'db Database,
+        environment: &ProgramEnvironment<'db>,
+        declarations: ProgramFile<'db>,
+    ) -> Option<Type<'db>> {
+        if self.kind == AttributeKind::Label && self.has_non_none_value() {
+            native_class(db, declarations, "Label")?.to_instance_approximation(db, environment)
+        } else {
+            attribute_value_type(
+                db,
+                environment,
+                declarations,
+                &self.kind,
+                AttributeUse::RepositoryContext,
+            )
+        }
+    }
+
     fn implicit_input_name(&self, name: &str, kind: &RuleKind) -> Option<Name> {
         let suffix = name.strip_prefix('_')?;
         if suffix.is_empty() {

@@ -41,6 +41,7 @@ use ty_python_semantic::types::DictionaryItem;
 use ty_python_semantic::types::DictionaryItems;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
+use ty_python_semantic::types::ParameterKind;
 use ty_python_semantic::types::Parameters;
 use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
@@ -61,6 +62,7 @@ use super::factory::AttributeConfiguration;
 use super::factory::AttributeUse;
 use super::factory::BuiltinFunction;
 use super::factory::RuleAttributeData;
+use super::module_extension;
 use crate::Database;
 
 pub(super) const REPOSITORY_CONTEXT_SCHEMA: &str = "_RepositoryContext";
@@ -331,7 +333,7 @@ pub(super) fn callback_contract<'a, 'db>(
                 registration_context_type(db, model, file, call, &registration, context_kind)?;
             callback_invocation(db, file, declaration, context_kind, context)?
         }
-        None => declared_implementation_type(&registration)?,
+        None => module_extension_invocation(db, model, call, &registration)?,
     };
     // The body binding already combines every registration, source defaults, and annotation
     // precedence. Project only unannotated slots; the declared return remains authoritative.
@@ -524,7 +526,7 @@ fn registration_parameter_type<'db>(
             if first.parameter.name.as_str() != parameter {
                 return None;
             }
-            let callback = declared_implementation_type(signature)?
+            let callback = module_extension_invocation(db, model, call, signature)?
                 .single_callable_signature(db, &environment)?;
             let [context] = callback.parameters().iter().as_slice() else {
                 return None;
@@ -572,6 +574,41 @@ fn registration_parameter_type<'db>(
         }
     }
     registration_context_type(db, model, file, call, signature, context_kind)
+}
+
+fn module_extension_invocation<'db>(
+    db: &'db Database,
+    model: &SemanticModel<'db>,
+    call: &ExprCall,
+    registration: &CallSignatureDetails<'db>,
+) -> Option<Type<'db>> {
+    let declared = declared_implementation_type(registration)?;
+    let environment = model.program_environment();
+    let Some(signature) = declared.single_callable_signature(db, &environment) else {
+        return Some(declared);
+    };
+    let [parameter] = signature.parameters().iter().as_slice() else {
+        return Some(declared);
+    };
+    let declarations = registration.definition?.program_file(db);
+    let native_context = factory::native_class(db, declarations, "module_ctx")
+        .and_then(|class| class.to_instance_approximation(db, &environment));
+    if !matches!(
+        parameter.kind(),
+        ParameterKind::PositionalOnly { .. } | ParameterKind::PositionalOrKeyword { .. }
+    ) || parameter.has_default()
+        || native_context != Some(parameter.annotated_type())
+    {
+        return Some(declared);
+    }
+    let context = call.inferred_type(model).and_then(|result| {
+        module_extension::implementation_context(db, model, call, declarations, result)
+    });
+    Some(context.map_or(declared, |context| {
+        let parameters =
+            Parameters::from_annotation(db, [parameter.clone().with_annotated_type(context)]);
+        Type::single_callable(db, signature.clone().with_parameters(parameters))
+    }))
 }
 
 fn subrule_parameter_type<'db>(
@@ -897,18 +934,7 @@ fn context_type<'db>(
                 if let Some(ty) = finite {
                     ty
                 } else if context_kind == ContextKind::Repository {
-                    if attribute.kind == AttributeKind::Label && attribute.has_non_none_value() {
-                        factory::native_class(db, declarations, "Label")?
-                            .to_instance_approximation(db, &environment)?
-                    } else {
-                        factory::attribute_value_type(
-                            db,
-                            &environment,
-                            declarations,
-                            &attribute.kind,
-                            AttributeUse::RepositoryContext,
-                        )?
-                    }
+                    attribute.repository_value_type(db, &environment, declarations)?
                 } else {
                     let Some(ty) = field_type(db, &environment, declarations, view, attribute)
                     else {
@@ -1729,6 +1755,130 @@ def register_schema(callback: Callable[[module_ctx], extension_metadata | None],
         );
         analysis.update_file(file, source.replacen("context: module_ctx", "context", 1));
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn module_extension_callback_uses_evaluated_tag_attributes() {
+        let source = r#"def consume(labels: list[Label], strip: int) -> None: pass
+def consume_modules(modules: list[bazel_module]) -> None: pass
+def consume_string(value: str) -> None: pass
+def consume_label(value: Label) -> None: pass
+def implementation(context):
+    consume_modules(context.modules)
+    consume_modules(context.modules[:])
+    consume_string(context.modules[0].tags.version[0].version)
+    for module in context.modules:
+        for tag in module.tags.patch:
+            consume(tag.patches, tag.strip)
+            consume_label(tag.required)
+            consume_label(tag.optional)
+            context.is_dev_dependency(tag)
+            consume(tag.patches, "bad")
+            tag.missing
+        for tag in module.tags.version:
+            consume_string(tag.version)
+            tag.patches
+        module.tags.missing
+    return context.extension_metadata(reproducible=True)
+extension = module_extension(
+    implementation,
+    tag_classes={
+        "patch": tag_class(attrs={"patches": attr.label_list(), "strip": attr.int(), "required": attr.label(mandatory=True), "optional": attr.label()}),
+        "version": tag_class(attrs={"version": attr.string()}),
+    },
+)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        install_bazel_builtins(&mut analysis);
+        enable_context_inference(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let range = diagnostic.range().unwrap();
+                (
+                    diagnostic.id().as_str(),
+                    &source[usize::from(range.start())..usize::from(range.end())],
+                )
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            [
+                ("invalid-argument-type", "tag.optional"),
+                ("invalid-argument-type", "\"bad\""),
+                ("unresolved-attribute", "tag.missing"),
+                ("unresolved-attribute", "tag.patches"),
+                ("unresolved-attribute", "module.tags.missing"),
+            ]
+        );
+    }
+
+    #[test]
+    fn module_extension_callback_accounts_for_other_registrations() {
+        let source = r#"def shared(context):
+    for module in context.modules:
+        module.tags.first
+first = module_extension(shared, tag_classes={"first": tag_class()})
+second = module_extension(shared, tag_classes={"second": tag_class()})
+def opaque_tag() -> tag_class:
+    return tag_class()
+def opaque(context):
+    for module in context.modules:
+        for tag in module.tags.opaque:
+            print(tag.unknown_field)
+opaque_extension = module_extension(opaque, tag_classes={"opaque": opaque_tag()})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        let diagnostic = &diagnostics[0];
+        assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+        let range = diagnostic.range().unwrap();
+        assert_eq!(
+            &source[usize::from(range.start())..usize::from(range.end())],
+            "module.tags.first"
+        );
+    }
+
+    #[test]
+    fn module_extension_callback_preserves_supplied_inventory() {
+        let source = r#"def consume(value: str) -> None: pass
+def implementation(context):
+    consume(context.modules)
+extension = module_extension(implementation, tag_classes={"patch": tag_class()})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let modules = builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "module_ctx")
+            .unwrap()
+            .field
+            .iter_mut()
+            .find(|field| field.name == "modules")
+            .unwrap();
+        modules.r#type = "string".to_owned();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        enable_context_inference(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 

@@ -2,6 +2,7 @@
 
 use ruff_db::files::FileRange;
 use ruff_python_ast::name::Name;
+use ruff_python_ast::ExprCall;
 use starpls_common::Db as _;
 use starpls_hir::Db as _;
 use ty_python_core::ProgramFile;
@@ -13,11 +14,13 @@ use ty_python_semantic::provided::ProvidedInstanceFields;
 use ty_python_semantic::types::CheckedArgument;
 use ty_python_semantic::types::CheckedCall;
 use ty_python_semantic::types::DictionaryItem;
+use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::Parameters;
 use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::ProgramEnvironment;
+use ty_python_semantic::SemanticModel;
 
 use super::factory;
 use super::factory::Attribute;
@@ -26,6 +29,8 @@ use super::load;
 use super::native::MODULE_EXTENSION_PROXY_TYPE;
 use super::native::MODULE_EXTENSION_TYPE;
 use crate::Database;
+
+pub(super) const MODULES_TYPE: &str = "_ModuleExtensionModules";
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, get_size2::GetSize)]
 struct TagClassData {
@@ -36,12 +41,13 @@ struct TagClassData {
 #[derive(Debug, Eq, PartialEq, Hash, get_size2::GetSize)]
 struct ExtensionData {
     tags: Box<[Tag]>,
+    names_complete: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, get_size2::GetSize)]
 struct Tag {
     name: Name,
-    schema: TagClassData,
+    schema: Option<TagClassData>,
     source: FileRange,
 }
 
@@ -89,30 +95,139 @@ pub(super) fn extension<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> 
     if call.has_binding_errors() {
         return None;
     }
-    let dictionary = call.dictionary_argument(db, "tag_classes")?;
     let environment = ProgramEnvironment::from_file(call.file());
-    let tags = dictionary
-        .items
-        .into_vec()
-        .into_iter()
-        .filter(DictionaryItem::is_required)
-        .filter_map(|item| {
-            Some(Tag {
+    let (tags, names_complete) = if matches!(call.argument("tag_classes"), CheckedArgument::Omitted)
+    {
+        (Box::default(), true)
+    } else {
+        let dictionary = call.dictionary_argument(db, "tag_classes")?;
+        let names_complete =
+            dictionary.is_complete() && dictionary.items.iter().all(DictionaryItem::is_required);
+        let tags = dictionary
+            .items
+            .into_vec()
+            .into_iter()
+            .filter(DictionaryItem::is_required)
+            .map(|item| Tag {
                 name: item.name,
                 schema: item
                     .ty
-                    .provided_data(db, &environment)?
-                    .downcast_ref::<TagClassData>()?
-                    .clone(),
+                    .provided_data(db, &environment)
+                    .and_then(|data| data.downcast_ref::<TagClassData>())
+                    .cloned(),
                 source: FileRange::new(call.file().file(db), item.source),
             })
-        })
-        .collect();
+            .collect();
+        (tags, names_complete)
+    };
     factory::descriptor(
         db,
         call,
         MODULE_EXTENSION_TYPE,
-        ProvidedData::new(ExtensionData { tags }),
+        ProvidedData::new(ExtensionData {
+            tags,
+            names_complete,
+        }),
+    )
+}
+
+pub(super) fn implementation_context<'db>(
+    db: &'db Database,
+    model: &SemanticModel<'db>,
+    call: &ExprCall,
+    declarations: ProgramFile<'db>,
+    result: Type<'db>,
+) -> Option<Type<'db>> {
+    // This class exists only when the inventory exposes the canonical context
+    // and module fields. Preserve richer supplied metadata otherwise.
+    factory::native_class(db, declarations, MODULES_TYPE)?;
+    let environment = model.program_environment();
+    let data = result.provided_data(db, &environment)?;
+    let data = data.downcast_ref::<ExtensionData>()?;
+    let make_instance = |name: &str, fields, has_dynamic_fields, require_base| {
+        let base = factory::native_class(db, declarations, name);
+        if require_base && base.is_none() {
+            return None;
+        }
+        model
+            .provided_class_at_call(
+                call,
+                ProvidedClass {
+                    name: Name::new(name),
+                    bases: base.into_iter().collect(),
+                    class_members: Box::default(),
+                    instance_fields: ProvidedInstanceFields {
+                        fields,
+                        has_dynamic_fields,
+                        ..Default::default()
+                    }
+                    .into(),
+                },
+            )?
+            .to_instance_approximation(db, &environment)
+    };
+    let list = |element| KnownClass::List.to_specialized_instance(db, &environment, &[element]);
+    let tag_fields = data
+        .tags
+        .iter()
+        .map(|tag| {
+            let fields = tag
+                .schema
+                .iter()
+                .flat_map(|schema| &schema.attributes)
+                .map(|attribute| ProvidedField {
+                    name: attribute.name.clone(),
+                    ty: attribute
+                        .descriptor
+                        .as_ref()
+                        .and_then(|descriptor| {
+                            descriptor.repository_value_type(db, &environment, declarations)
+                        })
+                        .unwrap_or_else(Type::unknown),
+                    source: attribute.source,
+                })
+                .collect();
+            let instance = make_instance(
+                "bazel_module_tag",
+                fields,
+                tag.schema
+                    .as_ref()
+                    .is_none_or(|schema| !schema.names_complete),
+                false,
+            )?;
+            Some(ProvidedField {
+                name: tag.name.clone(),
+                ty: list(instance),
+                source: Some(tag.source),
+            })
+        })
+        .collect::<Option<_>>()?;
+    let tags = make_instance("bazel_module_tags", tag_fields, !data.names_complete, true)?;
+    let module = make_instance(
+        "bazel_module",
+        Box::from([ProvidedField {
+            name: Name::new("tags"),
+            ty: tags,
+            source: None,
+        }]),
+        false,
+        true,
+    )?;
+    make_instance(
+        "module_ctx",
+        Box::from([ProvidedField {
+            name: Name::new("modules"),
+            ty: factory::specialized_native_instance(
+                db,
+                &environment,
+                declarations,
+                MODULES_TYPE,
+                vec![module],
+            )?,
+            source: None,
+        }]),
+        false,
+        true,
     )
 }
 
@@ -195,12 +310,17 @@ fn proxy_fields<'db>(
     Some(
         data.tags
             .iter()
-            .map(|tag| ProvidedField {
-                name: tag.name.clone(),
-                ty: tag
-                    .schema
-                    .callable(db, environment, declarations, none_is_omission),
-                source: Some(tag.source),
+            .filter_map(|tag| {
+                Some(ProvidedField {
+                    name: tag.name.clone(),
+                    ty: tag.schema.as_ref()?.callable(
+                        db,
+                        environment,
+                        declarations,
+                        none_is_omission,
+                    ),
+                    source: Some(tag.source),
+                })
             })
             .collect(),
     )

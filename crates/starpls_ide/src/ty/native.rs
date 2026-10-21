@@ -1573,6 +1573,44 @@ fn declarations(
     output.push_str(&body);
     output.push('\n');
     if dialect == Dialect::Bazel
+        && classes
+            .get("bazel_module_tags")
+            .is_some_and(|class| class.field.is_empty())
+        && [
+            ("module_ctx", "modules", "list"),
+            ("bazel_module", "tags", "bazel_module_tags"),
+        ]
+        .into_iter()
+        .all(|(class, field, expected)| {
+            classes.get(class).is_some_and(|class| {
+                class.field.iter().any(|value| {
+                    value.name == field
+                        && value.callable.is_none()
+                        && env::normalize_doc(&value.r#type, true) == expected
+                })
+            })
+        })
+    {
+        // Bazel freezes module_ctx.modules before invoking the extension. Keep
+        // its ordinary list compatibility while refining immutable reads.
+        // A slice is a new list and retains the ordinary mutable element type.
+        writeln!(
+            output,
+            r#"class {modules_type}[_Module: _starpls_types.bazel_module](_starpls_builtins.list[_starpls_types.bazel_module]):
+    @_starpls_typing.type_check_only
+    def __iter__(self) -> _starpls_typing.Iterator[_Module]: ...
+    @_starpls_typing.overload
+    @_starpls_typing.type_check_only
+    def __getitem__(self, index: _starpls_builtins.int, /) -> _Module: ...
+    @_starpls_typing.overload
+    @_starpls_typing.type_check_only
+    def __getitem__(self, index: _starpls_builtins.slice, /) -> _starpls_builtins.list[_starpls_types.bazel_module]: ...
+_starpls_annotation_{modules_type} = {modules_type}
+"#,
+            modules_type = super::module_extension::MODULES_TYPE
+        )?;
+    }
+    if dialect == Dialect::Bazel
         && classes.contains_key("repository_ctx")
         && classes.contains_key("struct")
     {
