@@ -89,6 +89,10 @@ enum CallableKind<'a> {
     Function,
     EmptyDepset,
     Method(&'a str),
+    ArgsCollection {
+        with_name: bool,
+        options: &'a [Param],
+    },
     ResolveCommand,
     Rule(&'a starpls_bazel::build::RuleDefinition),
     Provider(Option<&'a str>),
@@ -1132,6 +1136,21 @@ fn declarations(
                             writeln!(body, "            {}", quoted(&documentation))?;
                             writeln!(body, "            ...")?;
                         }
+                    } else if let Some(options) =
+                        args_collection_options(class, field, &declared_classes)
+                    {
+                        for with_name in [false, true] {
+                            writeln!(body, "        @_starpls_typing.overload")?;
+                            write_function(
+                                &mut body,
+                                "        ",
+                                field,
+                                callable,
+                                CallableKind::ArgsCollection { with_name, options },
+                                AnnotationUse::Value,
+                                &declared_classes,
+                            )?;
+                        }
                     } else if class.name == "json" && field.name == "decode" {
                         // Every JSON object has string keys. Recursive values retain
                         // gradual schema-dependent behavior through the Any intersection.
@@ -1931,6 +1950,42 @@ fn target_attribute_annotation(name: &str, target: &str) -> Option<String> {
     Some(format!("_starpls_types.Attribute[{value}]"))
 }
 
+fn args_collection_options<'a>(
+    class: &Type,
+    method: &'a Value,
+    classes: &BTreeSet<String>,
+) -> Option<&'a [Param]> {
+    if class.name != "Args"
+        || !matches!(method.name.as_str(), "add_all" | "add_joined")
+        || !classes.contains("depset")
+    {
+        return None;
+    }
+    // Bazel dispatches on whether the optional second positional argument is present.
+    // https://github.com/bazelbuild/bazel/blob/9.3.0rc2/src/main/java/com/google/devtools/build/lib/analysis/starlark/Args.java#L327-L347
+    let [first, second, options @ ..] = method.callable.as_ref()?.param.as_slice() else {
+        return None;
+    };
+    let (next, remaining) = options.split_first()?;
+    let options = if next.is_star_arg && next.name.trim_start_matches('*').is_empty() {
+        remaining
+    } else {
+        options
+    };
+    (first.name == "arg_name_or_values"
+        && matches!(
+            env::normalize_doc(&first.r#type, true).as_str(),
+            "" | "unknown" | "Unknown"
+        )
+        && second.name == "values"
+        && env::normalize_doc(&second.r#type, true) == "sequence; or depset"
+        && !options.is_empty()
+        && options
+            .iter()
+            .all(|parameter| !parameter.is_star_arg && !parameter.is_star_star_arg))
+    .then_some(options)
+}
+
 fn write_function(
     output: &mut String,
     indent: &str,
@@ -1945,12 +2000,16 @@ fn write_function(
 
     let provider = matches!(kind, CallableKind::Provider(_));
     let empty_depset = matches!(kind, CallableKind::EmptyDepset);
-    let kind = match kind {
-        CallableKind::EmptyDepset => CallableKind::Function,
-        CallableKind::Provider(namespace) => {
-            namespace.map_or(CallableKind::Function, CallableKind::Method)
+    let (kind, args_collection) = match kind {
+        CallableKind::EmptyDepset => (CallableKind::Function, None),
+        CallableKind::Provider(namespace) => (
+            namespace.map_or(CallableKind::Function, CallableKind::Method),
+            None,
+        ),
+        CallableKind::ArgsCollection { with_name, options } => {
+            (CallableKind::Method("Args"), Some((with_name, options)))
         }
-        kind => kind,
+        kind => (kind, None),
     };
     let name = if provider || matches!(kind, CallableKind::Rule(_)) {
         "__call__"
@@ -1987,7 +2046,21 @@ fn write_function(
     if keyword_only {
         output.push_str(", *");
     }
-    for parameter in &callable.param {
+    let parameters = if let Some((with_name, options)) = args_collection {
+        // Java's Sequence includes Starlark lists, tuples and ranges, but not strings.
+        let values = "_starpls_ty_extensions.Intersection[_starpls_typing.Sequence[_starpls_builtins.object], _starpls_ty_extensions.Not[_starpls_builtins.str]] | _starpls_types.depset[_starpls_builtins.object]";
+        let prefix = if with_name {
+            "arg_name_or_values: _starpls_builtins.str, values"
+        } else {
+            "arg_name_or_values"
+        };
+        write!(output, ", {prefix}: {values}, /, *")?;
+        keyword_only = true;
+        options
+    } else {
+        callable.param.as_slice()
+    };
+    for parameter in parameters {
         output.push_str(separator);
         separator = ", ";
         let Param {
@@ -8058,6 +8131,75 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
                 assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
                 assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
             }
+        }
+    }
+
+    #[test]
+    fn bazel_action_api_args_collection_checks_call_shapes() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let args = builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "Args")
+            .unwrap();
+        let add_joined = args
+            .field
+            .iter_mut()
+            .find(|field| field.name == "add_joined")
+            .unwrap();
+        add_joined.callable.as_mut().unwrap().param.insert(
+            2,
+            Param {
+                is_star_arg: true,
+                ..Default::default()
+            },
+        );
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def check(args: Args, file: File) -> None:
+    chained: Args = args.add_all(depset([file]))
+    args.add_all("--headers", [file])
+    args.add_all(range(3))
+    chained.add_joined((file,), join_with=",")
+    args.add_joined("--headers", depset([file]), join_with=",")
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/actions.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_rules(Default::default());
+        for invalid in [
+            "args.add_all(42)",
+            "args.add_all('--headers')",
+            "args.add_joined([file], [file], join_with=',')",
+            "args.add_all('--headers', values=[file])",
+            "args.add_joined([file])",
+            "args.add_all([file], format_each=42)",
+        ] {
+            analysis.update_file(file, format!("{source}    {invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
         }
     }
 
