@@ -120,6 +120,7 @@ pub enum SyntaxKind {
     TYPE_COMMENT_PREFIX,
     TYPE_COMMENT_BODY,
     TYPE_LIST,
+    TYPE_DICT,
 }
 
 #[macro_export]
@@ -217,7 +218,7 @@ impl SyntaxKind {
 impl From<u16> for SyntaxKind {
     #[inline]
     fn from(value: u16) -> Self {
-        assert!(value <= TYPE_LIST as u16);
+        assert!(value <= TYPE_DICT as u16);
         unsafe { std::mem::transmute(value) }
     }
 }

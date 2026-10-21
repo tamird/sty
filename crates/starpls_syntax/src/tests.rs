@@ -86,6 +86,19 @@ fn callable_type_comments_preserve_argument_lists() {
     );
 }
 
+#[test]
+fn dictionary_shape_type_comments_report_malformed_fields() {
+    let source = r#"# type: dict[{"name" str}]"#;
+    let parsed =
+        ruff_python_parser::parse_unchecked_source(source, ruff_python_ast::PySourceType::Python);
+    let mut errors = Vec::new();
+    crate::parse_type_comments(source, parsed.tokens(), &mut |error| errors.push(error));
+    assert!(
+        errors.iter().any(|error| error.message == "Expected \":\""),
+        "{errors:?}"
+    );
+}
+
 #[derive(Debug)]
 struct TestCase {
     input: String,

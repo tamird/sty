@@ -127,9 +127,14 @@ ast_node! {
     children types -> Type;
 }
 
+ast_node! {
+    TypeDict => TYPE_DICT
+}
+
 pub enum Type {
     PathType(PathType),
     TypeList(TypeList),
+    TypeDict(TypeDict),
     UnionType(UnionType),
     NoneType(NoneType),
     EllipsisType(EllipsisType),
@@ -145,7 +150,13 @@ impl AstNode for Type {
     {
         matches!(
             kind,
-            PATH_TYPE | TYPE_LIST | UNION_TYPE | NONE_TYPE | ELLIPSIS_TYPE | LITERAL_VALUE
+            PATH_TYPE
+                | TYPE_LIST
+                | TYPE_DICT
+                | UNION_TYPE
+                | NONE_TYPE
+                | ELLIPSIS_TYPE
+                | LITERAL_VALUE
         )
     }
 
@@ -156,6 +167,7 @@ impl AstNode for Type {
         Some(match syntax.kind() {
             PATH_TYPE => Self::PathType(PathType { syntax }),
             TYPE_LIST => Self::TypeList(TypeList { syntax }),
+            TYPE_DICT => Self::TypeDict(TypeDict { syntax }),
             UNION_TYPE => Self::UnionType(UnionType { syntax }),
             NONE_TYPE => Self::NoneType(NoneType { syntax }),
             ELLIPSIS_TYPE => Self::EllipsisType(EllipsisType { syntax }),
@@ -168,6 +180,7 @@ impl AstNode for Type {
         match self {
             Type::PathType(type_) => type_.syntax(),
             Type::TypeList(type_) => type_.syntax(),
+            Type::TypeDict(type_) => type_.syntax(),
             Type::UnionType(type_) => type_.syntax(),
             Type::NoneType(type_) => type_.syntax(),
             Type::EllipsisType(type_) => type_.syntax(),

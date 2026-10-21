@@ -301,6 +301,38 @@ mod tests {
     }
 
     #[test]
+    fn dictionary_shape_type_comments_check_list_elements() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        let file = fixture.main_file();
+        for (element, expected) in [
+            (r#"{"name": "ok"}"#, None),
+            (r#"{"name": "ok", "aliases": ["other"]}"#, None),
+            (r#"{"name": 1}"#, Some("invalid-argument-type")),
+            (r#"{"aliases": ["other"]}"#, Some("invalid-assignment")),
+        ] {
+            analysis.update_file(
+                file,
+                format!(
+                    r#"def consume(value):
+    # type: (str) -> None
+    pass
+items = [{element}]  # type: list[dict[{{"name": str, "aliases": NotRequired[list[str]]}}]]
+consume(items[0]["name"])
+"#
+                ),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            match expected {
+                Some(expected) => assert!(
+                    diagnostics.iter().any(|d| d.id().as_str() == expected),
+                    "{diagnostics:?}"
+                ),
+                None => assert!(diagnostics.is_empty(), "{diagnostics:?}"),
+            }
+        }
+    }
+
+    #[test]
     fn literal_type_comments_check_callers_and_bodies() {
         let signature = "def configure(operations, enabled, code):\n    # type: (Mapping[str, Literal['set', 'extend']], Literal[True], Literal[1, -1]) -> Literal['split']\n";
         let (mut analysis, fixture) = Analysis::from_single_file_fixture("");

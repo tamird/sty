@@ -8,7 +8,7 @@ use crate::T;
 const LITERAL_START: SyntaxKindSet =
     SyntaxKindSet::new(&[STRING, INT, FLOAT, T![True], T![False], T![+], T![-]]);
 const TYPE_START: SyntaxKindSet =
-    SyntaxKindSet::new(&[T![ident], T![None], T!['['], ELLIPSIS]).union(LITERAL_START);
+    SyntaxKindSet::new(&[T![ident], T![None], T!['['], T!['{'], ELLIPSIS]).union(LITERAL_START);
 
 const PARAMETER_TYPE_START: SyntaxKindSet = TYPE_START.union(SyntaxKindSet::new(&[T![*], T![**]]));
 
@@ -125,6 +125,7 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
             }
             m.complete(p, TYPE_LIST)
         }
+        T!['{'] => type_dict(p),
         ELLIPSIS => {
             let m = p.start();
             p.bump(ELLIPSIS);
@@ -147,6 +148,38 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
             return None;
         }
     })
+}
+
+fn type_dict(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(T!['{']);
+    let end = SyntaxKindSet::new(&[T!['}']]);
+    while !p.at(T!['}']) && !p.at(EOF) {
+        if !p.eat(STRING) {
+            p.error_recover_until("Expected string key", end);
+            break;
+        }
+        if !p.eat(T![:]) {
+            p.error_recover_until("Expected \":\"", end);
+            break;
+        }
+        if !p.at_kinds(TYPE_START) {
+            p.error_recover_until("Expected type", end);
+            break;
+        }
+        union_type(p);
+        if p.at(T!['}']) {
+            break;
+        }
+        if !p.eat(T![,]) {
+            p.error_recover_until("Expected \",\"", end);
+            break;
+        }
+    }
+    if !p.eat(T!['}']) {
+        p.error("\"{\" was not closed");
+    }
+    m.complete(p, TYPE_DICT)
 }
 
 pub(crate) fn function_type(p: &mut Parser) -> CompletedMarker {
