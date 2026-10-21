@@ -208,8 +208,7 @@ fn callback_invocation<'db>(
     let environment = ProgramEnvironment::from_file(file);
     let mut parameters = Vec::new();
     if kind == ContextKind::Aspect {
-        let target = factory::native_class(db, declaration.program_file(db), "Target")?;
-        let target = target.to_instance_approximation(db, &environment)?;
+        let target = unrestricted_target_type(db, &environment, declaration.program_file(db))?;
         parameters.push(Parameter::positional_only(None).with_annotated_type(target));
     }
     parameters.push(Parameter::positional_only(None).with_annotated_type(context));
@@ -569,8 +568,7 @@ fn registration_parameter_type<'db>(
             return None;
         }
         if function.parameters.index(parameter) == Some(0) {
-            let target = factory::native_class(db, declarations, "Target")?;
-            return target.to_instance_approximation(db, &environment);
+            return unrestricted_target_type(db, &environment, declarations);
         }
     }
     registration_context_type(db, model, file, call, signature, context_kind)
@@ -1133,7 +1131,8 @@ fn context_type<'db>(
                 target: Box::from([Name::new(view.name()), name.clone()]),
                 ty,
             });
-            if let Some(ty) = analyzed_target_type(db, &environment, declarations, attribute) {
+            if let Some(ty) = analyzed_target_type(db, &environment, declarations, Some(attribute))
+            {
                 implications.push(ProvidedFieldImplication {
                     guard: Box::from([Name::new(view.name()), name.clone()]),
                     target: Box::from([Name::new("attr"), name.clone()]),
@@ -1251,7 +1250,7 @@ fn field_type<'db>(
             None => Some(Type::unknown()),
         }
     };
-    let target = || analyzed_target_type(db, environment, declarations, attribute);
+    let target = || analyzed_target_type(db, environment, declarations, Some(attribute));
     match view {
         View::Attr => {
             if attribute.kind == AttributeKind::Label {
@@ -1306,18 +1305,50 @@ fn field_type<'db>(
     }
 }
 
+pub(super) fn target_type_reference<'db>(
+    db: &'db Database,
+    file: ProgramFile<'db>,
+    value: Type<'db>,
+) -> Option<Type<'db>> {
+    let source = db.starlark_file(file)?;
+    if source.dialect != Dialect::Bazel
+        || !matches!(value, Type::ClassLiteral(_))
+        || db.annotation_builtin(source, "Target") != Some(value)
+    {
+        return None;
+    }
+    let environment = ProgramEnvironment::from_file(file);
+    let TypeDefinition::StaticClass(definition) = value.definition(db, &environment)? else {
+        return None;
+    };
+    unrestricted_target_type(db, &environment, definition.program_file(db))
+}
+
+fn unrestricted_target_type<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    declarations: ProgramFile<'db>,
+) -> Option<Type<'db>> {
+    let target = factory::native_class(db, declarations, "Target")?;
+    // Match the complete inventory required by native::analyzed_target_annotation.
+    factory::native_class(db, declarations, "File")
+        .and_then(|_| analyzed_target_type(db, environment, declarations, None))
+        .or_else(|| target.to_instance_approximation(db, environment))
+}
+
 fn analyzed_target_type<'db>(
     db: &'db Database,
     environment: &ProgramEnvironment<'db>,
     declarations: ProgramFile<'db>,
-    attribute: &Attribute,
+    attribute: Option<&Attribute>,
 ) -> Option<Type<'db>> {
     let native = |name| {
         factory::native_class(db, declarations, name)?.to_instance_approximation(db, environment)
     };
     // Successful executable/single-artifact prerequisites exclude targets
     // without FilesToRunProvider. Other dependencies can be environment groups.
-    let provider = if attribute.executable == Some(true) {
+    let executable = attribute.is_some_and(|attribute| attribute.executable == Some(true));
+    let provider = if executable {
         factory::specialized_native_instance(
             db,
             environment,
@@ -1335,7 +1366,7 @@ fn analyzed_target_type<'db>(
         "Target",
         vec![provider],
     )?;
-    if attribute.executable == Some(true) || attribute.single_file == Some(true) {
+    if executable || attribute.is_some_and(|attribute| attribute.single_file == Some(true)) {
         Some(target)
     } else {
         let group = factory::specialized_native_instance(
@@ -2060,6 +2091,68 @@ registered = rule(**options)
                     && d.headline_message().contains("`ctx`")),
             "{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn unrestricted_targets_agree_across_bazel_apis() {
+        let source = r#"def consume(deps: list[Target]) -> None: pass
+def use_factory(factory: Callable[[], Attribute[Sequence[Target]]]) -> None: pass
+def as_target(value: object) -> Target | None:
+    if type(value) == "Target":
+        return value
+    return None
+def implementation(ctx):
+    consume(ctx.attr.deps)
+example = rule(implementation=implementation, attrs={"deps": attr.label_list()})
+use_factory(attr.label_list)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn target_typing_preserves_partial_inventory() {
+        let source = r#"def as_label(value: object) -> Label:
+    if type(value) == "Target":
+        return value.label
+    fail("not a target")
+def aspect_impl(target, ctx):
+    target.label
+    return []
+aspect(implementation=aspect_impl)
+def subrule_impl(ctx, *, _x): pass
+subrule(implementation=subrule_impl, attrs={"_x": "not an attribute"})
+"#;
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for missing in ["File", "FilesToRunProvider"] {
+            let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+            enable_context_inference(&mut analysis);
+            let mut builtins = builtins.clone();
+            builtins.r#type.retain(|class| class.name != missing);
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let snapshot = analysis.snapshot();
+            let diagnostics = snapshot.diagnostics(fixture.main_file()).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{missing}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+            check_field(
+                &snapshot,
+                fixture.main_file(),
+                source,
+                "target.label",
+                "Label",
+                "",
+            );
+        }
     }
 
     #[test]
@@ -3473,7 +3566,7 @@ def read(context: ctx[object, struct[{"enabled": bool}, ...]]) -> bool: ...
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(helper, interface)]).unwrap();
         let inherited = "load('//:attrs.bzl', 'attributes')\ndef more() -> dict[str, Attribute]: return {}\ndef parent(ctx): return []\nbase = rule(implementation=parent, attrs=attributes(), extendable=True)\ndef implementation(ctx):\n    ctx.attr.dep\n    ctx.attr._private\n    return []\nexample = rule(parent=base, implementation=implementation, attrs=OVERRIDES)\n";
-        let target = "Target[FilesToRunProvider[File | None] | None]";
+        let target = "Target[FilesToRunProvider[File | None]] | Target[None]";
         for (overrides, expected) in [("{}", target), ("more()", "Unknown"), ("{}", target)] {
             let source = inherited.replace("OVERRIDES", overrides);
             analysis.update_file(file, source.clone());
@@ -5006,7 +5099,7 @@ example = rule(implementation=rule_impl, attrs={
             ),
             (
                 "ctx.attr.helper",
-                "Sequence[Target[FilesToRunProvider[File | None] | None]]",
+                "Sequence[Target[FilesToRunProvider[File | None]] | Target[None]]",
             ),
             ("ctx.attr.exec_label", "Target[FilesToRunProvider[File]]"),
             (

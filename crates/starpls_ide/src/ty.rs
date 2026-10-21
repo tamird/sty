@@ -558,9 +558,15 @@ impl ty_python_semantic::Db for Database {
         _definition: Option<Definition<'db>>,
     ) -> Option<Type<'db>> {
         self.starlark_file(file)?;
-        factory::common_rule_attrs(self, file, value_type).or_else(|| {
-            providers::constructor_instance(self, value_type, &ProgramEnvironment::from_file(file))
-        })
+        factory::common_rule_attrs(self, file, value_type)
+            .or_else(|| context::target_type_reference(self, file, value_type))
+            .or_else(|| {
+                providers::constructor_instance(
+                    self,
+                    value_type,
+                    &ProgramEnvironment::from_file(file),
+                )
+            })
     }
 
     fn provided_instance_fields<'db>(
@@ -723,7 +729,13 @@ impl ty_python_semantic::Db for Database {
                 // Tuple elements are covariant, so object covers every element type.
                 KnownClass::Object.to_instance(self, &environment),
             ),
-            "File" | "Label" | "Target" | "rule" | "macro" | "select" | "depset" | "runfiles"
+            "Target" => {
+                let class = self
+                    .language_builtin(file, tag, BuiltinUsage::Annotation)?
+                    .resolve_type(self)?;
+                context::target_type_reference(self, file, class)?
+            }
+            "File" | "Label" | "rule" | "macro" | "select" | "depset" | "runfiles"
             | "FilesToRunProvider" => {
                 let binding = self.language_builtin(file, tag, BuiltinUsage::Annotation)?;
                 let class = binding.resolve_type(self)?;
@@ -1390,8 +1402,10 @@ def register(name: str, visibility: list[str] | None):
                     })
                     .unwrap()
                     .unwrap();
-                let expected =
-                    expected.replace("Target", "Target[FilesToRunProvider[File | None] | None]");
+                let expected = expected.replace(
+                    "Target",
+                    "Target[FilesToRunProvider[File | None]] | Target[None]",
+                );
                 assert!(
                     hover.contents.value.contains(&format!(": {expected}\n")),
                     "{tag}, {marker}: {}",
@@ -1555,8 +1569,10 @@ def register(name: str, visibility: list[str] | None):
                 })
                 .unwrap()
                 .unwrap();
-            let expected =
-                expected.replace("Target", "Target[FilesToRunProvider[File | None] | None]");
+            let expected = expected.replace(
+                "Target",
+                "Target[FilesToRunProvider[File | None]] | Target[None]",
+            );
             assert!(
                 hover.contents.value.contains(&format!(": {expected}\n")),
                 "{declarations}: {}",

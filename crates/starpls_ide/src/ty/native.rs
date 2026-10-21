@@ -1910,6 +1910,27 @@ fn native_provider_instance(value: &Value) -> Option<&str> {
         })
 }
 
+fn analyzed_target_annotation(classes: &BTreeSet<String>) -> Option<&'static str> {
+    // Match the unrestricted analyzed target in context::unrestricted_target_type.
+    ["Target", "FilesToRunProvider", "File"]
+        .into_iter()
+        .all(|class| classes.contains(class))
+        .then_some("_starpls_types.Target[_starpls_types.FilesToRunProvider] | _starpls_types.Target[None]")
+}
+
+fn target_attribute_annotation(name: &str, target: &str) -> Option<String> {
+    let targets = format!("_starpls_typing.Sequence[{target}]");
+    let value = match name {
+        "label" => format!("{target} | {targets} | None"),
+        "label_list" => targets,
+        "label_list_dict" => {
+            format!("_starpls_typing.Mapping[_starpls_builtins.str, {targets}]")
+        }
+        _ => return None,
+    };
+    Some(format!("_starpls_types.Attribute[{value}]"))
+}
+
 fn write_function(
     output: &mut String,
     indent: &str,
@@ -1935,6 +1956,23 @@ fn write_function(
         "__call__"
     } else {
         &value.name
+    };
+    let target_attribute = match (kind, value.name.as_str()) {
+        (CallableKind::Method("attr"), name @ ("label" | "label_list" | "label_list_dict"))
+            if classes.contains("Attribute") =>
+        {
+            analyzed_target_annotation(classes)
+                .and_then(|target| target_attribute_annotation(name, target))
+        }
+        (CallableKind::Function, "subrule")
+            if classes.contains("Attribute") && classes.contains("Target") =>
+        {
+            let target = analyzed_target_annotation(classes).unwrap_or("_starpls_types.Target");
+            target_attribute_annotation("label", target).map(|attribute| {
+                format!("_starpls_typing.Mapping[_RuleAttributeName, {attribute}]")
+            })
+        }
+        _ => None,
     };
     write!(output, "{indent}def {name}(")?;
     let mut separator = "";
@@ -2047,7 +2085,7 @@ fn write_function(
             // Subrules accept label and label-list descriptors. Their ordinary
             // ctx.attr values fit this covariant view; subrule callbacks receive
             // different injected values for executable and single-file labels.
-            (CallableKind::Function, "subrule", "attrs") => (classes.contains("Attribute") && classes.contains("Target")).then_some("_starpls_typing.Mapping[_RuleAttributeName, _starpls_types.Attribute[_starpls_types.Target | _starpls_typing.Sequence[_starpls_types.Target] | None]]"),
+            (CallableKind::Function, "subrule", "attrs") => target_attribute.as_deref(),
             // The host validates export and extension permissions after the rule type.
             (CallableKind::Function, "rule", "parent") => classes.contains("rule").then_some("_starpls_types.rule | None"),
             // Registration retains a separate callable signature. Attribute-dependent
@@ -2344,18 +2382,7 @@ fn write_function(
                     // These covariant views include provider-refined targets
                     // and split-transition lists. Checked descriptors retain
                     // their exact flags, requiredness, and mutable list types.
-                    "label" => ["Target", "FilesToRunProvider", "File"]
-                        .into_iter()
-                        .all(|class| classes.contains(class))
-                        .then_some("_starpls_types.Attribute[_starpls_types.Target | _starpls_typing.Sequence[_starpls_types.Target] | None]"),
-                    "label_list" => ["Target", "FilesToRunProvider", "File"]
-                        .into_iter()
-                        .all(|class| classes.contains(class))
-                        .then_some("_starpls_types.Attribute[_starpls_typing.Sequence[_starpls_types.Target]]"),
-                    "label_list_dict" => ["Target", "FilesToRunProvider", "File"]
-                        .into_iter()
-                        .all(|class| classes.contains(class))
-                        .then_some("_starpls_types.Attribute[_starpls_typing.Mapping[_starpls_builtins.str, _starpls_typing.Sequence[_starpls_types.Target]]]"),
+                    "label" | "label_list" | "label_list_dict" => target_attribute.as_deref(),
                     _ => None,
                 }
             }
@@ -2563,6 +2590,11 @@ fn annotation(
                     }
                     if name == "Label" && matches!(usage, AnnotationUse::AttributeInput) {
                         return "_starpls_types.Label | _starpls_builtins.str".to_owned();
+                    }
+                    if name == "Target" {
+                        return analyzed_target_annotation(classes)
+                            .unwrap_or("_starpls_types.Target")
+                            .to_owned();
                     }
                     return format!("_starpls_types.{name}");
                 }
