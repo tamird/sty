@@ -288,22 +288,36 @@ fn refine_builtin_signature(dialect: Dialect, value: &mut Value, builtins: &Buil
 }
 
 fn existing_rule_view_result(value: &Value) -> Option<&'static str> {
-    let immutable_result = env::immutable_existing_rule_return_type(&value.name)?;
+    let any_rule_result = env::ExistingRuleScope::Any.return_type(&value.name)?;
     let callable = value.callable.as_ref()?;
     let result = env::normalize_doc(&callable.return_type, true);
-    let immutable = result == immutable_result;
-    if !immutable && !result.eq_ignore_ascii_case("unknown") {
+    let scope = if result == any_rule_result {
+        Some(env::ExistingRuleScope::Any)
+    } else if env::ExistingRuleScope::Build.return_type(&value.name) == Some(result.as_str()) {
+        Some(env::ExistingRuleScope::Build)
+    } else {
+        None
+    };
+    if scope.is_none() && !result.eq_ignore_ascii_case("unknown") {
         return None;
     }
-    match (value.name.as_str(), immutable) {
-        ("existing_rule", true) => Some("_starpls_types._ExistingRule | None"),
-        ("existing_rules", true) => {
+    match (value.name.as_str(), scope) {
+        ("existing_rule", Some(env::ExistingRuleScope::Any)) => {
+            Some("_starpls_types._ExistingRule | None")
+        }
+        ("existing_rules", Some(env::ExistingRuleScope::Any)) => {
             Some("_starpls_types._ExistingRuleView[_starpls_types._ExistingRule]")
         }
-        ("existing_rule", false) => {
+        ("existing_rule", Some(env::ExistingRuleScope::Build)) => Some(
+            "_starpls_types._ExistingRule[_starpls_builtins.tuple[_starpls_builtins.str, ...]] | None",
+        ),
+        ("existing_rules", Some(env::ExistingRuleScope::Build)) => Some(
+            "_starpls_types._ExistingRuleView[_starpls_types._ExistingRule[_starpls_builtins.tuple[_starpls_builtins.str, ...]]]",
+        ),
+        ("existing_rule", None) => {
             Some("_starpls_types._ExistingRuleView[_starpls_builtins.object] | None")
         }
-        ("existing_rules", false) => Some(
+        ("existing_rules", None) => Some(
             "_starpls_types._ExistingRuleView[_starpls_types._ExistingRuleView[_starpls_builtins.object]]",
         ),
         _ => None,
@@ -606,7 +620,10 @@ fn declarations(
         // so lookup keys must be hashable. Sequence results differ from Python
         // Mapping's set-like views. ExistingRuleView always supplies string
         // pseudo-attributes "name" and "kind"; other attribute values are
-        // heterogeneous. ExistingRulesView instead maps target names to rules.
+        // heterogeneous. Build rules have nonconfigurable string-list tags,
+        // which StarlarkNativeModule converts to tuples; older queries can
+        // also return repository rules without tags. ExistingRulesView
+        // instead maps target names to rules.
         write!(
             body,
             r#"    class {EXISTING_RULE_VIEW}[_Value](_starpls_typing.Protocol):
@@ -621,13 +638,17 @@ fn declarations(
         def keys(self) -> _starpls_typing.Sequence[_starpls_builtins.str]: ...
         def values(self) -> _starpls_typing.Sequence[_Value]: ...
         def items(self) -> _starpls_typing.Sequence[_starpls_builtins.tuple[_starpls_builtins.str, _Value]]: ...
-    class _ExistingRule({EXISTING_RULE_VIEW}[_starpls_builtins.object], _starpls_typing.Protocol):
+    class _ExistingRule[_Tags = _starpls_builtins.object]({EXISTING_RULE_VIEW}[_starpls_builtins.object], _starpls_typing.Protocol):
         @_starpls_typing.overload
         def __getitem__(self, key: _starpls_typing.Literal["name", "kind"]) -> _starpls_builtins.str: ...
+        @_starpls_typing.overload
+        def __getitem__(self, key: _starpls_typing.Literal["tags"]) -> _Tags: ...
         @_starpls_typing.overload
         def __getitem__(self, key: _starpls_builtins.str) -> _starpls_builtins.object: ...
         @_starpls_typing.overload
         def get(self, key: _starpls_typing.Literal["name", "kind"], /, default: _starpls_builtins.object = ...) -> _starpls_builtins.str: ...
+        @_starpls_typing.overload
+        def get(self, key: _starpls_typing.Literal["tags"], /, default: _starpls_builtins.object = ...) -> _Tags: ...
         @_starpls_typing.overload
         def get(self, key: _starpls_typing.Hashable, /, default: _starpls_builtins.object = ...) -> _starpls_builtins.object: ...
 "#
@@ -5097,10 +5118,31 @@ def inspect_all() -> str:
 def kind() -> str:
     return native.existing_rules()["name"]["kind"]
 
+def tags() -> tuple[str, ...] | None:
+    rule = native.existing_rule("target")
+    return rule.get("tags", default=42) if rule != None else None
+
+def all_tags() -> tuple[str, ...]:
+    return native.existing_rules()["target"]["tags"]
+
+def mutable_tags() -> list[str]:
+    return native.existing_rules()["target"]["tags"]
+
 def other() -> str:
     return native.existing_rules()["target"]["srcs"]
 "#;
-        for (release, expected) in [("release 7.4.1", 3), ("release 8.0.0", 1)] {
+        let cases: [(&str, &[&str]); 3] = [
+            (
+                "release 7.4.1",
+                &["name", "kind", "tags", "all_tags", "mutable_tags", "other"],
+            ),
+            (
+                "release 8.0.0",
+                &["tags", "all_tags", "mutable_tags", "other"],
+            ),
+            ("release 9.0.0", &["mutable_tags", "other"]),
+        ];
+        for (release, expected) in cases {
             let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
                 "../../../starpls/src/builtin/builtin.pb"
             ))
@@ -5120,14 +5162,22 @@ def other() -> str:
                 )
                 .unwrap();
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert_eq!(diagnostics.len(), expected, "{release}: {diagnostics:?}");
-            assert!(
-                diagnostics
-                    .iter()
-                    .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
-                "{release}: {diagnostics:?}"
-            );
-            assert!(source[diagnostics.last().unwrap().range().unwrap()].contains("\"srcs\""));
+            let failed_functions: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+                    source[..usize::from(diagnostic.range().unwrap().start())]
+                        .lines()
+                        .rev()
+                        .find_map(|line| {
+                            line.strip_prefix("def ")?
+                                .split_once('(')
+                                .map(|(name, _)| name)
+                        })
+                        .unwrap()
+                })
+                .collect();
+            assert_eq!(failed_functions, expected, "{release}: {diagnostics:?}");
         }
     }
 

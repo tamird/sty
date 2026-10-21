@@ -56,12 +56,25 @@ pub fn normalize_doc(text: &str, is_type: bool) -> String {
     result
 }
 
-/// Bazel's runtime type for a reflected rule query when immutable views are guaranteed.
-pub fn immutable_existing_rule_return_type(name: &str) -> Option<&'static str> {
-    match name {
-        "existing_rule" => Some("dict_like_view; or None"),
-        "existing_rules" => Some("dict_like_view"),
-        _ => None,
+/// The possible rules exposed by an immutable reflected-rule query.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExistingRuleScope {
+    Any,
+    Build,
+}
+
+impl ExistingRuleScope {
+    /// A return-type description that retains the query's rule scope.
+    pub fn return_type(self, name: &str) -> Option<&'static str> {
+        match (self, name) {
+            (Self::Any, "existing_rule") => Some("dict_like_view; or None"),
+            (Self::Any, "existing_rules") => Some("dict_like_view"),
+            (Self::Build, "existing_rule") => {
+                Some("dict_like_view of build rule attributes; or None")
+            }
+            (Self::Build, "existing_rules") => Some("dict_like_view of build rule views"),
+            _ => None,
+        }
     }
 }
 
@@ -80,6 +93,14 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     if version >= (8, 0) {
         // Bazel 8 removed the option to return mutable dictionaries.
         // https://github.com/bazelbuild/bazel/commit/0fa8f9f39542a093ebc6819642b58dce643c7af3
+        // Bazel 9 removed repository-rule packages, so queries can only
+        // reflect build rules.
+        // https://github.com/bazelbuild/bazel/commit/e812374c01f6f1795e61818cd027973a03bfb7db
+        let scope = if version >= (9, 0) {
+            ExistingRuleScope::Build
+        } else {
+            ExistingRuleScope::Any
+        };
         for value in builtins.global.iter_mut().chain(
             builtins
                 .r#type
@@ -87,7 +108,7 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
                 .filter(|class| class.name == "native")
                 .flat_map(|class| &mut class.field),
         ) {
-            let Some(result) = immutable_existing_rule_return_type(&value.name) else {
+            let Some(result) = scope.return_type(&value.name) else {
                 continue;
             };
             let Some(callable) = &mut value.callable else {
