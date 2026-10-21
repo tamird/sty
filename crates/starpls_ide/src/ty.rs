@@ -170,17 +170,27 @@ impl Database {
     }
 
     fn install_native_source(&mut self, source: native::DeclarationSource) {
+        let native::DeclarationSource { path, contents } = source;
+        self.install_virtual_source(&path, contents);
+    }
+
+    fn install_virtual_source(
+        &mut self,
+        path: &ruff_db::system::SystemVirtualPath,
+        contents: String,
+    ) -> File {
         use starpls_common::Db;
 
-        let native::DeclarationSource { path, contents } = source;
-        let changed = self.source_system_mut().set_virtual_source(&path, contents);
-        if let Some(file) = self.files.try_virtual_file(&path) {
+        let changed = self.source_system_mut().set_virtual_source(path, contents);
+        let file = if let Some(file) = self.files.try_virtual_file(path) {
             if changed {
                 file.sync(self);
             }
+            file
         } else {
-            self.files.virtual_file(self, &path);
-        }
+            self.files.virtual_file(self, path)
+        };
+        file.file()
     }
 
     /// Selects semantics using the same host identity as source navigation and loads.

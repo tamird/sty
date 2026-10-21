@@ -989,7 +989,21 @@ pub(super) fn used_build_annotations(db: &Database, file: File) -> FxHashSet<Tex
 }
 
 impl Analysis {
-    /// Replace the explicit trusted contracts atomically after validating every mapping.
+    /// Create a checker-owned declaration file to pair with a physical implementation.
+    pub fn bundled_type_interface(&mut self, path: &str, contents: &str) -> anyhow::Result<File> {
+        let path = ruff_db::system::SystemVirtualPath::new(path);
+        anyhow::ensure!(path.extension() == Some("bzli"), "expected a .bzli path");
+        Ok(File {
+            source: self.db.install_virtual_source(path, contents.to_owned()),
+            dialect: Dialect::Bazel,
+            info: Some(FileInfo::Bazel {
+                api_context: APIContext::Bzl,
+                is_external: true,
+            }),
+        })
+    }
+
+    /// Replace the trusted contracts atomically after validating every mapping.
     pub fn set_type_interfaces(
         &mut self,
         interfaces: impl IntoIterator<Item = (File, File)>,
@@ -1013,7 +1027,7 @@ impl Analysis {
             if !interface.is_type_interface(db) {
                 anyhow::bail!(
                     "type interface must be a .bzli file: {}",
-                    interface.path(db).display()
+                    interface.source.path(db)
                 );
             }
             match mappings.entry(source.source) {
@@ -1025,8 +1039,8 @@ impl Analysis {
                     anyhow::bail!(
                         "duplicate type interface for {}: {} and {}",
                         source.path(db).display(),
-                        previous.path(db).display(),
-                        interface.path(db).display()
+                        previous.source.path(db),
+                        interface.source.path(db)
                     );
                 }
             }
@@ -1035,12 +1049,13 @@ impl Analysis {
         Ok(())
     }
 
-    /// Physical implementations and their registered type interfaces.
+    /// Registered pairs whose implementation and interface are physical files.
     pub fn type_interface_pairs(&self) -> Vec<(File, File)> {
         let Self { db } = self;
         db.environment()
             .type_interfaces(db)
             .values()
+            .filter(|(_, interface)| interface.source.path(db).is_system_path())
             .copied()
             .collect()
     }
@@ -1055,7 +1070,7 @@ impl Analysis {
             .collect()
     }
 
-    /// Configured declaration files, including the Bazel host contract.
+    /// Physical configured declaration files, including the Bazel host contract.
     pub fn type_interface_files(&self) -> Vec<File> {
         let Self { db } = self;
         let mut files: Vec<_> = db
@@ -1064,6 +1079,7 @@ impl Analysis {
             .values()
             .map(|(_, interface)| *interface)
             .chain(self.bazel_builtin_extension_file())
+            .filter(|interface| interface.source.path(db).is_system_path())
             .collect();
         files.sort_by(|left, right| left.path(db).cmp(right.path(db)));
         files.dedup();
@@ -1109,7 +1125,10 @@ impl Database {
     ) -> ProgramFile<'db> {
         if let Some(interface) = self.type_interface(from, source) {
             let file = self.starlark_program_file(interface);
-            if !export_definitions(self, file, name).is_empty() {
+            if !export_definitions(self, file, name).is_empty()
+                && (!interface.source.path(self).is_system_virtual_path()
+                    || paired_bundled_export(self, source, interface, name))
+            {
                 return file;
             }
         }
@@ -1135,6 +1154,28 @@ impl Database {
         }
         export_definitions(self, source_file, &name)
     }
+}
+
+/// An automatic contract applies only to a declaration that corresponds to the installed owner.
+fn paired_bundled_export(db: &Database, source: File, interface: File, name: &str) -> bool {
+    let Some(annotations) = implementation_annotations(db, source) else {
+        return false;
+    };
+    let parsed = starpls_common::parsed_module(db, interface).load(db);
+    let declaration = parsed.suite().iter().find(|statement| match statement {
+        Stmt::FunctionDef(function) => function.name.as_str() == name,
+        Stmt::AnnAssign(assignment) => assignment
+            .target
+            .as_name_expr()
+            .is_some_and(|target| target.id == name),
+        _ => false,
+    });
+    declaration.is_some_and(|declaration| {
+        annotations
+            .owners
+            .values()
+            .any(|owner| *owner == declaration.node_index().load())
+    })
 }
 
 /// Correspondence is syntax and binding provenance; type inference begins after selection.

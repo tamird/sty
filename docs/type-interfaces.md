@@ -165,6 +165,17 @@ load(":shared.bzli", _Builder = "Builder")
 def builder() -> _Builder: ...
 ```
 
+### Bazel's standard library
+
+sty bundles selected declarations for Bazel's embedded `@bazel_tools`
+repository. A declaration applies when it corresponds to the source installed
+by the selected Bazel executable. An explicitly configured stub for that source
+takes precedence. Checking the source validates its implementation against the
+declaration.
+
+The bundled `@bazel_tools//tools/build_defs/repo:utils.bzl` declaration checks
+that `maybe` forwards the repository rule's required keywords and their types.
+
 ### Bazel rule keywords
 
 `CommonRuleAttrs` is a closed dictionary schema for common Bazel rule

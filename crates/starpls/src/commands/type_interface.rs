@@ -11,6 +11,11 @@ use starpls_ide::Analysis;
 
 use super::stub_package::Registration;
 
+const BAZEL_TOOLS_INTERFACES: &[(&str, &str)] = &[(
+    "tools/build_defs/repo/utils.bzl",
+    include_str!("../builtin/bazel_tools/tools/build_defs/repo/utils.bzli"),
+)];
+
 #[derive(Args, Clone, Default)]
 pub(crate) struct TypeInterfaceOptions {
     /// Apply INTERFACE to SOURCE exports or BUILD variable bindings; repeat for more files.
@@ -182,8 +187,34 @@ impl TypeInterfaceOptions {
                 }
             }
         }
+        let mut bundled = Vec::new();
+        if loader.has_bazel_context() {
+            let repository = loader.canonical_repository("bazel_tools".to_owned())?;
+            for &(relative_source, contents) in BAZEL_TOOLS_INTERFACES {
+                let source =
+                    loader.register_path(&repository.root.join(relative_source), &repository)?;
+                if origins.contains_key(&source) {
+                    continue;
+                }
+                if let Err(error) = loader.read_manifest(&source) {
+                    if error.kind() == std::io::ErrorKind::NotFound {
+                        continue;
+                    }
+                    return Err(error).with_context(|| format!("cannot read {}", source.display()));
+                }
+                bundled.push(BundledInterface {
+                    source,
+                    virtual_path: format!(
+                        "sty://bazel_tools/{}",
+                        Path::new(relative_source).with_extension("bzli").display()
+                    ),
+                    contents,
+                });
+            }
+        }
         Ok(PreparedInterfaces {
             registrations,
+            bundled,
             rules,
             analysis,
             builtin_extension,
@@ -194,9 +225,17 @@ impl TypeInterfaceOptions {
 #[derive(Debug)]
 pub(crate) struct PreparedInterfaces {
     registrations: Vec<Registration>,
+    bundled: Vec<BundledInterface>,
     rules: starpls_ide::DiagnosticRules,
     analysis: super::project_config::AnalysisOptions,
     builtin_extension: Option<(PathBuf, String)>,
+}
+
+#[derive(Debug)]
+struct BundledInterface {
+    source: PathBuf,
+    virtual_path: String,
+    contents: &'static str,
 }
 
 #[derive(Debug)]
@@ -235,11 +274,12 @@ impl PreparedInterfaces {
     pub(crate) fn install(self, analysis: &mut Analysis, workspace: &Path) -> anyhow::Result<()> {
         let Self {
             registrations,
+            bundled,
             rules,
             analysis: analysis_options,
             builtin_extension,
         } = self;
-        let open = |path: &Path| {
+        let open = |analysis: &Analysis, path: &Path| {
             let (dialect, context) =
                 crate::document::dialect_and_api_context_for_workspace_path(workspace, path)
                     .with_context(|| {
@@ -254,15 +294,25 @@ impl PreparedInterfaces {
                 }),
             )
         };
-        let mut mappings = Vec::with_capacity(registrations.len());
+        let mut mappings = Vec::with_capacity(registrations.len() + bundled.len());
         for Registration {
             source,
             interface,
             origin: _,
         } in registrations
         {
-            let source = open(&source)?;
-            let interface = open(&interface)?;
+            let source = open(analysis, &source)?;
+            let interface = open(analysis, &interface)?;
+            mappings.push((source, interface));
+        }
+        for BundledInterface {
+            source,
+            virtual_path,
+            contents,
+        } in bundled
+        {
+            let source = open(analysis, &source)?;
+            let interface = analysis.bundled_type_interface(&virtual_path, contents)?;
             mappings.push((source, interface));
         }
         let builtin_extension = match builtin_extension {
@@ -273,7 +323,7 @@ impl PreparedInterfaces {
                 {
                     return Err(UnsavedBuiltinExtension(document.path.as_std_path().into()).into());
                 }
-                Some(open(&path)?)
+                Some(open(analysis, &path)?)
             }
             None => None,
         };
@@ -294,6 +344,132 @@ impl PreparedInterfaces {
 #[cfg(test)]
 mod tests {
     use clap::Parser;
+
+    #[test]
+    fn bazel_tools_contract_belongs_to_the_installed_source() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("bazel-tools-contract");
+        let owner = root.join("external/bazel_tools/tools/build_defs/repo/utils.bzl");
+        std::fs::create_dir_all(owner.parent().unwrap()).unwrap();
+        std::fs::write(
+            &owner,
+            "def maybe(repo_rule, name, **kwargs):\n    repo_rule(name = name, **kwargs)\n",
+        )
+        .unwrap();
+        std::fs::write(owner.with_file_name("BUILD.bazel"), "").unwrap();
+        let caller = root.join("caller.bzl");
+        let caller_text = concat!(
+            "load(\"@@bazel_tools//tools/build_defs/repo:utils.bzl\", \"maybe\")\n\n",
+            "def repo(name: str, value: str) -> None:\n    pass\n\n",
+            "maybe(repo, \"valid\", value = \"yes\")\n",
+            "maybe(repo, \"wrong\", value = 1)\n",
+            "maybe(repo, \"missing\")\n",
+        );
+        std::fs::write(&caller, caller_text).unwrap();
+        let (sender, _) = crossbeam_channel::unbounded();
+        let loader = std::sync::Arc::new(crate::document::DefaultFileLoader::new(
+            std::sync::Arc::new(crate::document::source_tests::TestBazelClient::default()),
+            root.clone(),
+            None,
+            root.join("external"),
+            sender,
+            false,
+        ));
+        let options = super::TypeInterfaceOptions::default();
+        let prepared = options.prepare(&loader, &root).unwrap();
+        assert!(prepared.paths().next().is_none());
+        assert!(loader.configuration_inputs().contains_key(&owner));
+        let mut analysis = starpls_ide::Analysis::new(loader.clone(), Default::default()).unwrap();
+        analysis
+            .set_builtin_defs(crate::server::load_bazel_builtins(None), Default::default())
+            .unwrap();
+        prepared.install(&mut analysis, &root).unwrap();
+        assert!(analysis.type_interface_files().is_empty());
+        assert!(analysis.type_interface_pairs().is_empty());
+        let &[owner] = analysis.type_interface_sources().as_slice() else {
+            panic!("expected one bundled interface source");
+        };
+        let caller = analysis
+            .file(&caller, starpls_common::Dialect::Bazel, None)
+            .unwrap();
+        let ids = |analysis: &starpls_ide::Analysis, file| {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let mut ids: Vec<_> = diagnostics
+                .iter()
+                .map(|d| d.id().as_str().to_owned())
+                .collect();
+            ids.sort_unstable();
+            ids
+        };
+        assert_eq!(
+            ids(&analysis, caller),
+            ["invalid-argument-type", "missing-argument"]
+        );
+        assert!(ids(&analysis, owner).is_empty());
+        {
+            let snapshot = analysis.snapshot();
+            let position = starpls_ide::FilePosition {
+                file_id: caller,
+                pos: (caller_text.find("maybe(repo").unwrap() as u32).into(),
+            };
+            let locations = snapshot
+                .goto_definition(position.clone(), false)
+                .unwrap()
+                .unwrap();
+            let [starpls_ide::LocationLink::Local {
+                target_file_id,
+                origin_selection_range: _,
+                target_range: _,
+                target_selection_range: _,
+            }] = locations.as_slice()
+            else {
+                panic!("{locations:?}");
+            };
+            assert_eq!(*target_file_id, owner.source);
+            let references = snapshot
+                .find_references(position.clone(), true)
+                .unwrap()
+                .unwrap();
+            assert!(references.iter().any(|location| location.file_id == owner));
+            assert!(references
+                .iter()
+                .all(|location| location.file_id == owner || location.file_id == caller));
+            assert!(snapshot
+                .rename(position, &[caller, owner], Some("changed"))
+                .unwrap()
+                .unwrap()
+                .is_none());
+        }
+        analysis.update_file(
+            owner,
+            "def maybe(repo_rule, name, **kwargs):\n    repo_rule(name = 1, **kwargs)\n".into(),
+        );
+        assert_eq!(ids(&analysis, owner), ["invalid-argument-type"]);
+        analysis.update_file(owner, "def maybe(repo_rule, name):\n    pass\n".into());
+        assert_eq!(
+            ids(&analysis, caller),
+            ["unknown-argument", "unknown-argument"]
+        );
+        std::fs::write(
+            root.join("custom.bzli"),
+            "def maybe(repo_rule: object, name: str, **kwargs: object) -> None: ...\n",
+        )
+        .unwrap();
+        let explicit = super::TypeInterfaceOptions {
+            mappings: vec![super::TypeInterfaceMapping {
+                source: "external/bazel_tools/tools/build_defs/repo/utils.bzl".into(),
+                interface: "custom.bzli".into(),
+            }],
+        };
+        explicit
+            .prepare(&loader, &root)
+            .unwrap()
+            .install(&mut analysis, &root)
+            .unwrap();
+        assert_eq!(analysis.type_interface_files().len(), 1);
+        assert!(ids(&analysis, caller).is_empty());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn source_reload_requires_declared_interfaces() {
@@ -384,6 +560,7 @@ mod tests {
                 interface: stub,
                 origin: "test mapping".into(),
             }],
+            bundled: Vec::new(),
             rules: Default::default(),
             analysis: Default::default(),
             builtin_extension: None,

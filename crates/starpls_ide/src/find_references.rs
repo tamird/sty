@@ -302,7 +302,8 @@ fn occurrences(
             .definitions
             .iter()
             .filter_map(ResolvedDefinition::definition)
-            .filter_map(|definition| db.starlark_file(definition.program_file(db))),
+            .filter_map(|definition| db.starlark_file(definition.program_file(db)))
+            .filter(|file| file.source.path(db).is_system_path()),
     );
     files.sort_by(|left, right| left.path(db).cmp(right.path(db)));
     files.dedup_by_key(|file| file.source);
@@ -464,7 +465,7 @@ fn pair_definitions<'db>(db: &'db Database, search: &mut Search<'db>) -> anyhow:
                 bail!(
                     "No corresponding `{}` declaration in {}",
                     search.name,
-                    other.path(db).display()
+                    other.source.path(db)
                 );
             }
             search
@@ -560,16 +561,19 @@ pub(crate) fn rename(
     }) {
         bail!("The selected name refers to unrelated declarations");
     }
+    if !search.local_alias {
+        pair_definitions(db, &mut search)?;
+    }
     if search
         .definitions
         .iter()
         .filter_map(ResolvedDefinition::definition)
-        .any(|definition| db.starlark_file(definition.program_file(db)).is_none())
+        .any(|definition| {
+            !definition.file(db).path(db).is_system_path()
+                || db.starlark_file(definition.program_file(db)).is_none()
+        })
     {
         return Ok(None);
-    }
-    if !search.local_alias {
-        pair_definitions(db, &mut search)?;
     }
     let locations = occurrences(db, &search, candidates, true, true)?;
     if let Some(name) = new_name {

@@ -160,6 +160,7 @@ impl File {
         })
     }
 
+    /// Return the path of a physical Starlark file.
     pub fn path(self, db: &dyn Db) -> &std::path::Path {
         let Self {
             source,
@@ -169,7 +170,7 @@ impl File {
         source
             .path(db)
             .as_system_path()
-            .expect("Starlark files have system paths")
+            .expect("operation requires a physical Starlark file")
             .as_std_path()
     }
 
@@ -201,19 +202,19 @@ impl File {
     pub fn allows_native_annotations(self, db: &dyn Db) -> bool {
         self.dialect == Dialect::Bazel
             && matches!(self.api_context(), None | Some(APIContext::Bzl))
-            && self
-                .path(db)
-                .extension()
-                .is_some_and(|extension| matches!(extension.to_str(), Some("bzl" | "bzli")))
+            && matches!(self.extension(db), Some("bzl" | "bzli"))
     }
 
     /// A `.bzli` is a declaration file, never an executable Starlark module.
     pub fn is_type_interface(self, db: &dyn Db) -> bool {
-        self.allows_native_annotations(db)
-            && self
-                .path(db)
-                .extension()
-                .is_some_and(|extension| extension == "bzli")
+        self.allows_native_annotations(db) && self.extension(db) == Some("bzli")
+    }
+
+    fn extension(self, db: &dyn Db) -> Option<&str> {
+        match self.source.path(db) {
+            ruff_db::files::FilePath::SystemVirtual(path) => path.extension(),
+            path => path.extension(),
+        }
     }
 
     pub fn annotation_mode(self, db: &dyn Db) -> starpls_syntax::AnnotationMode {
