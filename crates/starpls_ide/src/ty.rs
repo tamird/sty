@@ -456,14 +456,23 @@ impl Database {
         let native_file = self
             .files
             .try_virtual_file(&native::path(source_file.dialect))?;
+        let declarations = ty_python_semantic::Db::program_file(self, native_file.file());
+        let value = if source_file.dialect == Dialect::Bazel
+            && matches!(usage, BuiltinUsage::Runtime)
+            && name == "native"
+        {
+            native::namespace(self, declarations)
+        } else {
+            None
+        };
         let name = if matches!(usage, BuiltinUsage::Annotation) {
             Name::new(format!("_starpls_annotation_{name}"))
         } else {
             Name::new(native::export_name(context, name))
         };
         Some(ProvidedBindingValue::Export {
-            value: None,
-            file: ty_python_semantic::Db::program_file(self, native_file.file()),
+            value,
+            file: declarations,
             name,
         })
     }

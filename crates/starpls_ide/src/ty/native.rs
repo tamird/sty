@@ -7,6 +7,7 @@ use std::fmt::Write;
 
 use ruff_db::files::FilePath;
 use ruff_db::system::SystemVirtualPathBuf;
+use ruff_python_ast::name::Name;
 use starpls_bazel::build::attribute::Discriminator;
 use starpls_bazel::build::BuildLanguage;
 use starpls_bazel::build_language::attribute_type_string_from_discriminator;
@@ -24,9 +25,19 @@ use ty_ide::Docstring;
 use ty_ide::MarkupKind;
 use ty_python_core::definition::Definition;
 use ty_python_core::scope::NodeWithScopeKind;
+use ty_python_core::ProgramFile;
+use ty_python_semantic::provided::ProvidedBindingValue;
+use ty_python_semantic::provided::ProvidedClass;
+use ty_python_semantic::provided::ProvidedField;
+use ty_python_semantic::provided::ProvidedInstanceFields;
+use ty_python_semantic::types::Type as SemanticType;
+use ty_python_semantic::types::TypeDefinition;
+use ty_python_semantic::ProgramEnvironment;
+use ty_python_semantic::ResolvedDefinition;
 
 const STANDARD_PATH: &str = "starpls-native:standard.pyi";
 const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
+const STORED_GLOB: &str = "_starpls_native_stored_glob";
 pub(super) const MODULE_EXTENSION_TYPE: &str = "ModuleExtension";
 
 /// Bazel type constructor names and the corresponding type names in API metadata.
@@ -100,6 +111,49 @@ pub(super) fn is_builtin_function(db: &dyn ty_python_core::Db, definition: Defin
 
 pub(super) fn export_name(context: APIContext, name: &str) -> String {
     format!("_starpls_{context:?}_{name}")
+}
+
+/// Bazel stores BUILD globals as immutable fields of the native namespace.
+#[salsa::tracked(returns(copy))]
+pub(super) fn namespace<'db>(
+    db: &'db dyn ty_python_semantic::Db,
+    declarations: ProgramFile<'db>,
+) -> Option<SemanticType<'db>> {
+    let export = |name| {
+        ProvidedBindingValue::Export {
+            file: declarations,
+            name: Name::new(name),
+            value: None,
+        }
+        .resolve_type(db)
+    };
+    let glob @ SemanticType::FunctionLiteral(_) = export(STORED_GLOB)? else {
+        return None;
+    };
+    let base = export("_starpls_annotation_native")?;
+    let environment = ProgramEnvironment::from_file(declarations);
+    let TypeDefinition::Function(glob_definition) = glob.definition(db, &environment)? else {
+        return None;
+    };
+    let TypeDefinition::StaticClass(definition) = base.definition(db, &environment)? else {
+        return None;
+    };
+    ProvidedClass {
+        name: Name::new("native"),
+        bases: Box::from([base]),
+        class_members: Box::default(),
+        instance_fields: ProvidedInstanceFields {
+            fields: Box::from([ProvidedField {
+                name: Name::new("glob"),
+                ty: glob,
+                source: Some(ResolvedDefinition::Definition(glob_definition).focus_range(db)),
+            }]),
+            ..Default::default()
+        }
+        .into(),
+    }
+    .into_type_at_definition(db, definition)?
+    .to_instance_approximation(db, &environment)
 }
 
 pub(super) fn generate(
@@ -400,6 +454,21 @@ fn declarations(
             }
         }
     }
+    // The BUILD global and the native field are the same callable in Bazel.
+    // Preserve either inventory declaration if a host describes them differently.
+    let stored_glob = dialect == Dialect::Bazel
+        && classes
+            .get("native")
+            .and_then(|native| native.field.iter().find(|field| field.name == "glob"))
+            .and_then(|field| field.callable.as_ref())
+            .zip(
+                contexts
+                    .iter()
+                    .find(|(context, _)| *context == APIContext::Build)
+                    .and_then(|(_, globals)| globals.get("glob"))
+                    .and_then(|global| global.callable.as_ref()),
+            )
+            .is_some_and(|(field, global)| field == global);
 
     if !rule_names.is_empty() {
         classes.entry("rule".to_owned()).or_insert_with(|| Type {
@@ -1388,6 +1457,13 @@ _starpls_annotation_{} = repository_ctx
     output.push_str(&provider_declarations);
     output.push_str(&rule_declarations);
     output.push_str(&exports);
+    if stored_glob {
+        writeln!(
+            output,
+            "{STORED_GLOB} = {}",
+            export_name(APIContext::Build, "glob")
+        )?;
+    }
     output.push('\n');
     output.push_str(include_str!("starlark.pyi"));
     write_type_overloads(&mut output, &declared_classes)?;

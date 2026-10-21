@@ -1876,6 +1876,112 @@ def choose(*, text: bool) -> str | int: ...
     }
 
     #[test]
+    fn function_stubs_check_overloads_using_native_glob() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        let body = "def choose(files):\n    if files:\n        return native.glob(['*.py'])\n    return 42\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "source.bzli",
+            "@overload\ndef choose(files: Literal[True]) -> list[str]: ...\n@overload\ndef choose(files: Literal[False]) -> int: ...\ndef choose(files: bool) -> list[str] | int: ...\n",
+        );
+        let inherited = fixture.add_file(
+            &mut analysis.db,
+            "other.bzl",
+            "def package(value: native) -> str:\n    return value.package_name()\npackage(native)\n",
+        );
+        let module = fixture.add_file_with_options(
+            &mut analysis.db,
+            "MODULE.bazel",
+            "native.glob(['*.py'])",
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Module,
+                is_external: false,
+            }),
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for file in [source, inherited] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        let diagnostics = analysis.snapshot().diagnostics(module).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unresolved-reference");
+        let hover = analysis
+            .snapshot()
+            .hover(FilePosition {
+                file_id: source,
+                pos: u32::try_from(body.find("glob").unwrap()).unwrap().into(),
+            })
+            .unwrap()
+            .unwrap();
+        assert!(
+            hover.contents.value.contains("allow_empty"),
+            "{}",
+            hover.contents.value
+        );
+
+        analysis.update_file(
+            source,
+            body.replace("    if files:", "    bazel = native\n    if files:")
+                .replace("native.glob", "bazel.glob"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(
+            source,
+            body.replace(
+                "return native.glob(['*.py'])",
+                "native.glob(['*.py'])\n        return 42",
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+
+        analysis.update_file(source, body.replace("['*.py']", "['*.py'], allow_empty=42"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+
+        let include = builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "native")
+            .unwrap()
+            .field
+            .iter_mut()
+            .find(|field| field.name == "glob")
+            .unwrap()
+            .callable
+            .as_mut()
+            .unwrap()
+            .param
+            .iter_mut()
+            .find(|parameter| parameter.name == "include")
+            .unwrap();
+        include.r#type = "int".into();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.update_file(source, body.replace("['*.py']", "42"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "unverified-overload");
+    }
+
+    #[test]
     fn function_stubs_report_unverified_overloads() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
