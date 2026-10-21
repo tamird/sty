@@ -651,6 +651,7 @@ impl ty_python_semantic::Db for Database {
                 Some(
                     factory::BuiltinFunction::Rule { repository: _ }
                         | factory::BuiltinFunction::Aspect
+                        | factory::BuiltinFunction::Subrule
                         | factory::BuiltinFunction::Macro
                 )
             )

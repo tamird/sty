@@ -420,6 +420,7 @@ pub(super) fn parameter_type<'db>(
             factory,
             BuiltinFunction::Rule { repository: _ }
                 | BuiltinFunction::Aspect
+                | BuiltinFunction::Subrule
                 | BuiltinFunction::Macro
                 | BuiltinFunction::ModuleExtension
         ) {
@@ -512,6 +513,9 @@ fn registration_parameter_type<'db>(
             };
             return Some(context.annotated_type());
         }
+        BuiltinFunction::Subrule => {
+            return subrule_parameter_type(db, model, function, parameter, call, signature);
+        }
         BuiltinFunction::Rule { repository } => {
             if repository {
                 ContextKind::Repository
@@ -550,6 +554,77 @@ fn registration_parameter_type<'db>(
         }
     }
     registration_context_type(db, model, file, call, signature, context_kind)
+}
+
+fn subrule_parameter_type<'db>(
+    db: &'db Database,
+    model: &SemanticModel<'db>,
+    function: &ruff_python_ast::StmtFunctionDef,
+    parameter: &str,
+    call: &ExprCall,
+    signature: &CallSignatureDetails<'db>,
+) -> Option<Type<'db>> {
+    let environment = model.program_environment();
+    let declarations = signature.definition?.program_file(db);
+    let first = function
+        .parameters
+        .posonlyargs
+        .first()
+        .or_else(|| function.parameters.args.first())?;
+    if first.parameter.name.as_str() == parameter {
+        return factory::native_class(db, declarations, "subrule_ctx")?
+            .to_instance_approximation(db, &environment);
+    }
+    if !parameter.starts_with('_')
+        || !function
+            .parameters
+            .args
+            .iter()
+            .chain(&function.parameters.kwonlyargs)
+            .any(|argument| argument.parameter.name.as_str() == parameter)
+    {
+        return None;
+    }
+    let Argument::Expression(attrs) = argument(call, signature, "attrs").ok()?? else {
+        return None;
+    };
+    let items = model.dictionary_items(attrs)?;
+    let item = items
+        .items
+        .iter()
+        .find(|item| item.name == parameter && item.is_required())?;
+    let data = item.ty.provided_data(db, &environment)?;
+    let descriptor = data.downcast_ref::<Attribute>()?;
+    if descriptor.configuration != AttributeConfiguration::Ordinary {
+        return None;
+    }
+    match descriptor.kind {
+        AttributeKind::LabelList => {
+            analyzed_attribute_type(db, &environment, declarations, descriptor)
+        }
+        AttributeKind::Label => match (descriptor.executable, descriptor.single_file) {
+            (Some(true), _) => {
+                // Bazel collects this provider before invoking the callback.
+                let file = factory::native_class(db, declarations, "File")?
+                    .to_instance_approximation(db, &environment)?;
+                factory::specialized_native_instance(
+                    db,
+                    &environment,
+                    declarations,
+                    "FilesToRunProvider",
+                    vec![file],
+                )
+            }
+            (Some(false), Some(true)) => {
+                field_type(db, &environment, declarations, View::File, descriptor)
+            }
+            (Some(false), Some(false)) => {
+                analyzed_attribute_type(db, &environment, declarations, descriptor)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn registration_context_type<'db>(
@@ -1399,6 +1474,79 @@ mod tests {
                 infer_ctx_attributes: true,
                 ..Default::default()
             });
+    }
+
+    #[test]
+    fn subrule_implementations_receive_context_and_injected_attributes() {
+        let source = r#"def takes_file(value: File) -> None: pass
+def takes_target(value: Target) -> None: pass
+
+def implementation(context, caller_value, *, _file, _files, _tool, _target):
+    print(context.label)
+    takes_file(_file)
+    takes_target(_files[0])
+    takes_file(_tool.executable)
+    takes_target(_target)
+    print(_file.label)
+    print(context.attr)
+    return caller_value
+
+example = subrule(
+    implementation = implementation,
+    attrs = {
+        "_file": attr.label(default = "//pkg:file", allow_single_file = True),
+        "_files": attr.label_list(default = ["//pkg:files"]),
+        "_tool": attr.label(default = "//pkg:tool", executable = True, cfg = "exec"),
+        "_target": attr.label(default = "//pkg:target"),
+    },
+)
+
+def nullable(context, *, _maybe):
+    takes_file(_maybe)
+
+late_bound = subrule(
+    implementation = nullable,
+    attrs = {"_maybe": attr.label(
+        default = configuration_field(fragment = "coverage", name = "output_generator"),
+        allow_single_file = True,
+    )},
+)
+
+def shared(context, *, _both):
+    print(_both.path)
+
+native_subrule = subrule
+with_file = native_subrule(implementation = shared, attrs = {
+    "_both": attr.label(default = "//pkg:file", allow_single_file = True),
+})
+with_target = subrule(implementation = shared, attrs = {
+    "_both": attr.label(default = "//pkg:target"),
+})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic.id().as_str(),
+                    &source[diagnostic.range().unwrap()],
+                )
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            [
+                ("unresolved-attribute", "_file.label"),
+                ("unresolved-attribute", "context.attr"),
+                ("invalid-argument-type", "_maybe"),
+                ("unresolved-attribute", "_both.path"),
+            ]
+        );
     }
 
     #[test]
