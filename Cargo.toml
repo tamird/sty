@@ -11,17 +11,17 @@ members = [
 ]
 
 [workspace.dependencies]
-ruff_python_ast = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ruff_python_parser = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ruff_text_size = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ruff_source_file = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
+ruff_python_ast = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ruff_python_parser = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ruff_text_size = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ruff_source_file = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
 stacker = "0.1.25"
 salsa = { version = "=0.28.5", default-features = false, features = ["macros", "inventory", "accumulator"] }
-ruff_db = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450", features = ["os"] }
-ruff_notebook = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ty_module_resolver = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ty_ide = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ty_python_core = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ty_python_semantic = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ty_site_packages = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
-ty_vendored = { git = "https://github.com/tamird/ruff", rev = "7976fdd8f157012eb992469354bd68e1faf21450" }
+ruff_db = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493", features = ["os"] }
+ruff_notebook = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ty_module_resolver = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ty_ide = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ty_python_core = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ty_python_semantic = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ty_site_packages = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
+ty_vendored = { git = "https://github.com/tamird/ruff", rev = "148dff5706d32899defad0b3e63b42f8b42d1493" }
