@@ -288,18 +288,26 @@ fn refine_builtin_signature(dialect: Dialect, value: &mut Value, builtins: &Buil
 }
 
 fn existing_rule_view_result(value: &Value) -> Option<&'static str> {
-    let result = match value.name.as_str() {
-        "existing_rule" => "_starpls_types._ExistingRuleView[_starpls_builtins.object] | None",
-        "existing_rules" => {
-            "_starpls_types._ExistingRuleView[_starpls_types._ExistingRuleView[_starpls_builtins.object]]"
+    let immutable_result = env::immutable_existing_rule_return_type(&value.name)?;
+    let callable = value.callable.as_ref()?;
+    let result = env::normalize_doc(&callable.return_type, true);
+    let immutable = result == immutable_result;
+    if !immutable && !result.eq_ignore_ascii_case("unknown") {
+        return None;
+    }
+    match (value.name.as_str(), immutable) {
+        ("existing_rule", true) => Some("_starpls_types._ExistingRule | None"),
+        ("existing_rules", true) => {
+            Some("_starpls_types._ExistingRuleView[_starpls_types._ExistingRule]")
         }
-        _ => return None,
-    };
-    value.callable.as_ref().and_then(|callable| {
-        env::normalize_doc(&callable.return_type, true)
-            .eq_ignore_ascii_case("unknown")
-            .then_some(result)
-    })
+        ("existing_rule", false) => {
+            Some("_starpls_types._ExistingRuleView[_starpls_builtins.object] | None")
+        }
+        ("existing_rules", false) => Some(
+            "_starpls_types._ExistingRuleView[_starpls_types._ExistingRuleView[_starpls_builtins.object]]",
+        ),
+        _ => None,
+    }
 }
 
 fn declarations(
@@ -596,7 +604,9 @@ fn declarations(
         // StarlarkNativeModule.DictLikeView defines the read operations shared
         // by existing_rule and existing_rules. Bazel can also return a dictionary,
         // so lookup keys must be hashable. Sequence results differ from Python
-        // Mapping's set-like views; attribute values remain heterogeneous.
+        // Mapping's set-like views. ExistingRuleView always supplies string
+        // pseudo-attributes "name" and "kind"; other attribute values are
+        // heterogeneous. ExistingRulesView instead maps target names to rules.
         write!(
             body,
             r#"    class {EXISTING_RULE_VIEW}[_Value](_starpls_typing.Protocol):
@@ -611,6 +621,15 @@ fn declarations(
         def keys(self) -> _starpls_typing.Sequence[_starpls_builtins.str]: ...
         def values(self) -> _starpls_typing.Sequence[_Value]: ...
         def items(self) -> _starpls_typing.Sequence[_starpls_builtins.tuple[_starpls_builtins.str, _Value]]: ...
+    class _ExistingRule({EXISTING_RULE_VIEW}[_starpls_builtins.object], _starpls_typing.Protocol):
+        @_starpls_typing.overload
+        def __getitem__(self, key: _starpls_typing.Literal["name", "kind"]) -> _starpls_builtins.str: ...
+        @_starpls_typing.overload
+        def __getitem__(self, key: _starpls_builtins.str) -> _starpls_builtins.object: ...
+        @_starpls_typing.overload
+        def get(self, key: _starpls_typing.Literal["name", "kind"], /, default: _starpls_builtins.object = ...) -> _starpls_builtins.str: ...
+        @_starpls_typing.overload
+        def get(self, key: _starpls_typing.Hashable, /, default: _starpls_builtins.object = ...) -> _starpls_builtins.object: ...
 "#
         )?;
     }
@@ -4836,6 +4855,49 @@ def inspect_all() -> str:
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn existing_rule_identity_requires_immutable_views() {
+        let source = r#"def name() -> str | None:
+    rule = native.existing_rule("target")
+    return rule.get("name", default=42) if rule != None else None
+
+def kind() -> str:
+    return native.existing_rules()["name"]["kind"]
+
+def other() -> str:
+    return native.existing_rules()["target"]["srcs"]
+"#;
+        for (release, expected) in [("release 7.4.1", 3), ("release 8.0.0", 1)] {
+            let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+                "../../../starpls/src/builtin/builtin.pb"
+            ))
+            .unwrap();
+            env::apply_versioned_signatures(&mut builtins, release);
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let file = analysis
+                .open_document(
+                    Path::new("/main.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source.to_owned(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), expected, "{release}: {diagnostics:?}");
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                "{release}: {diagnostics:?}"
+            );
+            assert!(source[diagnostics.last().unwrap().range().unwrap()].contains("\"srcs\""));
+        }
     }
 
     #[test]

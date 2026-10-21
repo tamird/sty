@@ -56,6 +56,15 @@ pub fn normalize_doc(text: &str, is_type: bool) -> String {
     result
 }
 
+/// Bazel's runtime type for a reflected rule query when immutable views are guaranteed.
+pub fn immutable_existing_rule_return_type(name: &str) -> Option<&'static str> {
+    match name {
+        "existing_rule" => Some("dict_like_view; or None"),
+        "existing_rules" => Some("dict_like_view"),
+        _ => None,
+    }
+}
+
 /// Complete version-dependent API metadata using `bazel info release`.
 pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     let version = release.strip_prefix("release ").and_then(|version| {
@@ -68,6 +77,27 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     let Some(version) = version else {
         return;
     };
+    if version >= (8, 0) {
+        // Bazel 8 removed the option to return mutable dictionaries.
+        // https://github.com/bazelbuild/bazel/commit/0fa8f9f39542a093ebc6819642b58dce643c7af3
+        for value in builtins.global.iter_mut().chain(
+            builtins
+                .r#type
+                .iter_mut()
+                .filter(|class| class.name == "native")
+                .flat_map(|class| &mut class.field),
+        ) {
+            let Some(result) = immutable_existing_rule_return_type(&value.name) else {
+                continue;
+            };
+            let Some(callable) = &mut value.callable else {
+                continue;
+            };
+            if normalize_doc(&callable.return_type, true).eq_ignore_ascii_case("unknown") {
+                callable.return_type = result.to_owned();
+            }
+        }
+    }
     if let Some(platform_type) = builtins
         .r#type
         .iter_mut()
