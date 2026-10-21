@@ -1710,7 +1710,7 @@ def register_schema(callback: Callable[[module_ctx], extension_metadata | None],
             let source = format!(
                 r#"def implementation({parameters}):
     checked: str = {expression}
-    print(checked)
+    print(checked, attributes.keys())
     return {result}
 attributes = {{"message": {descriptor}}}
 first = {factory}(implementation=implementation, attrs=attributes)
