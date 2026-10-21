@@ -1,12 +1,13 @@
 load("@crates//:defs.bzl", "all_crate_deps")
-load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
-rust_binary(
-    name = "sty",
-    srcs = glob(["src/**/*.rs"]),
+rust_library(
+    name = "sty_lib",
+    srcs = glob(["src/**/*.rs"], exclude = ["src/main.rs"]),
     compile_data = [":src/builtin/builtin.pb"],
+    crate_name = "sty",
     rustc_env_files = [":generate_rustc_env_file"],
     deps = all_crate_deps() + [
         "//crates/starpls_bazel",
@@ -16,9 +17,15 @@ rust_binary(
     ],
 )
 
+rust_binary(
+    name = "sty",
+    srcs = ["src/main.rs"],
+    deps = [":sty_lib"],
+)
+
 rust_test(
     name = "sty_test",
-    crate = ":sty",
+    crate = ":sty_lib",
 )
 
 genrule(
