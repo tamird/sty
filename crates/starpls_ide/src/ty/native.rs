@@ -1131,7 +1131,17 @@ fn declarations(
                     }
                 }
                 None => {
-                    let field_type = if matches!(class.name.as_str(), "ctx" | "rule_attributes")
+                    let field_type = if dialect == Dialect::Bazel
+                        && class.name == "ctx"
+                        && matches!(field.name.as_str(), "features" | "disabled_features")
+                        && matches!(
+                            env::normalize_doc(&field.r#type, true).as_str(),
+                            "list" | "List"
+                        ) {
+                        // StarlarkRuleContextApi returns lists of feature names, but
+                        // Bazel's inventory erases their element type.
+                        Some("_starpls_builtins.list[_starpls_builtins.str]")
+                    } else if matches!(class.name.as_str(), "ctx" | "rule_attributes")
                         && classes.contains_key("struct")
                     {
                         match field.name.as_str() {
@@ -3174,6 +3184,66 @@ def module_environment(context: module_ctx) -> dict[str, str]:
                 .iter()
                 .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
         }
+    }
+
+    #[test]
+    fn context_feature_lists_preserve_string_elements() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def enabled(context: ctx[object, object]) -> list[str]:
+    context.features.append("enabled")
+    context.disabled_features.append("disabled")
+    context.features.append(42)
+    return context.features
+
+def disabled(context: ctx[object, object]) -> list[int]:
+    return context.disabled_features
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/features.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        assert_eq!(diagnostics[1].id().as_str(), "invalid-return-type");
+
+        let features = builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "ctx")
+            .unwrap()
+            .field
+            .iter_mut()
+            .find(|field| field.name == "features")
+            .unwrap();
+        features.r#type = "List of ints".to_owned();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.update_file(
+            file,
+            "def supplied(context: ctx[object, object]) -> list[int]:\n    return context.features\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
