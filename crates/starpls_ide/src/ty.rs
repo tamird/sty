@@ -38,6 +38,7 @@ mod host;
 pub(crate) mod interface;
 mod keywords;
 pub(crate) mod load;
+mod module_extension;
 mod native;
 mod providers;
 mod shapes;

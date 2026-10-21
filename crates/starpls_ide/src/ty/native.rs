@@ -47,6 +47,7 @@ const LEGACY_PROVIDER_GLOBALS: &[&str] = &[
     "ProtoInfo",
 ];
 pub(super) const MODULE_EXTENSION_TYPE: &str = "ModuleExtension";
+pub(super) const MODULE_EXTENSION_PROXY_TYPE: &str = "module_extension_proxy";
 
 /// Bazel type constructor names and the corresponding type names in API metadata.
 /// https://github.com/bazelbuild/bazel/commit/89086de828f7aa63564054819947edb9a7697e1f
@@ -274,6 +275,16 @@ fn refine_builtin_signature(dialect: Dialect, value: &mut Value, builtins: &Buil
         }
         // Rule values are callable objects with a nominal inheritance contract.
         "rule" => callable.return_type = "rule".to_owned(),
+        "use_extension" if dialect == Dialect::Bazel && callable.return_type == "Unknown" => {
+            callable.return_type = MODULE_EXTENSION_PROXY_TYPE.to_owned();
+        }
+        "use_repo" | "override_repo" | "inject_repo" if dialect == Dialect::Bazel => {
+            if let Some(parameter) = callable.param.iter_mut().find(|parameter| {
+                parameter.name == "extension_proxy" && parameter.r#type == "Unknown"
+            }) {
+                parameter.r#type = MODULE_EXTENSION_PROXY_TYPE.to_owned();
+            }
+        }
         // Bazel documents a mutable list, which the inventory calls a sequence.
         "glob" | "subpackages" if dialect == Dialect::Bazel => {
             callable.return_type = "list of strings".to_owned();
@@ -555,6 +566,24 @@ fn declarations(
             .entry(MODULE_EXTENSION_TYPE.to_owned())
             .or_insert_with(|| Type {
                 name: MODULE_EXTENSION_TYPE.to_owned(),
+                ..Default::default()
+            });
+    }
+    if dialect == Dialect::Bazel
+        && contexts.iter().any(|(context, globals)| {
+            *context == APIContext::Module
+                && globals.get("use_extension").is_some_and(|value| {
+                    value
+                        .callable
+                        .as_ref()
+                        .is_some_and(|callable| callable.return_type == MODULE_EXTENSION_PROXY_TYPE)
+                })
+        })
+    {
+        classes
+            .entry(MODULE_EXTENSION_PROXY_TYPE.to_owned())
+            .or_insert_with(|| Type {
+                name: MODULE_EXTENSION_PROXY_TYPE.to_owned(),
                 ..Default::default()
             });
     }

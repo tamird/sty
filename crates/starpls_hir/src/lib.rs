@@ -33,6 +33,7 @@ pub struct BuiltinDefs {
     pub rules: starpls_bazel::build::BuildLanguage,
     #[returns(clone)]
     pub extension: Option<BuiltinExtension>,
+    pub bazel_version: Option<starpls_bazel::env::BazelVersion>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -82,8 +83,8 @@ pub struct Environment {
 
 impl Environment {
     pub fn initialize(db: &dyn Db, options: InferenceOptions) -> Self {
-        let standard = BuiltinDefs::new(db, Builtins::default(), Default::default(), None);
-        let bazel = BuiltinDefs::new(db, Builtins::default(), Default::default(), None);
+        let standard = BuiltinDefs::new(db, Builtins::default(), Default::default(), None, None);
+        let bazel = BuiltinDefs::new(db, Builtins::default(), Default::default(), None, None);
         Self::new(
             db,
             options,

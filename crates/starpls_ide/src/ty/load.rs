@@ -4,6 +4,8 @@ use ruff_db::diagnostic::DiagnosticId;
 use ruff_db::diagnostic::Severity;
 use ruff_db::diagnostic::Span;
 use ruff_python_ast::name::Name;
+use ruff_python_ast::visitor;
+use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::ArgOrKeyword;
 use ruff_python_ast::Expr;
 use ruff_python_ast::ExprCall;
@@ -254,7 +256,7 @@ pub(super) fn callee_loaded_from(
 
 /// A load introduces a local binding, but only a declaration or assignment exports it again.
 /// Inspect binding origins without inferring the module's unrelated values.
-fn is_loaded_alias(db: &Database, file: ProgramFile<'_>, name: &str) -> bool {
+pub(super) fn is_loaded_alias(db: &Database, file: ProgramFile<'_>, name: &str) -> bool {
     let scope = global_scope(db, file);
     let Some(symbol) = place_table(db, scope).symbol_id(name) else {
         return false;
@@ -332,6 +334,63 @@ pub(crate) fn resolve_dependency(
 /// Reading source locations must not resolve other loads in the same file.
 pub(crate) fn statement_locations(db: &dyn Db, file: starpls_common::File) -> &[LoadDependency] {
     load_statements(db, file.source, (file.dialect, file.info))
+}
+
+/// Possible dependency sites for literal module-extension selectors.
+/// The CLI retains only sites whose host call actually requested the module.
+pub(crate) fn module_extension_locations(
+    db: &dyn Db,
+    file: starpls_common::File,
+) -> Vec<LoadDependency> {
+    if file.api_context() != Some(starpls_bazel::APIContext::Module) {
+        return Vec::new();
+    }
+    let parsed = starpls_common::parsed_module(db, file).load(db);
+    let source = file.contents(db);
+    let mut collector = ModuleExtensionLocations {
+        source: &source,
+        string_mode: file.source_mode(db).string_mode(),
+        dependencies: Vec::new(),
+    };
+    collector.visit_body(parsed.suite());
+    collector.dependencies
+}
+
+struct ModuleExtensionLocations<'a> {
+    source: &'a str,
+    string_mode: StringMode,
+    dependencies: Vec<LoadDependency>,
+}
+
+impl<'ast> Visitor<'ast> for ModuleExtensionLocations<'_> {
+    fn visit_expr(&mut self, expression: &'ast Expr) {
+        if let Expr::Call(call) = expression {
+            if let Some(label) = module_extension_label(call) {
+                let range = label.range();
+                if let Some((module, _)) = string_value(&self.source[range], self.string_mode) {
+                    self.dependencies.push(LoadDependency {
+                        module,
+                        range,
+                        resolution: LoadResolution::Pending,
+                    });
+                }
+            }
+        }
+        visitor::walk_expr(self, expression);
+    }
+}
+
+pub(super) fn module_extension_label(call: &ExprCall) -> Option<&Expr> {
+    let Expr::Name(name) = call.func.as_ref() else {
+        return None;
+    };
+    if name.id != "use_extension" {
+        return None;
+    }
+    let label @ Expr::StringLiteral(_) = call.arguments.args.first()? else {
+        return None;
+    };
+    Some(label)
 }
 
 #[salsa::tracked(returns(ref))]

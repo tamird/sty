@@ -218,6 +218,7 @@ impl starpls_hir::Db for Database {
         defs.set_builtins(self).to(builtins);
         defs.set_rules(self).to(rules);
         defs.set_extension(self).to(None);
+        defs.set_bazel_version(self).to(None);
         Ok(())
     }
 
@@ -494,6 +495,19 @@ impl Analysis {
         db.set_builtin_defs(Dialect::Bazel, builtins, rules)
     }
 
+    pub fn set_builtin_defs_with_release(
+        &mut self,
+        builtins: Builtins,
+        rules: starpls_bazel::build::BuildLanguage,
+        release: &str,
+    ) -> anyhow::Result<()> {
+        self.set_builtin_defs(builtins, rules)?;
+        let defs = self.db.get_builtin_defs(&Dialect::Bazel);
+        defs.set_bazel_version(&mut self.db)
+            .to(starpls_bazel::env::BazelVersion::parse_release(release));
+        Ok(())
+    }
+
     pub fn set_bazel_prelude_file(&mut self, file_id: File) {
         let Self { db } = self;
         db.set_bazel_prelude_file(file_id);
@@ -613,6 +627,11 @@ impl AnalysisSnapshot {
     /// Return syntactic load edges without resolving their paths.
     pub fn load_statement_locations(&self, file: File) -> Cancellable<Vec<LoadDependency>> {
         self.query(|db| ty::load::statement_locations(db, file).to_vec())
+    }
+
+    /// Return possible module-extension dependency sites without resolving their paths.
+    pub fn module_extension_locations(&self, file: File) -> Cancellable<Vec<LoadDependency>> {
+        self.query(|db| ty::load::module_extension_locations(db, file))
     }
 
     /// Renders diagnostics obtained from this snapshot using its captured source.

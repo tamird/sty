@@ -656,12 +656,15 @@ impl DefaultFileLoader {
             return Ok(None);
         }
         let repository = self.resolve_repository(label, &repository)?;
-        let resolved_path = if label.is_relative() {
-            package_for_path(db.system(), from_path, &repository.root)?
-        } else {
-            repository.root.join(label.package())
-        }
-        .join(label.target());
+        let resolved_path =
+            if label.is_relative() && from.api_context() != Some(APIContext::Module) {
+                package_for_path(db.system(), from_path, &repository.root)?
+            } else {
+                // Module-file labels are relative to the module repository root,
+                // including labels in files selected by `include`.
+                repository.root.join(label.package())
+            }
+            .join(label.target());
 
         Ok(Some(ResolvedLabel {
             resolved_path,

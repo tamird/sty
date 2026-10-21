@@ -526,6 +526,7 @@ fn registration_parameter_type<'db>(
         BuiltinFunction::Aspect => ContextKind::Aspect,
         BuiltinFunction::Attribute(_) => return None,
         BuiltinFunction::BuildSetting(_) => return None,
+        BuiltinFunction::TagClass | BuiltinFunction::UseExtension => return None,
         BuiltinFunction::Struct => return None,
         BuiltinFunction::StructGetattr => return None,
         BuiltinFunction::Getattr => return None,

@@ -97,7 +97,7 @@ pub(crate) struct ConfigurationReady {
 
 pub(crate) struct PreparedConfiguration {
     loader: Box<DefaultFileLoader>,
-    native: Option<(Builtins, starpls_bazel::build::BuildLanguage)>,
+    native: Option<(Builtins, starpls_bazel::build::BuildLanguage, String)>,
     interfaces: anyhow::Result<crate::commands::type_interface::PreparedInterfaces>,
 }
 
@@ -508,7 +508,10 @@ impl Server {
                     );
                     loader.finish_mapping(String::new(), Ok(context.main_repo_mapping));
                     let builtins = load_bazel_builtins(Some(&context.info.release));
-                    (loader, Some((builtins, context.rules)))
+                    (
+                        loader,
+                        Some((builtins, context.rules, context.info.release)),
+                    )
                 };
                 let interfaces = options.prepare(&loader, &workspace);
                 Ok(PreparedConfiguration {
@@ -573,7 +576,9 @@ impl Server {
         self.loader = loader;
         let replacement = self.analysis.replace_loader(self.loader.clone());
         let native = match native {
-            Some((builtins, rules)) => self.analysis.set_builtin_defs(builtins, rules),
+            Some((builtins, rules, release)) => self
+                .analysis
+                .set_builtin_defs_with_release(builtins, rules, &release),
             None => Ok(()),
         };
         let result = admission

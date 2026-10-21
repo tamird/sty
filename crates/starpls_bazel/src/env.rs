@@ -78,18 +78,33 @@ impl ExistingRuleScope {
     }
 }
 
+/// The major and minor components reported by `bazel info release`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BazelVersion {
+    major: u32,
+    minor: u32,
+}
+
+impl BazelVersion {
+    pub fn parse_release(release: &str) -> Option<Self> {
+        let mut parts = release.strip_prefix("release ")?.split('.');
+        Some(Self {
+            major: parts.next()?.parse().ok()?,
+            minor: parts.next()?.parse().ok()?,
+        })
+    }
+
+    pub fn at_least(self, major: u32, minor: u32) -> bool {
+        (self.major, self.minor) >= (major, minor)
+    }
+}
+
 /// Complete version-dependent API metadata using `bazel info release`.
 pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
-    let version = release.strip_prefix("release ").and_then(|version| {
-        let mut parts = version.split('.');
-        Some((
-            parts.next()?.parse::<u32>().ok()?,
-            parts.next()?.parse::<u32>().ok()?,
-        ))
-    });
-    let Some(version) = version else {
+    let Some(BazelVersion { major, minor }) = BazelVersion::parse_release(release) else {
         return;
     };
+    let version = (major, minor);
     if version >= (8, 0) {
         // Bazel 8 removed the option to return mutable dictionaries.
         // https://github.com/bazelbuild/bazel/commit/0fa8f9f39542a093ebc6819642b58dce643c7af3

@@ -244,6 +244,30 @@ pub(super) enum Configurability {
     Unknown,
 }
 
+struct AttributeInput {
+    configurable: bool,
+    rewritable: bool,
+    none_is_omission: bool,
+}
+
+impl AttributeInput {
+    fn rule(kind: &RuleKind, rewritable: bool) -> Self {
+        Self {
+            configurable: !matches!(kind, RuleKind::Repository),
+            rewritable,
+            none_is_omission: true,
+        }
+    }
+
+    fn tag(none_is_omission: bool) -> Self {
+        Self {
+            configurable: false,
+            rewritable: false,
+            none_is_omission,
+        }
+    }
+}
+
 impl Attribute {
     fn implicit_input_name(&self, name: &str, kind: &RuleKind) -> Option<Name> {
         let suffix = name.strip_prefix('_')?;
@@ -308,10 +332,14 @@ impl Attribute {
         db: &'db Database,
         environment: &ProgramEnvironment<'db>,
         declarations: ProgramFile<'db>,
-        kind: &RuleKind,
         mut parameter: Parameter<'db>,
-        rewritable: bool,
+        options: AttributeInput,
     ) -> Option<Parameter<'db>> {
+        let AttributeInput {
+            configurable,
+            rewritable,
+            none_is_omission,
+        } = options;
         let input = attribute_value_type(
             db,
             environment,
@@ -325,7 +353,7 @@ impl Attribute {
             self.allowed_value_type(db, environment)
         };
         let ty = allowed_values.unwrap_or(input);
-        let ty = if !matches!(kind, RuleKind::Repository) && self.configurable() != Some(false) {
+        let ty = if configurable && self.configurable() != Some(false) {
             let allows_selected_none = rewritable
                 || self
                     .values
@@ -351,9 +379,29 @@ impl Attribute {
                 }
                 None => parameter.with_default_type(Type::unknown()),
             };
-            parameter = optional_attribute(db, environment, parameter);
+            if none_is_omission {
+                parameter = optional_attribute(db, environment, parameter);
+            }
         }
         Some(parameter)
+    }
+
+    pub(super) fn tag_parameter<'db>(
+        &self,
+        db: &'db Database,
+        environment: &ProgramEnvironment<'db>,
+        declarations: ProgramFile<'db>,
+        parameter: Parameter<'db>,
+        none_is_omission: bool,
+    ) -> Option<(Parameter<'db>, bool)> {
+        self.input_parameter(
+            db,
+            environment,
+            declarations,
+            parameter,
+            AttributeInput::tag(none_is_omission),
+        )
+        .map(|parameter| (parameter, self.mandatory.is_some()))
     }
 
     pub(super) fn has_non_none_value(&self) -> bool {
@@ -521,7 +569,9 @@ pub(super) enum BuiltinFunction {
     Aspect,
     Subrule,
     Macro,
+    TagClass,
     ModuleExtension,
+    UseExtension,
     Struct,
     StructGetattr,
     Getattr,
@@ -610,7 +660,9 @@ pub(super) fn declaration<'db>(
         "aspect" => BuiltinFunction::Aspect,
         "subrule" => BuiltinFunction::Subrule,
         "macro" => BuiltinFunction::Macro,
+        "tag_class" => BuiltinFunction::TagClass,
         "module_extension" => BuiltinFunction::ModuleExtension,
+        "use_extension" => BuiltinFunction::UseExtension,
         "struct" => BuiltinFunction::Struct,
         "provider" => BuiltinFunction::Provider,
         "select" => BuiltinFunction::Select,
@@ -641,9 +693,10 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
             },
         ),
         BuiltinFunction::Macro => rule(db, call, RuleKind::Macro),
-        BuiltinFunction::Aspect | BuiltinFunction::Subrule | BuiltinFunction::ModuleExtension => {
-            None
-        }
+        BuiltinFunction::Aspect | BuiltinFunction::Subrule => None,
+        BuiltinFunction::TagClass => super::module_extension::tag_class(db, call),
+        BuiltinFunction::ModuleExtension => super::module_extension::extension(db, call),
+        BuiltinFunction::UseExtension => super::module_extension::proxy(db, call),
         BuiltinFunction::Struct => structure(db, call),
         BuiltinFunction::Select => selector(db, call),
         BuiltinFunction::StructGetattr => None,
@@ -883,7 +936,7 @@ fn is_exact_dictionary_class<'db>(
         == Some(class)
 }
 
-fn descriptor<'db>(
+pub(super) fn descriptor<'db>(
     db: &'db Database,
     call: &CheckedCall<'_, 'db>,
     name: &str,
@@ -1749,9 +1802,11 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     db,
                     &environment,
                     declarations,
-                    &kind,
                     parameter,
-                    initializer_preserves_call_shape && !name.starts_with('_'),
+                    AttributeInput::rule(
+                        &kind,
+                        initializer_preserves_call_shape && !name.starts_with('_'),
+                    ),
                 )?
             };
             if let Some(doc) = &attribute.documentation {
@@ -2238,9 +2293,8 @@ fn inherit_macro_attributes<'db>(
                         db,
                         &environment,
                         declarations,
-                        &RuleKind::Macro,
                         Parameter::keyword_only(name.clone()).with_source_range(source),
-                        false,
+                        AttributeInput::rule(&RuleKind::Macro, false),
                     )
                     .unwrap_or_else(|| {
                         complete = false;

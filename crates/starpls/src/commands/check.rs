@@ -1174,6 +1174,76 @@ mod tests {
     }
 
     #[test]
+    fn module_extension_source_is_a_reported_dependency() {
+        for audit_loads in [false, true] {
+            let mut checker = local_checker_with_options(
+                &format!("checker-extension-source-{audit_loads}"),
+                &[
+                    ("BUILD.bazel", ""),
+                    ("MODULE.bazel", ""),
+                    ("pkg/BUILD.bazel", ""),
+                    (
+                        "pkg/fragment.MODULE.bazel",
+                        "use_repo(use_extension(':defs.bzl', 'extension'), 'generated')\n",
+                    ),
+                    (
+                        "defs.bzl",
+                        "load(':unused.bzl', 'unused')\ndef implementation(ctx): pass\nextension = module_extension(implementation, tag_classes={'download': tag_class(attrs={'url': attr.string(mandatory=True)})})\n",
+                    ),
+                    ("pkg/defs.bzl", "extension = 42\n"),
+                    ("unused.bzl", "unused = 42\n"),
+                ],
+                CheckCommand {
+                    paths: vec!["pkg/fragment.MODULE.bazel".to_owned()],
+                    audit_loads,
+                    ..Default::default()
+                },
+            );
+            checker
+                .analysis
+                .set_builtin_defs_with_release(
+                    crate::server::load_bazel_builtins(Some("release 9.0.0")),
+                    Default::default(),
+                    "release 9.0.0",
+                )
+                .unwrap();
+            let result = checker.check_files().unwrap();
+            assert!(result.loads.unresolved.is_empty());
+            let snapshot = checker.analysis.snapshot();
+            let mut files: Vec<_> = result
+                .loads
+                .files
+                .iter()
+                .map(|file| {
+                    snapshot
+                        .path(*file)
+                        .strip_prefix(&checker.bazel_info.workspace)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect();
+            files.sort();
+            assert_eq!(
+                files,
+                if audit_loads {
+                    vec!["defs.bzl", "pkg/fragment.MODULE.bazel", "unused.bzl"]
+                } else {
+                    vec!["defs.bzl", "pkg/fragment.MODULE.bazel"]
+                }
+            );
+            assert!(
+                result
+                    .diagnostics
+                    .iter()
+                    .all(|(_, diagnostics)| diagnostics.is_empty()),
+                "{:?}",
+                result.diagnostics
+            );
+        }
+    }
+
+    #[test]
     fn non_utf8_load_paths_are_reported_as_incomplete() {
         for audit in [false, true] {
             let mut checker = local_checker(
@@ -2563,7 +2633,11 @@ impl CheckCommand {
                 ..Default::default()
             },
         )?;
-        analysis.set_builtin_defs(load_bazel_builtins(Some(&info.release)), rules)?;
+        analysis.set_builtin_defs_with_release(
+            load_bazel_builtins(Some(&info.release)),
+            rules,
+            &info.release,
+        )?;
         for SourceOverlay { logical, physical } in &self.source_overlay {
             let logical = starpls_common::absolute_path(logical)?;
             let Some((Dialect::Bazel, context)) =
@@ -3066,7 +3140,7 @@ impl Checker {
                     frontier.push(counterpart);
                 }
             }
-            let dependencies = match self.load_scope {
+            let mut dependencies = match self.load_scope {
                 LoadScope::Transitive => snapshot.load_dependencies(file)?,
                 LoadScope::Requested => {
                     let modules = requests.get(&file);
@@ -3085,6 +3159,14 @@ impl Checker {
                     dependencies
                 }
             };
+            if let Some(modules) = requests.get(&file) {
+                for mut edge in snapshot.module_extension_locations(file)? {
+                    if modules.contains(edge.module.as_ref()) {
+                        edge.resolution = snapshot.resolve_load(file, &edge.module)?;
+                        dependencies.push(edge);
+                    }
+                }
+            }
             let mut unresolved = Vec::new();
             for edge in dependencies {
                 match &edge.resolution {
