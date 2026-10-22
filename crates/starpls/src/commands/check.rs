@@ -79,6 +79,10 @@ pub(crate) struct CheckCommand {
     #[clap(long)]
     check_local_interface_sources: bool,
 
+    /// Check every configured interface's source, including external Bazel repositories.
+    #[clap(long, conflicts_with = "check_local_interface_sources")]
+    check_interface_sources: bool,
+
     /// Report dependency discovery and checked-file progress on stderr.
     #[clap(long)]
     progress: bool,
@@ -496,7 +500,7 @@ mod tests {
     }
 
     #[test]
-    fn local_interface_sources_complete_selection_and_reject_exclusions() {
+    fn interface_sources_complete_selection_and_reject_exclusions() {
         let sources = [
             (
                 "sty.toml",
@@ -514,14 +518,15 @@ mod tests {
             ("extra.bzl", "value = 3\n"),
             ("files.txt", "extra.bzl\ngood.bzl\n"),
         ];
-        for (name, select_sources, exclude_bad) in [
-            ("ordinary", false, false),
-            ("complete", true, false),
-            ("excluded", true, true),
+        for (name, selection, exclude_bad) in [
+            ("ordinary", None, false),
+            ("local", Some("--check-local-interface-sources"), false),
+            ("all", Some("--check-interface-sources"), false),
+            ("excluded", Some("--check-local-interface-sources"), true),
         ] {
             let mut args = vec!["check", "--files-from", "files.txt"];
-            if select_sources {
-                args.push("--check-local-interface-sources");
+            if let Some(selection) = selection {
+                args.push(selection);
             }
             if exclude_bad {
                 args.extend(["--ignore_pattern", "bad.bzl"]);
@@ -540,7 +545,7 @@ mod tests {
             let report_path = root.join("coverage.json");
             let result =
                 checker.report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new());
-            let expected = (!exclude_bad).then_some(if select_sources {
+            let expected = (!exclude_bad).then_some(if selection.is_some() {
                 ExitCode::FAILURE
             } else {
                 ExitCode::SUCCESS
@@ -549,7 +554,7 @@ mod tests {
             let report: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
             let mut expected = vec!["shared.bzli", "packaged.bzli", "extra.bzl", "good.bzl"];
-            if select_sources {
+            if selection.is_some() {
                 expected.push("packaged.bzl");
                 if !exclude_bad {
                     expected.push("bad.bzl");
@@ -569,7 +574,7 @@ mod tests {
             assert_eq!(report["complete"], !exclude_bad, "{report}");
             assert_eq!(
                 report["diagnostics"]["errors"],
-                usize::from(select_sources && !exclude_bad),
+                usize::from(selection.is_some() && !exclude_bad),
                 "{report}"
             );
             assert_eq!(
@@ -584,6 +589,85 @@ mod tests {
                 assert_eq!(
                     report["excluded_inputs"][root.join("bad.bzl").to_str().unwrap()],
                     "ignored"
+                );
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn interface_sources_require_configured_declarations() {
+        use clap::Parser;
+
+        for (name, flag, ignored, expected) in [
+            (
+                "visible",
+                "--check-interface-sources",
+                false,
+                Some(ExitCode::FAILURE),
+            ),
+            ("ignored", "--check-interface-sources", true, None),
+            (
+                "local",
+                "--check-local-interface-sources",
+                true,
+                Some(ExitCode::SUCCESS),
+            ),
+        ] {
+            let mut args = vec!["sty", "check", flag, "--output-format", "json-lines"];
+            if ignored {
+                args.extend(["--ignore_pattern", "contract.bzli"]);
+            }
+            let Some(crate::Commands::Check(options)) =
+                crate::Cli::try_parse_from(args).unwrap().command
+            else {
+                panic!("expected check command");
+            };
+            let mut checker = local_checker_with_options(
+                &format!("checker-interface-declarations-{name}"),
+                &[
+                    (
+                        "sty.toml",
+                        "[type-interfaces]\n'BUILD.bazel'='contract.bzli'\n",
+                    ),
+                    ("BUILD.bazel", "existing = 1\n"),
+                    ("contract.bzli", "missing: int\n"),
+                ],
+                options,
+            );
+            let root = checker.bazel_info.workspace.clone();
+            let report_path = root.join("coverage.json");
+            let mut diagnostics = Vec::new();
+            let result = checker.report_diagnostics_to(
+                Some(&report_path),
+                &mut diagnostics,
+                &mut Vec::new(),
+            );
+            assert_eq!(result.ok(), expected, "{name}");
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+            assert_eq!(report["complete"], expected.is_some(), "{report}");
+            assert_eq!(
+                report["diagnostics"]["errors"],
+                usize::from(!ignored),
+                "{report}"
+            );
+            assert_eq!(
+                report["input_errors"].as_array().unwrap().len(),
+                usize::from(expected.is_none()),
+                "{report}"
+            );
+            if !ignored {
+                let diagnostic: serde_json::Value = serde_json::from_slice(&diagnostics).unwrap();
+                assert_eq!(diagnostic["name"], "invalid-build-annotation");
+                assert_eq!(
+                    diagnostic["filename"],
+                    root.join("contract.bzli").to_str().unwrap()
+                );
+            } else if expected.is_none() {
+                assert_eq!(
+                    report["input_errors"][0]["path"],
+                    root.join("contract.bzli").to_str().unwrap()
                 );
             }
             std::fs::remove_dir_all(root).unwrap();
@@ -618,17 +702,21 @@ mod tests {
     }
 
     #[test]
-    fn local_interface_sources_require_an_implementation() {
-        for (name, paths) in [
-            ("empty", vec![]),
-            ("declarations", vec!["source.bzli".to_owned()]),
+    fn interface_sources_require_an_implementation() {
+        for (name, paths, local) in [
+            ("empty-local", vec![], true),
+            ("declarations-local", vec!["source.bzli".to_owned()], true),
+            ("empty-all", vec![], false),
+            ("declarations-all", vec!["source.bzli".to_owned()], false),
+            ("missing-all", vec!["missing.bzl".to_owned()], false),
         ] {
             let mut checker = local_checker_with_options(
                 &format!("checker-local-interfaces-{name}"),
                 &[("source.bzli", "def value() -> int: ...\n")],
                 CheckCommand {
                     paths,
-                    check_local_interface_sources: true,
+                    check_local_interface_sources: local,
+                    check_interface_sources: !local,
                     ..Default::default()
                 },
             );
@@ -2595,7 +2683,7 @@ mod tests {
     }
 
     #[test]
-    fn local_interface_sources_leave_external_packages_explicit() {
+    fn interface_sources_select_external_package_implementations() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("checker-stub-graph");
         let workspace = root.join("workspace");
@@ -2613,7 +2701,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(external.join("stubs+/package.toml"),
-            "format-version=1\n[source]\nrepository='@dep'\nmodule='rules'\nversions=['1']\n[files]\n'defs.bzl'='defs.bzli'\n").unwrap();
+            "format-version=1\n[source]\nrepository='@dep'\nmodule='rules'\nversions=['1']\n[files]\n'defs.bzl'='defs.bzli'\n'good.bzl'='defs.bzli'\n").unwrap();
         std::fs::write(
             external.join("stubs+/defs.bzli"),
             "def value() -> int: ...\n",
@@ -2624,6 +2712,7 @@ mod tests {
             "load('@dep//:value.bzl', 'helper')\ndef value(): return str(helper)\n",
         )
         .unwrap();
+        std::fs::write(external.join("rules+/good.bzl"), "def value(): return 1\n").unwrap();
         let client = Arc::new(TestBazelClient::default());
         client.fetch_files.lock().unwrap().insert(
             "wrong+".to_owned(),
@@ -2675,32 +2764,57 @@ mod tests {
             root.join("external/stubs+/defs.bzli")
         );
         drop(snapshot);
-        checker = Checker::new(
-            checker.analysis,
-            checker.bazel_info,
-            vec![root
-                .join("external/rules+/defs.bzl")
-                .to_str()
-                .unwrap()
-                .to_owned()],
-            &[],
-            checker.loader,
-            checker.fetch_repo_receiver,
-            &options,
-        )
-        .unwrap();
-        assert_eq!(
-            checker
-                .report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new())
-                .unwrap(),
-            ExitCode::FAILURE
-        );
-        let report: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
-        assert_eq!(report["complete"], true, "{report}");
-        assert_eq!(report["diagnostics"]["errors"], 1, "{report}");
-        assert_eq!(report["selected_files"].as_array().unwrap().len(), 2);
-        assert_eq!(report["checked_files"].as_array().unwrap().len(), 2);
+        for ignored in [true, false] {
+            let options = CheckCommand {
+                check_interface_sources: true,
+                ignore_patterns: if ignored {
+                    vec!["defs.bzl".to_owned()]
+                } else {
+                    Vec::new()
+                },
+                ..Default::default()
+            };
+            checker = Checker::new(
+                checker.analysis,
+                checker.bazel_info,
+                Vec::new(),
+                &[],
+                checker.loader,
+                checker.fetch_repo_receiver,
+                &options,
+            )
+            .unwrap();
+            let result =
+                checker.report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new());
+            assert_eq!(result.ok(), (!ignored).then_some(ExitCode::FAILURE));
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&report_path).unwrap()).unwrap();
+            assert_eq!(report["complete"], !ignored, "{report}");
+            assert_eq!(
+                report["diagnostics"]["errors"],
+                usize::from(!ignored),
+                "{report}"
+            );
+            assert_eq!(
+                report["input_errors"].as_array().unwrap().len(),
+                usize::from(ignored)
+            );
+            let mut expected = vec!["external/stubs+/defs.bzli", "external/rules+/good.bzl"];
+            if !ignored {
+                expected.push("external/rules+/defs.bzl");
+            }
+            let expected: std::collections::BTreeSet<_> =
+                expected.iter().map(|path| root.join(path)).collect();
+            for key in ["selected_files", "checked_files"] {
+                let actual: std::collections::BTreeSet<_> = report[key]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|file| std::path::PathBuf::from(file["path"].as_str().unwrap()))
+                    .collect();
+                assert_eq!(actual, expected, "{report}");
+            }
+        }
         assert_eq!(
             *client.fetch_requests.lock().unwrap(),
             ["stubs+", "rules+", "wrong+"]
@@ -3046,12 +3160,19 @@ impl Checker {
                         path: path.to_path_buf(),
                         message: "configured Bazel builtins are excluded by --ignore_pattern; remove the exclusion to check the declarations".to_owned(),
                     });
+                } else if options.check_interface_sources {
+                    checker.input_errors.push(InputError {
+                        path: path.to_path_buf(),
+                        message: "configured interface is excluded by --ignore_pattern; remove the exclusion to check the declarations".to_owned(),
+                    });
                 }
             } else {
                 checker.files.insert(file);
             }
         }
-        if options.check_local_interface_sources {
+        let check_interface_sources =
+            options.check_local_interface_sources || options.check_interface_sources;
+        if check_interface_sources {
             let main_repository = checker.loader.main_repository();
             for source in checker.analysis.type_interface_sources() {
                 let path = snapshot.path(source);
@@ -3063,18 +3184,19 @@ impl Checker {
                     });
                     continue;
                 };
-                if repository != main_repository {
-                    continue;
-                }
-                let physical = snapshot.source_path(path)?;
-                // Workspace edits use both logical and physical ownership,
-                // including nested repositories reached through file symlinks.
-                if !checker.loader.is_editable(path, &physical)? {
-                    checker.input_errors.push(InputError {
-                        path: path.to_path_buf(),
-                        message: "configured interface source is outside the checked workspace or in a nested repository; check it from its own workspace instead"
-                            .to_owned(),
-                    });
+                if repository == main_repository {
+                    let physical = snapshot.source_path(path)?;
+                    // Workspace edits use both logical and physical ownership,
+                    // including nested repositories reached through file symlinks.
+                    if !checker.loader.is_editable(path, &physical)? {
+                        checker.input_errors.push(InputError {
+                            path: path.to_path_buf(),
+                            message: "configured interface source is outside the checked workspace or in a nested repository; check it from its own workspace instead"
+                                .to_owned(),
+                        });
+                        continue;
+                    }
+                } else if options.check_local_interface_sources {
                     continue;
                 }
                 if checker.ignored_paths.contains(path) {
@@ -3083,8 +3205,12 @@ impl Checker {
                         .insert(path.to_path_buf(), Exclusion::Ignored);
                     checker.input_errors.push(InputError {
                         path: path.to_path_buf(),
-                        message: "configured local interface source is excluded by --ignore_pattern; remove the exclusion to check its implementation"
-                            .to_owned(),
+                        message: if repository == main_repository {
+                            "configured local interface source is excluded by --ignore_pattern; remove the exclusion to check its implementation"
+                        } else {
+                            "configured interface source is excluded by --ignore_pattern; remove the exclusion to check its implementation"
+                        }
+                        .to_owned(),
                     });
                 } else {
                     checker.files.insert(source);
@@ -3194,7 +3320,7 @@ impl Checker {
             }
         }
 
-        if options.check_local_interface_sources && checker.input_errors.is_empty() {
+        if check_interface_sources && checker.input_errors.is_empty() {
             let snapshot = checker.analysis.snapshot();
             if checker.files.iter().all(|file| {
                 snapshot
@@ -3204,8 +3330,12 @@ impl Checker {
             }) {
                 checker.input_errors.push(InputError {
                     path: checker.bazel_info.workspace.clone(),
-                    message: "no implementations were selected; configure a local type interface or select a source file"
-                        .to_owned(),
+                    message: if options.check_local_interface_sources {
+                        "no implementations were selected; configure a local type interface or select a source file"
+                    } else {
+                        "no implementations were selected; configure a type interface or select a source file"
+                    }
+                    .to_owned(),
                 });
             }
         }
