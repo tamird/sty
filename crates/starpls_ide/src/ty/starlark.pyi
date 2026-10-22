@@ -1,6 +1,6 @@
 """Starlark declarations whose contracts differ from Python's builtins.
 
-These fixed language declarations use Ty's ordinary generic call inference.
+These fixed language declarations use ty's ordinary generic call inference.
 They do not describe or rewrite executable Starlark source.
 """
 
@@ -12,6 +12,8 @@ from types import FunctionType as _starpls_annotation_function
 _T = _typing.TypeVar("_T")
 _U = _typing.TypeVar("_U")
 _V = _typing.TypeVar("_V")
+_W = _typing.TypeVar("_W")
+_X = _typing.TypeVar("_X")
 
 def fail(
     *args: _builtins.object,
@@ -63,6 +65,7 @@ def max(iterable: _typing.Iterable[_ComparableT], /, *, key: None = None) -> _Co
 @_typing.overload
 def max(iterable: _typing.Iterable[_T], /, *, key: _typing.Callable[[_T], _ComparableT]) -> _T: ...
 
+# Use builtins.zip's positional overloads with Starlark's eager list result.
 @_typing.overload
 def zip() -> _builtins.list[_builtins.tuple[()]]: ...
 @_typing.overload
@@ -78,5 +81,22 @@ def zip(
     third: _typing.Iterable[_V],
     /,
 ) -> _builtins.list[_builtins.tuple[_T, _U, _V]]: ...
+@_typing.overload
+def zip(
+    first: _typing.Iterable[_T],
+    second: _typing.Iterable[_U],
+    third: _typing.Iterable[_V],
+    fourth: _typing.Iterable[_W],
+    /,
+) -> _builtins.list[_builtins.tuple[_T, _U, _V, _W]]: ...
+@_typing.overload
+def zip(
+    first: _typing.Iterable[_T],
+    second: _typing.Iterable[_U],
+    third: _typing.Iterable[_V],
+    fourth: _typing.Iterable[_W],
+    fifth: _typing.Iterable[_X],
+    /,
+) -> _builtins.list[_builtins.tuple[_T, _U, _V, _W, _X]]: ...
 @_typing.overload
 def zip(*args: _typing.Iterable[_T]) -> _builtins.list[_builtins.tuple[_T, ...]]: ...

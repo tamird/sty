@@ -1026,25 +1026,51 @@ def Initialized(value: str, count: int = ...) -> record[{"value": str, "count": 
 
     #[test]
     fn zip_preserves_element_types_for_variadic_inputs() {
-        let (mut analysis, fixture) = Analysis::from_single_file_fixture(
-            "pairs = zip([1], ['text'])\nrows = zip([1], ['text'], [True], [2])\nvalues: list[list[str]] = [['text']]\nunpacked = zip(*values)\n",
-        );
+        let source = r#"
+empty: list[tuple[()]] = zip()
+empty.append(())
+single: list[tuple[int]] = zip([1])
+pairs: list[tuple[int, str]] = zip([1], ["text"])
+triples: list[tuple[int, str, bool]] = zip([1], ["text"], [True])
+
+rows = zip([{"key": 1}], ["text"], [True], [[2]])
+record: dict[str, int] = rows[0][0]
+text: str = rows[0][1]
+enabled: bool = rows[0][2]
+numbers: list[int] = rows[0][3]
+rows.append(({"key": 2}, "tail", False, [3]))
+
+five = zip([{"key": 1}], ["text"], [True], [[2]], [("item",)])
+row5: tuple[dict[str, int], str, bool, list[int], tuple[str]] = five[0]
+
+values: list[list[str]] = [["text"]]
+unpacked = zip(*values)
+value: str = unpacked[0][0]
+many: list[tuple[int, ...]] = zip([1], [2], [3], [4], [5], [6])
+mixed: list[tuple[int | str, ...]] = zip([1], ["two"], [3], ["four"], [5], ["six"])
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
         analysis.set_rules(rules(&["non-static-type"]));
         let file = fixture.main_file();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        analysis.update_file(
-            file,
-            "rows = zip([1], ['text'], [True], [2])\nwrong: str = rows[0][0]\n".into(),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-assignment");
         analysis.set_rules(DiagnosticRules::default());
-        analysis.update_file(file, "zip([1], ['text'], [True], 2)\n".into());
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        for (expression, expected) in [
+            ("wrong: str = rows[0][0]", "invalid-assignment"),
+            ("wrong: int = five[0][4]", "invalid-assignment"),
+            (
+                "rows.append(('wrong', 'text', True, [2]))",
+                "invalid-argument-type",
+            ),
+            ("zip([1], ['text'], [True], 2)", "no-matching-overload"),
+            ("zip([1], ['text'], [True], [2], 3)", "no-matching-overload"),
+            ("zip([1], [2], [3], [4], [5], 6)", "invalid-argument-type"),
+        ] {
+            analysis.update_file(file, format!("{source}\n{expression}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{expression}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected, "{expression}");
+        }
     }
 
     #[test]
