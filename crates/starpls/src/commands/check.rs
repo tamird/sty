@@ -572,6 +572,48 @@ mod tests {
                 assert_eq!(actual, expected, "{name}: {report}");
                 assert_eq!(files.len(), expected.len(), "duplicate selection: {report}");
             }
+            if let Some(selection) = selection {
+                let reported = &report["checked_interface_sources"];
+                assert_eq!(
+                    reported["mode"],
+                    if selection == "--check-interface-sources" {
+                        "all"
+                    } else {
+                        "local"
+                    }
+                );
+                let actual: std::collections::BTreeSet<_> = reported["files"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|file| std::path::PathBuf::from(file["path"].as_str().unwrap()))
+                    .collect();
+                let mut expected = std::collections::BTreeSet::from([
+                    root.join("good.bzl"),
+                    root.join("packaged.bzl"),
+                ]);
+                if !exclude_bad {
+                    expected.insert(root.join("bad.bzl"));
+                }
+                assert_eq!(actual, expected, "{name}: {report}");
+            } else {
+                assert!(
+                    report.get("checked_interface_sources").is_none(),
+                    "{report}"
+                );
+            }
+            if name == "all" {
+                let partial = checker
+                    .coverage_report(
+                        &checker.analysis.snapshot(),
+                        &super::LoadGraph::default(),
+                        &Default::default(),
+                        Default::default(),
+                    )
+                    .unwrap();
+                assert!(!partial.complete);
+                assert!(partial.checked_interface_sources.unwrap().files.is_empty());
+            }
             assert_eq!(report["complete"], !exclude_bad, "{report}");
             assert_eq!(
                 report["diagnostics"]["errors"],
@@ -3183,6 +3225,19 @@ struct ReportFile {
     repository: Option<String>,
 }
 
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum InterfaceSourceMode {
+    Local,
+    All,
+}
+
+#[derive(Serialize)]
+struct InterfaceSources<T> {
+    mode: InterfaceSourceMode,
+    files: Vec<T>,
+}
+
 #[derive(Serialize)]
 struct UnresolvedLoad {
     source: ReportFile,
@@ -3207,6 +3262,8 @@ struct CoverageReport<'a> {
     bazel_release: &'a str,
     selected_files: Vec<ReportFile>,
     checked_files: Vec<ReportFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    checked_interface_sources: Option<InterfaceSources<ReportFile>>,
     loaded_dependencies: Vec<ReportFile>,
     excluded_inputs: &'a BTreeMap<PathBuf, Exclusion>,
     input_errors: &'a [InputError],
@@ -3219,6 +3276,7 @@ struct Checker {
     analysis: Analysis,
     bazel_info: BazelInfo,
     files: indexmap::IndexSet<File>,
+    selected_interface_sources: Option<InterfaceSources<File>>,
     exclusions: BTreeMap<PathBuf, Exclusion>,
     input_errors: Vec<InputError>,
     ignored_paths: IgnoredPaths,
@@ -3302,10 +3360,21 @@ impl Checker {
         options: &CheckCommand,
     ) -> anyhow::Result<Self> {
         let ignored_paths = IgnoredPaths::new(&bazel_info.workspace, &options.ignore_patterns)?;
+        let interface_source_mode = if options.check_interface_sources {
+            Some(InterfaceSourceMode::All)
+        } else if options.check_local_interface_sources {
+            Some(InterfaceSourceMode::Local)
+        } else {
+            None
+        };
         let mut checker = Self {
             analysis,
             bazel_info,
             files: Default::default(),
+            selected_interface_sources: interface_source_mode.map(|mode| InterfaceSources {
+                mode,
+                files: Vec::new(),
+            }),
             exclusions: Default::default(),
             input_errors: Vec::new(),
             ignored_paths,
@@ -3340,7 +3409,7 @@ impl Checker {
                         path: path.to_path_buf(),
                         message: "configured Bazel builtins are excluded by --ignore_pattern; remove the exclusion to check the declarations".to_owned(),
                     });
-                } else if options.check_interface_sources {
+                } else if matches!(interface_source_mode, Some(InterfaceSourceMode::All)) {
                     checker.input_errors.push(InputError {
                         path: path.to_path_buf(),
                         message: "configured interface is excluded by --ignore_pattern; remove the exclusion to check the declarations".to_owned(),
@@ -3350,10 +3419,7 @@ impl Checker {
                 checker.files.insert(file);
             }
         }
-        let check_interface_sources =
-            options.check_local_interface_sources || options.check_interface_sources;
-        let mut selected_interface_source = false;
-        if check_interface_sources {
+        if let Some(InterfaceSources { mode, files }) = &mut checker.selected_interface_sources {
             let main_repository = checker.loader.main_repository();
             for (source, _) in checker.analysis.type_interface_pairs() {
                 let path = snapshot.path(source);
@@ -3377,7 +3443,7 @@ impl Checker {
                         });
                         continue;
                     }
-                } else if options.check_local_interface_sources {
+                } else if matches!(mode, InterfaceSourceMode::Local) {
                     continue;
                 }
                 if checker.ignored_paths.contains(path) {
@@ -3395,7 +3461,7 @@ impl Checker {
                     });
                 } else {
                     checker.files.insert(source);
-                    selected_interface_source = true;
+                    files.push(source);
                 }
             }
         }
@@ -3502,25 +3568,30 @@ impl Checker {
             }
         }
 
-        if check_interface_sources && checker.input_errors.is_empty() {
-            let missing_implementation = if options.check_interface_sources {
-                !selected_interface_source
-            } else {
-                let snapshot = checker.analysis.snapshot();
-                checker.files.iter().all(|file| {
-                    snapshot
-                        .path(*file)
-                        .extension()
-                        .is_some_and(|extension| extension == "bzli")
-                })
-            };
+        if let Some(InterfaceSources { mode, files }) = &checker.selected_interface_sources {
+            let missing_implementation = checker.input_errors.is_empty()
+                && match mode {
+                    InterfaceSourceMode::All => files.is_empty(),
+                    InterfaceSourceMode::Local => {
+                        let snapshot = checker.analysis.snapshot();
+                        checker.files.iter().all(|file| {
+                            snapshot
+                                .path(*file)
+                                .extension()
+                                .is_some_and(|extension| extension == "bzli")
+                        })
+                    }
+                };
             if missing_implementation {
                 checker.input_errors.push(InputError {
                     path: checker.bazel_info.workspace.clone(),
-                    message: if options.check_local_interface_sources {
-                        "no implementations were selected; configure a local type interface or select a source file"
-                    } else {
-                        "no configured interface implementation sources were selected; configure a type interface"
+                    message: match mode {
+                        InterfaceSourceMode::Local => {
+                            "no implementations were selected; configure a local type interface or select a source file"
+                        }
+                        InterfaceSourceMode::All => {
+                            "no configured interface implementation sources were selected; configure a type interface"
+                        }
                     }
                     .to_owned(),
                 });
@@ -3920,6 +3991,18 @@ impl Checker {
                 });
             }
         }
+        let checked_interface_sources = match &self.selected_interface_sources {
+            Some(InterfaceSources { mode, files }) => {
+                let files = files
+                    .iter()
+                    .copied()
+                    .filter(|file| checked.contains(file))
+                    .map(|file| self.report_file(snapshot, file))
+                    .collect::<anyhow::Result<_>>()?;
+                Some(InterfaceSources { mode: *mode, files })
+            }
+            None => None,
+        };
         Ok(CoverageReport {
             version: 2,
             load_scope: self.load_scope,
@@ -3934,6 +4017,7 @@ impl Checker {
                 .iter()
                 .map(|file| self.report_file(snapshot, *file))
                 .collect::<anyhow::Result<_>>()?,
+            checked_interface_sources,
             loaded_dependencies: graph
                 .files
                 .difference(checked)

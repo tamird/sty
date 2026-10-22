@@ -216,9 +216,11 @@ invocation. `complete` means every selected file was checked and every
 load in that scope resolved.
 `loaded_dependencies` lists successfully resolved dependencies and sources
 whose loads were requested; `checked_files` lists selected files and
-validated implementations. Requested-load coverage includes failed and
-pending loads encountered while inferring dependency exports. Cycle diagnostics are
-warnings, separate from load resolution. Deliberate scope exclusions
+validated implementations. When interface source selection is requested,
+`checked_interface_sources` records the selection `mode` (`local` or `all`)
+and the implementation `files` that were checked. Requested-load coverage
+includes failed and pending loads encountered while inferring dependency
+exports. Cycle diagnostics are warnings, separate from load resolution. Deliberate scope exclusions
 appear separately. Type errors, failed input paths, and unresolved loads
 produce a failing exit status.
 Failed Bzlmod fetches leave coverage incomplete, even if they created
