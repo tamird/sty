@@ -2,6 +2,8 @@
 # Python-only mixins and collection views are omitted.
 # Generic bases retain the nominal collection constraints used by Ty inference.
 
+from _starpls_allocations import _MappingEntries
+
 class Collection(Iterable[_T_co], Sized, Protocol[_T_co]):
     @type_check_only
     def __contains__(self, value: object, /) -> bool: ...
@@ -22,7 +24,7 @@ class Sequence(Generic[_T_co]):
     @type_check_only
     def __getitem__(self, index: slice, /) -> Sequence[_T_co]: ...
 
-class Mapping(Generic[_KT, _VT_co]):
+class Mapping(_MappingEntries[_KT, _VT_co], Generic[_KT, _VT_co]):
     @type_check_only
     def __len__(self) -> int: ...
     @type_check_only

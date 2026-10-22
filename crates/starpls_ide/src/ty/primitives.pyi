@@ -318,7 +318,7 @@ class set(AbstractSet[_T]):
         """Add elements from the other collections."""
 
 @disjoint_base
-class dict(Mapping[_KT, _VT], _MappingEntries[_KT, _VT]):
+class dict(Mapping[_KT, _VT]):
     @type_check_only
     class _SupportsROr(Protocol[_T_contra, _T_co]):
         @type_check_only

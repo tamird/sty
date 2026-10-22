@@ -713,6 +713,16 @@ def widen_value(values):
 def alias(values):
     # type: (dict[str, int]) -> dict[str | int, int]
     return values
+
+def copy_mapping(values):
+    # type: (Mapping[str, int] | Mapping[int, int] | Mapping[str | int, int] | None) -> dict[str | int, int]
+    copied = dict(values or {})
+    copied[1] = "wrong"
+    return copied
+
+def alias_mapping(readonly):
+    # type: (Mapping[str, int]) -> Mapping[str | int, int]
+    return readonly
 "#;
         let (mut analysis, _) = Analysis::new_for_test();
         let file = analysis
@@ -742,6 +752,8 @@ def alias(values):
                 ("invalid-assignment", "result[1] = \"wrong\""),
                 ("invalid-assignment", "values[1] = 42"),
                 ("invalid-return-type", "return values"),
+                ("invalid-assignment", "copied[1] = \"wrong\""),
+                ("invalid-return-type", "return readonly"),
             ],
         );
     }
