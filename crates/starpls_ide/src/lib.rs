@@ -279,6 +279,14 @@ impl Analysis {
             .to(rules);
     }
 
+    pub fn set_static_json_decode(&mut self, enabled: bool) {
+        self.db
+            .check_settings
+            .expect("database initialization is complete")
+            .set_static_json_decode(&mut self.db)
+            .to(enabled);
+    }
+
     pub fn new(loader: Arc<dyn FileLoader>, options: InferenceOptions) -> anyhow::Result<Self> {
         let cwd = std::env::current_dir()?;
         let cwd = starpls_common::system_path(&cwd)?;
@@ -322,6 +330,7 @@ impl Analysis {
             &db,
             DiagnosticRules::default(),
             ty::FileAnalysisSettings::default(),
+            false,
         ));
         for dialect in [Dialect::Standard, Dialect::Bazel] {
             db.set_builtin_defs(dialect, Builtins::default(), Default::default())

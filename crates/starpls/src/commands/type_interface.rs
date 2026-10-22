@@ -251,6 +251,7 @@ impl PreparedInterfaces {
             analysis_options.strict_generic_narrowing,
             analysis_options.widen_singleton_collection_elements,
         );
+        analysis.set_static_json_decode(analysis_options.static_json_decode.unwrap_or(false));
         Ok(())
     }
 }

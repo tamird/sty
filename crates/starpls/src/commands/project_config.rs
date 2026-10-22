@@ -35,6 +35,7 @@ pub(super) struct AnalysisOptions {
     pub strict_generic_narrowing: Option<bool>,
     pub widen_singleton_collection_elements: Option<bool>,
     pub require_valid_suppressions: Option<bool>,
+    pub static_json_decode: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -79,6 +80,7 @@ impl ConfigOverride {
                     strict_generic_narrowing,
                     widen_singleton_collection_elements,
                     require_valid_suppressions,
+                    static_json_decode,
                 },
         } = self;
         config.rules.extend(rules.clone());
@@ -90,6 +92,9 @@ impl ConfigOverride {
         }
         if let Some(value) = require_valid_suppressions {
             config.analysis.require_valid_suppressions = Some(*value);
+        }
+        if let Some(value) = static_json_decode {
+            config.analysis.static_json_decode = Some(*value);
         }
     }
 }

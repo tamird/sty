@@ -788,6 +788,9 @@ impl ty_python_semantic::Db for Database {
         name: &str,
         usage: BuiltinUsage,
     ) -> Option<ProvidedBindingValue<'db>> {
+        if let Some(binding) = native::json_policy_binding(self, file, name, usage) {
+            return Some(binding);
+        }
         if let Some(binding) = host::binding(self, file, name) {
             return Some(binding);
         }

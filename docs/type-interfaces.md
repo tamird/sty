@@ -243,10 +243,15 @@ or `getattr(result, "size_bytes", default)` when reading it.
 
 ### JSON values
 
-`json.decode` preserves string keys in decoded objects at every nesting level.
-Schema-dependent values and writes retain gradual typing behavior, and
-`non-static-type` continues to report unconstrained decoder results. A supplied
-default retains its own type, including dictionaries with non-string keys.
+By default, `json.decode` permits gradual schema-dependent access while
+preserving string keys in decoded objects at every nesting level.
+
+Set `analysis.static-json-decode = true` to check decoded values using Bazel's
+outer result domain: `None`, `bool`, `int`, `float`, `str`, `list[object]`, or
+`dict[str, object]`. Check the outer type before using the value. Decoded
+containers are mutable, so their elements have type `object`; only outer JSON
+objects retain the string-key guarantee. A supplied default adds its own type
+to the result in either mode.
 
 ## Project configuration
 

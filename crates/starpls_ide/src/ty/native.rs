@@ -26,6 +26,7 @@ use ty_ide::MarkupKind;
 use ty_python_core::definition::Definition;
 use ty_python_core::scope::NodeWithScopeKind;
 use ty_python_core::ProgramFile;
+use ty_python_semantic::provided::BuiltinUsage;
 use ty_python_semantic::provided::ProvidedBindingValue;
 use ty_python_semantic::provided::ProvidedClass;
 use ty_python_semantic::provided::ProvidedField;
@@ -39,6 +40,7 @@ const STANDARD_PATH: &str = "starpls-native:standard.pyi";
 const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
 const STORED_GLOB: &str = "_starpls_native_stored_glob";
 const EXISTING_RULE_VIEW: &str = "_ExistingRuleView";
+const STATIC_JSON_DECODE: &str = "_starpls_static_json_decode";
 const LEGACY_PROVIDER_GLOBALS: &[&str] = &[
     "CcSharedLibraryHintInfo",
     "CcSharedLibraryInfo",
@@ -111,6 +113,26 @@ pub(super) fn path(dialect: Dialect) -> SystemVirtualPathBuf {
     }
     .to_owned()
     .into()
+}
+
+pub(super) fn json_policy_binding<'db>(
+    db: &'db crate::Database,
+    file: ProgramFile<'db>,
+    name: &str,
+    usage: BuiltinUsage,
+) -> Option<ProvidedBindingValue<'db>> {
+    if name != STATIC_JSON_DECODE || !matches!(usage, BuiltinUsage::Runtime) {
+        return None;
+    }
+    let FilePath::SystemVirtual(path) = file.file(db).path(db) else {
+        return None;
+    };
+    if path.as_str() != BAZEL_PATH {
+        return None;
+    }
+    Some(ProvidedBindingValue::Value(SemanticType::bool_literal(
+        *db.check_settings?.static_json_decode(db),
+    )))
 }
 
 pub(super) fn is_builtin_function(db: &dyn ty_python_core::Db, definition: Definition<'_>) -> bool {
@@ -339,13 +361,42 @@ fn existing_rule_view_result(value: &Value) -> Option<&'static str> {
     }
 }
 
+fn json_value_type(element: &str) -> String {
+    format!(
+        "None | _starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.float | _starpls_builtins.str | _starpls_builtins.list[{element}] | _starpls_builtins.dict[_starpls_builtins.str, {element}]"
+    )
+}
+
+fn write_json_decode(
+    output: &mut String,
+    indent: &str,
+    decoded: &str,
+    documentation: &str,
+) -> std::fmt::Result {
+    // A supplied default can have any type; an omitted one contributes no
+    // type variable to contextual inference.
+    for (default, fallback) in [("", ""), (", default: _JsonDefault", " | _JsonDefault")] {
+        writeln!(output, "{indent}@_starpls_typing.overload")?;
+        writeln!(
+            output,
+            "{indent}def decode(_starpls_self, x: _starpls_builtins.str, /{default}) -> {decoded}{fallback}:"
+        )?;
+        writeln!(output, "{indent}    {}", quoted(documentation))?;
+        writeln!(output, "{indent}    ...")?;
+    }
+    Ok(())
+}
+
 fn declarations(
     dialect: Dialect,
     builtins: &Builtins,
     rules: &BuildLanguage,
     extensions: &BTreeSet<String>,
 ) -> anyhow::Result<String> {
-    let decoded_json = "_starpls_ty_extensions.Intersection[_starpls_typing.Any, None | _starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.float | _starpls_builtins.str | _starpls_builtins.list[\"_JsonValue\"] | _starpls_builtins.dict[_starpls_builtins.str, \"_JsonValue\"]]";
+    let decoded_json = format!(
+        "_starpls_ty_extensions.Intersection[_starpls_typing.Any, {}]",
+        json_value_type("\"_JsonValue\"")
+    );
     // ApiExporter::collectRuleInfo omits return_type; collectMethodInfo supplies it.
     // This encoding identifies rule documentation only within the native inventory.
     let documented_rules: BTreeSet<_> = builtins
@@ -1190,22 +1241,24 @@ fn declarations(
                             )?;
                         }
                     } else if class.name == "json" && field.name == "decode" {
-                        // Every JSON object has string keys. Recursive values retain
-                        // gradual schema-dependent behavior through the Any intersection.
-                        // A supplied default can have any type; an omitted one
-                        // contributes no type variable to contextual inference.
                         let documentation = callable_documentation(field, callable)?;
-                        for (default, fallback) in
-                            [("", ""), (", default: _JsonDefault", " | _JsonDefault")]
-                        {
-                            writeln!(body, "        @_starpls_typing.overload")?;
-                            writeln!(
-                                body,
-                                "        def decode(_starpls_self, x: _starpls_builtins.str, /{default}) -> {decoded_json}{fallback}:"
+                        let indent = if dialect == Dialect::Bazel {
+                            // Keep result domains inline so hovers display them.
+                            // Decoded containers are mutable: static elements must
+                            // allow later insertion of values outside JSON's grammar.
+                            writeln!(body, "        if {STATIC_JSON_DECODE}:")?;
+                            write_json_decode(
+                                &mut body,
+                                "            ",
+                                &json_value_type("_starpls_builtins.object"),
+                                &documentation,
                             )?;
-                            writeln!(body, "            {}", quoted(&documentation))?;
-                            writeln!(body, "            ...")?;
-                        }
+                            writeln!(body, "        else:")?;
+                            "            "
+                        } else {
+                            "        "
+                        };
+                        write_json_decode(&mut body, indent, &decoded_json, &documentation)?;
                     } else {
                         let mut callable = Cow::Borrowed(callable);
                         if dialect == Dialect::Bazel
@@ -4271,7 +4324,7 @@ called = computed.upper()
     }
 
     #[test]
-    fn json_decode_preserves_nested_object_keys() {
+    fn json_decode_respects_result_policy() {
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
             .set_builtin_defs(
@@ -4336,7 +4389,11 @@ def fallback(contents: str, default: dict[int, str]) -> None:
         }
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("non-static-type".into(), "error".into())].into(),
+                &[
+                    ("non-static-type".into(), "error".into()),
+                    ("unsound-return-statement".into(), "error".into()),
+                ]
+                .into(),
             )
             .unwrap(),
         );
@@ -4346,6 +4403,65 @@ def fallback(contents: str, default: dict[int, str]) -> None:
             panic!("{diagnostics:?}");
         };
         assert_eq!(diagnostic.id().as_str(), "non-static-type");
+        analysis.set_static_json_decode(true);
+        analysis.update_file(
+            file,
+            r#"def decoded_object(contents: str) -> dict[str, object]:
+    decoder = json.decode
+    decoded = decoder(contents)
+    if type(decoded) != "dict":
+        fail("expected object")
+    decoded["new"] = struct(value = "new")
+    return decoded
+def decoded_list(contents: str) -> None:
+    decoded = json.decode(contents)
+    if type(decoded) == "list":
+        decoded.append(struct(value = "new"))
+"#
+            .into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_static_json_decode(false);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
+            "{diagnostics:?}"
+        );
+        analysis.set_static_json_decode(true);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (source, expected) in [
+            (
+                "def unsafe(contents: str) -> str:\n    return json.decode(contents).upper()\n",
+                "unresolved-attribute",
+            ),
+            (
+                "def fallback(contents: str, default: dict[int, object]) -> dict[str, object]:\n    decoded = json.decode(contents, default)\n    if type(decoded) != 'dict':\n        fail('expected object')\n    return decoded\n",
+                "invalid-return-type",
+            ),
+        ] {
+            analysis.update_file(file, source.into());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == expected),
+                "{source}: {diagnostics:?}"
+            );
+        }
+        let source = "def gradual(contents: str, fallback: Any) -> object:\n    decoded = json.decode(contents, fallback)\n    return decoded\n";
+        analysis.update_file(file, source.into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == "non-static-type"
+                    && diagnostic
+                        .range()
+                        .is_some_and(|range| &source[range] == "json.decode(contents, fallback)")
+            }),
+            "{diagnostics:?}"
+        );
     }
 
     #[test]

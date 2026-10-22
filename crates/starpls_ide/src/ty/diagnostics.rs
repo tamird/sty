@@ -215,6 +215,7 @@ pub(crate) struct CheckSettings {
     pub rules: DiagnosticRules,
     #[returns(ref)]
     pub analysis: crate::ty::FileAnalysisSettings,
+    pub static_json_decode: bool,
 }
 
 fn default_rules(use_code_flow_analysis: bool) -> RuleSelection {
