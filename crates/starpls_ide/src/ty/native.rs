@@ -2263,8 +2263,12 @@ fn write_function(
             (CallableKind::Function, "DefaultInfo", "files") => Some("_DefaultInfoFiles"),
             (CallableKind::Function, "DefaultInfo", "executable") => classes.contains("File").then_some("_starpls_types.File | None"),
             (CallableKind::Function, "DefaultInfo", "runfiles" | "data_runfiles" | "default_runfiles") => classes.contains("runfiles").then_some("_starpls_types.runfiles | None"),
-            (CallableKind::Function, "RunEnvironmentInfo", "environment") => Some("_starpls_typing.Mapping[_StringKey, _StringValue]"),
-            (CallableKind::Function, "RunEnvironmentInfo", "inherited_environment") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
+            // Both entry points cast a concrete dictionary and a Java Sequence,
+            // which excludes strings even though Python treats them as sequences.
+            (CallableKind::Function, "RunEnvironmentInfo", "environment")
+            | (CallableKind::Method("testing"), "TestEnvironment", "environment") => Some(STRING_DICTIONARY_INPUT),
+            (CallableKind::Function, "RunEnvironmentInfo", "inherited_environment")
+            | (CallableKind::Method("testing"), "TestEnvironment", "inherited_environment") => Some("_starpls_ty_extensions.Intersection[_starpls_typing.Sequence[_starpls_builtins.str], _starpls_ty_extensions.Not[_starpls_builtins.str]]"),
             (CallableKind::Method("coverage_common"), "instrumented_files_info", "ctx") => {
                 // Coverage consumes the native context, independently of its
                 // build-setting value and generated attribute schema.
@@ -6154,7 +6158,7 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
 groups: dict[Literal['tools'], exec_group] = {'tools': group}
 def implementation(context: object) -> None:
     pass
-def inspect(context: ctx[object, object], file: File, change: transition) -> None:
+def inspect(context: ctx[object, object], file: File, change: transition, mapping: Mapping[str, str]) -> None:
     files = context.runfiles(files=[file])
     default = DefaultInfo(executable=file, runfiles=files)
     other = DefaultInfo(data_runfiles=files, default_runfiles=files)
@@ -6162,6 +6166,8 @@ def inspect(context: ctx[object, object], file: File, change: transition) -> Non
     environment = RunEnvironmentInfo(environment=values, inherited_environment=['HOME'])
     shaped: dict[{"MODE": str}] = {"MODE": "test"}
     RunEnvironmentInfo(environment=shaped)
+    test_environment: RunEnvironmentInfo = testing.TestEnvironment(values, ("HOME",))
+    testing.TestEnvironment(environment=shaped, inherited_environment=["HOME"])
     value: str = environment.environment['MODE']
     inherited: str = environment.inherited_environment[0]
     exec_attr = attr.label(cfg='exec')
@@ -6170,7 +6176,7 @@ def inspect(context: ctx[object, object], file: File, change: transition) -> Non
     rule(implementation=implementation, cfg=None)
     rule(implementation=implementation, cfg=config.none())
     rule(implementation=implementation, cfg=change)
-    print(default, other, value, inherited, exec_attr, changed_attr, native_attr)
+    print(default, other, test_environment, value, inherited, exec_attr, changed_attr, native_attr)
 "#;
         let file = analysis
             .open_document(
@@ -6195,7 +6201,13 @@ def inspect(context: ctx[object, object], file: File, change: transition) -> Non
             "DefaultInfo(runfiles=[file])",
             "RunEnvironmentInfo(environment={'MODE': 42})",
             "RunEnvironmentInfo(environment={42: 'test'})",
+            "RunEnvironmentInfo(environment=mapping)",
             "RunEnvironmentInfo(inherited_environment=[42])",
+            "RunEnvironmentInfo(inherited_environment='HOME')",
+            "testing.TestEnvironment({'MODE': 42})",
+            "testing.TestEnvironment({42: 'test'})",
+            "testing.TestEnvironment({}, [42])",
+            "testing.TestEnvironment({}, 'HOME')",
             "exec_group(toolchains=[42])",
             "attr.label(cfg=42)",
             "rule(implementation=implementation, cfg='exec')",
