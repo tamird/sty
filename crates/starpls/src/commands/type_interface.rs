@@ -13,7 +13,7 @@ use super::stub_package::Registration;
 
 #[derive(Args, Clone, Default)]
 pub(crate) struct TypeInterfaceOptions {
-    /// Apply INTERFACE to SOURCE exports or BUILD variable bindings; repeat for more files.
+    /// Apply INTERFACE to SOURCE exports or bindings; repeat for more files.
     #[clap(long = "type_interface", value_name = "SOURCE=INTERFACE")]
     mappings: Vec<TypeInterfaceMapping>,
 }
@@ -303,14 +303,35 @@ mod tests {
         }
     }
     #[test]
-    fn build_mapping_registration_preserves_host_context() {
+    fn binding_mapping_registration_preserves_host_context() {
+        use starpls_bazel::APIContext;
+
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
-            .join("build-annotations");
+            .join("binding-annotations");
         std::fs::create_dir_all(&root).unwrap();
-        let source = root.join("BUILD.bazel");
-        let stub = root.join("BUILD.bzli");
-        std::fs::write(&source, "_VALUE = 1\n").unwrap();
+        let stub = root.join("bindings.bzli");
         std::fs::write(&stub, "_VALUE: str\n").unwrap();
+        let cases = [
+            ("BUILD.bazel", APIContext::Build, "invalid-build-annotation"),
+            (
+                "MODULE.bazel",
+                APIContext::Module,
+                "invalid-module-annotation",
+            ),
+        ];
+        let source_text = "_VALUE = 'ok'\nvalue = _VALUE\n";
+        let registrations = cases
+            .iter()
+            .map(|(name, _, _)| {
+                let source = root.join(name);
+                std::fs::write(&source, source_text).unwrap();
+                super::Registration {
+                    source,
+                    interface: stub.clone(),
+                    origin: "test mapping".into(),
+                }
+            })
+            .collect();
         let (sender, _) = crossbeam_channel::unbounded();
         let loader = std::sync::Arc::new(crate::document::DefaultFileLoader::new(
             std::sync::Arc::new(starpls_bazel::client::BazelCLI::default()),
@@ -325,11 +346,7 @@ mod tests {
             .set_builtin_defs(crate::server::load_bazel_builtins(None), Default::default())
             .unwrap();
         super::PreparedInterfaces {
-            registrations: vec![super::Registration {
-                source,
-                interface: stub,
-                origin: "test mapping".into(),
-            }],
+            registrations,
             rules: Default::default(),
             analysis: Default::default(),
             builtin_extension: None,
@@ -337,25 +354,39 @@ mod tests {
         .install(&mut analysis, &root)
         .unwrap();
         let sources = analysis.type_interface_sources();
-        let [source] = sources.as_slice() else {
-            panic!("{sources:?}");
-        };
-        assert_eq!(source.api_context(), Some(starpls_bazel::APIContext::Build));
-        let diagnostics = analysis.snapshot().diagnostics(*source).unwrap();
-        assert!(
-            diagnostics
+        assert_eq!(sources.len(), cases.len());
+        let interface = super::open_interface_file(&analysis, &root, &stub).unwrap();
+        for (name, context, annotation_error) in cases {
+            let path = root.join(name);
+            let source = sources
                 .iter()
-                .any(|d| d.id().as_str() == "invalid-assignment"),
-            "{diagnostics:?}"
-        );
-        analysis.update_file(*source, "_VALUE: str = 'ok'\n".into());
-        let diagnostics = analysis.snapshot().diagnostics(*source).unwrap();
-        assert!(
-            diagnostics
-                .iter()
-                .any(|d| d.id().as_str() == "invalid-syntax"),
-            "{diagnostics:?}"
-        );
+                .copied()
+                .find(|source| analysis.snapshot().path(*source) == path)
+                .unwrap();
+            assert_eq!(source.api_context(), Some(context));
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(diagnostics.is_empty(), "{name}: {diagnostics:?}");
+            for (text, expected) in [
+                ("_VALUE = 1\nvalue = _VALUE\n", "invalid-assignment"),
+                ("_VALUE: str = 'ok'\n", "invalid-syntax"),
+            ] {
+                analysis.update_file(source, text.into());
+                let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+                assert!(
+                    diagnostics.iter().any(|d| d.id().as_str() == expected),
+                    "{name}: {diagnostics:?}"
+                );
+            }
+            analysis.update_file(source, "other = 1\n".into());
+            let diagnostics = analysis.snapshot().diagnostics(interface).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|d| d.id().as_str() == annotation_error),
+                "{name}: {diagnostics:?}"
+            );
+            analysis.update_file(source, source_text.into());
+        }
         std::fs::remove_dir_all(root).unwrap();
     }
 

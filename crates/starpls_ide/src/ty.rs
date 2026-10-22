@@ -536,7 +536,7 @@ impl ty_python_core::Db for Database {
         starpls_hir::Source::new(self)
             .type_comment_annotation(file, owner)
             .map(ty_python_core::ProvidedAnnotation::Range)
-            .or_else(|| interface::build_annotation(self, file, owner))
+            .or_else(|| interface::binding_annotation(self, file, owner))
             .or_else(|| interface::implementation_annotation(self, file, owner))
     }
 }

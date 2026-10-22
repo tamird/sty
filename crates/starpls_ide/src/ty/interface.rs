@@ -32,6 +32,7 @@ use ty_python_core::place_table;
 use ty_python_core::semantic_index;
 use ty_python_core::use_def_map;
 use ty_python_core::ProgramFile;
+use ty_python_semantic::lint::LintMetadata;
 use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::types::ide_support::definitions_for_name;
 use ty_python_semantic::types::list_members::all_end_of_scope_members;
@@ -118,17 +119,19 @@ pub(super) fn diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_>
         if *interface != file {
             continue;
         }
-        let Some(BuildAnnotations {
+        let Some(BindingAnnotations {
+            kind,
             interface: _,
             owners: _,
             errors,
-        }) = build_annotations(db, *source)
+        }) = binding_annotations(db, *source)
         else {
             continue;
         };
+        let (_, lint) = kind.metadata();
         for (range, message) in errors {
             let mut diagnostic = Diagnostic::new(
-                DiagnosticId::Lint(super::diagnostics::INVALID_BUILD_ANNOTATION.name()),
+                DiagnosticId::Lint(lint.name()),
                 Severity::Error,
                 message.clone(),
             );
@@ -225,7 +228,7 @@ struct ImplementationAnnotations {
 }
 
 fn implementation_annotations(db: &dyn Db, file: File) -> Option<&ImplementationAnnotations> {
-    if file.api_context() == Some(APIContext::Build)
+    if BindingSource::from_file(file).is_some()
         || !db
             .environment()
             .type_interfaces(db)
@@ -773,28 +776,53 @@ pub(super) fn pairing_diagnostics(
     diagnostics
 }
 
-/// BUILD annotations describe source bindings, so correspondence must be available
-/// while Ty indexes those bindings, before semantic inference can run.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BindingSource {
+    Build,
+    Module,
+}
+
+impl BindingSource {
+    fn from_file(file: File) -> Option<Self> {
+        match (file.dialect, file.api_context()) {
+            (Dialect::Bazel, Some(APIContext::Build)) => Some(Self::Build),
+            (Dialect::Bazel, Some(APIContext::Module)) => Some(Self::Module),
+            _ => None,
+        }
+    }
+
+    fn metadata(self) -> (&'static str, &'static LintMetadata) {
+        match self {
+            Self::Build => ("BUILD", &super::diagnostics::INVALID_BUILD_ANNOTATION),
+            Self::Module => (
+                "MODULE.bazel",
+                &super::diagnostics::INVALID_MODULE_ANNOTATION,
+            ),
+        }
+    }
+}
+
+/// Binding correspondence must be available while ty indexes source bindings,
+/// before semantic inference can run.
 #[derive(Debug, PartialEq, Eq)]
-struct BuildAnnotations {
+struct BindingAnnotations {
+    kind: BindingSource,
     interface: File,
     owners: FxHashMap<NodeIndex, NodeIndex>,
     errors: Vec<(TextRange, String)>,
 }
 
-fn build_annotations(db: &dyn Db, file: File) -> Option<&BuildAnnotations> {
-    if file.dialect != Dialect::Bazel || file.api_context() != Some(APIContext::Build) {
-        return None;
-    }
-    build_annotations_query(db, file.source, (file.dialect, file.info)).as_ref()
+fn binding_annotations(db: &dyn Db, file: File) -> Option<&BindingAnnotations> {
+    BindingSource::from_file(file)?;
+    binding_annotations_query(db, file.source, (file.dialect, file.info)).as_ref()
 }
 
 #[salsa::tracked(returns(ref))]
-fn build_annotations_query(
+fn binding_annotations_query(
     db: &dyn Db,
     source: ruff_db::files::File,
     context: (Dialect, Option<FileInfo>),
-) -> Option<BuildAnnotations> {
+) -> Option<BindingAnnotations> {
     let (dialect, info) = context;
     let file = File {
         source,
@@ -805,15 +833,18 @@ fn build_annotations_query(
     if implementation != file {
         return None;
     }
+    let kind = BindingSource::from_file(file)?;
     let parsed = starpls_common::parsed_module(db, file).load(db);
     let source_names = module_bindings(db, file);
     let stub_names = module_bindings(db, interface);
     let candidates = direct_module_assignments(parsed.suite());
-    let mut result = BuildAnnotations {
+    let mut result = BindingAnnotations {
+        kind,
         interface,
         owners: FxHashMap::default(),
         errors: Vec::new(),
     };
+    let (label, _) = kind.metadata();
     let stub = starpls_common::parsed_module(db, interface).load(db);
     for statement in stub.suite() {
         let annotation = match statement {
@@ -822,7 +853,7 @@ fn build_annotations_query(
                 result.errors.push((
                     function.name.range(),
                     format!(
-                        "Function declaration `{}` cannot annotate a BUILD binding",
+                        "Function declaration `{}` cannot annotate a {label} binding",
                         function.name.id,
                     ),
                 ));
@@ -834,19 +865,21 @@ fn build_annotations_query(
             continue;
         };
         let error = if stub_names.get(&name.id) != Some(&1) {
-            Some("the stub binds this name more than once")
+            Some("the stub binds this name more than once".to_owned())
         } else {
             match source_names.get(&name.id).copied().unwrap_or(0) {
-                0 => Some("the BUILD file does not bind this name"),
+                0 => Some(format!("the {label} file does not bind this name")),
                 1 => {
                     if let Some(&owner) = candidates.get(&name.id) {
                         result.owners.insert(owner, annotation.node_index().load());
                         None
                     } else {
-                        Some("the BUILD binding must be a direct assignment to a name")
+                        Some(format!(
+                            "the {label} binding must be a direct assignment to a name"
+                        ))
                     }
                 }
-                _ => Some("the BUILD file binds this name more than once"),
+                _ => Some(format!("the {label} file binds this name more than once")),
             }
         };
         if let Some(error) = error {
@@ -939,16 +972,17 @@ fn module_bindings(db: &dyn Db, file: File) -> FxHashMap<Name, usize> {
     names
 }
 
-pub(super) fn build_annotation<'db>(
+pub(super) fn binding_annotation<'db>(
     db: &'db Database,
     file: File,
     owner: NodeIndex,
 ) -> Option<ty_python_core::ProvidedAnnotation<'db>> {
-    let BuildAnnotations {
+    let BindingAnnotations {
+        kind: _,
         interface,
         owners,
         errors: _,
-    } = build_annotations(db, file)?;
+    } = binding_annotations(db, file)?;
     let &owner = owners.get(&owner)?;
     Some(ty_python_core::ProvidedAnnotation::External {
         file: db.starlark_program_file(*interface),
@@ -956,7 +990,7 @@ pub(super) fn build_annotation<'db>(
     })
 }
 
-pub(super) fn used_build_annotations(db: &Database, file: File) -> FxHashSet<TextRange> {
+pub(super) fn used_binding_annotations(db: &Database, file: File) -> FxHashSet<TextRange> {
     if !file.is_type_interface(db) {
         return FxHashSet::default();
     }
@@ -966,21 +1000,22 @@ pub(super) fn used_build_annotations(db: &Database, file: File) -> FxHashSet<Tex
         if *interface != file {
             continue;
         }
-        let Some(BuildAnnotations {
+        let Some(BindingAnnotations {
+            kind: _,
             interface: _,
             owners,
             errors: _,
-        }) = build_annotations(db, *source)
+        }) = binding_annotations(db, *source)
         else {
             continue;
         };
         for owner in owners.values() {
             let ruff_python_ast::AnyRootNodeRef::Stmt(statement) = parsed.get_by_index(*owner)
             else {
-                unreachable!("BUILD annotations refer to stub statements");
+                unreachable!("binding annotations refer to stub statements");
             };
             let Stmt::AnnAssign(annotation) = statement else {
-                unreachable!("BUILD annotations refer to annotated assignments");
+                unreachable!("binding annotations refer to annotated assignments");
             };
             used.insert(annotation.target.range());
         }
@@ -1002,11 +1037,9 @@ impl Analysis {
                     .path(db)
                     .extension()
                     .is_some_and(|extension| extension == "bzl");
-            let is_build =
-                source.dialect == Dialect::Bazel && source.api_context() == Some(APIContext::Build);
-            if !is_bzl && !is_build {
+            if !is_bzl && BindingSource::from_file(source).is_none() {
                 anyhow::bail!(
-                    "type interface source must be a .bzl or BUILD file: {}",
+                    "type interface source must be a .bzl, BUILD, or MODULE.bazel file: {}",
                     source.path(db).display()
                 );
             }
@@ -2752,7 +2785,7 @@ number: int = identity(42)
             "_VALUE = 1\ndef helper():\n    _VALUE = 'local'\n",
         ] {
             analysis.update_file(source, text.into());
-            let correspondence = super::build_annotations(&analysis.db, source).unwrap();
+            let correspondence = super::binding_annotations(&analysis.db, source).unwrap();
             assert!(correspondence.errors.is_empty(), "{correspondence:?}");
             assert_eq!(correspondence.owners.len(), 1);
         }

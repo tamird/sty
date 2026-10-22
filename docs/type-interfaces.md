@@ -1,8 +1,8 @@
 # Starlark stubs
 
-A *stub file* (`.bzli`) declares types for a Starlark module (`.bzl`) or variables
-in a BUILD file. A *stub package* contains stub files and a manifest mapping
-them to source files.
+A *stub file* (`.bzli`) declares types for a Starlark module (`.bzl`) or bindings
+in a BUILD or MODULE.bazel file. A *stub package* contains stub files and a
+manifest mapping them to source files.
 
 ## Stub files
 
@@ -366,10 +366,12 @@ unannotated code still uses gradual types.
 Suppressions use `# ty: ignore[rule-name]`. Unused suppressions are errors by
 default, including suppressions made obsolete by adding an annotation.
 
-## BUILD annotations
+## BUILD and MODULE.bazel annotations
 
-An explicit mapping such as `BUILD.bazel=BUILD.bzli` applies variable annotations
-to the BUILD file's module assignments, including private names:
+An explicit mapping such as `BUILD.bazel=BUILD.bzli` or
+`MODULE.bazel=MODULE.bzli` applies variable annotations to top-level assignments
+in BUILD files, MODULE.bazel files, and `.MODULE.bazel` fragments, including
+private names:
 
 ```starlark
 type _Case = dict[{"name": str, "enabled": bool}]
@@ -377,12 +379,12 @@ type _Case = dict[{"name": str, "enabled": bool}]
 _CASES: list[_Case]
 ```
 
-Each annotated variable requires one direct assignment to that name in the BUILD
+Each annotated variable requires one direct assignment to that name in the source
 file and one declaration in the stub. Missing, unsupported, and ambiguous
 bindings are errors. Helper classes and loads supply annotation types; top-level
 function declarations are unsupported. Source type comments take precedence.
 ty checks the initializer, subsequent uses, and mutations against the annotation
-in the BUILD host context.
+in the source file's host context.
 
 ## Providers
 

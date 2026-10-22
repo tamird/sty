@@ -72,6 +72,10 @@ pub(super) static INVALID_BUILD_ANNOTATION: LintMetadata = lint(
     "invalid-build-annotation",
     "Reports BUILD annotations without a unique source assignment.",
 );
+pub(super) static INVALID_MODULE_ANNOTATION: LintMetadata = lint(
+    "invalid-module-annotation",
+    "Reports MODULE.bazel annotations without a unique source assignment.",
+);
 pub(super) static INVALID_PROVIDER_INTERFACE: LintMetadata = lint(
     "invalid-provider-interface",
     "Reports invalid or conflicting provider declarations in stubs.",
@@ -124,6 +128,7 @@ pub(super) fn registry() -> &'static LintRegistry {
             &DEPRECATED_ARGUMENT,
             &INVALID_PROVIDER_INTERFACE,
             &INVALID_BUILD_ANNOTATION,
+            &INVALID_MODULE_ANNOTATION,
             &INVALID_FUNCTION_INTERFACE,
             &UNVERIFIED_OVERLOAD,
             &MISSING_PARAMETER_ANNOTATION,
@@ -262,7 +267,7 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
     if !options.allow_unused_definitions {
         let index = semantic_index(db, program_file);
         let environment = model.program_environment();
-        let build_annotations = super::interface::used_build_annotations(db, file);
+        let binding_annotations = super::interface::used_binding_annotations(db, file);
         let contract_sources = if file.is_type_interface(db) {
             db.environment()
                 .type_interfaces(db)
@@ -324,7 +329,7 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
                 || is_discard
                 || (is_module && !name.starts_with('_'))
                 || (file.is_type_interface(db) && index.scope(scope).kind() == ScopeKind::Class)
-                || build_annotations.contains(&kind.target_range(&parsed))
+                || binding_annotations.contains(&kind.target_range(&parsed))
                 || (is_module
                     && contract_sources.iter().any(|source| {
                         super::interface::is_implementation_contract(db, definition, *source)
