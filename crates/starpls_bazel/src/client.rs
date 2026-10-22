@@ -830,6 +830,8 @@ fn supports_extension_mapping_reuse(release: &str) -> bool {
     // and https://github.com/dzbarsky/bazel/tree/c9e799a41461893607df3b93d95c77d00c597032/src/main/java/com/google/devtools/build/lib/bazel/bzlmod.
     // The fork kept that code unchanged through 9.4.0-dzbarsky3:
     // https://github.com/dzbarsky/bazel/compare/c9e799a41461893607df3b93d95c77d00c597032...936b87fb56f12c7be262c4a5bbe853f4fc9bbd45
+    // The audited 10.0.0-pre.20261021.1 release preserves those invariants:
+    // https://github.com/dzbarsky/bazel/tree/e5cf43633e1c8131a2864bf17a7fc5c507b17be3/src/main/java/com/google/devtools/build/lib/bazel/bzlmod
     matches!(
         release,
         "release 9.0.0"
@@ -841,6 +843,7 @@ fn supports_extension_mapping_reuse(release: &str) -> bool {
             | "release 9.3.0"
             | "release 9.4.0-dzbarsky1"
             | "release 9.4.0-dzbarsky3"
+            | "release 10.0.0-pre.20261021.1"
     )
 }
 
@@ -1636,6 +1639,19 @@ exit "$status"
     #[cfg(unix)]
     #[test]
     fn legacy_mapping_queries_share_only_confirmed_extension_repositories() {
+        for release in ["release 9.2.0", "release 9.4.0-dzbarsky3"] {
+            check_legacy_mapping_reuse(release);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn legacy_mapping_queries_reuse_audited_bazel_10_extensions() {
+        check_legacy_mapping_reuse("release 10.0.0-pre.20261021.1");
+    }
+
+    #[cfg(unix)]
+    fn check_legacy_mapping_reuse(release: &str) {
         use std::os::unix::fs::PermissionsExt;
 
         use super::BazelClient;
@@ -1674,7 +1690,7 @@ esac
         )
         .unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
-        std::fs::write(root.path().join("release"), "release 9.2.0\n").unwrap();
+        std::fs::write(root.path().join("release"), format!("{release}\n")).unwrap();
         let client = super::BazelCLI::new(&executable);
         client.info().unwrap();
         client.dump_repo_mapping("").unwrap();
@@ -1732,17 +1748,19 @@ esac
             "mod --enable_bzlmod dump_repo_mapping rules++ext+one\nmod --enable_bzlmod dump_repo_mapping rules++ext+missing\nmod --enable_bzlmod dump_repo_mapping rules++ext+one rules++ext+missing\n"
         );
 
-        std::fs::write(root.path().join("release"), "release 9.4.0-dzbarsky4\n").unwrap();
-        client.info().unwrap();
-        assert_eq!(client.selected_module("rules++ext+seed").unwrap(), None);
-        std::fs::write(root.path().join("calls"), "").unwrap();
-        client
-            .dump_repo_mappings(&["rules++ext+one", "rules++ext+two"])
-            .unwrap();
-        assert_eq!(
-            std::fs::read_to_string(root.path().join("calls")).unwrap(),
-            "mod --enable_bzlmod dump_repo_mapping rules++ext+one rules++ext+two\n"
-        );
+        for release in ["release 9.4.0-dzbarsky4", "release 10.0.0"] {
+            std::fs::write(root.path().join("release"), format!("{release}\n")).unwrap();
+            client.info().unwrap();
+            assert_eq!(client.selected_module("rules++ext+seed").unwrap(), None);
+            std::fs::write(root.path().join("calls"), "").unwrap();
+            client
+                .dump_repo_mappings(&["rules++ext+one", "rules++ext+two"])
+                .unwrap();
+            assert_eq!(
+                std::fs::read_to_string(root.path().join("calls")).unwrap(),
+                "mod --enable_bzlmod dump_repo_mapping rules++ext+one rules++ext+two\n"
+            );
+        }
 
         let generated: Vec<_> = (0..super::MIN_REPOSITORIES_FOR_PROVENANCE)
             .map(|index| format!("generated++ext+{index}"))
@@ -1763,7 +1781,7 @@ esac
             requested.join(" ")
         );
 
-        std::fs::write(root.path().join("release"), "release 9.4.0-dzbarsky3\n").unwrap();
+        std::fs::write(root.path().join("release"), format!("{release}\n")).unwrap();
         let fresh_client = super::BazelCLI::new(&executable);
         fresh_client.info().unwrap();
         std::fs::write(root.path().join("calls"), "").unwrap();
