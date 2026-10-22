@@ -503,13 +503,11 @@ fn declarations(
         for field in &mut native.field {
             refine_builtin_signature(dialect, field, builtins);
         }
-        let workspace = env::make_workspace_builtins();
-        for field in rule_values.iter().chain(workspace.global.iter()) {
-            if field.name != "workspace"
-                && !native
-                    .field
-                    .iter()
-                    .any(|existing| existing.name == field.name)
+        for field in &rule_values {
+            if !native
+                .field
+                .iter()
+                .any(|existing| existing.name == field.name)
             {
                 native.field.push(field.clone());
             }
@@ -1043,11 +1041,27 @@ fn declarations(
                 "        def __call__(self, /, *, name: _starpls_builtins.str, **kwargs: _starpls_typing.Any) -> None: ..."
             )?;
         }
-        for field in &class.field {
+        // WorkspaceFactory exports WORKSPACE functions through native, omits
+        // `workspace`, and gives the `bind` function precedence over its rule.
+        let native_inventory = class.name == "native";
+        let workspace = if native_inventory && dialect == Dialect::Bazel {
+            contexts
+                .iter()
+                .find(|(context, _)| *context == APIContext::Workspace)
+        } else {
+            None
+        };
+        let fields = workspace
+            .into_iter()
+            .flat_map(|(_, globals)| globals.values())
+            .filter(|field| field.name != "workspace")
+            .map(|field| (field, false))
+            .chain(class.field.iter().map(|field| (field, native_inventory)));
+        for (field, native_rule_candidate) in fields {
             if !names.insert(field.name.as_str()) {
                 continue;
             }
-            if class.name == "native" && rule_names.contains(field.name.as_str()) {
+            if native_rule_candidate && rule_names.contains(field.name.as_str()) {
                 writeln!(body, "        {}: {}", field.name, rule_type(&field.name))?;
                 writeln!(
                     body,
@@ -1056,7 +1070,7 @@ fn declarations(
                 )?;
                 continue;
             }
-            if class.name == "native" && unresolved_rules.contains(field.name.as_str()) {
+            if native_rule_candidate && unresolved_rules.contains(field.name.as_str()) {
                 // Autoloads can provide these names independently of the live rule
                 // registry, including replacements implemented as ordinary functions.
                 writeln!(body, "        if _starpls_native_rule_available:")?;
@@ -9152,12 +9166,69 @@ def excluded_kinds():
                     "{signature}"
                 ),
                 APIContext::Workspace => assert!(
-                    signature.contains("Label") && !signature.contains("dev_dependency"),
+                    signature.contains("str") && !signature.contains("dev_dependency"),
                     "{signature}"
                 ),
                 _ => unreachable!(),
             }
         }
+    }
+
+    #[test]
+    fn workspace_native_functions_use_workspace_contracts() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = analysis
+            .open_document(
+                Path::new("/repositories.bzl"),
+                Dialect::Bazel,
+                None,
+                r#"native.bind(name = "cc_toolchain", actual = "@local_config_cc//:toolchain")
+native.register_toolchains("@local_config_cc_toolchains//:all")
+native.register_execution_platforms("//platforms:all")
+"#
+                .to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(
+            file,
+            r#"native.bind(name = 1)
+native.bind("invalid", name = "alias")
+native.register_toolchains(Label("//toolchains:all"))
+native.register_execution_platforms(1)
+"#
+            .to_owned(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>(),
+            [
+                "invalid-argument-type",
+                "too-many-positional-arguments",
+                "invalid-argument-type",
+                "invalid-argument-type",
+            ],
+            "{diagnostics:?}"
+        );
     }
 
     #[test]
