@@ -13,6 +13,8 @@ pub(crate) fn did_open_text_document(
         params.text_document.version,
     ) {
         server.send_error_message(&format!("{error:#}"));
+    } else {
+        server.interface_buffer_changed(&path)?;
     }
     Ok(())
 }
@@ -34,6 +36,8 @@ pub(crate) fn did_close_text_document(
             || server.configuration.edited_builtin_extension.as_deref() == Some(path.as_path())
         {
             server.reload_configuration()?;
+        } else {
+            server.interface_buffer_changed(&path)?;
         }
         server.invalidate_diagnostics();
         server.send_notification::<lsp_types::notification::PublishDiagnostics>(
@@ -89,8 +93,11 @@ pub(crate) fn did_change_watched_files(
         .into_iter()
         .map(|event| convert::path_buf_from_url(&event.uri))
         .collect::<anyhow::Result<Vec<_>>>()?;
+    if let Err(error) = server.analysis.sync_files(&paths) {
+        log::debug!("Cannot resolve changed source paths: {error:#}");
+        server.analysis.invalidate_loads();
+    }
     server.configuration_changed(&paths)?;
-    server.analysis.sync_files(&paths)?;
     server.invalidate_diagnostics();
     Ok(())
 }

@@ -42,29 +42,6 @@ impl FromStr for TypeInterfaceMapping {
 }
 
 impl TypeInterfaceOptions {
-    /// Whether changes to a `.bzl` source can affect configured interfaces.
-    pub(crate) fn has_source_interfaces(&self, configuration: Option<&[u8]>) -> bool {
-        !self.mappings.is_empty()
-            || configuration.is_some_and(|contents| {
-                // Invalid configurations may still declare interfaces. Preserve
-                // source-change recovery until the configuration can be read.
-                let Ok(contents) = std::str::from_utf8(contents) else {
-                    return true;
-                };
-                let Ok(config) = toml::from_str::<super::project_config::ProjectConfig>(contents)
-                else {
-                    return true;
-                };
-                let super::project_config::ProjectConfig {
-                    type_interfaces,
-                    stub_packages,
-                    rules: _,
-                    analysis: _,
-                    bazel: _,
-                } = config;
-                !type_interfaces.is_empty() || !stub_packages.is_empty()
-            })
-    }
     pub(crate) fn prepare(
         &self,
         loader: &crate::document::DefaultFileLoader,
@@ -152,9 +129,11 @@ impl TypeInterfaceOptions {
             let source = resolve(source).with_context(|| {
                 format!("cannot resolve type interface source {}", source.display())
             })?;
+            loader.watch_interface_file(&source);
             let interface = resolve(interface).with_context(|| {
                 format!("cannot resolve type interface {}", interface.display())
             })?;
+            loader.watch_interface_file(&interface);
             registrations.push(Registration {
                 source,
                 interface,
@@ -239,21 +218,6 @@ impl PreparedInterfaces {
             analysis: analysis_options,
             builtin_extension,
         } = self;
-        let open = |path: &Path| {
-            let (dialect, context) =
-                crate::document::dialect_and_api_context_for_workspace_path(workspace, path)
-                    .with_context(|| {
-                        format!("cannot classify type interface path {}", path.display())
-                    })?;
-            analysis.file(
-                path,
-                dialect,
-                context.map(|api_context| FileInfo::Bazel {
-                    api_context,
-                    is_external: !path.starts_with(workspace),
-                }),
-            )
-        };
         let mut mappings = Vec::with_capacity(registrations.len());
         for Registration {
             source,
@@ -261,8 +225,8 @@ impl PreparedInterfaces {
             origin: _,
         } in registrations
         {
-            let source = open(&source)?;
-            let interface = open(&interface)?;
+            let source = open_interface_file(analysis, workspace, &source)?;
+            let interface = open_interface_file(analysis, workspace, &interface)?;
             mappings.push((source, interface));
         }
         let builtin_extension = match builtin_extension {
@@ -273,7 +237,7 @@ impl PreparedInterfaces {
                 {
                     return Err(UnsavedBuiltinExtension(document.path.as_std_path().into()).into());
                 }
-                Some(open(&path)?)
+                Some(open_interface_file(analysis, workspace, &path)?)
             }
             None => None,
         };
@@ -291,45 +255,27 @@ impl PreparedInterfaces {
     }
 }
 
+pub(crate) fn open_interface_file(
+    analysis: &Analysis,
+    workspace: &Path,
+    path: &Path,
+) -> anyhow::Result<starpls_common::File> {
+    let (dialect, context) =
+        crate::document::dialect_and_api_context_for_workspace_path(workspace, path)
+            .with_context(|| format!("cannot classify type interface path {}", path.display()))?;
+    analysis.file(
+        path,
+        dialect,
+        context.map(|api_context| FileInfo::Bazel {
+            api_context,
+            is_external: !path.starts_with(workspace),
+        }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use clap::Parser;
-
-    #[test]
-    fn source_reload_requires_declared_interfaces() {
-        let options = super::TypeInterfaceOptions::default();
-        assert!(!options.has_source_interfaces(None));
-        for config in [
-            "",
-            "[rules]\nmissing-type-argument = 'error'",
-            "[type-interfaces]",
-            "stub-packages = []",
-            "[bazel]\nbuiltins = 'host.bzli'",
-        ] {
-            assert!(
-                !options.has_source_interfaces(Some(config.as_bytes())),
-                "{config}"
-            );
-        }
-        for config in [
-            "[type-interfaces]\n'missing.bzl' = 'missing.bzli'",
-            "[[stub-packages]]\nmanifest = 'missing.toml'",
-            "[malformed",
-        ] {
-            assert!(
-                options.has_source_interfaces(Some(config.as_bytes())),
-                "{config}"
-            );
-        }
-        assert!(options.has_source_interfaces(Some(&[0xff])));
-        let options = super::TypeInterfaceOptions {
-            mappings: vec![super::TypeInterfaceMapping {
-                source: "missing.bzl".into(),
-                interface: "missing.bzli".into(),
-            }],
-        };
-        assert!(options.has_source_interfaces(None));
-    }
 
     #[test]
     fn check_and_server_share_repeatable_mapping_arguments() {

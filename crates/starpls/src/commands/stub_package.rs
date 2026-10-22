@@ -218,9 +218,7 @@ fn read_manifest(loader: &DefaultFileLoader, package: &mut Package) -> anyhow::R
         path,
         repository,
     } = package;
-    loader.watch_manifest(path);
-    *path = contained_file(path, &repository.root)?;
-    loader.watch_manifest(path);
+    *path = contained_file(path, &repository.root, |path| loader.watch_manifest(path))?;
     let contents = loader
         .read_manifest(path)
         .with_context(|| format!("cannot read manifest {}", path.display()))?;
@@ -328,11 +326,13 @@ fn register_files(
             bail!("stub file mappings must use relative paths");
         }
         let origin = format!("{} [{:?}]", path.display(), source);
+        let watch = |path: &Path| loader.watch_interface_file(path);
         let source = contained_file(
             &source_repository.root.join(source),
             &source_repository.root,
+            watch,
         )?;
-        let interface = contained_file(&directory.join(interface), &repository.root)?;
+        let interface = contained_file(&directory.join(interface), &repository.root, watch)?;
         let source = loader.register_path(&source, source_repository)?;
         let interface = loader.register_path(&interface, repository)?;
         registrations.push(Registration {
@@ -344,7 +344,7 @@ fn register_files(
     Ok(registrations)
 }
 
-fn contained_file(path: &Path, root: &Path) -> anyhow::Result<PathBuf> {
+fn contained_file(path: &Path, root: &Path, watch: impl FnOnce(&Path)) -> anyhow::Result<PathBuf> {
     let path = starpls_common::absolute_path(path)?;
     let root = starpls_common::absolute_path(root)?;
     if !path.starts_with(&root) {
@@ -354,6 +354,7 @@ fn contained_file(path: &Path, root: &Path) -> anyhow::Result<PathBuf> {
             root.display()
         );
     }
+    watch(&path);
     let metadata = path
         .metadata()
         .with_context(|| format!("cannot resolve {}", path.display()))?;
@@ -413,9 +414,9 @@ mod tests {
         let message = format!("{error:#}");
         assert!(message.contains("first.toml"), "{message}");
         assert!(message.contains("selected version 2"), "{message}");
-        let watched = loader.configuration_paths();
-        assert!(watched.contains(&external.join("first+/MODULE.bazel")));
-        assert!(!watched.contains(&external.join("second+/MODULE.bazel")));
+        let watched = loader.configuration_inputs();
+        assert!(watched.contains_key(&external.join("first+/MODULE.bazel")));
+        assert!(!watched.contains_key(&external.join("second+/MODULE.bazel")));
         assert!(client.fetch_requests.lock().unwrap().is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -621,18 +622,18 @@ mod tests {
                 vec![]
             };
             assert_eq!(*client.mapping_requests.lock().unwrap(), expected_mappings);
-            let watched = loader.configuration_paths();
+            let watched = loader.configuration_inputs();
             for name in ["stubs_one", "stubs_two", "rules_one", "rules_two"] {
                 let expected = external.join(name).join("MODULE.bazel");
                 assert!(
-                    watched.contains(&expected),
+                    watched.contains_key(&expected),
                     "missing {expected:?} in {watched:?}"
                 );
             }
             for name in ["stubs_one", "stubs_two"] {
                 let expected = external.join(name).join("stubs.toml");
                 assert!(
-                    watched.contains(&expected),
+                    watched.contains_key(&expected),
                     "missing {expected:?} in {watched:?}"
                 );
             }

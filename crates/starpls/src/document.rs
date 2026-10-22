@@ -13,6 +13,7 @@ use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
 use crossbeam_channel::Sender;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use starpls_bazel::client::repository_fetch_batch_len;
 use starpls_bazel::client::BazelClient;
@@ -316,6 +317,7 @@ pub(crate) struct DefaultFileLoader {
     repositories: RwLock<HashMap<PathBuf, RepositoryContext>>,
     bazel_load_context: BazelLoadContext,
     configuration_inputs: RwLock<HashMap<PathBuf, Option<Vec<u8>>>>,
+    interface_files: Option<Mutex<HashMap<PathBuf, Option<PathBuf>>>>,
     repository_roots: RwLock<HashSet<PathBuf>>,
     configuration_revision: Option<u64>,
     validate_repositories: bool,
@@ -348,6 +350,7 @@ impl DefaultFileLoader {
             repositories: Default::default(),
             bazel_load_context: Default::default(),
             configuration_inputs: Default::default(),
+            interface_files: None,
             repository_roots: Default::default(),
             configuration_revision: None,
             validate_repositories: false,
@@ -393,6 +396,18 @@ impl DefaultFileLoader {
             self.fetch_repo_sender.clone(),
             bzlmod,
         )
+    }
+
+    pub(crate) fn with_interface_file_tracking(mut self) -> Self {
+        self.interface_files = Some(Mutex::default());
+        self
+    }
+
+    pub(crate) fn take_interface_files(&mut self) -> HashMap<PathBuf, Option<PathBuf>> {
+        self.interface_files
+            .take()
+            .expect("interface file tracking enabled")
+            .into_inner()
     }
 
     pub(crate) fn for_editor(mut self, revision: u64) -> Self {
@@ -619,13 +634,17 @@ impl DefaultFileLoader {
     }
 
     pub(crate) fn watch_manifest(&self, path: &Path) {
+        let contents = fs::read(path).ok();
         self.configuration_inputs
             .write()
-            .insert(path.to_path_buf(), fs::read(path).ok());
+            .insert(path.to_path_buf(), contents);
     }
 
-    pub(crate) fn configuration_paths(&self) -> Vec<PathBuf> {
-        self.configuration_inputs.read().keys().cloned().collect()
+    pub(crate) fn watch_interface_file(&self, path: &Path) {
+        if let Some(files) = &self.interface_files {
+            let target = path.canonicalize().ok();
+            files.lock().insert(path.to_path_buf(), target);
+        }
     }
 
     pub(crate) fn read_manifest(&self, path: &Path) -> std::io::Result<String> {
@@ -642,22 +661,31 @@ impl DefaultFileLoader {
         self.configuration_inputs.read().clone()
     }
 
-    pub(crate) fn repository_roots(&self) -> anyhow::Result<Vec<PathBuf>> {
-        self.repository_roots
-            .read()
-            .iter()
-            .map(|root| match root.canonicalize() {
-                Ok(root) => Ok(root),
-                Err(error) => {
-                    if error.kind() == std::io::ErrorKind::NotFound {
-                        Ok(root.clone())
-                    } else {
-                        Err(error)
-                            .with_context(|| format!("cannot watch repository {}", root.display()))
-                    }
+    /// These sets only grow during a loader's lifetime.
+    pub(crate) fn watch_counts(&self) -> (usize, usize) {
+        (
+            self.repository_roots.read().len(),
+            self.configuration_inputs.read().len(),
+        )
+    }
+
+    pub(crate) fn repository_roots(&self) -> Vec<PathBuf> {
+        let roots = self.repository_roots.read().clone();
+        let mut paths = Vec::with_capacity(roots.len());
+        for root in roots {
+            match root.canonicalize() {
+                Ok(canonical) if canonical != root => paths.push(canonical),
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                    log::warn!(
+                        "Cannot watch physical repository root {}: {error}",
+                        root.display()
+                    );
                 }
-            })
-            .collect()
+                _ => {}
+            }
+            paths.push(root);
+        }
+        paths
     }
 
     pub(crate) fn begin_fetch(&self, repository: String) -> bool {

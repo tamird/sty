@@ -438,15 +438,19 @@ impl Analysis {
         starpls_common::update_file(db, file, contents);
     }
 
-    /// Refresh filesystem metadata after repository commands, then
-    /// invalidate host resolution results that did not yet identify a file.
-    pub fn invalidate_loads(&mut self) {
+    /// Drain snapshots and invalidate cached host load resolution.
+    pub fn invalidate_load_resolution(&mut self) {
         let Self { db } = self;
         salsa::Database::trigger_cancellation(db);
-        ruff_db::files::Files::sync_all(db);
         let environment = db.environment();
         let revision = environment.load_revision(db) + 1;
         environment.set_load_revision(db).to(revision);
+    }
+
+    /// Refresh filesystem metadata and host load resolution after repository commands.
+    pub fn invalidate_loads(&mut self) {
+        self.invalidate_load_resolution();
+        ruff_db::files::Files::sync_all(&mut self.db);
     }
 
     /// Replace host resolution only after all snapshots using the old host drain.

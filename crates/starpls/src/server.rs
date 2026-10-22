@@ -86,8 +86,42 @@ pub(crate) struct ConfigurationState {
     pub(crate) edited_builtin_extension: Option<PathBuf>,
     restart_required: bool,
     inputs: HashMap<PathBuf, Option<Vec<u8>>>,
-    watched: FxHashSet<PathBuf>,
+    interfaces: HashMap<PathBuf, InterfaceState>,
+    watch: ConfigurationWatch,
+    watched: HashMap<PathBuf, WatchKind>,
     watcher_id: u64,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct InterfaceState {
+    target: Option<PathBuf>,
+    admitted: bool,
+}
+
+impl InterfaceState {
+    fn observe(analysis: &Analysis, workspace: &Path, path: &Path) -> Self {
+        Self {
+            target: path.canonicalize().ok(),
+            admitted: crate::commands::type_interface::open_interface_file(
+                analysis, workspace, path,
+            )
+            .is_ok(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum WatchKind {
+    Directory,
+    File,
+}
+
+#[derive(Default)]
+struct ConfigurationWatch {
+    counts: Option<(usize, usize)>,
+    paths: HashMap<PathBuf, WatchKind>,
+    aliases: HashMap<PathBuf, Arc<[PathBuf]>>,
+    registered: bool,
 }
 
 pub(crate) struct ConfigurationReady {
@@ -99,6 +133,7 @@ pub(crate) struct PreparedConfiguration {
     loader: Box<DefaultFileLoader>,
     native: Option<(Builtins, starpls_bazel::build::BuildLanguage, String)>,
     interfaces: anyhow::Result<crate::commands::type_interface::PreparedInterfaces>,
+    interface_files: HashMap<PathBuf, Option<PathBuf>>,
 }
 
 impl std::fmt::Debug for ConfigurationReady {
@@ -214,6 +249,22 @@ impl Server {
         self.analysis_changed = true;
     }
 
+    pub(crate) fn reconcile_filesystem(&mut self) -> anyhow::Result<()> {
+        self.analysis.invalidate_loads();
+        self.configuration.watch.counts = None;
+        self.refresh_configuration_watch();
+        let paths = self
+            .configuration
+            .inputs
+            .keys()
+            .chain(self.configuration.interfaces.keys())
+            .cloned()
+            .collect();
+        self.observe_configuration_inputs(paths, false)?;
+        self.invalidate_diagnostics();
+        Ok(())
+    }
+
     pub(crate) fn open_document(
         &mut self,
         path: &Path,
@@ -285,44 +336,105 @@ impl Server {
             if let Some(error) = resp.error {
                 self.send_error_message(&format!("Cannot watch type interfaces: {}. Changes to closed files will not be reported.", error.message));
             } else {
-                let paths: Vec<_> = self.configuration.inputs.keys().cloned().collect();
-                if let Err(error) = self.configuration_changed(&paths) {
+                // Reconcile changes made between initial reads and watcher activation.
+                if let Err(error) = self.reconcile_filesystem() {
                     self.send_error_message(&format!("{error:#}"));
                 }
-                // Reconcile changes made between initial reads and watcher activation.
-                self.analysis.invalidate_loads();
-                self.invalidate_diagnostics();
             }
         }
     }
 
-    pub(crate) fn watch_type_interfaces(&mut self) -> anyhow::Result<()> {
-        let mut paths: FxHashSet<_> = self.loader.repository_roots()?.into_iter().collect();
-        paths.insert(self.workspace.clone());
+    fn refresh_configuration_watch(&mut self) {
+        let counts = self.loader.watch_counts();
+        if self.configuration.watch.counts == Some(counts) {
+            return;
+        }
         for (path, contents) in self.loader.configuration_inputs() {
             self.configuration.inputs.entry(path).or_insert(contents);
         }
-        let manifests = self.loader.configuration_paths();
-        paths.extend(manifests.iter().cloned());
+        let mut roots: FxHashSet<_> = self.loader.repository_roots().into_iter().collect();
+        roots.insert(self.workspace.clone());
+        let mut by_source: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+        let mut watch_files = FxHashSet::default();
         let snapshot = self.analysis.snapshot();
-        for file in self
-            .analysis
-            .type_interface_files()
-            .into_iter()
-            .chain(self.analysis.type_interface_sources())
-        {
-            let path = snapshot.path(file);
-            if !paths.iter().any(|root| path.starts_with(root)) {
-                paths.insert(
-                    path.parent()
-                        .expect("absolute configured path")
-                        .to_path_buf(),
-                );
+        for path in self.configuration.interfaces.keys().chain(
+            self.configuration
+                .inputs
+                .keys()
+                .filter(|path| !self.configuration.interfaces.contains_key(*path)),
+        ) {
+            match snapshot.source_path(path) {
+                Ok(source) => by_source.entry(source).or_default().push(path.clone()),
+                Err(_) => {
+                    // A broken alias can be repaired through its logical path.
+                    watch_files.insert(path.clone());
+                }
             }
         }
-        if paths == self.configuration.watched {
+        drop(snapshot);
+        let mut extra_roots = Vec::new();
+        let mut aliases = HashMap::new();
+        for (source, paths) in by_source {
+            let Some(parent) = source.parent() else {
+                continue;
+            };
+            let is_interface = paths
+                .iter()
+                .any(|path| self.configuration.interfaces.contains_key(path));
+            if is_interface && !source.ancestors().any(|ancestor| roots.contains(ancestor)) {
+                extra_roots.push(parent.to_path_buf());
+            }
+            if paths.len() == 1 && paths[0] == source {
+                continue;
+            }
+            if !is_interface {
+                watch_files.insert(source.clone());
+            }
+            let paths: Arc<[PathBuf]> = paths.into();
+            for path in paths.iter().chain(std::iter::once(&source)) {
+                aliases.insert(path.clone(), paths.clone());
+            }
+        }
+        extra_roots.sort_by_key(|path| path.components().count());
+        for root in extra_roots {
+            if !root.ancestors().any(|ancestor| roots.contains(ancestor)) {
+                roots.insert(root);
+            }
+        }
+        watch_files.extend(
+            self.configuration
+                .interfaces
+                .keys()
+                .filter(|path| !path.ancestors().any(|ancestor| roots.contains(ancestor)))
+                .cloned(),
+        );
+        watch_files.extend(self.configuration.inputs.keys().cloned());
+        let mut paths: HashMap<_, _> = watch_files
+            .into_iter()
+            // A filesystem root cannot be replaced by a regular file.
+            .filter(|path| path.file_name().is_some())
+            .map(|path| (path, WatchKind::File))
+            .collect();
+        // Recursive coverage wins when a metadata input is also a root.
+        paths.extend(roots.into_iter().map(|root| (root, WatchKind::Directory)));
+        self.configuration.watch = ConfigurationWatch {
+            counts: Some(counts),
+            paths,
+            aliases,
+            registered: false,
+        };
+    }
+
+    pub(crate) fn watch_type_interfaces(&mut self) -> anyhow::Result<()> {
+        self.refresh_configuration_watch();
+        if self.configuration.watch.registered {
             return Ok(());
         }
+        self.configuration.watch.registered = true;
+        if self.configuration.watch.paths == self.configuration.watched {
+            return Ok(());
+        }
+        let paths = self.configuration.watch.paths.clone();
         let capability = self
             .config
             .caps
@@ -343,20 +455,16 @@ impl Server {
             .and_then(|watching| watching.relative_pattern_support)
             .unwrap_or(false);
         let mut watchers = Vec::new();
-        for path in &paths {
-            let pattern = if manifests.contains(path) {
-                let name = path
-                    .file_name()
-                    .expect("manifest filename")
-                    .to_string_lossy();
-                escape_glob(&name)
-            } else {
-                "**/{*.bzl,*.bzli,BUILD,BUILD.bazel,MODULE.bazel,MODULE.bazel.lock,*.MODULE.bazel,WORKSPACE,WORKSPACE.bazel,WORKSPACE.bzlmod,sty.toml,.bazelrc,.bazelversion}".to_owned()
-            };
-            let base = if manifests.contains(path) {
-                path.parent().expect("absolute manifest")
-            } else {
-                path.as_path()
+        for (path, kind) in &paths {
+            let (base, pattern) = match kind {
+                WatchKind::Directory => (
+                    path.as_path(),
+                    "**/{*.bzl,*.bzli,BUILD,BUILD.bazel,MODULE.bazel,MODULE.bazel.lock,*.MODULE.bazel,WORKSPACE,WORKSPACE.bazel,WORKSPACE.bzlmod,sty.toml,.bazelrc,.bazelversion}".to_owned(),
+                ),
+                WatchKind::File => {
+                    let name = path.file_name().expect("manifest filename").to_string_lossy();
+                    (path.parent().expect("absolute manifest"), escape_glob(&name))
+                }
             };
             let glob_pattern = if base == self.workspace {
                 lsp_types::GlobPattern::String(pattern)
@@ -406,39 +514,85 @@ impl Server {
         Ok(())
     }
 
+    #[cfg(test)]
+    pub(crate) fn reset_watcher_registration(&mut self) {
+        self.configuration.watched.clear();
+        self.configuration.watcher_id = 0;
+        self.configuration.watch.registered = false;
+    }
+
     pub(crate) fn configuration_changed(&mut self, paths: &[PathBuf]) -> anyhow::Result<()> {
-        let mut changed = paths
+        self.refresh_configuration_watch();
+        let changed = paths
             .iter()
             .any(|path| self.configuration.edited_builtin_extension.as_ref() == Some(path));
-        let inputs = self.loader.configuration_inputs();
-        let configured = self.config.args.type_interfaces.has_source_interfaces(
-            inputs
-                .get(&self.workspace.join("sty.toml"))
-                .and_then(Option::as_deref),
-        );
+        self.observe_configuration_inputs(self.affected_configuration_paths(paths), changed)
+    }
+
+    fn observe_configuration_inputs(
+        &mut self,
+        paths: FxHashSet<PathBuf>,
+        mut changed: bool,
+    ) -> anyhow::Result<()> {
         for path in paths {
-            let metadata = is_bazel_dependency(path)
-                || (configured && path.extension().is_some_and(|extension| extension == "bzl"))
-                || path == &self.workspace.join("sty.toml")
-                || inputs.contains_key(path);
-            if !metadata {
-                continue;
-            }
-            let contents = std::fs::read(path).ok();
-            if self.configuration.inputs.get(path) != Some(&contents) {
-                self.configuration.inputs.insert(path.clone(), contents);
-                if path == &self.workspace.join(".bazelrc")
-                    || path == &self.workspace.join(".bazelversion")
-                {
-                    self.configuration.restart_required = true;
+            if self.configuration.inputs.contains_key(&path)
+                || is_bazel_dependency(&path)
+                || path == self.workspace.join("sty.toml")
+            {
+                let contents = std::fs::read(&path).ok();
+                if self.configuration.inputs.get(&path) != Some(&contents) {
+                    self.configuration.inputs.insert(path.clone(), contents);
+                    if path == self.workspace.join(".bazelrc")
+                        || path == self.workspace.join(".bazelversion")
+                    {
+                        self.configuration.restart_required = true;
+                    }
+                    changed = true;
                 }
-                changed = true;
             }
+            changed |= self.interface_changed(&path);
         }
         if changed || self.open_repository_changed() {
             self.reload_configuration()?;
         }
         Ok(())
+    }
+
+    pub(crate) fn interface_buffer_changed(&mut self, path: &Path) -> anyhow::Result<()> {
+        self.refresh_configuration_watch();
+        let paths = self.affected_configuration_paths(&[path.to_path_buf()]);
+        let mut changed = false;
+        for path in paths {
+            changed |= self.interface_changed(&path);
+        }
+        if changed {
+            self.reload_configuration()?;
+        }
+        Ok(())
+    }
+
+    fn affected_configuration_paths(&self, paths: &[PathBuf]) -> FxHashSet<PathBuf> {
+        let mut affected = FxHashSet::default();
+        for path in paths {
+            if let Some(aliases) = self.configuration.watch.aliases.get(path) {
+                affected.extend(aliases.iter().cloned());
+            } else {
+                affected.insert(path.clone());
+            }
+        }
+        affected
+    }
+
+    fn interface_changed(&mut self, path: &Path) -> bool {
+        let Some(previous) = self.configuration.interfaces.get_mut(path) else {
+            return false;
+        };
+        let observed = InterfaceState::observe(&self.analysis, &self.workspace, path);
+        if observed == *previous {
+            return false;
+        }
+        *previous = observed;
+        true
     }
 
     pub(crate) fn reload_configuration(&mut self) -> anyhow::Result<()> {
@@ -513,11 +667,14 @@ impl Server {
                         Some((builtins, context.rules, context.info.release)),
                     )
                 };
+                let mut loader = loader.with_interface_file_tracking();
                 let interfaces = options.prepare(&loader, &workspace);
+                let interface_files = loader.take_interface_files();
                 Ok(PreparedConfiguration {
                     loader: Box::new(loader),
                     native,
                     interfaces,
+                    interface_files,
                 })
             })();
             Task::ConfigurationReady(ConfigurationReady { revision, result })
@@ -535,6 +692,7 @@ impl Server {
             loader,
             native,
             interfaces,
+            interface_files,
         } = match result {
             Ok(prepared) => prepared,
             Err(error) => {
@@ -544,10 +702,13 @@ impl Server {
                 return;
             }
         };
-        let changed = loader
-            .configuration_inputs()
-            .into_iter()
-            .any(|(path, contents)| std::fs::read(&path).ok() != contents);
+        let inputs = loader.configuration_inputs();
+        let changed = inputs
+            .iter()
+            .any(|(path, contents)| std::fs::read(path).ok() != *contents)
+            || interface_files
+                .iter()
+                .any(|(path, target)| path.canonicalize().ok() != *target);
         if changed {
             self.configuration.pending = true;
             self.start_configuration_refresh();
@@ -596,9 +757,21 @@ impl Server {
         if let Err(error) = result {
             self.send_error_message(&format!("Cannot reload sty configuration: {error:#}"));
         }
-        self.configuration
-            .inputs
-            .extend(self.loader.configuration_inputs());
+        self.configuration.inputs = inputs;
+        self.configuration.interfaces = interface_files
+            .into_iter()
+            .map(|(path, target)| {
+                let admitted = self.configuration.complete
+                    || crate::commands::type_interface::open_interface_file(
+                        &self.analysis,
+                        &self.workspace,
+                        &path,
+                    )
+                    .is_ok();
+                (path, InterfaceState { target, admitted })
+            })
+            .collect();
+        self.configuration.watch = ConfigurationWatch::default();
         self.refresh_all_workspace_targets();
         self.invalidate_diagnostics();
         self.refresh_editor_semantics();

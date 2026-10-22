@@ -167,11 +167,9 @@ impl Server {
                 self.complete_request(resp);
             }
             Event::Task(task) => {
-                self.handle_task(task);
-
-                while let Ok(task) = self.task_pool_handle.receiver.try_recv() {
-                    self.handle_task(task);
-                }
+                let mut tasks = vec![task];
+                tasks.extend(self.task_pool_handle.receiver.try_iter());
+                self.handle_tasks(tasks);
             }
         };
 
@@ -285,7 +283,33 @@ impl Server {
         }
     }
 
+    fn handle_tasks(&mut self, tasks: Vec<Task>) {
+        if tasks.iter().any(|task| {
+            matches!(
+                task,
+                Task::RepoMappingsReady { .. }
+                    | Task::FetchExternalRepos(FetchExternalReposProgress::End { .. })
+                    | Task::RefreshAllWorkspaceTargets(
+                        RefreshAllWorkspaceTargetsProgress::End { .. }
+                    )
+            )
+        }) {
+            // Even stale or failed Bazel commands can change the current output tree.
+            if let Err(error) = self.reconcile_filesystem() {
+                self.send_error_message(&format!("{error:#}"));
+            }
+        }
+        for task in tasks {
+            self.apply_task(task);
+        }
+    }
+
+    #[cfg(test)]
     fn handle_task(&mut self, task: Task) {
+        self.handle_tasks(vec![task]);
+    }
+
+    fn apply_task(&mut self, task: Task) {
         match task {
             Task::AnalysisRequested(file_ids) => self.analysis_requested_for_files = Some(file_ids),
             Task::DiagnosticsReady(results) => {
@@ -327,9 +351,8 @@ impl Server {
             } => {
                 self.is_resolving_repo_mappings = false;
                 if revision == self.configuration.revision && !self.configuration.refreshing {
-                    // Drain readers while the lookups are still pending, so a
-                    // workspace edit cannot accept references from that state.
-                    self.analysis.invalidate_loads();
+                    // Earlier tasks in this batch may have started fresh analysis.
+                    self.analysis.invalidate_load_resolution();
                     if let Err(error) = self
                         .loader
                         .finish_repository_mappings(&repositories, result)
@@ -338,7 +361,6 @@ impl Server {
                             "Cannot load repository mapping batch: {error:#}"
                         ));
                     }
-                    self.invalidate_diagnostics();
                     self.refresh_editor_semantics();
                 }
             }
@@ -375,21 +397,16 @@ impl Server {
                         self.is_fetching_repos = false;
                         let mut failed_repos = Vec::new();
                         if revision == self.configuration.revision {
-                            self.analysis.invalidate_loads();
+                            if !results.is_empty() {
+                                self.analysis.invalidate_load_resolution();
+                            }
                             for crate::document::RepositoryFetchResult { name, result } in results {
                                 if result.is_err() {
                                     failed_repos.push(name.clone());
                                 }
                                 self.loader.finish_fetch([name], result);
                             }
-                            self.invalidate_diagnostics();
-                            if self.open_repository_changed() {
-                                if let Err(error) = self.reload_configuration() {
-                                    self.send_error_message(&format!("{error:#}"));
-                                }
-                            } else {
-                                self.refresh_editor_semantics();
-                            }
+                            self.refresh_editor_semantics();
                         }
 
                         // Fetching external repositories with `bazel query`, as in the case when bzlmod is disabled, often
@@ -440,16 +457,10 @@ impl Server {
                     RefreshAllWorkspaceTargetsProgress::End { revision, targets } => {
                         self.is_refreshing_all_workspace_targets = false;
                         if revision == self.configuration.revision {
-                            if self.open_repository_changed() {
-                                if let Err(error) = self.reload_configuration() {
-                                    self.send_error_message(&format!("{error:#}"));
-                                }
-                            } else if let Some(targets) = targets {
+                            if let Some(targets) = targets {
                                 self.analysis.set_all_workspace_targets(targets);
-                                self.analysis.invalidate_loads();
-                                self.invalidate_diagnostics();
-                                self.refresh_editor_semantics();
                             }
+                            self.refresh_editor_semantics();
                         } else {
                             self.refresh_all_workspace_targets();
                         }
@@ -681,6 +692,88 @@ mod tests {
                 "ordinary edits use document requests"
             );
         }
+    }
+
+    #[test]
+    fn mapping_publication_drains_snapshots_created_after_batch_reconciliation() {
+        let TestServer {
+            mut server,
+            client: _client,
+            ..
+        } = server();
+        server.reconcile_filesystem().unwrap();
+
+        // A preceding retry can start analysis after the batch preflight.
+        let snapshot = server.analysis.snapshot();
+        let loader = server.loader.clone();
+        let worker = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while snapshot.check_cancelled().is_ok() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "snapshot was not drained"
+                );
+                std::thread::yield_now();
+            }
+            assert!(
+                loader.mappings_ready(),
+                "mapping was published before drain"
+            );
+        });
+
+        server.apply_task(Task::RepoMappingsReady {
+            repositories: vec![String::new()],
+            revision: server.configuration.revision,
+            result: Err(anyhow::anyhow!("mapping query failed")),
+        });
+        worker.join().unwrap();
+        assert!(!server.loader.mappings_ready());
+    }
+
+    #[test]
+    fn fetch_publication_invalidates_loads_cached_after_batch_reconciliation() {
+        let TestServer {
+            mut server,
+            client: _client,
+            disk,
+            ..
+        } = server();
+        disk.create_directory_all(SystemPath::new("/external/rules+"))
+            .unwrap();
+        disk.write_file(SystemPath::new("/external/rules+/defs.bzl"), "value = 1\n")
+            .unwrap();
+        server.loader = Arc::new(server.loader.fresh().for_editor(0));
+        server.analysis = Analysis::with_system(server.loader.clone(), Default::default(), disk);
+        assert!(server.loader.begin_fetch("rules+".into()));
+        let file = server
+            .analysis
+            .open_document(
+                Path::new("/workspace/BUILD"),
+                starpls_common::Dialect::Bazel,
+                None,
+                "load(\"@@rules+//:defs.bzl\", \"value\")\n".into(),
+                1,
+            )
+            .unwrap();
+        server.reconcile_filesystem().unwrap();
+        let before = server.analysis.snapshot().load_dependencies(file).unwrap();
+        assert!(
+            matches!(before.as_slice(), [dependency] if matches!(&dependency.resolution, starpls_ide::LoadResolution::Failed(error) if error.contains("must be fetched"))),
+            "{before:?}"
+        );
+
+        server.apply_task(Task::FetchExternalRepos(FetchExternalReposProgress::End {
+            revision: server.configuration.revision,
+            results: vec![crate::document::RepositoryFetchResult {
+                name: "rules+".into(),
+                result: Ok(()),
+            }],
+        }));
+        let after = server.analysis.snapshot().load_dependencies(file).unwrap();
+        assert!(
+            matches!(after.as_slice(), [dependency] if matches!(dependency.resolution, starpls_ide::LoadResolution::Resolved(_))),
+            "{after:?}"
+        );
     }
 
     struct BlockedClient {
@@ -1151,7 +1244,10 @@ mod tests {
             // the event boundary dispatches the next accumulated batch.
             server.handle_task(first);
             assert!(!server.is_resolving_repo_mappings);
-            assert_eq!(server.analysis_changed, !stale);
+            assert!(
+                server.analysis_changed,
+                "even stale commands may change files"
+            );
             let errors = client
                 .receiver
                 .try_iter()
@@ -1388,7 +1484,7 @@ mod tests {
                 .unwrap();
             let diagnostics = collect_diagnostics(&server.snapshot(), file).unwrap();
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
-            assert!(server.loader.repository_roots().unwrap().contains(&helper));
+            assert!(server.loader.repository_roots().contains(&helper));
             Arc::get_mut(&mut server.config).unwrap().caps.workspace =
                 Some(lsp_types::WorkspaceClientCapabilities {
                     did_change_watched_files: Some(
@@ -1506,25 +1602,151 @@ mod tests {
     }
 
     #[test]
-    fn rules_only_configuration_preserves_caches_on_source_save() {
+    #[cfg(unix)]
+    fn bazel_operations_refresh_physical_watch_roots() {
         let TestServer {
             mut server,
-            client: _,
-            disk: _,
+            client,
             tasks,
-            debounced: _,
+            debounced: _debounced,
+            ..
         } = server();
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
-            .join("rules-only-configuration");
+            .join("materialized-watch-roots");
+        let workspace = root.join("workspace");
+        let external = root.join("external");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&external).unwrap();
+        server.loader = Arc::new(DefaultFileLoader::new(
+            server.bazel_client.clone(),
+            workspace.clone(),
+            None,
+            external.clone(),
+            tasks,
+            false,
+        ));
+        server.analysis = Analysis::new(server.loader.clone(), Default::default()).unwrap();
+        server.workspace = workspace;
+        Arc::get_mut(&mut server.config).unwrap().caps.workspace =
+            Some(lsp_types::WorkspaceClientCapabilities {
+                did_change_watched_files: Some(
+                    lsp_types::DidChangeWatchedFilesClientCapabilities {
+                        dynamic_registration: Some(true),
+                        relative_pattern_support: Some(true),
+                    },
+                ),
+                ..Default::default()
+            });
+        let repository = server.loader.canonical_repository("rules+".into()).unwrap();
+        let registrations = || {
+            client
+                .receiver
+                .try_iter()
+                .filter_map(|message| match message {
+                    lsp_server::Message::Request(request)
+                        if request.method == "client/registerCapability" =>
+                    {
+                        Some(request)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        server.watch_type_interfaces().unwrap();
+        assert_eq!(registrations().len(), 1);
+        let counts = server.loader.watch_counts();
+        let revision = server.configuration.revision;
+        let operations = [
+            Task::FetchExternalRepos(FetchExternalReposProgress::End {
+                revision: revision + 1,
+                results: vec![crate::document::RepositoryFetchResult {
+                    name: "stale+".into(),
+                    result: Ok(()),
+                }],
+            }),
+            Task::RepoMappingsReady {
+                repositories: vec!["rules+".into()],
+                revision,
+                result: Err(anyhow::anyhow!("mapping failed")),
+            },
+            Task::FetchExternalRepos(FetchExternalReposProgress::End {
+                revision,
+                results: vec![crate::document::RepositoryFetchResult {
+                    name: "rules+".into(),
+                    result: Err("fetch failed".into()),
+                }],
+            }),
+            Task::RefreshAllWorkspaceTargets(RefreshAllWorkspaceTargetsProgress::End {
+                revision,
+                targets: None,
+            }),
+        ];
+        for (index, operation) in operations.into_iter().enumerate() {
+            let physical = root.join(format!("physical-{index}"));
+            std::fs::create_dir(&physical).unwrap();
+            if index != 0 {
+                std::fs::remove_file(&repository.root).unwrap();
+            }
+            std::os::unix::fs::symlink(&physical, &repository.root).unwrap();
+            assert_eq!(server.loader.watch_counts(), counts);
+            server.handle_event(Event::Task(operation)).unwrap();
+            if index == 0 {
+                assert!(server.loader.begin_fetch("stale+".into()));
+            }
+            let requests = registrations();
+            let [request] = requests.as_slice() else {
+                panic!("expected one refreshed registration: {requests:?}");
+            };
+            let params: lsp_types::RegistrationParams =
+                serde_json::from_value(request.params.clone()).unwrap();
+            let [registration] = params.registrations.as_slice() else {
+                panic!("expected one watcher registration: {params:?}");
+            };
+            let options: lsp_types::DidChangeWatchedFilesRegistrationOptions =
+                serde_json::from_value(registration.register_options.clone().unwrap()).unwrap();
+            assert!(
+                options.watchers.iter().any(|watcher| matches!(
+                    &watcher.glob_pattern,
+                    lsp_types::GlobPattern::Relative(pattern)
+                        if pattern.base_uri == lsp_types::OneOf::Right(
+                            lsp_types::Url::from_directory_path(&physical).unwrap()
+                        ) && pattern.pattern.starts_with("**/")
+                )),
+                "{options:?}"
+            );
+            assert_eq!(server.loader.watch_counts(), counts);
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn interface_configuration_tracks_selected_files() {
+        let TestServer {
+            mut server,
+            client: _client,
+            disk: _,
+            tasks,
+            debounced: _debounced,
+        } = server();
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("interface-configuration-tracking");
         std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("BUILD"), "").unwrap();
+        std::fs::write(root.join("source.bzl"), "def f(value): pass\n").unwrap();
+        let contract_directory = root.join("contracts");
+        std::fs::create_dir(&contract_directory).unwrap();
+        #[cfg(unix)]
+        let selected = {
+            std::os::unix::fs::symlink(&contract_directory, root.join("linked")).unwrap();
+            "linked/source.bzli"
+        };
+        #[cfg(not(unix))]
+        let selected = "contracts/source.bzli";
         std::fs::write(
             root.join("sty.toml"),
-            "[rules]\nmissing-type-argument = 'error'\n",
+            format!("[type-interfaces]\n'source.bzl' = '{selected}'\n"),
         )
         .unwrap();
-        let source = root.join("source.bzl");
-        std::fs::write(&source, "value = 1\n").unwrap();
-        server.bazel_client = Arc::new(crate::document::source_tests::TestBazelClient::default());
         server.loader = Arc::new(DefaultFileLoader::new(
             server.bazel_client.clone(),
             root.clone(),
@@ -1533,12 +1755,203 @@ mod tests {
             tasks,
             false,
         ));
-        server.loader.watch_manifest(&root.join("sty.toml"));
+        server.analysis = Analysis::new(server.loader.clone(), Default::default()).unwrap();
         server.workspace = root.clone();
+        server.reload_configuration().unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+
+        let changed = |path: &std::path::Path| lsp_types::DidChangeWatchedFilesParams {
+            changes: vec![lsp_types::FileEvent {
+                uri: lsp_types::Url::from_file_path(path).unwrap(),
+                typ: lsp_types::FileChangeType::CHANGED,
+            }],
+        };
+        let interface = contract_directory.join("source.bzli");
+        std::fs::write(&interface, "def f(value: int): ...\n").unwrap();
+        crate::handlers::notifications::did_change_watched_files(&mut server, changed(&interface))
+            .unwrap();
         let revision = server.configuration.revision;
-        server.configuration_changed(&[source]).unwrap();
+        crate::handlers::notifications::did_change_watched_files(
+            &mut server,
+            changed(&root.join(selected)),
+        )
+        .unwrap();
         assert_eq!(server.configuration.revision, revision);
-        assert!(!server.configuration.refreshing);
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        let caller = root.join("caller.bzl");
+        server
+            .open_document(
+                &caller,
+                "load('//:source.bzl', 'f')\nf('wrong')\n".into(),
+                1,
+            )
+            .unwrap();
+        let file = server
+            .analysis
+            .snapshot()
+            .open_file(&caller)
+            .unwrap()
+            .unwrap();
+        assert!(!collect_diagnostics(&server.snapshot(), file)
+            .unwrap()
+            .is_empty());
+
+        #[cfg(unix)]
+        {
+            // Both targets are inside the same watched root, and this client
+            // does not support dynamic watcher registration.
+            std::fs::write(
+                contract_directory.join("alternate.bzli"),
+                "def f(value: str): ...\n",
+            )
+            .unwrap();
+            std::fs::remove_file(&interface).unwrap();
+            std::os::unix::fs::symlink("alternate.bzli", &interface).unwrap();
+            server
+                .handle_event(Event::Task(Task::FetchExternalRepos(
+                    FetchExternalReposProgress::End {
+                        revision: server.configuration.revision,
+                        results: Vec::new(),
+                    },
+                )))
+                .unwrap();
+            assert!(server.configuration.refreshing);
+            assert!(server.analysis.type_interface_files().is_empty());
+            finish_reload(&mut server);
+            assert!(server.configuration.complete);
+            assert!(collect_diagnostics(&server.snapshot(), file)
+                .unwrap()
+                .is_empty());
+            std::fs::remove_file(&interface).unwrap();
+            std::fs::write(&interface, "def f(value: int): ...\n").unwrap();
+            crate::handlers::notifications::did_change_watched_files(
+                &mut server,
+                changed(&root.join(selected)),
+            )
+            .unwrap();
+            finish_reload(&mut server);
+            assert!(server.configuration.complete);
+        }
+
+        let revision = server.configuration.revision;
+        let unrelated = root.join("unrelated.bzl");
+        std::fs::write(&unrelated, "value = 1\n").unwrap();
+        crate::handlers::notifications::did_change_watched_files(&mut server, changed(&unrelated))
+            .unwrap();
+        assert_eq!(server.configuration.revision, revision);
+        assert!(!collect_diagnostics(&server.snapshot(), file)
+            .unwrap()
+            .is_empty());
+
+        std::fs::write(&interface, "def f(value: str): ...\n").unwrap();
+        crate::handlers::notifications::did_change_watched_files(&mut server, changed(&interface))
+            .unwrap();
+        assert_eq!(server.configuration.revision, revision);
+        assert!(collect_diagnostics(&server.snapshot(), file)
+            .unwrap()
+            .is_empty());
+
+        let source = root.join("source.bzl");
+        std::fs::write(&source, [0xff]).unwrap();
+        crate::handlers::notifications::did_change_watched_files(&mut server, changed(&source))
+            .unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+        assert!(server.analysis.type_interface_files().is_empty());
+
+        let source_uri = lsp_types::Url::from_file_path(&source).unwrap();
+        crate::handlers::notifications::did_open_text_document(
+            &mut server,
+            lsp_types::DidOpenTextDocumentParams {
+                text_document: lsp_types::TextDocumentItem {
+                    uri: source_uri.clone(),
+                    language_id: "starlark".to_owned(),
+                    version: 1,
+                    text: "def f(value): pass\n".to_owned(),
+                },
+            },
+        )
+        .unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        crate::handlers::notifications::did_close_text_document(
+            &mut server,
+            lsp_types::DidCloseTextDocumentParams {
+                text_document: lsp_types::TextDocumentIdentifier { uri: source_uri },
+            },
+        )
+        .unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+        std::fs::write(&source, "def f(value): pass\n").unwrap();
+        crate::handlers::notifications::did_change_watched_files(&mut server, changed(&source))
+            .unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        #[cfg(unix)]
+        {
+            std::fs::remove_file(&interface).unwrap();
+            std::os::unix::fs::symlink("source.bzli", &interface).unwrap();
+            crate::handlers::notifications::did_change_watched_files(
+                &mut server,
+                changed(&root.join(selected)),
+            )
+            .unwrap();
+            finish_reload(&mut server);
+            assert!(!server.configuration.complete);
+            server.watch_type_interfaces().unwrap();
+            crate::handlers::notifications::did_open_text_document(
+                &mut server,
+                lsp_types::DidOpenTextDocumentParams {
+                    text_document: lsp_types::TextDocumentItem {
+                        uri: lsp_types::Url::from_file_path(&unrelated).unwrap(),
+                        language_id: "starlark".to_owned(),
+                        version: 1,
+                        text: "value = 1\n".to_owned(),
+                    },
+                },
+            )
+            .unwrap();
+            std::fs::remove_file(&interface).unwrap();
+            std::fs::write(&interface, "def f(value: int): ...\n").unwrap();
+            crate::handlers::notifications::did_change_watched_files(
+                &mut server,
+                changed(&root.join(selected)),
+            )
+            .unwrap();
+            finish_reload(&mut server);
+            assert!(server.configuration.complete);
+            assert!(!collect_diagnostics(&server.snapshot(), file)
+                .unwrap()
+                .is_empty());
+        }
+        let configuration = root.join("sty.toml");
+        let filesystem_root = root.ancestors().last().unwrap();
+        std::fs::write(
+            &configuration,
+            format!(
+                "[type-interfaces]\n'{}' = '{selected}'\n",
+                filesystem_root.display()
+            ),
+        )
+        .unwrap();
+        server.configuration_changed(&[configuration]).unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+        crate::handlers::notifications::did_open_text_document(
+            &mut server,
+            lsp_types::DidOpenTextDocumentParams {
+                text_document: lsp_types::TextDocumentItem {
+                    uri: lsp_types::Url::from_file_path(root.join("still-usable.bzl")).unwrap(),
+                    language_id: "starlark".into(),
+                    version: 1,
+                    text: "value = 1\n".into(),
+                },
+            },
+        )
+        .unwrap();
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -1614,6 +2027,38 @@ mod tests {
             collect_diagnostics(&server.snapshot(), host).unwrap().len(),
             1
         );
+        std::fs::write(root.join("helper.bzl"), "builtins = {}\n").unwrap();
+        std::fs::write(
+            &configuration,
+            format!(
+                "{settings}[type-interfaces]\n'helper.bzl' = '{}'\n",
+                editor.file_name().unwrap().to_string_lossy()
+            ),
+        )
+        .unwrap();
+        server
+            .configuration_changed(std::slice::from_ref(&configuration))
+            .unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        std::fs::write(&extension, contract.replace("source: str", "source: int")).unwrap();
+        crate::handlers::notifications::did_change_watched_files(
+            &mut server,
+            lsp_types::DidChangeWatchedFilesParams {
+                changes: vec![lsp_types::FileEvent {
+                    uri: lsp_types::Url::from_file_path(&editor).unwrap(),
+                    typ: lsp_types::FileChangeType::CHANGED,
+                }],
+            },
+        )
+        .unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        assert_eq!(
+            collect_diagnostics(&server.snapshot(), file).unwrap().len(),
+            1
+        );
+        std::fs::write(&extension, contract).unwrap();
         std::fs::write(
             &configuration,
             format!("{settings}[rules]\nmissing-type-argument = 'ignore'\n"),
@@ -1812,6 +2257,21 @@ mod tests {
         let response = response(&mut server, &client, 51);
         assert!(!response.result.unwrap().to_string().contains("stale"));
         assert_eq!(server.analysis.type_interface_files().len(), 1);
+        assert!(!collect_diagnostics(&server.snapshot(), file)
+            .unwrap()
+            .is_empty());
+
+        let source = root.join("source.bzl");
+        std::fs::remove_file(&source).unwrap();
+        crate::handlers::notifications::did_change_watched_files(&mut server, changed(&source))
+            .unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+        std::fs::write(&source, "def f(value): pass\n").unwrap();
+        crate::handlers::notifications::did_change_watched_files(&mut server, changed(&source))
+            .unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
         assert!(!collect_diagnostics(&server.snapshot(), file)
             .unwrap()
             .is_empty());
@@ -2354,36 +2814,48 @@ mod tests {
         let TestServer {
             mut server,
             client,
-            disk,
-            tasks: _,
+            disk: _,
+            tasks,
             debounced,
         } = server();
-        let source_path = Path::new("/workspace/source.bzl");
-        let interface_path = Path::new("/contracts/source.bzli");
-        let interface_uri = lsp_types::Url::from_file_path(interface_path).unwrap();
-        disk.create_directory_all(SystemPath::new("/contracts"))
-            .unwrap();
-        disk.write_file(SystemPath::new("/workspace/source.bzl"), "def f(): pass\n")
-            .unwrap();
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("closed-interface-diagnostics");
+        let workspace = root.join("workspace");
+        let contracts = root.join("contracts");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&contracts).unwrap();
+        let interface_path = contracts.join("source.bzli");
+        let interface_uri = lsp_types::Url::from_file_path(&interface_path).unwrap();
+        std::fs::write(workspace.join("source.bzl"), "def f(value): pass\n").unwrap();
+        std::fs::write(
+            workspace.join("sty.toml"),
+            format!(
+                "[type-interfaces]\n'source.bzl' = '{}'\n",
+                interface_path.display()
+            ),
+        )
+        .unwrap();
         let int_contract = "def f(value: int) -> None: ...\n";
         let str_contract = "def f(value: string) -> None: ...\n";
-        disk.write_file(SystemPath::new("/contracts/source.bzli"), int_contract)
-            .unwrap();
-        let source = server
-            .analysis
-            .file(source_path, starpls_common::Dialect::Bazel, None)
-            .unwrap();
-        let interface = server
-            .analysis
-            .file(interface_path, starpls_common::Dialect::Bazel, None)
-            .unwrap();
-        server
-            .analysis
-            .set_type_interfaces([(source, interface)])
-            .unwrap();
+        std::fs::write(&interface_path, int_contract).unwrap();
+        server.loader = Arc::new(DefaultFileLoader::new(
+            server.bazel_client.clone(),
+            workspace.clone(),
+            None,
+            root.join("external"),
+            tasks,
+            false,
+        ));
+        server.analysis = Analysis::new(server.loader.clone(), Default::default()).unwrap();
+        server.workspace = workspace.clone();
+        server.reload_configuration().unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        assert_eq!(server.analysis.type_interface_files().len(), 1);
+        let caller_path = workspace.join("BUILD");
         server
             .open_document(
-                Path::new("/workspace/BUILD"),
+                &caller_path,
                 "load(\"@//:source.bzl\", \"f\")\nf('text')\n".to_owned(),
                 4,
             )
@@ -2391,15 +2863,14 @@ mod tests {
         let caller = server
             .analysis
             .snapshot()
-            .open_file(Path::new("/workspace/BUILD"))
+            .open_file(&caller_path)
             .unwrap()
             .unwrap();
         let old = captured_diagnostics(&mut server, caller);
         assert!(!collect_diagnostics(&server.snapshot(), caller)
             .unwrap()
             .is_empty());
-        disk.write_file(SystemPath::new("/contracts/source.bzli"), str_contract)
-            .unwrap();
+        std::fs::write(&interface_path, str_contract).unwrap();
         let changed = || {
             notification::<lsp_types::notification::DidChangeWatchedFiles>(
                 lsp_types::DidChangeWatchedFilesParams {
@@ -2427,7 +2898,7 @@ mod tests {
         assert_eq!(closed.version, None);
 
         server
-            .open_document(interface_path, int_contract.to_owned(), 9)
+            .open_document(&interface_path, int_contract.to_owned(), 9)
             .unwrap();
         server.handle_event(changed()).unwrap();
         assert_eq!(server.analysis.diagnostic_files().len(), 2);
@@ -2465,26 +2936,34 @@ mod tests {
             .iter()
             .any(|update| update.uri == interface_uri && update.version.is_none()));
 
-        disk.fs()
-            .remove_file(SystemPath::new("/contracts/source.bzli"))
-            .unwrap();
+        std::fs::remove_file(&interface_path).unwrap();
         server.handle_event(changed()).unwrap();
-        analyze_requested_files(&mut server, &debounced);
-        let updates = published(&client);
-        let closed = updates
-            .iter()
-            .find(|update| update.uri == interface_uri)
-            .unwrap();
+        finish_reload(&mut server);
+        assert!(!server.configuration.complete);
+        assert!(server.analysis.type_interface_files().is_empty());
+        let error = client
+            .receiver
+            .try_iter()
+            .filter_map(|message| match message {
+                lsp_server::Message::Notification(message)
+                    if message.method == "window/showMessage" =>
+                {
+                    serde_json::from_value::<lsp_types::ShowMessageParams>(message.params).ok()
+                }
+                _ => None,
+            })
+            .find(|message| message.message.contains("Cannot reload sty configuration"))
+            .expect("missing configuration error");
         assert!(
-            closed
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.message.contains("cannot read")),
-            "{closed:?}"
+            error.message.contains(&*interface_path.to_string_lossy()),
+            "{error:?}"
         );
-        disk.write_file(SystemPath::new("/contracts/source.bzli"), str_contract)
-            .unwrap();
+        assert!(error.message.contains("cannot open"), "{error:?}");
+        std::fs::write(&interface_path, str_contract).unwrap();
         server.handle_event(changed()).unwrap();
+        let ready = next_configuration(&mut server);
+        server.handle_event(Event::Task(ready)).unwrap();
+        assert!(server.configuration.complete);
         analyze_requested_files(&mut server, &debounced);
         let updates = published(&client);
         assert!(
@@ -2492,6 +2971,38 @@ mod tests {
             "{updates:?}"
         );
 
+        std::fs::create_dir(contracts.join("nested")).unwrap();
+        std::fs::write(
+            contracts.join("nested/other.bzli"),
+            "def g() -> None: ...\n",
+        )
+        .unwrap();
+        std::fs::write(workspace.join("other.bzl"), "def g(): pass\n").unwrap();
+        #[cfg(unix)]
+        let selected = {
+            std::fs::create_dir_all(root.join("external")).unwrap();
+            let repository = root.join("external/rules+");
+            std::os::unix::fs::symlink(&contracts, &repository).unwrap();
+            repository.join("nested/other.bzli")
+        };
+        #[cfg(not(unix))]
+        let selected = contracts.join("nested/other.bzli");
+        let configuration = workspace.join("sty.toml");
+        std::fs::write(
+            &configuration,
+            format!(
+                "[type-interfaces]\n'source.bzl' = '{}'\n'other.bzl' = '{}'\n",
+                interface_path.display(),
+                selected.display()
+            ),
+        )
+        .unwrap();
+        server.configuration_changed(&[configuration]).unwrap();
+        finish_reload(&mut server);
+        assert!(server.configuration.complete);
+        let interfaces = server.analysis.type_interface_files();
+        assert_eq!(interfaces.len(), 2);
+        published(&client);
         let config = std::sync::Arc::get_mut(&mut server.config).unwrap();
         config.caps.workspace = Some(lsp_types::WorkspaceClientCapabilities {
             did_change_watched_files: Some(lsp_types::DidChangeWatchedFilesClientCapabilities {
@@ -2500,7 +3011,7 @@ mod tests {
             }),
             ..Default::default()
         });
-        server.configuration = Default::default();
+        server.reset_watcher_registration();
         server.watch_type_interfaces().unwrap();
         let lsp_server::Message::Request(request) = client.receiver.try_recv().unwrap() else {
             panic!("expected watch registration")
@@ -2523,6 +3034,23 @@ mod tests {
                 }),
             "{options:?}"
         );
+        let recursive_external: Vec<_> = options
+            .watchers
+            .iter()
+            .filter_map(|watcher| match &watcher.glob_pattern {
+                lsp_types::GlobPattern::Relative(pattern) if pattern.pattern.starts_with("**/") => {
+                    Some(&pattern.base_uri)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(recursive_external.len(), if cfg!(unix) { 2 } else { 1 });
+        #[cfg(unix)]
+        assert!(recursive_external.contains(&&lsp_types::OneOf::Right(
+            lsp_types::Url::from_directory_path(root.join("external/rules+")).unwrap()
+        )));
+        server.watch_type_interfaces().unwrap();
+        assert!(client.receiver.is_empty());
         assert!(
             options
                 .watchers
@@ -2531,15 +3059,14 @@ mod tests {
                     lsp_types::GlobPattern::Relative(pattern) =>
                         pattern.base_uri
                             == lsp_types::OneOf::Right(
-                                lsp_types::Url::from_directory_path("/contracts").unwrap()
+                                lsp_types::Url::from_directory_path(&contracts).unwrap()
                             )
                             && pattern.pattern.contains("*.bzli"),
                     lsp_types::GlobPattern::String(_) => false,
                 }),
             "{options:?}"
         );
-        disk.write_file(SystemPath::new("/contracts/source.bzli"), int_contract)
-            .unwrap();
+        std::fs::write(&interface_path, int_contract).unwrap();
         server
             .handle_event(Event::Message(
                 lsp_server::Response::new_ok(request.id, ()).into(),
@@ -2551,7 +3078,7 @@ mod tests {
             .unwrap()
             .is_empty());
 
-        server.configuration = Default::default();
+        server.reset_watcher_registration();
         server.watch_type_interfaces().unwrap();
         let lsp_server::Message::Request(request) = client.receiver.try_recv().unwrap() else {
             panic!("expected watch registration")
@@ -2569,10 +3096,7 @@ mod tests {
 
         // The handshake consumes initialized before run starts. Registration must
         // happen even when the client's first event is a shutdown request.
-        server
-            .analysis
-            .close_document(Path::new("/workspace/BUILD"))
-            .unwrap();
+        server.analysis.close_document(&caller_path).unwrap();
         server.analysis_changed = true;
         client
             .sender
@@ -2582,12 +3106,13 @@ mod tests {
             .sender
             .send(lsp_server::Notification::new("exit".to_owned(), ()).into())
             .unwrap();
-        server.configuration = Default::default();
+        server.reset_watcher_registration();
         server.run().unwrap();
-        assert_eq!(debounced.try_recv().unwrap(), vec![interface]);
+        assert_eq!(debounced.try_recv().unwrap(), interfaces);
         let lsp_server::Message::Request(request) = client.receiver.try_recv().unwrap() else {
             panic!("expected startup watch registration")
         };
         assert_eq!(request.method, "client/registerCapability");
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
