@@ -391,14 +391,14 @@ class dict(Mapping[_KT, _VT]):
     @overload
     def setdefault(self, key: _KT, /, default: _VT) -> _VT: ...
     @overload
-    def update(self, pairs: SupportsKeysAndGetItem[_KT, _VT] | Iterable[tuple[_KT, _VT]] = (), /) -> None:
+    def update(self, pairs: _MappingEntries[_KT, _VT] | SupportsKeysAndGetItem[_KT, _VT] | Iterable[tuple[_KT, _VT]] = (), /) -> None:
         """Copy entries from a mapping or iterable of pairs, then named entries."""
     # Tuple entries retain separate key/value types. List entries have one
     # homogeneous element type, so their update overload remains gradual.
     @overload
     def update(self, pairs: Iterable[list[Any]], /) -> None: ...
     @overload
-    def update(self: dict[_KT | str, _VT], pairs: SupportsKeysAndGetItem[_KT, _VT] | Iterable[tuple[_KT, _VT]] = (), /, **kwargs: _VT) -> None: ...
+    def update(self: dict[_KT | str, _VT], pairs: _MappingEntries[_KT, _VT] | SupportsKeysAndGetItem[_KT, _VT] | Iterable[tuple[_KT, _VT]] = (), /, **kwargs: _VT) -> None: ...
     @overload
     def update(self: dict[_KT | str, _VT], pairs: Iterable[list[Any]], /, **kwargs: _VT) -> None: ...
     def values(self) -> list[_VT]:

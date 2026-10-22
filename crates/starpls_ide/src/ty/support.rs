@@ -723,8 +723,26 @@ def copy_mapping(values):
 def alias_mapping(readonly):
     # type: (Mapping[str, int]) -> Mapping[str | int, int]
     return readonly
+
+def update_mapping(target, source, source_bad):
+    # type: (dict[str | int, int], Mapping[str, int], Mapping[str, str]) -> None
+    target.update(source)
+    target.update(source, added = 2)
+    target.update([("key", 1)])
+    target.update(source_bad)
+    target.update({"key": "wrong"})
+    target.update(struct(items = lambda: [("key", 1)]))
 "#;
         let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
         let file = analysis
             .open_document(
                 Path::new("/dictionary_copy.bzl"),
@@ -754,6 +772,15 @@ def alias_mapping(readonly):
                 ("invalid-return-type", "return values"),
                 ("invalid-assignment", "copied[1] = \"wrong\""),
                 ("invalid-return-type", "return readonly"),
+                ("no-matching-overload", "target.update(source_bad)"),
+                (
+                    "no-matching-overload",
+                    "target.update({\"key\": \"wrong\"})"
+                ),
+                (
+                    "no-matching-overload",
+                    "target.update(struct(items = lambda: [(\"key\", 1)]))",
+                ),
             ],
         );
     }
