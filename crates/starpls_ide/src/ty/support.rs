@@ -732,6 +732,18 @@ def update_mapping(target, source, source_bad):
     target.update(source_bad)
     target.update({"key": "wrong"})
     target.update(struct(items = lambda: [("key", 1)]))
+
+def update_projected(source):
+    # type: (Intersection[Top[dict[Unknown, int]], Iterable[str]]) -> dict[str, int]
+    result = {}  # type: dict[str, int]
+    result.update(source)
+    result.update(source, extra = 1)
+    return result
+
+def invalid_projected(target, wrong_values, keys_only):
+    # type: (dict[str, int], Intersection[Top[dict[Unknown, str]], Iterable[str]], Iterable[str]) -> None
+    target.update(wrong_values)
+    target.update(keys_only)
 "#;
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
@@ -781,6 +793,8 @@ def update_mapping(target, source, source_bad):
                     "no-matching-overload",
                     "target.update(struct(items = lambda: [(\"key\", 1)]))",
                 ),
+                ("no-matching-overload", "target.update(wrong_values)"),
+                ("no-matching-overload", "target.update(keys_only)"),
             ],
         );
     }
