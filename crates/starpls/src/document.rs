@@ -1724,6 +1724,8 @@ pub(crate) mod source_tests {
 
     #[derive(Default)]
     pub(crate) struct TestBazelClient {
+        pub(crate) release: String,
+        pub(crate) starlark_semantics: String,
         pub(crate) repository_mappings:
             std::collections::HashMap<String, starpls_bazel::client::RepoMapping>,
         pub(crate) selected_modules:
@@ -1790,10 +1792,14 @@ pub(crate) mod source_tests {
 
     impl starpls_bazel::client::BazelClient for TestBazelClient {
         fn build_language(&self) -> anyhow::Result<Vec<u8>> {
-            unimplemented!()
+            Ok(Vec::new())
         }
         fn info(&self) -> anyhow::Result<starpls_bazel::client::BazelInfo> {
-            unimplemented!()
+            Ok(starpls_bazel::client::BazelInfo {
+                release: self.release.clone(),
+                starlark_semantics: self.starlark_semantics.clone(),
+                ..Default::default()
+            })
         }
         fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()> {
             self.fetch_repo(repo)

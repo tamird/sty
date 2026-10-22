@@ -1446,6 +1446,8 @@ mod tests {
             std::os::unix::fs::symlink(&old, external.join("rules+")).unwrap();
             std::os::unix::fs::symlink(&helper, external.join("helper+")).unwrap();
             server.bazel_client = Arc::new(crate::document::source_tests::TestBazelClient {
+                release: String::new(),
+                starlark_semantics: String::new(),
                 fetch_requests: Default::default(),
                 fetch_batches: Default::default(),
                 fetch_files: Default::default(),

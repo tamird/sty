@@ -3,6 +3,7 @@ use log::debug;
 use log::info;
 use starpls_bazel::client::BazelClient;
 use starpls_bazel::client::BazelInfo;
+use starpls_bazel::env::BazelVersion;
 
 use crate::server::load_bazel_build_language;
 
@@ -29,18 +30,16 @@ impl BazelContext {
         // Check if bzlmod is enabled for the current workspace.
         let bzlmod_enabled = {
             // bzlmod is enabled by default for Bazel versions 7 and later.
-            // TODO(withered-magic): Just hardcoding this for now since I'm lazy to parse the actual versions.
-            // This should last us pretty long since Bazel 9 isn't anywhere on the horizon.
-            let bzlmod_enabled_by_default = ["development", "release 7", "release 8", "release 9"]
-                .iter()
-                .any(|release| info.release.starts_with(release));
+            let bzlmod_enabled_by_default = info.release.starts_with("development")
+                || BazelVersion::parse_release(&info.release)
+                    .is_some_and(|version| version.at_least(7, 0));
 
             if bzlmod_enabled_by_default {
                 info!("Bazel 7 or later detected");
             }
 
-            // Check starlark-semantics to determine whether bzlmod has been explicitly
-            // enabled/disabled, e.g. in a .bazelrc file.
+            // starlark-semantics reports nondefault values, which override the
+            // default inferred from the release.
             if info.starlark_semantics.contains("enable_bzlmod=true") {
                 info!("found enable_bzlmod=true in starlark semantics");
                 true
@@ -74,5 +73,56 @@ impl BazelContext {
             bzlmod_enabled,
             main_repo_mapping,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use starpls_bazel::client::RepoMapping;
+
+    use super::BazelContext;
+    use crate::document::source_tests::TestBazelClient;
+
+    #[test]
+    fn bzlmod_configuration_controls_repository_mapping() {
+        for (release, starlark_semantics, enabled) in [
+            ("release 6.4.0", "", false),
+            ("release 6.4.0", "enable_bzlmod=true", true),
+            ("release 7.0.0", "", true),
+            ("release 7.0.0", "enable_bzlmod=false", false),
+            ("release 8.0.0", "", true),
+            ("release 9.0.0", "", true),
+            ("release 9.4.0-dzbarsky3", "", true),
+            ("release 10.0.0rc1", "", true),
+            ("release 11.0.0", "", true),
+            ("development version", "", true),
+            ("development version", "enable_bzlmod=false", false),
+            ("unknown", "", false),
+            ("unknown", "enable_bzlmod=true", true),
+        ] {
+            let mapping: RepoMapping = Arc::new([("rules".to_owned(), "rules+".to_owned())].into());
+            let client = TestBazelClient {
+                release: release.to_owned(),
+                starlark_semantics: format!("StarlarkSemantics{{{starlark_semantics}}}"),
+                repository_mappings: [(String::new(), mapping.clone())].into(),
+                ..Default::default()
+            };
+            let context = BazelContext::new(&client).unwrap();
+            let case = format!("{release}, {starlark_semantics}");
+            assert_eq!(context.bzlmod_enabled, enabled, "{case}");
+            if enabled {
+                assert_eq!(context.main_repo_mapping, mapping, "{case}");
+                assert_eq!(
+                    *client.mapping_requests.lock().unwrap(),
+                    [vec![String::new()]],
+                    "{case}"
+                );
+            } else {
+                assert!(context.main_repo_mapping.is_empty(), "{case}");
+                assert!(client.mapping_requests.lock().unwrap().is_empty(), "{case}");
+            }
+        }
     }
 }
