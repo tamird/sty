@@ -80,6 +80,7 @@ pub(crate) struct CheckCommand {
     check_local_interface_sources: bool,
 
     /// Check every configured interface's source, including external Bazel repositories.
+    /// Requires at least one configured implementation source.
     #[clap(long, conflicts_with = "check_local_interface_sources")]
     check_interface_sources: bool,
 
@@ -729,6 +730,48 @@ mod tests {
             assert_eq!(report["complete"], false, "{report}");
             assert_eq!(report["diagnostics"]["errors"], 0, "{report}");
             assert_eq!(report["input_errors"].as_array().unwrap().len(), 1);
+            std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+        }
+    }
+
+    #[test]
+    fn interface_sources_require_a_paired_source_with_other_inputs() {
+        for overlay in [false, true] {
+            let name = format!("checker-interface-unpaired-{overlay}");
+            let source = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+                .join(&name)
+                .join("source.bzl");
+            let mut options = CheckCommand {
+                check_interface_sources: true,
+                ..Default::default()
+            };
+            if overlay {
+                options.source_overlay.push(super::SourceOverlay {
+                    logical: source.clone(),
+                    physical: source.clone(),
+                });
+            } else {
+                options.paths.push("source.bzl".to_owned());
+            }
+            let mut checker =
+                local_checker_with_options(&name, &[("source.bzl", "value = 1\n")], options);
+            let report_path = checker.bazel_info.workspace.join("coverage.json");
+            assert!(checker
+                .report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new())
+                .is_err());
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+            assert_eq!(report["complete"], false, "{report}");
+            assert_eq!(report["input_errors"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                report["input_errors"][0]["message"],
+                "no configured interface implementation sources were selected; configure a type interface"
+            );
+            for key in ["selected_files", "checked_files"] {
+                let files = report[key].as_array().unwrap();
+                assert_eq!(files.len(), 1);
+                assert_eq!(files[0]["path"], source.to_str().unwrap());
+            }
             std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
         }
     }
@@ -3172,9 +3215,10 @@ impl Checker {
         }
         let check_interface_sources =
             options.check_local_interface_sources || options.check_interface_sources;
+        let mut selected_interface_source = false;
         if check_interface_sources {
             let main_repository = checker.loader.main_repository();
-            for source in checker.analysis.type_interface_sources() {
+            for (source, _) in checker.analysis.type_interface_pairs() {
                 let path = snapshot.path(source);
                 let Some(repository) = checker.loader.repository_for_path(path)? else {
                     checker.input_errors.push(InputError {
@@ -3214,6 +3258,7 @@ impl Checker {
                     });
                 } else {
                     checker.files.insert(source);
+                    selected_interface_source = true;
                 }
             }
         }
@@ -3321,19 +3366,24 @@ impl Checker {
         }
 
         if check_interface_sources && checker.input_errors.is_empty() {
-            let snapshot = checker.analysis.snapshot();
-            if checker.files.iter().all(|file| {
-                snapshot
-                    .path(*file)
-                    .extension()
-                    .is_some_and(|extension| extension == "bzli")
-            }) {
+            let missing_implementation = if options.check_interface_sources {
+                !selected_interface_source
+            } else {
+                let snapshot = checker.analysis.snapshot();
+                checker.files.iter().all(|file| {
+                    snapshot
+                        .path(*file)
+                        .extension()
+                        .is_some_and(|extension| extension == "bzli")
+                })
+            };
+            if missing_implementation {
                 checker.input_errors.push(InputError {
                     path: checker.bazel_info.workspace.clone(),
                     message: if options.check_local_interface_sources {
                         "no implementations were selected; configure a local type interface or select a source file"
                     } else {
-                        "no implementations were selected; configure a type interface or select a source file"
+                        "no configured interface implementation sources were selected; configure a type interface"
                     }
                     .to_owned(),
                 });
