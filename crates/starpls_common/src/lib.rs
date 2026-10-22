@@ -101,6 +101,9 @@ pub trait Db: ruff_db::Db {
     /// Loads a file from the filesystem.
     fn load_file(&self, path: &str, dialect: Dialect, from: File) -> anyhow::Result<Option<File>>;
 
+    /// Make the current query depend on deferred host load work settling.
+    fn depend_on_load_settlement(&self);
+
     fn list_load_candidates(
         &self,
         path: &str,

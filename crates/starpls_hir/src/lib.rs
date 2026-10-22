@@ -77,6 +77,8 @@ pub struct Environment {
     pub all_workspace_targets: Arc<Vec<String>>,
     #[returns(clone)]
     pub load_revision: u64,
+    #[returns(clone)]
+    pub load_settlement_revision: u64,
     #[returns(ref)]
     pub type_interfaces: FxHashMap<ruff_db::files::File, (File, File)>,
 }
@@ -92,6 +94,7 @@ impl Environment {
             bazel,
             None,
             Arc::default(),
+            0,
             0,
             FxHashMap::default(),
         )
