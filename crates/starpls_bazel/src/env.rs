@@ -144,7 +144,10 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             })
         })
     {
-        // Bazel 8 moved these enum values to string constants in apple_platform.bzl.
+        // Bazel 7 used the nominal runtime type apple_platform_type. Bazel 8+
+        // uses string constants; sty retains the name as an annotation-only
+        // compatibility alias. Bazel ignores type comments, and Bazel 9's
+        // checked source annotations require str instead.
         // https://github.com/bazelbuild/bazel/blob/8.0.0/src/main/starlark/builtins_bzl/common/objc/apple_platform.bzl
         platform_type.r#type = "_ApplePlatformTypes".to_owned();
         let value_type = if version >= (8, 0) {
@@ -152,11 +155,27 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         } else {
             "apple_platform_type"
         };
-        if version < (8, 0) && !builtins.r#type.iter().any(|class| class.name == value_type) {
+        if !builtins
+            .r#type
+            .iter()
+            .any(|class| class.name == "apple_platform_type")
+        {
             builtins.r#type.push(Type {
-                name: value_type.to_owned(),
+                name: "apple_platform_type".to_owned(),
                 ..Default::default()
             });
+        }
+        if let Some(field) = builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "apple_platform")
+            .and_then(|class| {
+                class.field.iter_mut().find(|field| {
+                    field.name == "platform_type" && normalize_doc(&field.r#type, true) == "string"
+                })
+            })
+        {
+            field.r#type = "apple_platform_type".to_owned();
         }
         if !builtins
             .r#type

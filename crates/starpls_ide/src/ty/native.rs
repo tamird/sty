@@ -626,6 +626,9 @@ fn declarations(
             });
     }
     let mut declared_classes: BTreeSet<_> = classes.keys().cloned().collect();
+    let string_platform_types = classes.get("_ApplePlatformTypes").filter(|namespace| {
+        !namespace.field.is_empty() && namespace.field.iter().all(|field| field.r#type == "string")
+    });
     for extension in extensions {
         anyhow::ensure!(
             declared_classes.contains(extension),
@@ -810,6 +813,22 @@ fn declarations(
         .collect();
     let mut provider_declarations = String::new();
     for class in classes.values() {
+        if class.name == "apple_platform_type" {
+            if let Some(namespace) = string_platform_types {
+                let values = namespace
+                    .field
+                    .iter()
+                    .map(|field| quoted(&field.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                writeln!(
+                    body,
+                    "    type {} = _starpls_typing.Literal[{values}]",
+                    class.name
+                )?;
+                continue;
+            }
+        }
         // These native instance types have no Starlark subclasses. Finality
         // preserves their comparison semantics and excludes unrelated provider
         // types from group lookup results.
@@ -925,7 +944,12 @@ fn declarations(
                 "execution_info",
             ]);
             writeln!(body, "        xcode_version: _starpls_typing.Final[_starpls_typing.Callable[[], _starpls_types.DottedVersion | _starpls_builtins.str | None]]")?;
-            writeln!(body, "        minimum_os_for_platform_type: _starpls_typing.Final[_starpls_typing.Callable[[_starpls_builtins.str], _starpls_types.DottedVersion]]")?;
+            let platform_type = if declared_classes.contains("apple_platform_type") {
+                "_starpls_types.apple_platform_type"
+            } else {
+                "_starpls_builtins.str"
+            };
+            writeln!(body, "        minimum_os_for_platform_type: _starpls_typing.Final[_starpls_typing.Callable[[{platform_type}], _starpls_types.DottedVersion]]")?;
             writeln!(body, "        sdk_version_for_platform: _starpls_typing.Final[_starpls_typing.Callable[[_starpls_types.apple_platform], _starpls_types.DottedVersion]]")?;
             writeln!(body, "        availability: _starpls_typing.Final[_starpls_typing.Callable[[], _starpls_builtins.str]]")?;
             writeln!(body, "        execution_info: _starpls_typing.Final[_starpls_typing.Callable[[], _starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]]]")?;
@@ -1293,9 +1317,13 @@ fn declarations(
                     } else {
                         None
                     };
-                    let field_type = field_type
-                        .map(str::to_owned)
-                        .unwrap_or_else(|| value_annotation(field, &declared_classes));
+                    let field_type = field_type.map(str::to_owned).unwrap_or_else(|| {
+                        if class.name == "_ApplePlatformTypes" && string_platform_types.is_some() {
+                            format!("_starpls_typing.Literal[{}]", quoted(&field.name))
+                        } else {
+                            value_annotation(field, &declared_classes)
+                        }
+                    });
                     let field_type = if class.name == "_ApplePlatformTypes"
                         || (class.name == "apple_common" && field.name == "platform_type")
                         || (class.name == "DormantDependency" && field.name == "label")
@@ -4410,6 +4438,7 @@ platforms: list[apple_platform] = [
     apple_common.platform.catalyst,
 ]
 name: str = apple_common.platform.ios_device.name_in_plist
+ios: Literal["ios"] = apple_common.platform_type.ios
 platform_types: list[str] = [
     apple_common.platform_type.ios,
     apple_common.platform_type.macos,
@@ -4418,6 +4447,11 @@ platform_types: list[str] = [
     apple_common.platform_type.watchos,
     apple_common.platform_type.catalyst,
 ]
+
+def minimum(config: XcodeVersionConfig, platform: apple_platform) -> DottedVersion:
+    value: apple_platform_type = platform.platform_type
+    config.minimum_os_for_platform_type("ios")
+    return config.minimum_os_for_platform_type(value)
 "#;
         let file = analysis
             .open_document(
@@ -4432,8 +4466,16 @@ platform_types: list[str] = [
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         analysis.update_file(
             file,
-            "wrong: str = apple_common.platform.ios_device\napple_common.platform.ios_simualtor\nwrong_platform: apple_platform = apple_common.platform_type.ios\napple_common.platform_type.ios = 'watchos'\napple_common.platform_type.unknown\n"
-                .into(),
+            r#"wrong: str = apple_common.platform.ios_device
+apple_common.platform.ios_simualtor
+wrong_platform: apple_platform = apple_common.platform_type.ios
+apple_common.platform_type.ios = "watchos"
+apple_common.platform_type.unknown
+def invalid(config: XcodeVersionConfig, value: str) -> None:
+    config.minimum_os_for_platform_type(value)
+    config.minimum_os_for_platform_type("linux")
+"#
+            .into(),
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         let ids: Vec<_> = diagnostics
@@ -4447,7 +4489,9 @@ platform_types: list[str] = [
                 "unresolved-attribute",
                 "invalid-assignment",
                 "invalid-assignment",
-                "unresolved-attribute"
+                "unresolved-attribute",
+                "invalid-argument-type",
+                "invalid-argument-type"
             ]
         );
         let mut old_builtins = original_builtins;
@@ -4455,12 +4499,22 @@ platform_types: list[str] = [
         analysis
             .set_builtin_defs(old_builtins, Default::default())
             .unwrap();
-        analysis.update_file(file, "name: str = str(apple_common.platform_type.ios)\nwrong: str = apple_common.platform_type.ios\n".into());
+        analysis.update_file(
+            file,
+            r#"def minimum(config: XcodeVersionConfig, platform: apple_platform) -> DottedVersion:
+    config.minimum_os_for_platform_type("ios")
+    return config.minimum_os_for_platform_type(platform.platform_type)
+name: str = str(apple_common.platform_type.ios)
+wrong: str = apple_common.platform_type.ios
+"#
+            .into(),
+        );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        let [diagnostic] = diagnostics.as_slice() else {
-            panic!("{diagnostics:?}");
-        };
-        assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(ids, ["invalid-assignment", "invalid-argument-type"]);
     }
 
     #[test]
