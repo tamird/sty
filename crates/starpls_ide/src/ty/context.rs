@@ -957,6 +957,7 @@ fn context_type<'db>(
             let field = ProvidedField {
                 name: name.clone(),
                 ty,
+                is_required: true,
                 source: *source,
             };
             if required {
@@ -990,6 +991,7 @@ fn context_type<'db>(
                             ProvidedField {
                                 name,
                                 ty: if is_complete { output } else { Type::unknown() },
+                                is_required: true,
                                 source: Some(FileRange::new(file.file(db), source)),
                             },
                         );
@@ -1003,6 +1005,7 @@ fn context_type<'db>(
                     ProvidedField {
                         name: Name::new("executable"),
                         ty: output,
+                        is_required: true,
                         source: None,
                     },
                 ),
@@ -1058,6 +1061,7 @@ fn context_type<'db>(
         context_fields.push(ProvidedField {
             name: Name::new(view.name()),
             ty,
+            is_required: true,
             source: None,
         });
     }
@@ -1089,6 +1093,7 @@ fn context_type<'db>(
                 Some(ProvidedField {
                     name: name.clone(),
                     ty,
+                    is_required: true,
                     source: None,
                 })
             })
@@ -1099,6 +1104,7 @@ fn context_type<'db>(
                 context_fields.push(ProvidedField {
                     name: Name::new("fragments"),
                     ty,
+                    is_required: true,
                     source: None,
                 });
             }

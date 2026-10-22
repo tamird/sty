@@ -493,17 +493,22 @@ fn declaration_fields<'db>(
     let Expr::Subscript(application) = function.returns.as_deref()? else {
         return None;
     };
-    let (_, mapping, _) = super::shapes::mapping_argument(&application.slice)?;
+    let (mapping_expression, mapping, _) = super::shapes::mapping_argument(&application.slice)?;
     let model = SemanticModel::new(db, file);
+    let Type::TypedDict(schema) = mapping_expression.inferred_type(&model)? else {
+        return None;
+    };
     let mut fields = Vec::new();
     for item in &mapping.items {
         let Some(Expr::StringLiteral(key)) = &item.key else {
             continue;
         };
-        let ty = item.value.inferred_type(&model)?;
+        let name = Name::new(key.value.to_str());
+        let field = schema.items(db).get(&name)?;
         fields.push(ProvidedField {
-            name: Name::new(key.value.to_str()),
-            ty,
+            name,
+            ty: field.declared_type(),
+            is_required: field.is_required(),
             source: Some(FileRange::new(file.file(db), key.range())),
         });
     }
@@ -519,7 +524,9 @@ pub(super) fn getattr_presence<'db>(
     let data = receiver.provided_data(db, environment)?;
     let record = data.downcast_ref::<RecordDeclaration>()?;
     Some(
-        if !record.open && !record.fields.iter().any(|field| field == attribute) {
+        // Declared storage supplies its own type and presence. Its fallback
+        // cannot introduce another, unknown value when that storage is absent.
+        if !record.open || record.fields.iter().any(|field| field == attribute) {
             ProvidedGetattrPresence::Absent
         } else {
             ProvidedGetattrPresence::PossiblyMissing
@@ -881,12 +888,13 @@ fn field_contract<'db>(
                     |ProvidedField {
                          name,
                          ty,
+                         is_required,
                          source: _,
                      }| {
                         (
                             name,
                             TypedDictFieldBuilder::new(ty)
-                                .required(true)
+                                .required(is_required)
                                 .read_only(true)
                                 .build(),
                         )
@@ -1395,6 +1403,164 @@ absent_result = getattr(value, "absent", None)
     }
 
     #[test]
+    fn optional_provider_fields_preserve_presence_and_nominal_identity() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "info.bzl",
+            r#"
+Info = provider(fields=["value", "nullable"])
+Other = provider(fields=["value", "nullable"])
+Open = provider(fields=["value", "extra"])
+Node = provider(fields=["next"])
+Impossible = provider(fields=["value"])
+"#,
+        );
+        let declarations = r#"
+def Info(*, nullable: str | None, value: str = ...) -> record[{
+    "nullable": str | None,
+    "value": NotRequired[str],
+}]: ...
+def Other(*, nullable: str | None, value: str = ...) -> record[{
+    "nullable": str | None,
+    "value": NotRequired[str],
+}]: ...
+def Open(*, value: str = ..., extra: int = ...) -> record[{
+    "value": NotRequired[str],
+}, ...]: ...
+def Node(*, next: Node = ...) -> record[{"next": NotRequired[Node]}]: ...
+def Impossible(*, value: Never = ...) -> record[{"value": NotRequired[Never]}]: ...
+"#;
+        let interface = fixture.add_file(&mut analysis.db, "info.bzli", declarations);
+        let alias = fixture.add_file(
+            &mut analysis.db,
+            "alias.bzl",
+            "load('info.bzl', _Info = 'Info')\nAlias = _Info\n",
+        );
+        let valid = r#"
+load("info.bzl", "Info", "Other", "Open", "Node", "Impossible")
+load("alias.bzl", "Alias")
+
+empty: Info = Alias(nullable=None)
+present: Info = Info(nullable="known", value="present")
+linked: Node = Node(next=Node())
+
+def lookup(value: Info) -> str | None:
+    return getattr(value, "value", None)
+
+def guarded(value: Info) -> str:
+    if hasattr(value, "value"):
+        return value.value
+    return "absent"
+
+def truthy(value: Info) -> str | None:
+    return value.value if getattr(value, "value", None) else None
+
+def typed(value: Info) -> str:
+    item = getattr(value, "value", None)
+    return item if type(item) == "string" else "absent"
+
+def nullable(value: Info) -> str | None:
+    return value.nullable
+
+def open_lookup(value: Open) -> str | None:
+    return getattr(value, "value", None)
+
+def recursive(value: Node) -> Node | None:
+    return getattr(value, "next", None)
+
+def impossible(value: Impossible) -> None:
+    return getattr(value, "value", None)
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("non-static-type".into(), "error".into()),
+                    ("possibly-missing-attribute".into(), "error".into()),
+                ]
+                .into(),
+            )
+            .unwrap(),
+        );
+        for file in [source, interface, alias, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (invalid, expected) in [
+            ("Info()", "missing-argument"),
+            ("Info(nullable=None, value=None)", "invalid-argument-type"),
+            ("Info(nullable=None, value=42)", "invalid-argument-type"),
+            ("Info(nullable=None, extra=True)", "unknown-argument"),
+            ("wrong: Info = Other(nullable=None)", "invalid-assignment"),
+            ("wrong: Info = struct(nullable=None)", "invalid-assignment"),
+            ("def direct(value: Info) -> str:\n    return value.value", "possibly-missing-attribute"),
+            ("def negative(value: Info) -> str:\n    if not hasattr(value, 'value'):\n        return value.value\n    return ''", "possibly-missing-attribute"),
+            ("def still_nullable(value: Info) -> str:\n    if hasattr(value, 'nullable'):\n        return value.nullable\n    return ''", "invalid-return-type"),
+            ("def unknown_extra(value: Open) -> None:\n    return getattr(value, 'extra', None)", "invalid-return-type"),
+        ] {
+            analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected, "{invalid}");
+        }
+
+        let direct =
+            "load('info.bzl', 'Info')\ndef direct(value: Info) -> str:\n    return value.value\n";
+        analysis.update_file(caller, direct.into());
+        let required = declarations
+            .replace("value: str = ...", "value: str")
+            .replace("\"value\": NotRequired[str]", "\"value\": str");
+        for (declarations, missing) in [(required.as_str(), false), (declarations, true)] {
+            analysis.update_file(interface, declarations.into());
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            if missing {
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+                assert_eq!(diagnostics[0].id().as_str(), "possibly-missing-attribute");
+            } else {
+                assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            }
+            let locations = analysis
+                .snapshot()
+                .goto_definition(
+                    FilePosition {
+                        file_id: caller,
+                        pos: (direct.rfind(".value").unwrap() as u32 + 1).into(),
+                    },
+                    false,
+                )
+                .unwrap()
+                .unwrap();
+            let [location] = locations.as_slice() else {
+                panic!("{locations:?}");
+            };
+            let crate::LocationLink::Local {
+                target_file_id,
+                target_selection_range,
+                origin_selection_range: _,
+                target_range: _,
+            } = location
+            else {
+                panic!("{location:?}");
+            };
+            assert_eq!(*target_file_id, interface.source);
+            assert_eq!(&declarations[*target_selection_range], "\"value\"");
+        }
+    }
+
+    #[test]
     fn generic_provider_fields_follow_constructor_arguments() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
@@ -1735,6 +1901,141 @@ def mutate(value: Info[object]) -> None:
     }
 
     #[test]
+    fn generic_optional_provider_fields_preserve_values_and_callbacks() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let producer = r#"
+def _init(anchor):
+    return {"anchor": anchor}
+Info, raw_info = provider(fields=["anchor", "value", "values", "callback"], init=_init)
+"#;
+        let source = fixture.add_file(&mut analysis.db, "info.bzl", producer);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"
+def Info[T = str](anchor: T) -> record[{
+    "anchor": T,
+    "value": NotRequired[T],
+    "values": NotRequired[list[T]],
+    "callback": NotRequired[Callable[[int], T]],
+}]: ...
+"#,
+        );
+        let valid = r#"
+load("info.bzl", "Info", "raw_info")
+
+def callback(index: int) -> str:
+    return str(index)
+
+empty: Info[str] = Info("anchor")
+raw: Info[str] = raw_info(anchor="anchor")
+present: Info[str] = raw_info(anchor="anchor", value="present", values=["item"], callback=callback)
+inferred = raw_info(anchor="anchor")
+
+def inferred_lookup() -> str | None:
+    return getattr(inferred, "value", None)
+
+def lookup(value: Info[str]) -> str | None:
+    return getattr(value, "value", None)
+
+def defaulted(value: Info) -> str | None:
+    return getattr(value, "value", None)
+
+def opaque(target: Target) -> object:
+    return getattr(target[Info], "value", None)
+
+def guarded(value: Info[str]) -> str:
+    if hasattr(value, "callback"):
+        return value.callback(1)
+    return value.anchor
+
+def mutate(value: Info[object]) -> None:
+    if hasattr(value, "values"):
+        value.values.append(1)
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("non-static-type".into(), "error".into()),
+                    ("possibly-missing-attribute".into(), "error".into()),
+                ]
+                .into(),
+            )
+            .unwrap(),
+        );
+        for file in [interface, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (invalid, expected) in [
+            ("raw_info(value='missing anchor')", "missing-argument"),
+            ("Info('anchor', value='not a public input')", "unknown-argument"),
+            ("wrong: Info[str] = raw_info(anchor='anchor', value=42)", "invalid-assignment"),
+            ("mutate(present)", "invalid-argument-type"),
+            ("def direct(value: Info[str]) -> str:\n    return value.callback(1)", "possibly-missing-attribute"),
+            ("def wrong_argument(value: Info[str]) -> str:\n    if hasattr(value, 'callback'):\n        return value.callback('bad')\n    return ''", "invalid-argument-type"),
+            ("def wrong_result(value: Info[str]) -> int:\n    if hasattr(value, 'value'):\n        return value.value\n    return 0", "invalid-return-type"),
+            ("def wrong_inferred_result() -> int | None:\n    return getattr(inferred, 'value', None)", "invalid-return-type"),
+            ("def lost_defaulted_field(value: Info) -> None:\n    return getattr(value, 'value', None)", "invalid-return-type"),
+            ("def lost_opaque_field(target: Target) -> None:\n    return getattr(target[Info], 'value', None)", "invalid-return-type"),
+        ] {
+            analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected, "{invalid}");
+        }
+        let recovered = format!("{valid}\ndef recovered(value: Info[str, int]) -> None:\n    return getattr(value, 'value', None)\n");
+        analysis.update_file(caller, recovered.clone());
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-type-arguments"),
+            "{diagnostics:?}"
+        );
+        // Recovery may keep an opaque field type, but must not turn the
+        // potentially present value into a definitely absent field.
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                matches!(
+                    diagnostic.id().as_str(),
+                    "invalid-return-type" | "non-static-type"
+                ) && diagnostic
+                    .primary_span()
+                    .and_then(|span| span.range())
+                    .is_some_and(|range| &recovered[range] == "getattr(value, 'value', None)")
+            }),
+            "{diagnostics:?}"
+        );
+        analysis.update_file(
+            source,
+            producer.replace("{\"anchor\": anchor}", "{'anchor': anchor, 'value': 42}"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn provider_initializers_check_inputs_and_returned_fields() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
@@ -1750,23 +2051,62 @@ def mutate(value: Info[object]) -> None:
         let valid = r#"
 def _init(value, count=0):
     return {"value": value, "count": count}
-Info, raw_info = provider(fields=["value", "count"], init=_init)
+Info, raw_info = provider(fields=["value", "count", "note"], init=_init)
 "#;
         let source = fixture.add_file(&mut analysis.db, "info.bzl", valid);
         let stub = fixture.add_file(
             &mut analysis.db,
             "info.bzli",
             r#"
-def Info(value: str, count: int = ...) -> record[{"value": str, "count": int}]: ...
+def Info(value: str, count: int = ...) -> record[{
+    "value": str,
+    "count": int,
+    "note": NotRequired[str],
+}]: ...
 "#,
         );
+        let valid_calls = r#"
+load("info.bzl", "Info", "raw_info")
+public: Info = Info("value")
+raw: Info = raw_info(value="value", count=0)
+present: Info = raw_info(value="value", count=0, note="present")
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid_calls);
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for file in [source, stub, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (invalid, expected) in [
+            ("raw_info(value='value')", "missing-argument"),
+            (
+                "raw_info(value='value', count=0, note=42)",
+                "invalid-argument-type",
+            ),
+            (
+                "Info('value', note='not a public input')",
+                "unknown-argument",
+            ),
+        ] {
+            analysis.update_file(caller, format!("{valid_calls}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected);
+        }
+        analysis.update_file(
+            source,
+            valid.replace(
+                "{\"value\": value, \"count\": count}",
+                "{'value': value, 'count': count, 'note': 'present'}",
+            ),
+        );
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         for returned in [
             "{'value': 1, 'count': count}",
             "{'value': value}",
+            "{'value': value, 'count': count, 'note': 42}",
             "{'value': value, 'count': count, 'extra': True}",
             "None",
         ] {

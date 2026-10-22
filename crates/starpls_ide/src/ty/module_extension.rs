@@ -184,6 +184,7 @@ pub(super) fn implementation_context<'db>(
                             descriptor.repository_value_type(db, &environment, declarations)
                         })
                         .unwrap_or_else(Type::unknown),
+                    is_required: true,
                     source: attribute.source,
                 })
                 .collect();
@@ -198,6 +199,7 @@ pub(super) fn implementation_context<'db>(
             Some(ProvidedField {
                 name: tag.name.clone(),
                 ty: list(instance),
+                is_required: true,
                 source: Some(tag.source),
             })
         })
@@ -208,6 +210,7 @@ pub(super) fn implementation_context<'db>(
         Box::from([ProvidedField {
             name: Name::new("tags"),
             ty: tags,
+            is_required: true,
             source: None,
         }]),
         false,
@@ -224,6 +227,7 @@ pub(super) fn implementation_context<'db>(
                 MODULES_TYPE,
                 vec![module],
             )?,
+            is_required: true,
             source: None,
         }]),
         false,
@@ -319,6 +323,7 @@ fn proxy_fields<'db>(
                         declarations,
                         none_is_omission,
                     ),
+                    is_required: true,
                     source: Some(tag.source),
                 })
             })

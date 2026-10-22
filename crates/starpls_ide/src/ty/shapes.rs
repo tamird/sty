@@ -292,12 +292,6 @@ pub(super) fn type_application<'db>(
                 "Field types support Required, NotRequired, and ReadOnly qualifiers",
             );
         }
-        if is_record && qualifiers.contains(TypeQualifiers::NOT_REQUIRED) {
-            context.report_invalid_type_form(
-                item.value.range(),
-                "Record fields must be present; NotRequired is supported in dictionary and struct field maps",
-            );
-        }
         let name = Name::new(key.value.to_str());
         let field = TypedDictFieldBuilder::new(ty)
             .required(!qualifiers.contains(TypeQualifiers::NOT_REQUIRED))
@@ -309,6 +303,7 @@ pub(super) fn type_application<'db>(
                     stored_fields.push(ProvidedField {
                         name: entry.key().clone(),
                         ty,
+                        is_required: field.is_required(),
                         source: Some(FileRange::new(program.file(db), key.range())),
                     });
                 }
@@ -1194,17 +1189,6 @@ def selected_alias(value: struct[{{"compiler": str}}] | struct[{{}}]) -> str | N
             assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
             assert_eq!(diagnostics[0].id().as_str(), expected);
         }
-        analysis.update_file(
-            interface,
-            "def Info(*, value: str = ...) -> record[{'value': NotRequired[str]}]: ...\n".into(),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(interface).unwrap();
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-type-form"),
-            "{diagnostics:?}"
-        );
     }
 
     #[test]

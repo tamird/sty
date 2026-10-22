@@ -1404,6 +1404,7 @@ pub(super) fn provider_fields<'db>(
         fields.push(ProvidedField {
             name: name.id.clone(),
             ty: member.member.ty,
+            is_required: true,
             source: Some(FileRange::new(file.file(db), name.range())),
         });
     }

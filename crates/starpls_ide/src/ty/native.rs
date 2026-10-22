@@ -182,6 +182,7 @@ pub(super) fn namespace<'db>(
             fields: Box::from([ProvidedField {
                 name: Name::new("glob"),
                 ty: glob,
+                is_required: true,
                 source: Some(ResolvedDefinition::Definition(glob_definition).focus_range(db)),
             }]),
             ..Default::default()

@@ -413,8 +413,25 @@ def Node(value: str, next: Node | None = ...) -> record[{
 }]: ...
 ```
 
-Record fields are readonly and required. A closed record describes all fields
-of an instance; `record[{"files": depset[File]}, ...]` describes a partial
+Record fields are readonly and required unless annotated with
+`NotRequired[T]`. An optional field may be absent; a required field of type
+`T | None` is present and may contain `None`. For example:
+
+```starlark
+def Metadata(*, name: str, checksum: str = ...) -> record[{
+    "name": str,
+    "checksum": NotRequired[str],
+}]: ...
+```
+
+Use `getattr(value, "checksum", None)` to read an optional field with a
+default, or guard access with `hasattr(value, "checksum")`. Unguarded reads
+report `possibly-missing-attribute` when that diagnostic is enabled.
+Generic optional fields retain their specialized types, including stored
+callable signatures.
+
+A closed record describes all fields of an instance;
+`record[{"files": depset[File]}, ...]` describes a partial
 contract. Additional fields must also satisfy the source provider's `fields`
 declaration. `record[...]` is the return annotation of a provider constructor
 in a stub. Constructor declarations have one signature.
@@ -482,14 +499,15 @@ output field optional.
 
 A provider without an initializer stores its keyword arguments directly. Its
 constructor declaration therefore uses keyword-only parameters and requires
-every promised field:
+every required field. Defaulted parameters may correspond to optional fields:
 
 ```starlark
 def FilesInfo(*, files: depset[File]) -> record[{"files": depset[File]}]: ...
 ```
 
 Raw constructors accept stored field values directly and return the same
-nominal instance type:
+nominal instance type. Their parameters are optional only for optional stored
+fields, independently of the public initializer's defaults:
 
 ```starlark
 def raw_files(*, files: depset[File]) -> FilesInfo: ...

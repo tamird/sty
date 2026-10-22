@@ -2716,6 +2716,7 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
                     ProvidedField {
                         name: name.id.clone(),
                         ty,
+                        is_required: true,
                         source: Some(FileRange::new(call.file().file(db), name.range())),
                     },
                     true,
@@ -2748,6 +2749,7 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
                         ProvidedField {
                             name,
                             ty,
+                            is_required: true,
                             source: Some(FileRange::new(call.file().file(db), source)),
                         },
                         required,
@@ -2798,13 +2800,23 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
         let fields = super::interface::provider_fields(db, class, &environment)?;
         let parameters = fields
             .into_iter()
-            .map(|ProvidedField { name, ty, source }| {
-                let parameter = Parameter::keyword_only(name).with_annotated_type(ty);
-                match source {
-                    Some(source) => parameter.with_source_range(source),
-                    None => parameter,
-                }
-            })
+            .map(
+                |ProvidedField {
+                     name,
+                     ty,
+                     is_required,
+                     source,
+                 }| {
+                    let mut parameter = Parameter::keyword_only(name).with_annotated_type(ty);
+                    if !is_required {
+                        parameter = parameter.with_default_type(Type::unknown());
+                    }
+                    match source {
+                        Some(source) => parameter.with_source_range(source),
+                        None => parameter,
+                    }
+                },
+            )
             .chain(super::providers::raw_extra_parameters(db, call, class));
         let parameters = Parameters::standard(parameters);
         let definition = class.definition(db, &environment)?;
@@ -2847,6 +2859,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                             fields.push(ProvidedField {
                                 name,
                                 ty: Type::unknown(),
+                                is_required: true,
                                 source: Some(FileRange::new(
                                     call.file().file(db),
                                     expression.range(),
@@ -2876,6 +2889,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                         fields.push(ProvidedField {
                             name,
                             ty: Type::unknown(),
+                            is_required: true,
                             source: Some(FileRange::new(call.file().file(db), source)),
                         });
                     }
@@ -2891,6 +2905,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
             |ProvidedField {
                  name,
                  ty: _,
+                 is_required: _,
                  source,
              }| {
                 let parameter = Parameter::keyword_only(name.clone())
