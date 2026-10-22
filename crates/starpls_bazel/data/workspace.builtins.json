@@ -6,6 +6,15 @@
       "callable": {
         "params": [
           {
+            "name": "",
+            "type": "",
+            "doc": "",
+            "default_value": "",
+            "is_mandatory": false,
+            "is_star_arg": true,
+            "is_star_star_arg": false
+          },
+          {
             "name": "name",
             "type": "string",
             "doc": "The label under `//external` to serve as the alias name",
@@ -34,8 +43,8 @@
         "params": [
           {
             "name": "platform_labels",
-            "type": "sequence of Labels",
-            "doc": "The labels of the platforms to register.",
+            "type": "sequence of strings",
+            "doc": "The target patterns to register.",
             "default_value": "",
             "is_mandatory": false,
             "is_star_arg": true,
@@ -52,8 +61,8 @@
         "params": [
           {
             "name": "toolchain_labels",
-            "type": "sequence of Labels",
-            "doc": "The labels of the toolchains to register. Labels can include `:all`, in which case, all toolchain-providing targets in the package will be registered in lexicographical order by name.",
+            "type": "sequence of strings",
+            "doc": "The target patterns to register.",
             "default_value": "",
             "is_mandatory": false,
             "is_star_arg": true,
