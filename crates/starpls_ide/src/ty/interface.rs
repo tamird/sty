@@ -316,6 +316,12 @@ fn implementation_annotations_query(
         if super::providers::has_record_return(declaration) && !stub_names.contains_key("record") {
             continue;
         }
+        // Bundled declarations apply only to names present in the installed library.
+        if !source_names.contains_key(&declaration.name.id)
+            && interface.source.path(db).is_system_virtual_path()
+        {
+            continue;
+        }
         let source = source_functions.get(&declaration.name.id).copied();
         let error = if stub_names.get(&declaration.name.id) != Some(&family.len()) {
             Some("the stub must bind this name only through its function declarations")

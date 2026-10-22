@@ -442,6 +442,63 @@ mod tests {
         }
         analysis.update_file(
             owner,
+            "def maybe(repo_rule, name, **kwargs):\n    repo_rule(name = name, **kwargs)\nget_auth = 1\n".into(),
+        );
+        assert_eq!(ids(&analysis, owner), ["invalid-function-interface"]);
+        analysis.update_file(
+            owner,
+            concat!(
+                "def maybe(repo_rule, name, **kwargs):\n    repo_rule(name = name, **kwargs)\n",
+                "def get_auth(ctx, urls):\n    return {url: {'type': 'basic'} for url in urls}\n",
+            )
+            .into(),
+        );
+        let auth_caller_text = concat!(
+            "load('@@bazel_tools//tools/build_defs/repo:utils.bzl', 'get_auth')\n",
+            "def accepts_string(value: str) -> None: pass\n",
+            "def accepts_integer(value: int) -> None: pass\n",
+            "def check(ctx: repository_ctx[struct[{}]]) -> None:\n",
+            "    auth = get_auth(ctx, ('https://example.org/archive',))\n",
+            "    accepts_string(auth['https://example.org/archive']['type'])\n",
+            "    accepts_integer(auth['https://example.org/archive']['type'])\n",
+            "    get_auth(ctx, [1])\n",
+            "def bad_patterns(ctx: repository_ctx[struct[{'auth_patterns': dict[str, int]}]]) -> None:\n",
+            "    get_auth(ctx, ['https://example.org/archive'])\n",
+        );
+        let auth_caller = analysis
+            .open_document(
+                &root.join("auth_caller.bzl"),
+                starpls_common::Dialect::Bazel,
+                None,
+                auth_caller_text.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(auth_caller).unwrap();
+        let mut reported = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic.id().as_str(),
+                    &auth_caller_text[diagnostic.range().unwrap()],
+                )
+            })
+            .collect::<Vec<_>>();
+        reported.sort_unstable();
+        assert_eq!(
+            reported,
+            [
+                ("invalid-argument-type", "[1]"),
+                (
+                    "invalid-argument-type",
+                    "auth['https://example.org/archive']['type']"
+                ),
+                ("invalid-argument-type", "ctx"),
+            ]
+        );
+        assert!(ids(&analysis, owner).is_empty());
+        analysis.update_file(
+            owner,
             "def maybe(repo_rule, name, **kwargs):\n    repo_rule(name = 1, **kwargs)\n".into(),
         );
         assert_eq!(ids(&analysis, owner), ["invalid-argument-type"]);

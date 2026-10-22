@@ -173,8 +173,9 @@ by the selected Bazel executable. An explicitly configured stub for that source
 takes precedence. Checking the source validates its implementation against the
 declaration.
 
-The bundled `@bazel_tools//tools/build_defs/repo:utils.bzl` declaration checks
-that `maybe` forwards the repository rule's required keywords and their types.
+The bundled `@bazel_tools//tools/build_defs/repo:utils.bzl` declarations check
+the repository rule keywords forwarded by `maybe` and the URL-to-authentication
+dictionary returned by `get_auth`.
 
 ### Bazel rule keywords
 

@@ -2,3 +2,10 @@ class _RepositoryRule[**P](Protocol):
     def __call__(self, *, name: str, **kwargs: KeywordArgs[P]) -> None: ...
 
 def maybe[**P](repo_rule: _RepositoryRule[P], name: str, **kwargs: KeywordArgs[P]) -> None: ...
+
+type _AuthAttrs = struct[{
+    "auth_patterns": NotRequired[dict[str, str] | None],
+    "netrc": NotRequired[str | Label | path | None],
+}, ...]
+
+def get_auth(ctx: repository_ctx[_AuthAttrs], urls: Iterable[str]) -> dict[str, dict[str, str]]: ...
