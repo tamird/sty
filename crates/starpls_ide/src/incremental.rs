@@ -171,8 +171,10 @@ fn accumulated_diagnostics_follow_edits() {
 }
 
 #[test]
-fn fetched_modules_invalidate_missing_loads() {
+fn settled_loads_refresh_only_affected_inference() {
     let disk = InMemorySystem::default();
+    disk.write_file(SystemPath::new("/stable.bzl"), "value = 42\n")
+        .unwrap();
     let loader = Arc::new(crate::SimpleFileLoader::default());
     let mut analysis = Analysis::with_system(loader, Default::default(), disk.clone());
     let mut fixture = Fixture::new(&mut analysis.db);
@@ -181,13 +183,25 @@ fn fetched_modules_invalidate_missing_loads() {
         "main.bzl",
         "load(\"/external.bzl\", \"value\")\nresult = value\n",
     );
+    let stable = fixture.add_file(
+        &mut analysis.db,
+        "stable_client.bzl",
+        "load(\"/stable.bzl\", \"value\")\nresult = value\n",
+    );
+    let stable_diagnostics = analysis.snapshot().diagnostics(stable).unwrap();
     let missing = hover_value(&analysis, main);
     assert!(missing.contains("Unknown"), "{missing}");
     disk.write_file(SystemPath::new("/external.bzl"), "value = 42\n")
         .unwrap();
     // A file already cached as missing must be synchronized after fetching.
     assert_eq!(hover_value(&analysis, main), missing);
-    analysis.invalidate_loads();
+    analysis.refresh_loads_after_settlement();
+    analysis.db.executions.store(0, Ordering::Relaxed);
+    assert_eq!(
+        analysis.snapshot().diagnostics(stable).unwrap(),
+        stable_diagnostics
+    );
+    assert_eq!(analysis.db.executions.load(Ordering::Relaxed), 0);
     let fetched = hover_value(&analysis, main);
     assert!(fetched.contains("Literal[42]"), "{fetched}");
 }

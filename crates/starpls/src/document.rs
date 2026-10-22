@@ -780,14 +780,14 @@ pub(crate) struct ResolvedLabel {
 impl DefaultFileLoader {
     fn package_for_path(
         &self,
-        system: &dyn ruff_db::system::System,
+        db: &dyn Db,
         path: &Path,
         repository: &Repository,
     ) -> anyhow::Result<PathBuf> {
         if let Some(package) = self.bazel_load_context.package(repository, path) {
             return Ok(repository.root.join(package));
         }
-        package_for_path(system, path, &repository.root)
+        package_for_path(db, path, &repository.root)
     }
 
     fn label_needs_bazel_context(&self, label: &Label, from: &Repository) -> bool {
@@ -819,7 +819,7 @@ impl DefaultFileLoader {
         }
         let repository = self.resolve_repository(label, &repository)?;
         let package = if label.is_relative() && from.api_context() != Some(APIContext::Module) {
-            self.package_for_path(db.system(), from_path, &repository)?
+            self.package_for_path(db, from_path, &repository)?
         } else {
             // Module-file labels are relative to the module repository root,
             // including labels in files selected by `include`.
@@ -1400,7 +1400,7 @@ impl FileLoader for DefaultFileLoader {
                 let repository = self.resolve_repository(&label, &repository)?;
                 self.ensure_repository(&repository)?;
                 let package = if label.is_relative() {
-                    self.package_for_path(db.system(), &from_path, &repository)?
+                    self.package_for_path(db, &from_path, &repository)?
                 } else {
                     PathBuf::new()
                 };
@@ -1474,11 +1474,7 @@ impl FileLoader for DefaultFileLoader {
     }
 }
 
-fn package_for_path(
-    system: &dyn ruff_db::system::System,
-    path: &Path,
-    root: &Path,
-) -> anyhow::Result<PathBuf> {
+fn package_for_path(db: &dyn Db, path: &Path, root: &Path) -> anyhow::Result<PathBuf> {
     if !path.starts_with(root) {
         bail!(
             "{} is outside repository {}",
@@ -1486,24 +1482,32 @@ fn package_for_path(
             root.display()
         );
     }
+    let mut skipped_marker = false;
     for directory in path.ancestors().skip(1) {
         for name in ["BUILD", "BUILD.bazel"] {
             let build = directory.join(name);
             let build = starpls_common::system_path(&build)?;
-            match system.path_metadata(build) {
-                Ok(metadata) => {
-                    if metadata.file_type().is_file() {
-                        return Ok(directory.to_path_buf());
-                    }
-                }
+            let is_file = match db.system().path_metadata(build) {
+                Ok(metadata) => metadata.file_type().is_file(),
                 Err(error) => {
                     if error.kind() != std::io::ErrorKind::NotFound {
                         return Err(error.into());
                     }
+                    false
                 }
+            };
+            if is_file {
+                // Ruff groups inaccessible and absent files under one status.
+                // A skipped marker can become an error without changing it.
+                if skipped_marker || ruff_db::files::system_path_to_file(db, build).is_err() {
+                    db.depend_on_load_settlement();
+                }
+                return Ok(directory.to_path_buf());
             }
+            skipped_marker = true;
         }
         if directory == root {
+            db.depend_on_load_settlement();
             return Ok(root.to_path_buf());
         }
     }
@@ -2684,13 +2688,8 @@ pub(crate) mod source_tests {
             external.join("stubs+")
         );
         assert_eq!(
-            super::package_for_path(
-                &ruff_db::system::OsSystem::default(),
-                &installed,
-                &repository.root,
-            )
-            .unwrap(),
-            external.join("stubs+")
+            snapshot.resolve_load(file, ":defs.bzli").unwrap(),
+            starpls_ide::LoadResolution::Resolved(file)
         );
         let error = loader
             .register_path(&installed, &loader.main_repository())

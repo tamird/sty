@@ -1727,6 +1727,44 @@ mod tests {
         }
     }
 
+    #[test]
+    fn mapping_commands_refresh_relative_load_packages() {
+        let (mut checker, client, external) = fetch_checker("checker-mapping-package", true);
+        std::fs::create_dir_all(external.join("rules+")).unwrap();
+        std::fs::write(external.join("rules+/defs.bzl"), "value = 42\n").unwrap();
+        checker.loader.finish_fetch(["rules+".to_owned()], Ok(()));
+        let workspace = &checker.bazel_info.workspace;
+        let nested = workspace.join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        std::fs::write(workspace.join("defs.bzl"), "value = 42\n").unwrap();
+        std::fs::write(nested.join("defs.bzl"), "value = 'nested'\n").unwrap();
+        let caller = nested.join("caller.bzl");
+        std::fs::write(&caller, "load(':defs.bzl', 'value')\nlen(value)\n").unwrap();
+        checker.load_file(&caller, true, &[], true).unwrap();
+        let snapshot = checker.analysis.snapshot();
+        let caller = checker
+            .files
+            .iter()
+            .copied()
+            .find(|file| snapshot.path(*file) == caller)
+            .unwrap();
+        assert!(snapshot
+            .diagnostics(caller)
+            .unwrap()
+            .iter()
+            .any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"));
+        drop(snapshot);
+        *client.mapping_write.lock().unwrap() = Some((nested.join("BUILD.bazel"), String::new()));
+
+        let result = checker.check_files().unwrap();
+        let (_, diagnostics) = result
+            .diagnostics
+            .iter()
+            .find(|(file, _)| *file == caller)
+            .unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
     fn check_removed_load(case: &str, old_source: Option<&str>) {
         let (mut checker, client, external) =
             fetch_checker(&format!("checker-mapping-removed-load-{case}"), true);
@@ -1834,6 +1872,64 @@ mod tests {
             assert_eq!(unresolved, if audit { vec![":new.bzl"] } else { vec![] });
             let fetches = client.fetch_requests.lock().unwrap();
             assert!(fetches.is_empty(), "unexpected fetches: {fetches:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fetches_surface_package_marker_errors() {
+        for (name, scope) in [
+            ("requested", super::LoadScope::Requested),
+            ("transitive", super::LoadScope::Transitive),
+        ] {
+            let (mut checker, client, external) =
+                fetch_checker(&format!("checker-marker-error-{name}"), true);
+            checker.load_scope = scope;
+            client.fetch_files.lock().unwrap().insert(
+                "rules+".to_owned(),
+                (external.join("rules+/defs.bzl"), "value = 42\n".to_owned()),
+            );
+            let workspace = &checker.bazel_info.workspace;
+            std::fs::write(workspace.join("defs.bzl"), "value = 42\n").unwrap();
+            let nested = workspace.join("nested");
+            std::fs::create_dir(&nested).unwrap();
+            let caller = nested.join("caller.bzl");
+            std::fs::write(&caller, "load(':defs.bzl', 'value')\nlen(value)\n").unwrap();
+            checker.load_file(&caller, true, &[], true).unwrap();
+            let snapshot = checker.analysis.snapshot();
+            let caller = checker
+                .files
+                .iter()
+                .copied()
+                .find(|file| snapshot.path(*file) == caller)
+                .unwrap();
+            let initial = snapshot.diagnostics(caller).unwrap();
+            let [diagnostic] = initial.as_slice() else {
+                panic!("{name}: {initial:?}")
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type", "{name}");
+            drop(snapshot);
+            let marker = nested.join("BUILD");
+            *client.retarget.lock().unwrap() = Some((marker.clone(), marker));
+
+            let result = checker.check_files().unwrap();
+            let (_, diagnostics) = result
+                .diagnostics
+                .iter()
+                .find(|(file, _)| *file == caller)
+                .unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{name}: {diagnostics:?}")
+            };
+            assert_eq!(diagnostic.id().as_str(), "load-error", "{name}");
+            let unresolved = result.loads.unresolved.get(&caller).unwrap();
+            let [edge] = unresolved.as_slice() else {
+                panic!("{name}: {unresolved:?}")
+            };
+            assert!(
+                matches!(&edge.resolution, starpls_ide::LoadResolution::Failed(_)),
+                "{name}: {edge:?}"
+            );
         }
     }
 
@@ -3607,7 +3703,7 @@ impl Checker {
                 }
             }
         }
-        self.analysis.invalidate_loads();
+        self.analysis.refresh_loads_after_settlement();
         true
     }
 

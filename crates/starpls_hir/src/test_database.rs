@@ -74,6 +74,10 @@ impl starpls_common::Db for TestDatabase {
         Ok(None)
     }
 
+    fn depend_on_load_settlement(&self) {
+        crate::Db::environment(self).load_settlement_revision(self);
+    }
+
     fn list_load_candidates(
         &self,
         _path: &str,

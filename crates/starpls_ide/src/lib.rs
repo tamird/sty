@@ -176,7 +176,14 @@ impl starpls_common::Db for Database {
 
     fn load_file(&self, path: &str, dialect: Dialect, from: File) -> anyhow::Result<Option<File>> {
         self.environment().load_revision(self);
-        self.loader.load_file(self, path, dialect, from)
+        let result = self.loader.load_file(self, path, dialect, from);
+        if !matches!(result, Ok(Some(_))) {
+            self.depend_on_load_settlement();
+        }
+        result
+    }
+    fn depend_on_load_settlement(&self) {
+        self.environment().load_settlement_revision(self);
     }
     fn list_load_candidates(
         &self,
@@ -460,6 +467,18 @@ impl Analysis {
     pub fn invalidate_loads(&mut self) {
         self.invalidate_load_resolution();
         ruff_db::files::Files::sync_all(&mut self.db);
+    }
+
+    /// Refresh files and retry queries affected by settled host load work.
+    /// Successful resolutions must record each input that can change or call
+    /// [`Db::depend_on_load_settlement`].
+    pub fn refresh_loads_after_settlement(&mut self) {
+        let Self { db } = self;
+        salsa::Database::trigger_cancellation(db);
+        let environment = db.environment();
+        let revision = environment.load_settlement_revision(db) + 1;
+        environment.set_load_settlement_revision(db).to(revision);
+        ruff_db::files::Files::sync_all(db);
     }
 
     /// Replace host resolution only after all snapshots using the old host drain.
