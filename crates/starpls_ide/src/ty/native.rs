@@ -1301,6 +1301,23 @@ fn declarations(
                         // StarlarkRuleContextApi returns lists of feature names, but
                         // Bazel's inventory erases their element type.
                         Some("_starpls_builtins.list[_starpls_builtins.str]")
+                    } else if dialect == Dialect::Bazel
+                        && class.name == "CompilationContext"
+                        && classes.contains_key("File")
+                        && matches!(
+                            field.name.as_str(),
+                            "direct_headers"
+                                | "direct_public_headers"
+                                | "direct_private_headers"
+                                | "direct_textual_headers"
+                        )
+                        && matches!(
+                            env::normalize_doc(&field.r#type, true).as_str(),
+                            "list" | "List"
+                        )
+                    {
+                        // CcCompilationContextApi declares these as StarlarkList<FileT>.
+                        Some("_starpls_builtins.list[_starpls_types.File]")
                     } else if matches!(class.name.as_str(), "ctx" | "rule_attributes")
                         && classes.contains_key("struct")
                     {
@@ -3506,7 +3523,7 @@ def module_environment(context: module_ctx) -> dict[str, str]:
     }
 
     #[test]
-    fn context_feature_lists_preserve_string_elements() {
+    fn native_list_fields_preserve_element_types() {
         let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
@@ -3517,52 +3534,92 @@ def module_environment(context: module_ctx) -> dict[str, str]:
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("non-static-type".into(), "error".into())].into(),
+                &[
+                    ("non-static-type".into(), "error".into()),
+                    ("unsound-return-statement".into(), "error".into()),
+                ]
+                .into(),
             )
             .unwrap(),
         );
-        let source = r#"def enabled(context: ctx[object, object]) -> list[str]:
-    context.features.append("enabled")
-    context.disabled_features.append("disabled")
-    context.features.append(42)
-    return context.features
+        for (class_name, receiver, field_name, element) in [
+            ("ctx", "ctx[object, object]", "features", "str"),
+            ("ctx", "ctx[object, object]", "disabled_features", "str"),
+            (
+                "CompilationContext",
+                "CompilationContext",
+                "direct_headers",
+                "File",
+            ),
+            (
+                "CompilationContext",
+                "CompilationContext",
+                "direct_public_headers",
+                "File",
+            ),
+            (
+                "CompilationContext",
+                "CompilationContext",
+                "direct_private_headers",
+                "File",
+            ),
+            (
+                "CompilationContext",
+                "CompilationContext",
+                "direct_textual_headers",
+                "File",
+            ),
+        ] {
+            let source = format!(
+                r#"def elements(context: {receiver}, item: {element}) -> list[{element}]:
+    context.{field_name}.append(item)
+    context.{field_name}.append(42)
+    return context.{field_name}
 
-def disabled(context: ctx[object, object]) -> list[int]:
-    return context.disabled_features
-"#;
-        let file = analysis
-            .open_document(
-                Path::new("/features.bzl"),
-                Dialect::Bazel,
-                None,
-                source.into(),
-                1,
-            )
-            .unwrap();
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
-        assert_eq!(diagnostics[1].id().as_str(), "invalid-return-type");
+def first(context: {receiver}) -> {element}:
+    return context.{field_name}[0]
 
-        let features = builtins
-            .r#type
-            .iter_mut()
-            .find(|class| class.name == "ctx")
-            .unwrap()
-            .field
-            .iter_mut()
-            .find(|field| field.name == "features")
-            .unwrap();
-        features.r#type = "List of ints".to_owned();
-        analysis
-            .set_builtin_defs(builtins, Default::default())
-            .unwrap();
-        analysis.update_file(
-            file,
-            "def supplied(context: ctx[object, object]) -> list[int]:\n    return context.features\n".into(),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+def wrong(context: {receiver}) -> list[int]:
+    return context.{field_name}
+"#
+            );
+            let file = analysis
+                .open_document(Path::new("/fields.bzl"), Dialect::Bazel, None, source, 1)
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [argument, returned] = diagnostics.as_slice() else {
+                panic!("{class_name}.{field_name}: {diagnostics:?}");
+            };
+            assert_eq!(argument.id().as_str(), "invalid-argument-type");
+            assert_eq!(returned.id().as_str(), "invalid-return-type");
+
+            let field = builtins
+                .r#type
+                .iter_mut()
+                .find(|class| class.name == class_name)
+                .unwrap()
+                .field
+                .iter_mut()
+                .find(|field| field.name == field_name)
+                .unwrap();
+            field.r#type = "List of ints".to_owned();
+            analysis
+                .set_builtin_defs(builtins.clone(), Default::default())
+                .unwrap();
+            analysis.update_file(
+                file,
+                format!(
+                    r#"def supplied(context: {receiver}) -> list[int]:
+    return context.{field_name}
+"#
+                ),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.is_empty(),
+                "{class_name}.{field_name}: {diagnostics:?}"
+            );
+        }
     }
 
     #[test]
