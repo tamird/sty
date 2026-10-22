@@ -2031,6 +2031,8 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
             // Concatenation stores the pieces without converting their payloads.
             // Later branches may have different types from the first branch;
             // attribute conversion (or a macro) checks those values separately.
+            // Keep the receiver's kind, including gradual kinds, so otherwise
+            // identical overload results retain their known payloads.
             for (kind, _receiver, operand, _result, native_operation) in domains
                 .clone()
                 .chain(std::iter::once(("none", "None", "None", "None", "add")))
@@ -2042,12 +2044,12 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
                 for (plain_operand, fragment) in select_plain_operands(kind, operand) {
                     writeln!(output, "        @_starpls_typing.overload")?;
                     writeln!(output, "        @_starpls_typing.type_check_only")?;
-                    writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {plain_operand}, /) -> _starpls_types.select[_SelectValue | {fragment}, {required_kind}]: ...")?;
+                    writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {plain_operand}, /) -> _starpls_types.select[_SelectValue | {fragment}, _SelectKind]: ...")?;
                 }
                 let selected = format!("_starpls_types.select[_SelectPeerValue, {required_kind}]");
                 writeln!(output, "        @_starpls_typing.overload")?;
                 writeln!(output, "        @_starpls_typing.type_check_only")?;
-                writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {selected}, /) -> _starpls_types.select[_SelectValue | _SelectPeerValue, {required_kind}]: ...")?;
+                writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {selected}, /) -> _starpls_types.select[_SelectValue | _SelectPeerValue, _SelectKind]: ...")?;
             }
         }
     }

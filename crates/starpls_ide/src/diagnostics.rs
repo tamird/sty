@@ -119,6 +119,23 @@ mod tests {
             ),
             ("value + value", "value: select[str]", true),
             ("value + value", "value: select[str, Literal['str']]", false),
+            ("select(value) + ['suffix']", "value: Unknown", false),
+            ("{'prefix': 1} | select(value)", "value: Any", false),
+            ("select(value) + ['suffix']", "value: object", true),
+            ("select(value) + ['suffix']", "value: int | Unknown", true),
+            ("select({'//:a': value}) + ['suffix']", "value: Unknown", false),
+            ("['prefix'] + select({'//:a': value})", "value: Any", false),
+            ("select({'//:a': value}) | {'suffix': 1}", "value: Unknown", false),
+            ("{'prefix': 1} | select({'//:a': value})", "value: Any", false),
+            ("select({'//:a': value}) + ['suffix']", "value: list[str] | Unknown", false),
+            ("select({'//:a': value}) | {'suffix': 1}", "value: ExactDict[str, int] | Any", false),
+            ("select({'//:a': value}) + ['suffix']", "value: int | Unknown", true),
+            ("select({'//:a': value}) + ['suffix']", "value: list[str] | int | Any", true),
+            ("select({'//:a': value}) + ['suffix']", "value: None | Unknown", true),
+            ("select({'//:a': value}) + ['suffix']", "value: ExactDict[str, int] | Any", true),
+            ("select({'//:a': value}) | {'suffix': 1}", "value: list[str] | Unknown", true),
+            ("select({'//:a': value}) + ['suffix']", "value: object", true),
+            ("select({'//:a': value}) + ['suffix']", "value: struct[object]", true),
             // This payload admits both list-first and None-first selectors.
             ("value + None", "value: select[list[str] | None]", true),
             ("None + value", "value: select[list[str] | None]", true),
@@ -419,11 +436,19 @@ def mapping(values: dict[str, int]) -> select[int, Literal["int"]]:
         // Kind is determined by the first branch; each alternative keeps every branch's payload.
         assert!(hover.contents.value.contains("value: select[list[str] | None, Literal[\"list\"]] | select[list[str] | None, Literal[\"none\"]]\n"), "{}", hover.contents.value);
 
-        for value in ["object", "list[str] | Unknown", "list[str] | Any"] {
+        for (value, expected) in [
+            ("object", &["invalid-return-type"][..]),
+            ("list[str] | Unknown", &[][..]),
+            ("list[str] | Any", &[][..]),
+            ("list[str] | int | Unknown", &["invalid-return-type"][..]),
+        ] {
             analysis.update_file(file, format!("def embed(branches: dict[str, {value}]) -> {selected}:\n    return select(branches)\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert_eq!(diagnostics.len(), 1, "{value}: {diagnostics:?}");
-            assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(ids, expected, "{value}: {diagnostics:?}");
         }
         // A known first branch wins over unrelated kinds in later branches.
         analysis.update_file(file, "def first(first: list[str]) -> select[list[str] | None, Literal['list']]:\n    return select({'//:first': first, '//conditions:default': None})\n".into());
@@ -529,6 +554,161 @@ forward(select({"//:condition": ["selected"]}))
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
+    fn selector_gradual_mapping_transform_obeys_strict_policy() {
+        let source = r#"
+def with_or_dict(branches):
+    result = {}
+    for key, value in branches.items():
+        if type(key) == type(()):
+            for condition in key:
+                result[condition] = value
+        else:
+            result[key] = value
+    return result
+
+def with_or(branches):
+    return select(with_or_dict(branches))
+
+def forward(branches):
+    return select(branches)
+
+lists = ["prefix"] + with_or({("//:a", "//:b"): ["selected"]}) + ["suffix"]
+dictionaries = {"prefix": 1} | with_or({("//:a", "//:b"): {"selected": 2}}) | {"suffix": 3}
+forwarded_lists = ["prefix"] + forward({"//:a": ["selected"]}) + ["suffix"]
+forwarded_dictionaries = {"prefix": 1} | forward({"//:a": {"selected": 2}}) | {"suffix": 3}
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
+            "{diagnostics:?}"
+        );
+        for name in [
+            "lists",
+            "dictionaries",
+            "forwarded_lists",
+            "forwarded_dictionaries",
+        ] {
+            let start = source.find(&format!("\n{name} =")).unwrap() + 1;
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.range().is_some_and(|range| {
+                        range.start().to_usize() == start
+                            && range.end().to_usize() == start + name.len()
+                    })),
+                "missing strict diagnostic for {name}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn selector_gradual_composition_preserves_known_payloads() {
+        let source = r#"
+def consume(values: list[str] | select[list[str]]) -> None:
+    pass
+
+def combine(first: Unknown) -> None:
+    left = select({"//:first": first, "//:later": ["left"]})
+    right = select({"//:first": first, "//:later": ["right"]})
+    combined = left + right
+    consume(combined)
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        for gradual in ["Unknown", "Any"] {
+            let source = source.replace("Unknown", gradual);
+            analysis.update_file(file, source.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{gradual}: {diagnostics:?}");
+
+            for branch in ["left", "right"] {
+                let invalid_source = source.replace(&format!("[\"{branch}\"]"), "42");
+                analysis.update_file(file, invalid_source);
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert_eq!(diagnostics.len(), 1, "{gradual}, {branch}: {diagnostics:?}");
+                assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+            }
+        }
+    }
+
+    #[test]
+    fn selector_gradual_composition_requires_static_checks() {
+        let source = r#"
+def with_or(branches):
+    return select(branches)
+
+def consume(values: list[str] | select[list[str]]) -> None:
+    pass
+
+known = ["prefix"] + select({"//:a": ["known"], "//:b": ["later"]})
+first = known + with_or({"//:a": ["dynamic"]})
+second = first + with_or({"//:b": ["dynamic"]})
+combined = second + select({"//:a": ["suffix"]})
+consume(known)
+consume(first)
+consume(second)
+consume(combined)
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let invalid_source = source.replace("[\"later\"]", "[42]");
+        analysis.update_file(file, invalid_source.clone());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let start = invalid_source.find("consume(known)").unwrap() + "consume(".len();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == "invalid-argument-type"
+                    && diagnostic.range().is_some_and(|range| {
+                        range.start().to_usize() == start
+                            && range.end().to_usize() == start + "known".len()
+                    })
+            }),
+            "{diagnostics:?}"
+        );
+
+        // Ambiguous gradual composition needs strict checks at each consuming call.
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        for source in [source, invalid_source.as_str()] {
+            analysis.update_file(file, source.into());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            for name in ["first", "second", "combined"] {
+                let start = source.find(&format!("consume({name})")).unwrap() + "consume(".len();
+                assert!(
+                    diagnostics.iter().any(|diagnostic| {
+                        diagnostic.id().as_str() == "non-static-type"
+                            && diagnostic.range().is_some_and(|range| {
+                                range.start().to_usize() == start
+                                    && range.end().to_usize() == start + name.len()
+                            })
+                    }),
+                    "missing strict diagnostic for {name}: {diagnostics:?}"
+                );
+            }
+        }
     }
 
     #[test]

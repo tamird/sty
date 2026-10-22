@@ -31,6 +31,7 @@ use ty_python_semantic::types::DictionaryFirstEntry;
 use ty_python_semantic::types::DictionaryItem;
 use ty_python_semantic::types::DictionaryItemKind;
 use ty_python_semantic::types::DictionaryItems;
+use ty_python_semantic::types::DynamicType;
 use ty_python_semantic::types::IntersectionType;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
@@ -844,22 +845,25 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
     {
         Some(DictionaryFirstEntry::Entry { key: _, value }) => *value,
         Some(DictionaryFirstEntry::Empty) => return None,
-        Some(DictionaryFirstEntry::Unknown) | None => {
-            let (class, specialization) = ty.class_specialization(db, &environment)?;
-            if ![KnownClass::Dict, KnownClass::Mapping]
-                .into_iter()
-                .any(|known| Type::from(class) == known.to_class_literal(db, &environment))
-                && !is_exact_dictionary_class(db, &environment, Type::from(class))
-            {
-                return None;
+        Some(DictionaryFirstEntry::Unknown) | None => match ty {
+            Type::Dynamic(_) => ty,
+            _ => {
+                let (class, specialization) = ty.class_specialization(db, &environment)?;
+                if ![KnownClass::Dict, KnownClass::Mapping]
+                    .into_iter()
+                    .any(|known| Type::from(class) == known.to_class_literal(db, &environment))
+                    && !is_exact_dictionary_class(db, &environment, Type::from(class))
+                {
+                    return None;
+                }
+                let [_key, value] = specialization.types(db) else {
+                    return None;
+                };
+                // A successful select has a first branch. Its type bounds the possible
+                // native categories even when the dictionary order is unknown.
+                *value
             }
-            let [_key, value] = specialization.types(db) else {
-                return None;
-            };
-            // A successful select has a first branch. Its type bounds the possible
-            // native categories even when the dictionary order is unknown.
-            *value
-        }
+        },
     };
     let (_, specialization) = call.return_type().class_specialization(db, &environment)?;
     let [payload, _kind] = specialization.types(db) else {
@@ -878,13 +882,30 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
     let alternatives = values
         .iter()
         .map(|value| {
-            let kind = selector_value_kind(db, &environment, declaration.program_file(db), *value)?;
+            // A gradual first branch keeps a gradual kind. Keep known alternatives
+            // separate so a gradual arm cannot permit an invalid known operation.
+            let kind = match value {
+                Type::Dynamic(dynamic) => match dynamic {
+                    DynamicType::Unknown => *value,
+                    DynamicType::Any => *value,
+                    _ => return None,
+                },
+                _ => {
+                    let kind = selector_value_kind(
+                        db,
+                        &environment,
+                        declaration.program_file(db),
+                        *value,
+                    )?;
+                    Type::string_literal(db, kind)
+                }
+            };
             specialized_native_instance(
                 db,
                 &environment,
                 declaration.program_file(db),
                 "select",
-                vec![payload, Type::string_literal(db, kind)],
+                vec![payload, kind],
             )
         })
         .collect::<Option<Vec<_>>>()?;

@@ -592,9 +592,9 @@ whether the receiving attribute supports the combined fragments.
 
 Inferred types display this information as a second parameter, such as
 `select[dict[str, int] | None, Literal["none"]]`. List, tuple, and range branches
-share the `"list"` kind. Combining a selector with another selector or a compatible
-plain value preserves its kind and every operand's payload contribution, including
-`None`. Homogeneous list and dictionary payloads combine their element types.
+share the `"list"` kind. Fully static combinations preserve the runtime kind and
+every operand's payload contribution, including `None`. Homogeneous list and
+dictionary payloads combine their element types.
 A combination can contain both list and dictionary branches: Bazel stores these
 fragments and converts each one when an attribute consumes it. For example, a
 string-list attribute accepts both lists of strings and dictionaries with string
@@ -607,13 +607,23 @@ A mapping with a finite set of known value categories retains the possible
 selector types. For example, `dict[str, list[str] | None]` produces
 `select[list[str] | None, Literal["list"]] | select[list[str] | None, Literal["none"]]`.
 Each alternative retains every branch's payload type. Independent selectors
-with uncertain kinds still require proof of compatible kinds before combining.
-Mappings with unknown or unclassified value categories retain an unspecified
-kind, as do dictionary value types with several native representations.
+with several known kinds require proof of compatible kinds before combining.
+`Unknown` and `Any` constructor inputs retain gradual kinds, so ordinary checking
+permits composition through untyped helpers. A gradual alternative does not
+permit operations that are invalid for a known alternative in the same union.
+Unclassified static value categories retain an opaque kind, as do dictionary
+value types with several native representations.
 Integer values retain the `"int"` category, and literal dictionary branches
 retain the `"dict"` kind. Bazel can reject integer concatenation when operands
 use different internal representations, which depend on numeric range.
 Successful concatenations retain their `int` payloads.
+
+Gradual composition can still produce ambiguous overload results and lose
+precision. For example, adding an untyped helper's selector to
+`select[list[str | int], Literal["list"]]` can hide the incompatible `int` element
+from an ordinary argument check. The `non-static-type` rule rejects the gradual
+stored result and its use as a call argument. A checked helper contract with
+fully static payload and kind types avoids this gradual loss of precision.
 
 A predicate testing for any selector uses `TypeIs[select[object, object]]`.
 The second `object` covers every kind, so both outcomes of the predicate can
