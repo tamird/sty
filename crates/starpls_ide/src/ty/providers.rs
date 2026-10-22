@@ -1166,6 +1166,10 @@ def _legacy_init(value, next=None):
 Legacy, raw_legacy = provider(fields=["value", "next"], init=_legacy_init)
 def by_key(target, key):
     return target[key]
+def by_bounded_target(target):
+    if Initialized in target:
+        return target[Initialized].value
+    return ""
 "#,
         );
         let interface = fixture.add_file(
@@ -1186,6 +1190,7 @@ class Shape(Protocol):
 class Dictionary(TypedDict):
     value: str
 def by_key[T](target: Target, key: Provider[T]) -> T: ...
+def by_bounded_target[T: Target](target: T) -> str: ...
 "#,
         );
         fixture.add_file(
@@ -1267,6 +1272,7 @@ empty: Empty = Empty()
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         analysis.set_rules(Default::default());
         for (invalid, expected) in [
+            ("def bad(target: Target):\n    return target[Initialized('value')]", "invalid-argument-type"),
             ("def bad(target: Target):\n    return target[raw]", "invalid-argument-type"),
             ("def bad(target: Target):\n    return target[arbitrary]", "invalid-argument-type"),
             ("def bad(target: Target):\n    return arbitrary in target", "unsupported-operator"),
