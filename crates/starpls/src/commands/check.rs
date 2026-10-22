@@ -1526,6 +1526,55 @@ mod tests {
     }
 
     #[test]
+    fn requested_graph_settles_cached_transitive_loads() {
+        let (mut checker, client, external) = fetch_checker("checker-graph-fetch", true);
+        let root = checker.bazel_info.workspace.clone();
+        let caller = root.join("caller.bzl");
+        std::fs::write(&caller, "load(':dep.bzl', 'value')\nprint(value)\n").unwrap();
+        std::fs::write(
+            root.join("dep.bzl"),
+            "load('@rules//:defs.bzl', 'unused')\nvalue = 42\n",
+        )
+        .unwrap();
+        client.fetch_files.lock().unwrap().insert(
+            "rules+".to_owned(),
+            (external.join("rules+/defs.bzl"), "unused = 42\n".to_owned()),
+        );
+        checker.files.clear();
+        checker.load_file(&caller, true, &[], true).unwrap();
+
+        // An earlier analysis requested this unused transitive load before
+        // its repository mapping was available.
+        let snapshot = checker.analysis.snapshot();
+        let starpls_ide::LoadResolution::Resolved(dependency) = snapshot
+            .resolve_load(*checker.files.first().unwrap(), ":dep.bzl")
+            .unwrap()
+        else {
+            panic!("local dependency was not resolved")
+        };
+        assert!(matches!(
+            snapshot
+                .resolve_load(dependency, "@rules//:defs.bzl")
+                .unwrap(),
+            starpls_ide::LoadResolution::Pending
+        ));
+        drop(snapshot);
+        assert!(checker.resolve_pending_loads());
+        assert!(client.fetch_requests.lock().unwrap().is_empty());
+
+        let report_path = root.join("coverage.json");
+        let result = checker.report_diagnostics(Some(&report_path));
+        assert_eq!(*client.fetch_requests.lock().unwrap(), ["rules+"]);
+        assert_eq!(result.unwrap(), ExitCode::SUCCESS);
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+        assert_eq!(report["complete"], true);
+        assert_eq!(report["checked_files"].as_array().unwrap().len(), 1);
+        assert_eq!(report["loaded_dependencies"].as_array().unwrap().len(), 2);
+        assert!(report["unresolved_loads"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
     fn module_extension_source_is_a_reported_dependency() {
         for audit_loads in [false, true] {
             let mut checker = local_checker_with_options(
@@ -3842,6 +3891,11 @@ impl Checker {
                 diagnostics.push((file, snapshot.diagnostics(file)?));
             }
             drop(snapshot);
+            // Requested-load coverage resolves loads already requested by
+            // analysis. Settle those before constructing a graph we'd discard.
+            if self.load_scope == LoadScope::Requested && self.resolve_pending_loads() {
+                continue;
+            }
             let graph = self.load_graph(diagnostics.iter().map(|(file, _)| *file))?;
             if !self.resolve_pending_loads() {
                 return Ok(CheckResult {
