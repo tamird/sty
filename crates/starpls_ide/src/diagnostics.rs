@@ -1,20 +1,51 @@
 use starpls_common::Diagnostic;
+use starpls_common::Dialect;
 use starpls_common::File;
+use starpls_common::FileInfo;
 use starpls_hir::diagnostics_for_file;
 
 use crate::Database;
 
-pub(crate) fn diagnostics(db: &Database, file_id: File) -> Vec<Diagnostic> {
-    let file = file_id;
+#[salsa::db]
+trait Db: salsa::Database {
+    fn collect_diagnostics(&self, file: File) -> Vec<Diagnostic>;
+}
 
-    let diagnostics = crate::ty::check(db, file);
+#[salsa::db]
+impl Db for Database {
+    fn collect_diagnostics(&self, file: File) -> Vec<Diagnostic> {
+        let diagnostics = crate::ty::check(self, file);
 
-    // Limit the amount of syntax errors we send, as this many syntax errors probably means something
-    // is really wrong with the file being analyzed.
-    diagnostics_for_file(db, file)
-        .take(128)
-        .chain(diagnostics)
-        .collect()
+        // Limit the amount of syntax errors we send, as this many syntax errors probably means something
+        // is really wrong with the file being analyzed.
+        diagnostics_for_file(self, file)
+            .take(128)
+            .chain(diagnostics)
+            .collect()
+    }
+}
+
+pub(crate) fn diagnostics(db: &Database, file: File) -> Vec<Diagnostic> {
+    let File {
+        source,
+        dialect,
+        info,
+    } = file;
+    cached_diagnostics(db, source, (dialect, info))
+}
+
+#[salsa::tracked(returns(clone))]
+fn cached_diagnostics(
+    db: &dyn Db,
+    source: ruff_db::files::File,
+    context: (Dialect, Option<FileInfo>),
+) -> Vec<Diagnostic> {
+    let (dialect, info) = context;
+    db.collect_diagnostics(File {
+        source,
+        dialect,
+        info,
+    })
 }
 
 #[cfg(test)]

@@ -370,7 +370,7 @@ fn pending_edits_cancel_inference_snapshots() {
 #[test]
 fn physical_sources_support_distinct_host_contexts() {
     let (mut analysis, _) = Analysis::new_for_test();
-    let text = "load(\"query.bzl\", \"value\")\nvalue = 1\n";
+    let text = "load(\"query.bzl\", \"value\")\ndef identity(value: int):\n    return value\n";
     let query = analysis
         .open_document(
             Path::new("query.bzl"),
@@ -395,13 +395,24 @@ fn physical_sources_support_distinct_host_contexts() {
         .unwrap();
     assert_eq!(query.source, module.source);
     assert_ne!(query, module);
-    let diagnostics = analysis.snapshot().diagnostics(query).unwrap();
+    let snapshot = analysis.snapshot();
+    let diagnostics = snapshot.diagnostics(query).unwrap();
     assert!(
         diagnostics
             .iter()
             .any(|d| d.headline_message() == "Cannot load the current file"),
         "{diagnostics:?}"
     );
+    for (file, rejects_annotation) in [(module, false), (query, true)] {
+        let diagnostics = snapshot.diagnostics(file).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .any(|d| d.headline_message() == "Type annotations are not supported in Starlark"),
+            rejects_annotation,
+            "{diagnostics:?}"
+        );
+    }
 }
 
 #[test]
