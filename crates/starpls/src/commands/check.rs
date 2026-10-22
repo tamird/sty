@@ -2557,6 +2557,47 @@ mod tests {
     }
 
     #[test]
+    fn interface_load_graph_visits_all_requested_sources() {
+        let mut checker = local_checker_with_options(
+            "checker-interface-requested-sources",
+            &[
+                (
+                    "sty.toml",
+                    "[type-interfaces]\n'a.bzl'='shared.bzli'\n'b.bzl'='shared.bzli'\n",
+                ),
+                ("shared.bzli", "value: int\n"),
+                (
+                    "a.bzl",
+                    "load(':missing-a.bzl', 'loaded')\nvalue = loaded\n",
+                ),
+                (
+                    "b.bzl",
+                    "load(':missing-b.bzl', 'loaded')\nvalue = loaded\n",
+                ),
+            ],
+            CheckCommand::default(),
+        );
+        assert_eq!(checker.files.len(), 1);
+        let pairs = checker.analysis.type_interface_pairs();
+        let snapshot = checker.analysis.snapshot();
+        for (source, _) in &pairs {
+            snapshot.diagnostics(*source).unwrap();
+        }
+        drop(snapshot);
+
+        let graph = checker.load_graph([]).unwrap();
+        let expected: Vec<_> = checker
+            .files
+            .iter()
+            .copied()
+            .chain(pairs.iter().map(|(source, _)| *source))
+            .collect();
+        assert_eq!(graph.files.into_iter().collect::<Vec<_>>(), expected);
+        assert_eq!(graph.unresolved.len(), 2);
+        std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+    }
+
+    #[test]
     fn exclusion_paths_must_stay_workspace_relative() {
         let workspace = std::env::current_dir().unwrap();
         for pattern in [
@@ -3568,24 +3609,38 @@ impl Checker {
             unresolved: Default::default(),
         };
         graph.files.extend(checked);
-        let interfaces = self.analysis.type_interface_pairs();
-        let snapshot = self.analysis.snapshot();
-        if self.load_scope == LoadScope::Transitive {
-            for (source, _) in &interfaces {
-                let path = snapshot.path(*source);
-                if self.ignored_paths.contains(path) {
-                    self.exclusions
-                        .insert(path.to_path_buf(), Exclusion::Ignored);
-                } else {
-                    graph.files.insert(*source);
-                }
-            }
-        }
         // Requests survive cached queries. Current roots and load statements
         // determine which of those requests still belong to this check.
         let mut requests: HashMap<File, HashSet<String>> = Default::default();
         for (file, module) in self.loader.recorded_loads() {
             requests.entry(file).or_default().insert(module);
+        }
+        let snapshot = self.analysis.snapshot();
+        let mut requested_counterparts: HashMap<File, Vec<File>> = HashMap::new();
+        for (source, interface) in self.analysis.type_interface_pairs() {
+            if self.load_scope == LoadScope::Transitive {
+                let path = snapshot.path(source);
+                if self.ignored_paths.contains(path) {
+                    self.exclusions
+                        .insert(path.to_path_buf(), Exclusion::Ignored);
+                } else {
+                    graph.files.insert(source);
+                }
+            }
+            // Trusted interfaces and implementations can consult each other's
+            // declarations without a load statement, including excluded files.
+            if requests.contains_key(&interface) {
+                requested_counterparts
+                    .entry(source)
+                    .or_default()
+                    .push(interface);
+            }
+            if requests.contains_key(&source) {
+                requested_counterparts
+                    .entry(interface)
+                    .or_default()
+                    .push(source);
+            }
         }
         let mut frontier: Vec<_> = graph.files.iter().copied().collect();
         let progress = self.progress && self.load_scope == LoadScope::Transitive;
@@ -3602,18 +3657,11 @@ impl Checker {
                     snapshot.path(file).display()
                 );
             }
-            // Trusted interfaces and implementations can consult each other's
-            // declarations without a load statement, including excluded files.
-            for (source, interface) in &interfaces {
-                let counterpart = if file == *source {
-                    *interface
-                } else if file == *interface {
-                    *source
-                } else {
-                    continue;
-                };
-                if requests.contains_key(&counterpart) && graph.files.insert(counterpart) {
-                    frontier.push(counterpart);
+            if let Some(counterparts) = requested_counterparts.get(&file) {
+                for &counterpart in counterparts {
+                    if graph.files.insert(counterpart) {
+                        frontier.push(counterpart);
+                    }
                 }
             }
             let mut dependencies = match self.load_scope {
