@@ -2210,6 +2210,61 @@ mod tests {
     }
 
     #[test]
+    fn outside_workspace_implementations_use_registered_annotations() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("checker-outside-interface");
+        let workspace = root.join("workspace");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let source = root.join("source.bzl");
+        std::fs::write(&source, "_VALUE = 'wrong'\nvalue = _VALUE\n").unwrap();
+        std::fs::write(workspace.join("source.bzli"), "_VALUE: int\n").unwrap();
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        let loader = DefaultFileLoader::new(
+            Arc::new(TestBazelClient::default()),
+            workspace.clone(),
+            None,
+            None,
+            sender,
+            false,
+        );
+        let info = starpls_bazel::client::BazelInfo {
+            workspace,
+            output_base: root.join("output"),
+            ..Default::default()
+        };
+        let matches = <CheckCommand as clap::Args>::augment_args(clap::Command::new("check"))
+            .try_get_matches_from(["check", "--type_interface", "../source.bzl=source.bzli"])
+            .unwrap();
+        let options = <CheckCommand as clap::FromArgMatches>::from_arg_matches(&matches).unwrap();
+        let (analysis, loader) = options
+            .prepare_analysis(loader, &info, Default::default())
+            .unwrap();
+        let mut checker = Checker::new(
+            analysis,
+            info,
+            vec![source.to_str().unwrap().to_owned()],
+            &[],
+            loader,
+            receiver,
+            &options,
+        )
+        .unwrap();
+        assert!(checker.input_errors.is_empty());
+        let result = checker.check_files().unwrap();
+        assert!(result.loads.unresolved.is_empty());
+        let diagnostics: Vec<_> = result
+            .diagnostics
+            .iter()
+            .flat_map(|(_, diagnostics)| diagnostics)
+            .collect();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("expected the implementation assignment error: {diagnostics:?}")
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn explicit_external_interfaces_are_refreshed_before_installation() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("checker-explicit-interface-freshness");
@@ -3691,7 +3746,7 @@ impl Checker {
 
         let info = api_context.map(|api_context| FileInfo::Bazel {
             api_context,
-            is_external: path.starts_with(&self.bazel_info.output_base),
+            is_external: !path.starts_with(&self.bazel_info.workspace),
         });
 
         let file = self.analysis.file(&path, dialect, info)?;
