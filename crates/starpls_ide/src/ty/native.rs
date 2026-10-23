@@ -2493,6 +2493,7 @@ fn write_function(
             (CallableKind::Function, "DefaultInfo", "runfiles" | "data_runfiles" | "default_runfiles") => classes.contains("runfiles").then_some("_starpls_types.runfiles | None"),
             (CallableKind::Function, "RunEnvironmentInfo", "environment") => Some("_starpls_typing.Mapping[_StringKey, _StringValue]"),
             (CallableKind::Function, "RunEnvironmentInfo", "inherited_environment") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
+            (CallableKind::Method("testing"), "TestEnvironment", "inherited_environment") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
             (CallableKind::Method("coverage_common"), "instrumented_files_info", "ctx") => {
                 // Coverage consumes the native context, independently of its
                 // build-setting value and generated attribute schema.
@@ -2534,9 +2535,10 @@ fn write_function(
                 (classes.contains("Args") && env::normalize_doc(r#type, true) == "sequence")
                     .then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Args]")
             }
-            // Template expansion casts the dictionary keys and values to strings.
+            // These APIs require dictionaries with string keys and values.
             (CallableKind::Method("actions"), "expand_template", "substitutions")
-            | (CallableKind::Method("repository_ctx"), "template", "substitutions") => {
+            | (CallableKind::Method("repository_ctx"), "template", "substitutions")
+            | (CallableKind::Method("testing"), "TestEnvironment", "environment") => {
                 (env::normalize_doc(r#type, true) == "dict")
                     .then_some(STRING_DICTIONARY_INPUT)
             }
@@ -6561,7 +6563,12 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
 groups: dict[Literal['tools'], exec_group] = {'tools': group}
 def implementation(context: object) -> None:
     pass
-def inspect(context: ctx[object, object], file: File, change: transition) -> None:
+def inspect(
+    context: ctx[object, object],
+    file: File,
+    change: transition,
+    mapping: Mapping[str, str],
+) -> None:
     files = context.runfiles(files=[file])
     default = DefaultInfo(executable=file, runfiles=files)
     other = DefaultInfo(data_runfiles=files, default_runfiles=files)
@@ -6569,6 +6576,13 @@ def inspect(context: ctx[object, object], file: File, change: transition) -> Non
     environment = RunEnvironmentInfo(environment=values, inherited_environment=['HOME'])
     shaped: dict[{"MODE": str}] = {"MODE": "test"}
     RunEnvironmentInfo(environment=shaped)
+    test_environment = testing.TestEnvironment(values, inherited_environment=('HOME',))
+    testing.TestEnvironment(environment={'MODE': 'test'})
+    testing.TestEnvironment(environment=shaped)
+    testing.TestEnvironment(environment={}, inherited_environment=['HOME'])
+    test_value: str = test_environment.environment['MODE']
+    test_inherited: str = test_environment.inherited_environment[0]
+    print(test_value, test_inherited)
     value: str = environment.environment['MODE']
     inherited: str = environment.inherited_environment[0]
     exec_attr = attr.label(cfg='exec')
@@ -6603,6 +6617,11 @@ def inspect(context: ctx[object, object], file: File, change: transition) -> Non
             "RunEnvironmentInfo(environment={'MODE': 42})",
             "RunEnvironmentInfo(environment={42: 'test'})",
             "RunEnvironmentInfo(inherited_environment=[42])",
+            "testing.TestEnvironment(environment={'MODE': 42})",
+            "testing.TestEnvironment(environment={42: 'test'})",
+            "testing.TestEnvironment(environment={}, inherited_environment=[42])",
+            "testing.TestEnvironment(environment=struct(MODE='test'))",
+            "testing.TestEnvironment(environment=mapping)",
             "exec_group(toolchains=[42])",
             "attr.label(cfg=42)",
             "rule(implementation=implementation, cfg='exec')",
@@ -6613,6 +6632,10 @@ def inspect(context: ctx[object, object], file: File, change: transition) -> Non
             assert_eq!(diagnostics.len(), 1, "{call}: {diagnostics:?}");
             assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
         }
+        analysis.update_file(file, format!("{source}    testing.TestEnvironment()\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "missing-argument");
     }
 
     #[test]
