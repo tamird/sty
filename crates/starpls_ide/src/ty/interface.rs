@@ -1240,33 +1240,8 @@ pub(super) fn plain_provider_schema<'db>(
     else {
         return None;
     };
-    let Expr::Name(callee) = call.func.as_ref() else {
-        return None;
-    };
-    let scope = global_scope(db, file);
-    if semantic_index(db, file).try_expression_scope_id(&ruff_python_ast::ExprRef::from(call))?
-        != scope.file_scope_id(db)
-        || place_table(db, scope)
-            .symbol_by_name(&callee.id)
-            .is_some_and(|symbol| symbol.is_bound() || symbol.is_declared())
-    {
-        return None;
-    }
-    let model = SemanticModel::new(db, file);
-    let callee = model.builtin_type(
-        &callee.id,
-        ty_python_semantic::provided::BuiltinUsage::Runtime,
-    )?;
-    let Some(TypeDefinition::Function(callee)) =
-        callee.definition(db, &model.program_environment())
-    else {
-        return None;
-    };
-    if !matches!(
-        super::factory::declaration(db, callee),
-        Some(super::factory::BuiltinFunction::Provider)
-    ) || !call.arguments.args.is_empty()
-    {
+    native_provider_definition(db, file, call)?;
+    if !call.arguments.args.is_empty() {
         return None;
     }
     let mut fields = None;
@@ -1310,11 +1285,120 @@ pub(super) fn plain_provider_schema<'db>(
     fields
 }
 
+fn native_provider_definition<'db>(
+    db: &'db dyn Db,
+    file: ProgramFile<'db>,
+    call: &ruff_python_ast::ExprCall,
+) -> Option<Definition<'db>> {
+    let Expr::Name(callee) = call.func.as_ref() else {
+        return None;
+    };
+    let scope = global_scope(db, file);
+    let expression_scope =
+        semantic_index(db, file).try_expression_scope_id(&ruff_python_ast::ExprRef::from(call))?;
+    if expression_scope != scope.file_scope_id(db)
+        || place_table(db, scope)
+            .symbol_by_name(&callee.id)
+            .is_some_and(|symbol| symbol.is_bound() || symbol.is_declared())
+    {
+        return None;
+    }
+    let model = SemanticModel::new(db, file);
+    let callee = model.builtin_type(
+        &callee.id,
+        ty_python_semantic::provided::BuiltinUsage::Runtime,
+    )?;
+    let definition = callee.definition(db, &model.program_environment())?;
+    let TypeDefinition::Function(callee) = definition else {
+        return None;
+    };
+    let native = super::factory::declaration(db, callee)?;
+    matches!(native, super::factory::BuiltinFunction::Provider).then_some(callee)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ConstructorRole {
+    Public,
+    Raw,
+}
+
+/// Only native raw constructors store their supplied inputs directly.
+#[salsa::tracked(returns(copy))]
+pub(super) fn storage_constructor_declaration<'db>(
+    db: &'db dyn Db,
+    definition: Definition<'db>,
+) -> Option<Definition<'db>> {
+    let (file, node, role) = constructor_origin(db, definition, &mut FxHashSet::default())?;
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let ruff_python_ast::AnyRootNodeRef::Expr(expression) =
+        parsed.get_by_index(NodeIndex::from(node))
+    else {
+        return None;
+    };
+    let Expr::Call(call) = expression else {
+        return None;
+    };
+    native_provider_definition(db, file, call)?;
+    // Dynamic factory arguments cannot establish which callable was returned.
+    if call.arguments.args.len() > 1
+        || call
+            .arguments
+            .args
+            .iter()
+            .any(|argument| matches!(argument, Expr::Starred(_)))
+    {
+        return None;
+    }
+    let mut keywords = FxHashSet::default();
+    for keyword in &call.arguments.keywords {
+        let name = keyword.arg.as_ref()?;
+        if !matches!(name.as_str(), "doc" | "fields" | "init") {
+            return None;
+        }
+        if !keywords.insert(name.as_str()) {
+            return None;
+        }
+    }
+    let initializer = call.arguments.find_keyword("init");
+    match role {
+        ConstructorRole::Public => {
+            if initializer
+                .is_some_and(|initializer| !matches!(initializer.value, Expr::NoneLiteral(_)))
+            {
+                return None;
+            }
+        }
+        ConstructorRole::Raw => {
+            let initializer = initializer?;
+            super::providers::resolve_function(
+                db,
+                file,
+                &initializer.value,
+                &mut FxHashSet::default(),
+            )?;
+        }
+    }
+    let declarations = provider_pairs(db).get(&(file, node))?;
+    let [declaration] = declarations.as_slice() else {
+        return None;
+    };
+    super::providers::is_declaration(db, *declaration).then_some(*declaration)
+}
+
 fn provider_origin<'db>(
     db: &'db dyn Db,
     definition: Definition<'db>,
     visited: &mut FxHashSet<Definition<'db>>,
 ) -> Option<(ProgramFile<'db>, u32)> {
+    let (file, node, role) = constructor_origin(db, definition, visited)?;
+    (role == ConstructorRole::Public).then_some((file, node))
+}
+
+fn constructor_origin<'db>(
+    db: &'db dyn Db,
+    definition: Definition<'db>,
+    visited: &mut FxHashSet<Definition<'db>>,
+) -> Option<(ProgramFile<'db>, u32, ConstructorRole)> {
     if !visited.insert(definition) {
         return None;
     }
@@ -1323,7 +1407,7 @@ fn provider_origin<'db>(
     match definition.kind(db) {
         DefinitionKind::Assignment(assignment) => match assignment.value(&parsed) {
             Expr::Call(call) => {
-                if assignment.unpack().is_some() {
+                let role = if assignment.unpack().is_some() {
                     let node = ruff_python_ast::find_node::covering_node(
                         parsed.syntax().into(),
                         call.range(),
@@ -1334,14 +1418,21 @@ fn provider_origin<'db>(
                     let [Expr::Tuple(tuple)] = parent.targets.as_slice() else {
                         return None;
                     };
-                    let [constructor, _raw] = tuple.elts.as_slice() else {
+                    let [constructor, raw] = tuple.elts.as_slice() else {
                         return None;
                     };
-                    if constructor.range() != assignment.target(&parsed).range() {
+                    let target = assignment.target(&parsed).range();
+                    if constructor.range() == target {
+                        ConstructorRole::Public
+                    } else if raw.range() == target {
+                        ConstructorRole::Raw
+                    } else {
                         return None;
                     }
-                }
-                Some((file, call.node_index().load().as_u32()?))
+                } else {
+                    ConstructorRole::Public
+                };
+                Some((file, call.node_index().load().as_u32()?, role))
             }
             Expr::Name(name) => {
                 let model = SemanticModel::new(db, file);
@@ -1354,7 +1445,7 @@ fn provider_origin<'db>(
                 let [definition] = definitions.as_slice() else {
                     return None;
                 };
-                provider_origin(db, definition.definition()?, visited)
+                constructor_origin(db, definition.definition()?, visited)
             }
             _ => None,
         },
@@ -1365,7 +1456,7 @@ fn provider_origin<'db>(
             let [definition] = definitions.as_slice() else {
                 return None;
             };
-            provider_origin(db, *definition, visited)
+            constructor_origin(db, *definition, visited)
         }
         _ => None,
     }

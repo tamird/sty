@@ -32,6 +32,7 @@ use ty_python_semantic::provided::ProvidedClass;
 use ty_python_semantic::provided::ProvidedData;
 use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::provided::ProvidedGetattrPresence;
+use ty_python_semantic::provided::ProvidedInstanceDisplay;
 use ty_python_semantic::provided::ProvidedInstanceFields;
 use ty_python_semantic::provided::ProvidedInstanceFieldsSource;
 use ty_python_semantic::provided::ProvidedTypeApplication;
@@ -587,7 +588,7 @@ fn initializer_contracts(
     result
 }
 
-fn resolve_function<'db>(
+pub(super) fn resolve_function<'db>(
     db: &'db dyn super::interface::Db,
     file: ProgramFile<'db>,
     expression: &Expr,
@@ -945,6 +946,87 @@ pub(super) fn raw_extra_parameters<'db>(
             .collect(),
         None => vec![Parameter::keyword_variadic(Name::new("kwargs")).with_annotated_type(object)],
     }
+}
+
+/// Raw constructors make definitely supplied fields present without changing
+/// their declared value types or the provider's nominal identity.
+pub(super) fn call_result<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+) -> Option<Type<'db>> {
+    if call.has_binding_errors() {
+        return None;
+    }
+    let environment = ProgramEnvironment::from_file(call.file());
+    let result = call.return_type();
+    let data = result.provided_data(db, &environment)?;
+    data.downcast_ref::<RecordDeclaration>()?;
+    let Expr::Name(callee) = call.call().func.as_ref() else {
+        return None;
+    };
+    let model = SemanticModel::new(db, call.file());
+    let definitions = definitions_for_name(
+        &model,
+        &callee.id,
+        callee.into(),
+        ImportAliasResolution::PreserveAliases,
+    );
+    let [definition] = definitions.as_slice() else {
+        return None;
+    };
+    let definition = definition.definition()?;
+    let declaration = super::interface::storage_constructor_declaration(db, definition)?;
+    let DefinitionKind::Function(function) = declaration.kind(db) else {
+        return None;
+    };
+    let file = declaration.program_file(db);
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let anchor = instance(db, file, function.node(&parsed))?;
+    let (mut fields, original) = if let Some(fields) = result.provided_instance_fields(db) {
+        let fields = fields.to_vec();
+        let original = anchor.with_provided_instance_fields(
+            db,
+            fields.clone().into_boxed_slice(),
+            ProvidedInstanceDisplay::ClassName,
+        )?;
+        (fields, original)
+    } else {
+        let data = anchor.provided_data(db, &environment)?;
+        let record = data.downcast_ref::<RecordDeclaration>()?;
+        if record.generic {
+            return None;
+        }
+        let fields = declaration_fields(db, file, record)?;
+        (fields, anchor)
+    };
+    // A separate raw declaration can have a different return contract. It must
+    // already identify this same instance before storage is refined.
+    if !original.is_equivalent_to(db, &environment, result) {
+        return None;
+    }
+    let mut changed = false;
+    for field in &mut fields {
+        if !field.is_required
+            && matches!(
+                call.argument(&field.name),
+                CheckedArgument::Value {
+                    ty: _,
+                    expression: _
+                }
+            )
+        {
+            field.is_required = true;
+            changed = true;
+        }
+    }
+    if !changed {
+        return None;
+    }
+    anchor.with_provided_instance_fields(
+        db,
+        fields.into_boxed_slice(),
+        ProvidedInstanceDisplay::ClassName,
+    )
 }
 
 pub(super) fn call_diagnostics(db: &Database, call: &CheckedCall<'_, '_>) -> Vec<Diagnostic> {
@@ -1440,6 +1522,9 @@ def Open(*, value: str = ..., extra: int = ...) -> record[{
 }, ...]: ...
 def Node(*, next: Node = ...) -> record[{"next": NotRequired[Node]}]: ...
 def Impossible(*, value: Never = ...) -> record[{"value": NotRequired[Never]}]: ...
+class RequiredValue(Protocol):
+    @property
+    def value(self) -> str: ...
 "#;
         let interface = fixture.add_file(&mut analysis.db, "info.bzli", declarations);
         let alias = fixture.add_file(
@@ -1450,10 +1535,24 @@ def Impossible(*, value: Never = ...) -> record[{"value": NotRequired[Never]}]: 
         let valid = r#"
 load("info.bzl", "Info", "Other", "Open", "Node", "Impossible")
 load("alias.bzl", "Alias")
+load("info.bzli", "RequiredValue")
 
 empty: Info = Alias(nullable=None)
 present: Info = Info(nullable="known", value="present")
 linked: Node = Node(next=Node())
+supplied = Alias(nullable=None, value="present")
+
+def immediate() -> str:
+    return Info(nullable=None, value="present").value
+
+def stored() -> str:
+    return supplied.value
+
+def required(value: RequiredValue) -> str:
+    return value.value
+
+required(supplied)
+required(Info(nullable=None, value="present"))
 
 def lookup(value: Info) -> str | None:
     return getattr(value, "value", None)
@@ -1504,6 +1603,8 @@ def impossible(value: Impossible) -> None:
             ("Info(nullable=None, value=None)", "invalid-argument-type"),
             ("Info(nullable=None, value=42)", "invalid-argument-type"),
             ("Info(nullable=None, extra=True)", "unknown-argument"),
+            ("Info(nullable=None).value", "possibly-missing-attribute"),
+            ("required(Info(nullable=None))", "invalid-argument-type"),
             ("wrong: Info = Other(nullable=None)", "invalid-assignment"),
             ("wrong: Info = struct(nullable=None)", "invalid-assignment"),
             ("def direct(value: Info) -> str:\n    return value.value", "possibly-missing-attribute"),
@@ -1557,6 +1658,185 @@ def impossible(value: Impossible) -> None:
             };
             assert_eq!(*target_file_id, interface.source);
             assert_eq!(&declarations[*target_selection_range], "\"value\"");
+        }
+    }
+
+    #[test]
+    fn provider_constructor_presence_distinguishes_initializer_and_raw_calls() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "info.bzl",
+            r#"
+def initialize(value=None):
+    return {}
+Info, raw_info = provider(fields=["value"], init=initialize)
+
+def ordinary(value):
+    return raw_info()
+"#,
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"
+def Info(value: str | None = ...) -> record[{"value": NotRequired[str]}]: ...
+def ordinary(value: str) -> Info: ...
+"#,
+        );
+        let aliases = fixture.add_file(
+            &mut analysis.db,
+            "aliases.bzl",
+            "load('info.bzl', Original='Info', raw='raw_info')\nPublic = Original\nRaw = raw\n",
+        );
+        let valid = r#"
+load("info.bzl", "Info", "raw_info", "ordinary")
+load("aliases.bzl", "Public", "Raw")
+
+supplied = Raw(value="present")
+def immediate() -> str:
+    return raw_info(value="present").value
+def stored() -> str:
+    return supplied.value
+def unpack_literal() -> str:
+    return Raw(**{"value": "present"}).value
+def unpack_required(values: dict[{"value": str}]) -> str:
+    return Raw(**values).value
+def unpack_optional(values: dict[{"value": NotRequired[str]}]) -> str | None:
+    return getattr(Raw(**values), "value", None)
+def nominal(value: Info) -> str | None:
+    return getattr(value, "value", None)
+nominal(supplied)
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", valid);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("non-static-type".into(), "error".into()),
+                    ("possibly-missing-attribute".into(), "error".into()),
+                ]
+                .into(),
+            )
+            .unwrap(),
+        );
+        for file in [interface, aliases, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (invalid, expected) in [
+            ("Info(value='accepted but omitted').value", "possibly-missing-attribute"),
+            ("Public(value='accepted but omitted').value", "possibly-missing-attribute"),
+            ("ordinary(value='accepted but omitted').value", "possibly-missing-attribute"),
+            ("raw_info().value", "possibly-missing-attribute"),
+            ("def optional(values: dict[{'value': NotRequired[str]}]) -> str:\n    return Raw(**values).value", "possibly-missing-attribute"),
+            ("def indeterminate(values: dict[str, str]) -> str:\n    return Raw(**values).value", "possibly-missing-attribute"),
+            ("Raw(value=None)", "invalid-argument-type"),
+            ("Raw(value=42)", "invalid-argument-type"),
+            ("Raw(extra='bad')", "unknown-argument"),
+            ("Raw(value='first', **{'value': 'second'})", "parameter-already-assigned"),
+        ] {
+            analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), expected, "{invalid}");
+        }
+        analysis.update_file(caller, format!("{valid}\nRaw(value=42).value\n"));
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        let mut ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        ids.sort_unstable();
+        assert_eq!(ids, ["invalid-argument-type", "possibly-missing-attribute"]);
+    }
+
+    #[test]
+    fn provider_constructor_presence_rejects_non_native_origins() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "info.bzl",
+            r#"
+def provider(*, fields):
+    return lambda **kwargs: struct()
+Shadow = provider(fields=["value"])
+def make():
+    return lambda **kwargs: struct()
+Factory = make()
+"#,
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"
+def Shadow(*, value: str = ...) -> record[{"value": NotRequired[str]}]: ...
+def Factory(*, value: str = ...) -> record[{"value": NotRequired[str]}]: ...
+"#,
+        );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "main.bzl",
+            r#"
+load("info.bzl", "Shadow", "Factory")
+def shadowed() -> str:
+    return Shadow(value="not proof of storage").value
+def factory() -> str:
+    return Factory(value="not proof of storage").value
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("possibly-missing-attribute".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() == "possibly-missing-attribute"));
+        analysis.update_file(
+            source,
+            "Shadow = provider(**{'fields': ['value']})\nFactory = provider(fields=['value']) if True else provider(fields=['value'])\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.id().as_str() == "possibly-missing-attribute"));
+        analysis.update_file(
+            source,
+            "Shadow = provider(fields=['value'])\nFactory = provider(fields=['value'])\n".into(),
+        );
+        for file in [source, interface, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
         }
     }
 
@@ -1941,6 +2221,16 @@ empty: Info[str] = Info("anchor")
 raw: Info[str] = raw_info(anchor="anchor")
 present: Info[str] = raw_info(anchor="anchor", value="present", values=["item"], callback=callback)
 inferred = raw_info(anchor="anchor")
+inferred_present = raw_info(anchor="anchor", value="present", values=["item"], callback=callback)
+
+def supplied_value() -> str:
+    return inferred_present.value
+
+def supplied_callback() -> str:
+    return inferred_present.callback(1)
+
+def supplied_items() -> None:
+    inferred_present.values.append("item")
 
 def inferred_lookup() -> str | None:
     return getattr(inferred, "value", None)
@@ -1991,6 +2281,10 @@ def mutate(value: Info[object]) -> None:
             ("def wrong_argument(value: Info[str]) -> str:\n    if hasattr(value, 'callback'):\n        return value.callback('bad')\n    return ''", "invalid-argument-type"),
             ("def wrong_result(value: Info[str]) -> int:\n    if hasattr(value, 'value'):\n        return value.value\n    return 0", "invalid-return-type"),
             ("def wrong_inferred_result() -> int | None:\n    return getattr(inferred, 'value', None)", "invalid-return-type"),
+            ("inferred.value", "possibly-missing-attribute"),
+            ("inferred_present.values.append(42)", "invalid-argument-type"),
+            ("inferred_present.callback('bad')", "invalid-argument-type"),
+            ("def wrong_supplied_result() -> int:\n    return inferred_present.value", "invalid-return-type"),
             ("def lost_defaulted_field(value: Info) -> None:\n    return getattr(value, 'value', None)", "invalid-return-type"),
             ("def lost_opaque_field(target: Target) -> None:\n    return getattr(target[Info], 'value', None)", "invalid-return-type"),
         ] {

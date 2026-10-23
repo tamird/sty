@@ -430,6 +430,15 @@ report `possibly-missing-attribute` when that diagnostic is enabled.
 Generic optional fields retain their specialized types, including stored
 callable signatures.
 
+When sty traces a declared constructor to a native provider without an
+initializer, supplying an optional field makes it present on that
+constructed instance. The same applies to the raw
+constructor returned by `provider(init=...)`, including imported aliases.
+The field keeps its declared type and readonly status. An unpacked mapping
+proves presence only when argument binding establishes that the key is
+required. Initializer inputs and ordinary factory parameters do not prove
+which fields their results contain.
+
 A closed record describes all fields of an instance;
 `record[{"files": depset[File]}, ...]` describes a partial
 contract. Additional fields must also satisfy the source provider's `fields`
