@@ -101,7 +101,9 @@ enum CallableKind<'a> {
         options: &'a [Param],
     },
     ResolveCommand,
-    DeclareGeneratedFile,
+    DeclareGeneratedFile {
+        positional_only: bool,
+    },
     Rule(&'a starpls_bazel::build::RuleDefinition),
     Provider(Option<&'a str>),
 }
@@ -1341,6 +1343,10 @@ fn declarations(
                             // Bazel returns a path for each directory entry.
                             callable.to_mut().return_type = "list of paths".to_owned();
                         }
+                        let shareable_artifact = dialect == Dialect::Bazel
+                            && class.name == "actions"
+                            && field.name == "declare_shareable_artifact"
+                            && shareable_artifact_signature(&callable, &declared_classes);
                         write_function(
                             &mut body,
                             "        ",
@@ -1353,13 +1359,15 @@ fn declarations(
                                 CallableKind::ResolveCommand
                             } else if dialect == Dialect::Bazel
                                 && class.name == "actions"
-                                && matches!(
+                                && (matches!(
                                     field.name.as_str(),
                                     "declare_file" | "declare_directory" | "declare_symlink"
-                                )
+                                ) || shareable_artifact)
                                 && classes.contains_key("File")
                             {
-                                CallableKind::DeclareGeneratedFile
+                                CallableKind::DeclareGeneratedFile {
+                                    positional_only: shareable_artifact,
+                                }
                             } else {
                                 CallableKind::Method(&class.name)
                             },
@@ -2265,6 +2273,27 @@ fn args_collection_options<'a>(
     .then_some(options)
 }
 
+fn shareable_artifact_signature(callable: &Callable, classes: &BTreeSet<String>) -> bool {
+    let [path, root] = callable.param.as_slice() else {
+        return false;
+    };
+    classes.contains("File")
+        && classes.contains("root")
+        && env::normalize_doc(&callable.return_type, true) == "File"
+        && path.name == "path"
+        && env::normalize_doc(&path.r#type, true) == "string"
+        && path.is_mandatory
+        && path.default_value.is_empty()
+        && !path.is_star_arg
+        && !path.is_star_star_arg
+        && root.name == "artifact_root"
+        && env::normalize_doc(&root.r#type, true) == "root"
+        && !root.is_mandatory
+        && root.default_value == "unbound"
+        && !root.is_star_arg
+        && !root.is_star_star_arg
+}
+
 fn write_function(
     output: &mut String,
     indent: &str,
@@ -2664,6 +2693,16 @@ fn write_function(
             write!(output, " = {default}")?;
         }
     }
+    if matches!(
+        kind,
+        CallableKind::DeclareGeneratedFile {
+            positional_only: true
+        }
+    ) {
+        // The private shareable-artifact method has two positional-only inputs.
+        // Only its recognized metadata shape reaches this callable kind.
+        output.push_str(", /");
+    }
     // Bazel still accepts this undocumented spelling, which its inventory omits.
     if legacy_prefix
         && !callable
@@ -2677,7 +2716,7 @@ fn write_function(
         output.push_str(", stripPrefix: _starpls_builtins.str = ''");
     }
     let return_type = match (kind, value.name.as_str()) {
-        (CallableKind::DeclareGeneratedFile, _) => Some("_starpls_types._GeneratedFile"),
+        (CallableKind::DeclareGeneratedFile { positional_only: _ }, _) => Some("_starpls_types._GeneratedFile"),
         (CallableKind::ResolveCommand, _) => {
             // Bazel 7 returned immutable runfiles suppliers in the third
             // component; later releases return an empty immutable list.
@@ -8234,6 +8273,7 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
             "../../../starpls/src/builtin/builtin.pb"
         ))
         .unwrap();
+        starpls_bazel::env::apply_versioned_signatures(&mut builtins, "release 9.3.0rc2");
         for (name, r#type) in [("host_file", "File"), ("host_actions", "actions")] {
             builtins.global.push(Value {
                 name: name.into(),
@@ -8246,7 +8286,7 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
             .db
             .set_builtin_defs(Dialect::Standard, builtins, Default::default())
             .unwrap();
-        let source = "host_file.is_source = False\nhost_file.basename = 'renamed'\noriginal = host_file\noutput = host_actions.declare_file('output')\n";
+        let source = "host_file.is_source = False\nhost_file.basename = 'renamed'\noriginal = host_file\noutput = host_actions.declare_file('output')\nshareable = host_actions.declare_shareable_artifact('output')\n";
         let file = analysis
             .open_document(
                 Path::new("/other.star"),
@@ -8270,15 +8310,208 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
             .filter(|statement| statement.targets[0].is_name_expr())
             .map(|statement| statement.value.inferred_type(&model).unwrap())
             .collect();
-        let [original, output] = values.as_slice() else {
+        let [original, output, shareable] = values.as_slice() else {
             panic!("{values:?}");
         };
-        assert!(original.is_equivalent_to(db, &environment, *output));
-        assert!(super::super::strictness::is_fully_static(
-            db,
-            &environment,
-            *output
-        ));
+        for result in [output, shareable] {
+            assert!(original.is_equivalent_to(db, &environment, *result));
+            assert!(super::super::strictness::is_fully_static(
+                db,
+                &environment,
+                *result
+            ));
+        }
+    }
+
+    #[test]
+    fn shareable_artifact_preserves_generated_file_and_argument_contracts() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        starpls_bazel::env::apply_versioned_signatures(&mut builtins, "release 9.3.0rc2");
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())]
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def consume_file(value: File) -> None:
+    pass
+def consume_never(value: Never) -> None:
+    pass
+def create(action: actions, artifact_root: root, internal: CcInternal) -> GeneratedFile:
+    output = action.declare_shareable_artifact('module.pcm')
+    rooted = action.declare_shareable_artifact('rooted.pcm', artifact_root)
+    source: Literal[False] = output.is_source
+    source
+    consume_file(rooted)
+    internal.create_header_info(header_module=output, pic_header_module=rooted)
+    return output
+def invalid(action: actions, artifact_root: root, file: File) -> None:
+    pass
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/shareable.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (invalid, expected) in [
+            ("action.declare_shareable_artifact()", "missing-argument"),
+            (
+                "action.declare_shareable_artifact(42)",
+                "invalid-argument-type",
+            ),
+            (
+                "action.declare_shareable_artifact('path', None)",
+                "invalid-argument-type",
+            ),
+            (
+                "action.declare_shareable_artifact('path', file)",
+                "invalid-argument-type",
+            ),
+            (
+                "action.declare_shareable_artifact('path', artifact_root, artifact_root)",
+                "too-many-positional-arguments",
+            ),
+            (
+                "action.declare_shareable_artifact('path').nonexistent",
+                "unresolved-attribute",
+            ),
+            (
+                "action.declare_shareable_artifact('path').is_source = False",
+                "invalid-assignment",
+            ),
+            (
+                "consume_never(action.declare_shareable_artifact('path'))",
+                "invalid-argument-type",
+            ),
+            ("output: GeneratedFile = file; output", "invalid-assignment"),
+            (
+                "action.declare_shareable_artifact(path='path')",
+                "positional-only-parameter-as-kwarg",
+            ),
+            (
+                "action.declare_shareable_artifact('path', artifact_root=artifact_root)",
+                "positional-only-parameter-as-kwarg",
+            ),
+        ] {
+            analysis.update_file(file, format!("{source}    {invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(
+                diagnostic.id().as_str(),
+                expected,
+                "{invalid}: {diagnostic:?}"
+            );
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+    }
+
+    #[test]
+    fn shareable_artifact_preserves_incompatible_supplied_signatures() {
+        let mut original = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        starpls_bazel::env::apply_versioned_signatures(&mut original, "release 9.3.0rc2");
+        for (keyword_only, return_type, root_default) in [
+            (false, "string", "unbound"),
+            (true, "File", "unbound"),
+            (false, "File", "None"),
+        ] {
+            let mut builtins = original.clone();
+            let action = builtins
+                .r#type
+                .iter_mut()
+                .find(|class| class.name == "actions")
+                .unwrap();
+            let method = action
+                .field
+                .iter_mut()
+                .find(|field| field.name == "declare_shareable_artifact")
+                .unwrap();
+            let callable = method.callable.as_mut().unwrap();
+            callable.return_type = return_type.to_owned();
+            callable.param[1].default_value = root_default.to_owned();
+            if keyword_only {
+                callable.param.insert(
+                    0,
+                    Param {
+                        is_star_arg: true,
+                        ..Default::default()
+                    },
+                );
+            }
+            let supplied = method.clone();
+            starpls_bazel::env::apply_versioned_signatures(&mut builtins, "release 9.3.0rc2");
+            let action = builtins
+                .r#type
+                .iter()
+                .find(|class| class.name == "actions")
+                .unwrap();
+            assert_eq!(
+                action
+                    .field
+                    .iter()
+                    .find(|field| field.name == "declare_shareable_artifact")
+                    .unwrap(),
+                &supplied
+            );
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("non-static-type".into(), "error".into())]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+            );
+            let annotation = if return_type == "string" {
+                "str"
+            } else {
+                "File"
+            };
+            let source = format!("def supplied(action: actions) -> {annotation}:\n    return action.declare_shareable_artifact(path='module.pcm')\n");
+            let file = analysis
+                .open_document(
+                    Path::new("/supplied.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source.clone(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.is_empty(),
+                "keyword_only={keyword_only}, return_type={return_type}, root_default={root_default}: {diagnostics:?}"
+            );
+            analysis.update_file(file, format!("{source}def wrong(action: actions) -> GeneratedFile:\n    return action.declare_shareable_artifact(path='module.pcm')\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("keyword_only={keyword_only}, return_type={return_type}, root_default={root_default}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
     }
 
     #[test]

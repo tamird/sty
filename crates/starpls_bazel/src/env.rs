@@ -234,9 +234,21 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             }
         }
     }
+    // Complete only audited release families. The exact Bazel 10 build uses:
+    // https://github.com/dzbarsky/bazel/blob/e5cf43633e1c8131a2864bf17a7fc5c507b17be3/src/main/java/com/google/devtools/build/lib/analysis/starlark/StarlarkActionFactory.java#L1320-L1328
+    let shareable_artifact_available = (matches!(major, 7..=9)
+        || release == "release 10.0.0-pre.20261021.1")
+        && ["File", "root"]
+            .iter()
+            .all(|name| builtins.r#type.iter().any(|class| class.name == *name));
     for class in &mut builtins.r#type {
-        if class.name == "actions" && version >= (9, 0) {
-            complete_action_write_parameters(class, version);
+        if class.name == "actions" {
+            if shareable_artifact_available {
+                add_shareable_artifact(class);
+            }
+            if version >= (9, 0) {
+                complete_action_write_parameters(class, version);
+            }
             continue;
         }
         if matches!(class.name.as_str(), "repository_ctx" | "module_ctx") {
@@ -294,6 +306,40 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             }
         }
     }
+}
+
+fn add_shareable_artifact(class: &mut Type) {
+    if class
+        .field
+        .iter()
+        .any(|field| field.name == "declare_shareable_artifact")
+    {
+        return;
+    }
+    // The API exporter omits this undocumented method. Bazel enforces its
+    // private API allowlist when it is called, not when it is accessed.
+    class.field.push(Value {
+        name: "declare_shareable_artifact".to_owned(),
+        doc: "Private Bazel API restricted to allowlisted callers.".to_owned(),
+        callable: Some(Callable {
+            param: vec![
+                Param {
+                    name: "path".to_owned(),
+                    r#type: "string".to_owned(),
+                    is_mandatory: true,
+                    ..Default::default()
+                },
+                Param {
+                    name: "artifact_root".to_owned(),
+                    r#type: "root".to_owned(),
+                    default_value: "unbound".to_owned(),
+                    ..Default::default()
+                },
+            ],
+            return_type: "File".to_owned(),
+        }),
+        ..Default::default()
+    });
 }
 
 fn complete_action_write_parameters(class: &mut Type, version: (u32, u32)) {
@@ -582,6 +628,68 @@ pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shareable_artifact_follows_audited_releases_and_preserves_metadata() {
+        let original = Builtins {
+            r#type: ["actions", "File", "root"]
+                .into_iter()
+                .map(|name| Type {
+                    name: name.to_owned(),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        };
+        for (release, available) in [
+            ("development version", false),
+            ("release 7", false),
+            ("release 6.5.0", false),
+            ("release 7.0.0", true),
+            ("release 8.0.0", true),
+            ("release 9.3.0rc2", true),
+            ("release 10.0.0-pre.20261021.1", true),
+            ("release 10.0.0-pre.20261021.2", false),
+            ("release 10.0.0", false),
+            ("release 11.0.0", false),
+        ] {
+            let mut builtins = original.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            let fields = &builtins.r#type[0].field;
+            assert_eq!(fields.len(), usize::from(available), "{release}");
+            if available {
+                assert_eq!(fields[0].name, "declare_shareable_artifact");
+                assert!(fields[0].doc.contains("Private Bazel API"));
+            }
+            let once = builtins.clone();
+            apply_versioned_signatures(&mut builtins, release);
+            assert_eq!(builtins, once, "{release}");
+        }
+        for missing in ["actions", "File", "root"] {
+            let mut builtins = original.clone();
+            builtins.r#type.retain(|class| class.name != missing);
+            let before = builtins.clone();
+            apply_versioned_signatures(&mut builtins, "release 9.3.0rc2");
+            assert_eq!(builtins, before, "{missing}");
+        }
+        let mut supplied = original;
+        supplied.r#type[0].field.push(Value {
+            name: "declare_shareable_artifact".to_owned(),
+            callable: Some(Callable {
+                param: vec![Param {
+                    name: "options".to_owned(),
+                    r#type: "string".to_owned(),
+                    is_star_star_arg: true,
+                    ..Default::default()
+                }],
+                return_type: "string".to_owned(),
+            }),
+            ..Default::default()
+        });
+        let before = supplied.clone();
+        apply_versioned_signatures(&mut supplied, "release 9.3.0rc2");
+        assert_eq!(supplied, before);
+    }
 
     #[test]
     fn cpp_fdo_methods_follow_bazel_release() {
