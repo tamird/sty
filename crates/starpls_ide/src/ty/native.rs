@@ -10514,7 +10514,7 @@ def stop():
                 "list[int]",
                 "list[int]",
                 "list[tuple[int, str]]",
-                "list[tuple[int | str | bool, ...]]",
+                "list[tuple[int, str, bool, int]]",
                 "list[tuple[str, ...]]",
                 "None"
             ]
