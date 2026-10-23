@@ -3188,6 +3188,7 @@ impl CheckCommand {
             fetch_repo_sender,
             bazel_cx.bzlmod_enabled,
         )
+        .with_bundled_builtins(bazel_cx.has_bundled_builtins())
         .with_bazel_load_context(load_context, &self.required_bazel_load_context)?;
         loader.finish_mapping(String::new(), Ok(bazel_cx.main_repo_mapping));
         let (analysis, loader) = self.prepare_analysis(loader, &bazel_cx.info, bazel_cx.rules)?;
@@ -3280,6 +3281,7 @@ impl CheckCommand {
             let file_info = context.map(|api_context| FileInfo::Bazel {
                 api_context,
                 is_external: false,
+                bundled_cc_common: false,
             });
             if let Some(document) = analysis.document(&logical) {
                 anyhow::ensure!(
@@ -3747,6 +3749,7 @@ impl Checker {
         let info = api_context.map(|api_context| FileInfo::Bazel {
             api_context,
             is_external: !path.starts_with(&self.bazel_info.workspace),
+            bundled_cc_common: false,
         });
 
         let file = self.analysis.file(&path, dialect, info)?;

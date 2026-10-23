@@ -974,6 +974,7 @@ mod tests {
             Some(starpls_common::FileInfo::Bazel {
                 api_context: starpls_bazel::APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -983,6 +984,7 @@ mod tests {
                 info: Some(starpls_common::FileInfo::Bazel {
                     api_context: starpls_bazel::APIContext::Build,
                     is_external,
+                    bundled_cc_common: false,
                 }),
                 ..file_id
             };

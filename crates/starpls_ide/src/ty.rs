@@ -104,28 +104,37 @@ fn starlark_program_file(
         Dialect::Standard => "standard",
         Dialect::Bazel => "bazel",
     };
-    let context = match info {
-        None => "none",
+    let (context, bundled_cc_common) = match info {
+        None => ("none", false),
         Some(FileInfo::Bazel {
             api_context,
             is_external: _,
-        }) => match api_context {
-            APIContext::Bzl => "bzl",
-            APIContext::Build => "build",
-            APIContext::Module => "module",
-            APIContext::Repo => "repo",
-            APIContext::Workspace => "workspace",
-            APIContext::Prelude => "prelude",
-            APIContext::Cquery => "cquery",
-            APIContext::Vendor => "vendor",
-        },
+            bundled_cc_common,
+        }) => {
+            let context = match api_context {
+                APIContext::Bzl => "bzl",
+                APIContext::Build => "build",
+                APIContext::Module => "module",
+                APIContext::Repo => "repo",
+                APIContext::Workspace => "workspace",
+                APIContext::Prelude => "prelude",
+                APIContext::Cquery => "cquery",
+                APIContext::Vendor => "vendor",
+            };
+            (context, bundled_cc_common)
+        }
     };
     let origin = if file.is_external() == Some(true) {
         "external"
     } else {
         "local"
     };
-    let namespace = Name::new(format!("starpls:{dialect}:{context}:{origin}"));
+    let bundled = if bundled_cc_common {
+        ":bundled-cc-common"
+    } else {
+        ""
+    };
+    let namespace = Name::new(format!("starpls:{dialect}:{context}:{origin}{bundled}"));
     let default = Program::from_settings(db, db.program_settings());
     let program = Program::with_semantic_namespace(
         db,
@@ -224,6 +233,15 @@ impl Database {
             "external" => true,
             _ => return None,
         };
+        let bundled_cc_common = match parts.next() {
+            Some(namespace) => {
+                if namespace != "bundled-cc-common" {
+                    return None;
+                }
+                true
+            }
+            None => false,
+        };
         if parts.next().is_some() {
             return None;
         }
@@ -233,6 +251,7 @@ impl Database {
             info: api_context.map(|api_context| FileInfo::Bazel {
                 api_context,
                 is_external,
+                bundled_cc_common,
             }),
         })
     }
@@ -300,6 +319,9 @@ impl Database {
                     "ProviderKey",
                     native::MODULE_EXTENSION_TYPE,
                     "JavaCommonInternal",
+                    "CcInternal",
+                    "HeaderInfo",
+                    "GeneratedFile",
                     "Intersection",
                     "Top",
                     "KeywordArgs",
@@ -457,12 +479,13 @@ impl Database {
                 _ => {}
             }
         }
-        let context = match source_file.info {
+        let (context, bundled_cc_common) = match source_file.info {
             Some(FileInfo::Bazel {
                 api_context,
                 is_external: _,
-            }) => api_context,
-            None => APIContext::Bzl,
+                bundled_cc_common,
+            }) => (api_context, bundled_cc_common),
+            None => (APIContext::Bzl, false),
         };
         let native_file = self
             .files
@@ -479,7 +502,25 @@ impl Database {
         let name = if matches!(usage, BuiltinUsage::Annotation) {
             Name::new(format!("_starpls_annotation_{name}"))
         } else {
-            Name::new(native::export_name(context, name))
+            let original = Name::new(native::export_name(context, name));
+            if name == "cc_common"
+                && source_file.dialect == Dialect::Bazel
+                && bundled_cc_common
+                && context == APIContext::Bzl
+            {
+                let binding = ProvidedBindingValue::Export {
+                    value: None,
+                    file: declarations,
+                    name: original.clone(),
+                };
+                if let Some(namespace) = binding
+                    .resolve_type(self)
+                    .and_then(|_| native::bundled_cc_common(self, declarations))
+                {
+                    return Some(ProvidedBindingValue::Value(namespace));
+                }
+            }
+            original
         };
         Some(ProvidedBindingValue::Export {
             value,
@@ -1023,6 +1064,7 @@ mod tests {
             info: Some(FileInfo::Bazel {
                 api_context: APIContext::Bzl,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         })
     }
@@ -1721,6 +1763,7 @@ def type(value):
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -1768,6 +1811,7 @@ identity(value=Info(value=1))
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -1924,6 +1968,7 @@ identity(value=Info(value=1))
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -2387,11 +2432,14 @@ text(maybe("ok"))
             ruff_db::parsed::parsed_module(db, default.python_file(db)),
         ));
         for context in [APIContext::Bzl, APIContext::Build, APIContext::Module] {
-            for is_external in [false, true] {
+            for (is_external, bundled_cc_common) in
+                [(false, false), (true, false), (false, true), (true, true)]
+            {
                 let mut contextual_file = file;
                 contextual_file.info = Some(FileInfo::Bazel {
                     api_context: context,
                     is_external,
+                    bundled_cc_common,
                 });
                 let program_file = db.starlark_program_file(contextual_file);
                 assert_ne!(default, program_file);
@@ -2403,6 +2451,7 @@ text(maybe("ok"))
             info: Some(FileInfo::Bazel {
                 api_context: APIContext::Cquery,
                 is_external: false,
+                bundled_cc_common: false,
             }),
             ..file
         };

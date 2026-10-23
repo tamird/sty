@@ -11,7 +11,9 @@ rust_library(
     },
     compile_data = [
         "src/ty/allocations.pyi",
+        "src/ty/cc_internal.pyi",
         "src/ty/collections.pyi",
+        "src/ty/generated_file.pyi",
         "src/ty/legacy_py_cc_link_params.pyi",
         "src/ty/legacy_python.pyi",
         "src/ty/primitives.pyi",

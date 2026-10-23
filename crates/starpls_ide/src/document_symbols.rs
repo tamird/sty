@@ -164,6 +164,7 @@ mod tests {
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);

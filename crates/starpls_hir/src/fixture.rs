@@ -64,6 +64,7 @@ impl Fixture {
             Some(FileInfo::Bazel {
                 api_context: APIContext::Bzl,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         )
     }
@@ -77,6 +78,7 @@ impl Fixture {
             Some(FileInfo::Bazel {
                 api_context: APIContext::Prelude,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         db.set_bazel_prelude_file(file_id);

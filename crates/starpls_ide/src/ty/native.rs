@@ -33,6 +33,11 @@ use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::provided::ProvidedInstanceFields;
 use ty_python_semantic::types::Type as SemanticType;
 use ty_python_semantic::types::TypeDefinition;
+use ty_python_semantic::types::TypedDictFieldBuilder;
+use ty_python_semantic::types::TypedDictOpenness;
+use ty_python_semantic::types::TypedDictSchema;
+use ty_python_semantic::types::TypedDictType;
+use ty_python_semantic::types::UnionType;
 use ty_python_semantic::ProgramEnvironment;
 use ty_python_semantic::ResolvedDefinition;
 
@@ -96,6 +101,7 @@ enum CallableKind<'a> {
         options: &'a [Param],
     },
     ResolveCommand,
+    DeclareGeneratedFile,
     Rule(&'a starpls_bazel::build::RuleDefinition),
     Provider(Option<&'a str>),
 }
@@ -191,6 +197,64 @@ pub(super) fn namespace<'db>(
     }
     .into_type_at_definition(db, definition)?
     .to_instance_approximation(db, &environment)
+}
+
+/// The bundled struct's fields are audited against Bazel 9.3.0rc2's
+/// cc_common_bazel.bzl. The wider Java API also describes source facades.
+const BUNDLED_CC_COMMON_FIELDS: &[&str] = &[
+    "internal_DO_NOT_USE",
+    "do_not_use_tools_cpp_compiler_present",
+    "get_tool_for_action",
+    "get_execution_requirements",
+    "action_is_enabled",
+    "get_memory_inefficient_command_line",
+    "get_environment_variables",
+    "empty_variables",
+    "legacy_cc_flags_make_variable_do_not_use",
+    "incompatible_disable_objc_library_transition",
+    "add_go_exec_groups_to_binary_rules",
+    "check_experimental_cc_shared_library",
+    "get_tool_requirement_for_action",
+    "implementation_deps_allowed_by_allowlist",
+];
+
+#[salsa::tracked(returns(copy))]
+pub(super) fn bundled_cc_common<'db>(
+    db: &'db dyn ty_python_semantic::Db,
+    declarations: ProgramFile<'db>,
+) -> Option<SemanticType<'db>> {
+    let environment = ProgramEnvironment::from_file(declarations);
+    let mut schema = TypedDictSchema::default();
+    let mut values = Vec::new();
+    for name in BUNDLED_CC_COMMON_FIELDS {
+        let ty = ProvidedBindingValue::Export {
+            file: declarations,
+            name: Name::new(format!("_starpls_cc_common_field_{name}")),
+            value: None,
+        }
+        .resolve_type(db)
+        .unwrap_or_else(SemanticType::unknown);
+        values.push(ty);
+        schema.insert(
+            Name::new(*name),
+            TypedDictFieldBuilder::new(ty)
+                .required(true)
+                .read_only(true)
+                .build(),
+        );
+    }
+    let shape = SemanticType::TypedDict(TypedDictType::from_schema_items_with_openness(
+        db,
+        schema,
+        TypedDictOpenness::Closed,
+    ));
+    super::factory::specialized_native_instance(
+        db,
+        &environment,
+        declarations,
+        "struct",
+        vec![UnionType::from_elements(db, &environment, values), shape],
+    )
 }
 
 pub(super) fn generate(
@@ -592,6 +656,10 @@ fn declarations(
         && classes.contains_key("struct");
     let java_common_available = dialect == Dialect::Bazel
         && classes.contains_key("java_common")
+        && classes.contains_key("struct");
+    let cc_common_available = dialect == Dialect::Bazel
+        && classes.contains_key("cc_common")
+        && classes.contains_key("File")
         && classes.contains_key("struct");
     let xcode_config_available = dialect == Dialect::Bazel
         && classes.contains_key("apple_common")
@@ -1283,6 +1351,15 @@ fn declarations(
                                 && field.name == "resolve_command"
                             {
                                 CallableKind::ResolveCommand
+                            } else if dialect == Dialect::Bazel
+                                && class.name == "actions"
+                                && matches!(
+                                    field.name.as_str(),
+                                    "declare_file" | "declare_directory" | "declare_symlink"
+                                )
+                                && classes.contains_key("File")
+                            {
+                                CallableKind::DeclareGeneratedFile
                             } else {
                                 CallableKind::Method(&class.name)
                             },
@@ -1445,6 +1522,12 @@ fn declarations(
         body.push_str(
             "    class _AnalyzedRule(rule, _starpls_typing.Generic[_AnalyzedAttributes]): ...\n",
         );
+    }
+    if dialect == Dialect::Bazel && classes.contains_key("File") {
+        body.push_str(include_str!("generated_file.pyi"));
+    }
+    if cc_common_available {
+        body.push_str(include_str!("cc_internal.pyi"));
     }
     if java_common_available {
         // common/java/java_common.bzl exports this fixed struct. JavaCommonApi
@@ -1785,6 +1868,25 @@ _starpls_annotation_{} = ctx
         output.push_str(
             "_starpls_annotation_JavaCommonInternal = _starpls_types._JavaCommonInternal\n",
         );
+    }
+    if dialect == Dialect::Bazel && classes.contains_key("File") {
+        output.push_str("_starpls_annotation_GeneratedFile = _starpls_types._GeneratedFile\n");
+    }
+    if cc_common_available {
+        output.push_str("_starpls_annotation_CcInternal = _starpls_types._CcInternal\n");
+        output.push_str("_starpls_annotation_HeaderInfo = _starpls_types._HeaderInfo\n");
+        output.push_str("_starpls_cc_common_api: _starpls_types.cc_common\n");
+        output.push_str("_starpls_cc_common_field_internal_DO_NOT_USE: _starpls_typing.Callable[[], _starpls_types._CcInternal]\n");
+        for field in &classes["cc_common"].field {
+            if !BUNDLED_CC_COMMON_FIELDS.contains(&field.name.as_str()) {
+                continue;
+            }
+            writeln!(
+                output,
+                "_starpls_cc_common_field_{} = _starpls_cc_common_api.{}",
+                field.name, field.name,
+            )?;
+        }
     }
     if dialect == Dialect::Bazel {
         for (name, _) in COMMON_RULE_ATTRS {
@@ -2552,6 +2654,7 @@ fn write_function(
         output.push_str(", stripPrefix: _starpls_builtins.str = ''");
     }
     let return_type = match (kind, value.name.as_str()) {
+        (CallableKind::DeclareGeneratedFile, _) => Some("_starpls_types._GeneratedFile"),
         (CallableKind::ResolveCommand, _) => {
             // Bazel 7 returned immutable runfiles suppliers in the third
             // component; later releases return an empty immutable list.
@@ -4798,6 +4901,7 @@ def invalid_platform(ctx: ctx) -> str:
                 Some(FileInfo::Bazel {
                     api_context: APIContext::Bzl,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
                 source.to_owned(),
                 1,
@@ -4865,6 +4969,7 @@ def use_example():
                 Some(FileInfo::Bazel {
                     api_context: APIContext::Bzl,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
                 source.to_owned(),
                 1,
@@ -4938,6 +5043,7 @@ invalid_sequence = aspect(implementation = aspect_implementation, toolchains = "
                 Some(FileInfo::Bazel {
                     api_context: APIContext::Bzl,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
                 source.to_owned(),
                 1,
@@ -5004,6 +5110,7 @@ def use_keys(target: Target, files: depset[File]) -> str:
                 Some(FileInfo::Bazel {
                     api_context: APIContext::Bzl,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
                 source.to_owned(),
                 1,
@@ -5171,6 +5278,7 @@ def inspect_intersection(composite: Intersection[ProviderKey, Callable[..., Prov
                 Some(FileInfo::Bazel {
                     api_context: APIContext::Bzl,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
                 source.to_owned(),
                 1,
@@ -5427,6 +5535,7 @@ selected(name="shell", srcs=["//:input"], use_bash_launcher=True)
                 let info = Some(FileInfo::Bazel {
                     api_context: context,
                     is_external: false,
+                    bundled_cc_common: false,
                 });
                 let file = analysis
                     .open_document(Path::new(path), Dialect::Bazel, info, source.to_owned(), 1)
@@ -6116,7 +6225,7 @@ example(name='sets', visibility=depset([Label('//visibility:public')]), transiti
             };
             let (mut analysis, _) = Analysis::new_for_test();
             analysis.set_builtin_defs(builtins, rules).unwrap();
-            let info = Some(starpls_common::FileInfo::Bazel { api_context: context, is_external: false });
+            let info = Some(starpls_common::FileInfo::Bazel { api_context: context, is_external: false, bundled_cc_common: false });
             let file = analysis.open_document(Path::new(path), Dialect::Bazel, info, source.to_owned(), 1).unwrap();
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{path}: {diagnostics:?}");
@@ -6147,6 +6256,7 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
                 Some(starpls_common::FileInfo::Bazel {
                     api_context: APIContext::Module,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
                 source.to_owned(),
                 1,
@@ -7453,6 +7563,7 @@ unpacked = rule(implementation, **{"initializer": initialize}, attrs={"value": a
                     Some(FileInfo::Bazel {
                         api_context: context,
                         is_external: false,
+                        bundled_cc_common: false,
                     }),
                     source.clone(),
                     1,
@@ -7505,6 +7616,7 @@ unpacked = rule(implementation, **{"initializer": initialize}, attrs={"value": a
                     Some(FileInfo::Bazel {
                         api_context: context,
                         is_external: false,
+                        bundled_cc_common: false,
                     }),
                     source.clone(),
                     1,
@@ -8091,6 +8203,513 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
             assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
             assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
         }
+    }
+
+    #[test]
+    fn bazel_file_facts_respect_host_dialect() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for (name, r#type) in [("host_file", "File"), ("host_actions", "actions")] {
+            builtins.global.push(Value {
+                name: name.into(),
+                r#type: r#type.into(),
+                ..Default::default()
+            });
+        }
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .db
+            .set_builtin_defs(Dialect::Standard, builtins, Default::default())
+            .unwrap();
+        let source = "host_file.is_source = False\nhost_file.basename = 'renamed'\noriginal = host_file\noutput = host_actions.declare_file('output')\n";
+        let file = analysis
+            .open_document(
+                Path::new("/other.star"),
+                Dialect::Standard,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let db = &analysis.db;
+        let program = db.starlark_program_file(file);
+        let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+        let model = SemanticModel::new(db, program);
+        let environment = model.program_environment();
+        let values: Vec<_> = parsed
+            .suite()
+            .iter()
+            .filter_map(Stmt::as_assign_stmt)
+            .filter(|statement| statement.targets[0].is_name_expr())
+            .map(|statement| statement.value.inferred_type(&model).unwrap())
+            .collect();
+        let [original, output] = values.as_slice() else {
+            panic!("{values:?}");
+        };
+        assert!(original.is_equivalent_to(db, &environment, *output));
+        assert!(super::super::strictness::is_fully_static(
+            db,
+            &environment,
+            *output
+        ));
+    }
+
+    #[test]
+    fn bundled_cc_common_header_info_contracts() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = r#"internal_value = cc_common.internal_DO_NOT_USE() if hasattr(cc_common, 'internal_DO_NOT_USE') else None
+def consume_header(value: HeaderInfo) -> None:
+    pass
+def consume_file(value: File) -> None:
+    pass
+def consume_namespace(value: cc_common) -> None:
+    pass
+def consume_struct(value: struct[object]) -> None:
+    pass
+def consume_never(value: Never) -> None:
+    pass
+def obtain() -> CcInternal:
+    return internal_value
+def existing_api(configuration: FeatureConfiguration) -> str:
+    return cc_common.get_tool_for_action(feature_configuration=configuration, action_name='compile')
+def annotated_api(value: cc_common, configuration: FeatureConfiguration) -> bool:
+    return value.is_enabled(feature_configuration=configuration, feature_name='feature')
+def borrowed(internal: CcInternal) -> HeaderInfo:
+    return internal.create_header_info()
+def nullable_header(header: HeaderInfo) -> GeneratedFile | None:
+    return header.header_module
+def headers(header: HeaderInfo) -> list[File]:
+    return header.modular_public_headers + header.modular_private_headers + header.textual_headers + header.separate_module_headers
+def inspect(internal: CcInternal, action: actions, file: File) -> None:
+    consume_struct(cc_common)
+    output = action.declare_file('header.pcm')
+    directory = action.declare_directory('directory')
+    symlink = action.declare_symlink('symlink')
+    source: Literal[False] = output.is_source
+    source
+    consume_file(output)
+    header = internal.create_header_info(
+        header_module=output,
+        pic_header_module=directory,
+        separate_module=symlink,
+        separate_pic_module=None,
+        modular_public_headers=[file],
+        modular_private_headers=(file,),
+        textual_headers=[],
+        separate_module_headers=[output],
+    )
+    consume_header(internal.create_header_info())
+    consume_header(internal.create_header_info_with_deps(header_info=header, deps=(header,), merged_deps=[header]))
+"#;
+        let info = Some(starpls_common::FileInfo::Bazel {
+            api_context: APIContext::Bzl,
+            is_external: true,
+            bundled_cc_common: true,
+        });
+        let file = analysis
+            .open_document(
+                Path::new("/headers.bzl"),
+                Dialect::Bazel,
+                info,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (invalid, expected) in [
+            ("consume_never(cc_common)", "invalid-argument-type"),
+            ("consume_never(output)", "invalid-argument-type"),
+            ("consume_namespace(cc_common)", "invalid-argument-type"),
+            ("cc_common.is_enabled", "unresolved-attribute"),
+            ("cc_common.CcToolchainInfo", "unresolved-attribute"),
+            ("internal.create_header_info(header_module=file)", "invalid-argument-type"),
+            ("internal.create_header_info(pic_header_module=42)", "invalid-argument-type"),
+            ("internal.create_header_info(modular_public_headers=[42])", "invalid-argument-type"),
+            ("internal.create_header_info(textual_headers=['wrong'])", "invalid-argument-type"),
+            ("internal.create_header_info_with_deps()", "missing-argument"),
+            ("internal.create_header_info_with_deps(header_info=None)", "invalid-argument-type"),
+            ("internal.create_header_info_with_deps(header_info=header, deps=[file])", "invalid-argument-type"),
+            ("internal.create_header_info_with_deps(header_info=header, merged_deps=[42])", "invalid-argument-type"),
+            ("consume_struct(header)", "invalid-argument-type"),
+            ("consume_struct(internal)", "invalid-argument-type"),
+            ("consume_header(struct(header_module=output, pic_header_module=directory, separate_module=symlink, separate_pic_module=None, modular_public_headers=[file], modular_private_headers=[file], textual_headers=[file], separate_module_headers=[output]))", "invalid-argument-type"),
+            ("header.header_module = output", "invalid-assignment"),
+            ("output.is_source = False", "invalid-assignment"),
+            ("file.is_source = False", "invalid-assignment"),
+            ("_wrong: list[str] = header.modular_public_headers; _wrong", "invalid-assignment"),
+            ("_wrong: GeneratedFile = header.header_module; _wrong", "invalid-assignment"),
+        ] {
+            analysis.update_file(file, format!("{source}    {invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{invalid}: {diagnostic:?}");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
+        for name in ["CcInternal", "HeaderInfo", "GeneratedFile"] {
+            analysis.update_file(file, format!("{source}{name}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{name}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "unresolved-reference");
+        }
+    }
+
+    #[test]
+    fn bundled_cc_common_keeps_schema_relations_and_member_values() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = r#"def opaque_value() -> struct[object]:
+    return struct()
+namespace = cc_common
+method = cc_common.get_tool_for_action
+lookup = getattr(cc_common, 'get_tool_for_action', None)
+opaque = opaque_value()
+lookalike = struct(get_tool_for_action=cc_common.get_tool_for_action)
+wrapped = struct(namespace=cc_common)
+def forward() -> object:
+    return cc_common
+forwarded = forward()
+"#;
+        let files = [false, true].map(|bundled_cc_common| {
+            analysis
+                .open_document(
+                    Path::new(if bundled_cc_common {
+                        "/bundled.bzl"
+                    } else {
+                        "/uncertain.bzl"
+                    }),
+                    Dialect::Bazel,
+                    Some(FileInfo::Bazel {
+                        api_context: APIContext::Bzl,
+                        is_external: true,
+                        bundled_cc_common,
+                    }),
+                    source.into(),
+                    1,
+                )
+                .unwrap()
+        });
+        let ordinary_source = "def ordinary(value: Unknown):\n    return struct(field=value)\n";
+        let ordinary = analysis
+            .open_document(
+                Path::new("/ordinary.bzl"),
+                Dialect::Bazel,
+                None,
+                ordinary_source.into(),
+                1,
+            )
+            .unwrap();
+        let db = &analysis.db;
+        let types = files.map(|file| {
+            let program = db.starlark_program_file(file);
+            let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+            let model = SemanticModel::new(db, program);
+            parsed
+                .suite()
+                .iter()
+                .filter_map(|statement| match statement {
+                    Stmt::Assign(assignment) => {
+                        Some(assignment.value.inferred_type(&model).unwrap())
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        });
+        let [uncertain, bundled] = &types;
+        let [old_namespace, old_method, _, _, _, _, _] = uncertain.as_slice() else {
+            panic!("unexpected uncertain values: {uncertain:?}");
+        };
+        let [namespace, method, lookup, opaque, lookalike, wrapped, forwarded] = bundled.as_slice()
+        else {
+            panic!("unexpected bundled values: {bundled:?}");
+        };
+        let environment = ProgramEnvironment::from_file(db.starlark_program_file(files[1]));
+        assert!(
+            method.is_equivalent_to(db, &environment, *old_method),
+            "bundled={} old={}",
+            method.display(db, &environment),
+            old_method.display(db, &environment)
+        );
+        let method_definition = method.definition(db, &environment);
+        assert!(method_definition.is_some());
+        assert_eq!(method_definition, old_method.definition(db, &environment));
+        assert_eq!(lookup, method);
+        assert!(!namespace.is_equivalent_to(db, &environment, SemanticType::Never));
+        assert!(namespace.is_assignable_to(db, &environment, *opaque));
+        for unrelated in [opaque, lookalike, old_namespace] {
+            assert!(!unrelated.is_assignable_to(db, &environment, *namespace));
+        }
+        assert!(!namespace.is_assignable_to(db, &environment, *old_namespace));
+        for value in [namespace, wrapped] {
+            assert!(!super::super::strictness::is_fully_static(
+                db,
+                &environment,
+                *value
+            ));
+        }
+        assert!(super::super::strictness::is_fully_static(
+            db,
+            &environment,
+            *forwarded
+        ));
+        let program = db.starlark_program_file(files[1]);
+        let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+        let model = SemanticModel::new(db, program);
+        let function = parsed
+            .suite()
+            .iter()
+            .filter_map(Stmt::as_function_def_stmt)
+            .find(|function| function.name.as_str() == "forward")
+            .unwrap();
+        let value = function.body[0]
+            .as_return_stmt()
+            .unwrap()
+            .value
+            .as_ref()
+            .unwrap();
+        let forwarded_range = value.range();
+        let forward_value = value.inferred_type(&model).unwrap();
+        assert!(!super::super::strictness::is_fully_static(
+            db,
+            &environment,
+            forward_value
+        ));
+        let program = db.starlark_program_file(ordinary);
+        let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
+        let model = SemanticModel::new(db, program);
+        let function = parsed.suite()[0].as_function_def_stmt().unwrap();
+        let returned = function.body[0]
+            .as_return_stmt()
+            .unwrap()
+            .value
+            .as_ref()
+            .unwrap();
+        let returned_type = returned.inferred_type(&model).unwrap();
+        let returned_range = returned.range();
+        assert!(!super::super::strictness::is_fully_static(
+            db,
+            &environment,
+            returned_type
+        ));
+
+        assert!(super::super::strictness::is_fully_static(
+            db,
+            &environment,
+            *old_namespace
+        ));
+        for file in files {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(files[0]).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let diagnostics = analysis.snapshot().diagnostics(files[1]).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
+            "{diagnostics:?}"
+        );
+        for name in ["namespace", "wrapped"] {
+            let start = source.find(&format!("{name} =")).unwrap();
+            let range = ruff_text_size::TextRange::new(
+                (start as u32).into(),
+                ((start + name.len()) as u32).into(),
+            );
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.range() == Some(range)),
+                "{name}: {diagnostics:?}"
+            );
+        }
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.range() == Some(forwarded_range)),
+            "{diagnostics:?}"
+        );
+        let diagnostics = analysis.snapshot().diagnostics(ordinary).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"
+                    && diagnostic.range() == Some(returned_range)),
+            "{diagnostics:?}"
+        );
+        for (invalid, expected) in [
+            ("def bad(value):\n    return struct(field=value)\n", "non-static-type"),
+            ("def bad(callback: Callable[..., object]):\n    return struct(field=callback)\n", "non-static-type"),
+            ("cc_common.get_tool_for_action(feature_configuration=42, action_name='compile')\n", "invalid-argument-type"),
+            ("def bad() -> Literal[True]:\n    return hasattr(cc_common, 'is_enabled')\n", "invalid-return-type"),
+            ("def bad(name: str) -> Literal[True]:\n    return hasattr(cc_common, name)\n", "invalid-return-type"),
+            ("def bad(value: struct[object]) -> Literal[True]:\n    return hasattr(value, 'internal_DO_NOT_USE')\n", "invalid-return-type"),
+        ] {
+            analysis.update_file(files[1], format!("{source}{invalid}"));
+            let diagnostics = analysis.snapshot().diagnostics(files[1]).unwrap();
+            assert!(diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == expected
+                    && usize::from(diagnostic.range().unwrap().start()) >= source.len()
+            }), "{invalid}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
+    fn bundled_cc_common_preserves_unmodeled_host_members() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = r#"def freeze(internal: CcInternal, files: list[File]) -> object:
+    frozen = internal.freeze(files)
+    return frozen
+def variables() -> object:
+    selected = cc_common.empty_variables()
+    return selected
+def unmodeled(internal: CcInternal) -> object:
+    unknown_value = internal.not_a_real_method()
+    return unknown_value
+def present() -> Literal[True]:
+    return hasattr(cc_common, 'empty_variables')
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/partial.bzl"),
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Bzl,
+                    is_external: true,
+                    bundled_cc_common: true,
+                }),
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(file, format!("{source}def missing(internal: CcInternal) -> Literal[True]:\n    return hasattr(internal, 'not_a_real_method')\n"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        analysis.update_file(file, source.into());
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
+            "{diagnostics:?}"
+        );
+        for name in ["frozen", "selected", "unknown_value"] {
+            let start = source.find(&format!("{name} =")).unwrap();
+            let range = ruff_text_size::TextRange::new(
+                (start as u32).into(),
+                ((start + name.len()) as u32).into(),
+            );
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.range() == Some(range)),
+                "{name}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bundled_cc_common_respects_source_bindings() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        fixture.add_file(
+            &mut analysis.db,
+            "facade.bzl",
+            "cc_common = struct(value=1)\n",
+        );
+        let mut caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            r#"load("facade.bzl", "cc_common")
+def loaded() -> int:
+    return cc_common.value
+def shadowed() -> str:
+    cc_common = struct(value="local")
+    return cc_common.value
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        caller.info = Some(FileInfo::Bazel {
+            api_context: APIContext::Bzl,
+            is_external: true,
+            bundled_cc_common: true,
+        });
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            caller,
+            r#"load("facade.bzl", "cc_common")
+cc_common.internal_DO_NOT_USE()
+"#
+            .into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute"),
+            "{diagnostics:?}"
+        );
     }
 
     #[test]
@@ -9404,6 +10023,7 @@ def excluded_kinds():
                     Some(starpls_common::FileInfo::Bazel {
                         api_context: context,
                         is_external: false,
+                        bundled_cc_common: false,
                     }),
                     "register_toolchains(1)".to_owned(),
                     1,
@@ -9802,6 +10422,7 @@ consume(1, values, Label("//pkg:target"))
             Some(starpls_common::FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);

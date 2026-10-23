@@ -1064,6 +1064,7 @@ answer = identity(1)
             Some(starpls_common::FileInfo::Bazel {
                 api_context: starpls_bazel::APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -1291,6 +1292,7 @@ label(Label("//:target"))
                 Some(starpls_common::FileInfo::Bazel {
                     api_context: context,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
             );
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -1338,6 +1340,7 @@ label(Label("//:target"))
                     info: Some(starpls_common::FileInfo::Bazel {
                         api_context,
                         is_external,
+                        bundled_cc_common: false,
                     }),
                 };
                 let admitted = dialect == starpls_common::Dialect::Bazel
@@ -2706,6 +2709,7 @@ def _unused_function() -> rule:
             Some(starpls_common::FileInfo::Bazel {
                 api_context: starpls_bazel::APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -2856,6 +2860,7 @@ def _unused_function() -> rule:
             Some(starpls_common::FileInfo::Bazel {
                 api_context: starpls_bazel::APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         let diagnostics = analysis.snapshot().diagnostics(build).unwrap();

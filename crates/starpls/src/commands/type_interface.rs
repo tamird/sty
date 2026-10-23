@@ -270,6 +270,7 @@ pub(crate) fn open_interface_file(
         context.map(|api_context| FileInfo::Bazel {
             api_context,
             is_external: !path.starts_with(workspace),
+            bundled_cc_common: false,
         }),
     )
 }
@@ -883,6 +884,7 @@ mod tests {
         let info = Some(FileInfo::Bazel {
             api_context: APIContext::Bzl,
             is_external: false,
+            bundled_cc_common: false,
         });
         let caller = analysis.open_document(&workspace.join("caller.bzl"), Dialect::Bazel, info,
             "load('@@one+//:defs.bzl', one = 'identity')\nload('@@two+//:defs.bzl', two = 'identity')\none('bad')\ntwo('ok')\n".into(), 1).unwrap();

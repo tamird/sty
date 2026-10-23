@@ -543,6 +543,7 @@ info.fo$0o
                 Some(Bazel {
                     api_context: APIContext::Build,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
             );
             loader.add_files_from_fixture(&fixture);
@@ -837,6 +838,7 @@ F$0OO
             Some(Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -865,6 +867,7 @@ f$0oo()
             Some(Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -900,6 +903,7 @@ j$0ava_library()
             Some(Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);

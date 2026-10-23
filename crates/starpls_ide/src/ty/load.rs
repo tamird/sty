@@ -752,6 +752,7 @@ def result() -> int:
             Some(starpls_common::FileInfo::Bazel {
                 api_context: starpls_bazel::APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -777,6 +778,7 @@ def result() -> int:
             ordinary.info = Some(starpls_common::FileInfo::Bazel {
                 api_context: starpls_bazel::APIContext::Bzl,
                 is_external: false,
+                bundled_cc_common: false,
             });
             let snapshot = analysis.snapshot();
             let diagnostics = ty_python_semantic::check_file_unwrap(

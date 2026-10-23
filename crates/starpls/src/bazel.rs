@@ -18,6 +18,30 @@ pub(crate) struct BazelContext {
 }
 
 impl BazelContext {
+    pub(crate) fn has_bundled_builtins(&self) -> bool {
+        // The bundled namespace's closed field inventory is audited at this
+        // exact release; other versions retain the existing uncertain view.
+        // A custom builtins tree or injection override can replace its value.
+        self.info.release == "release 9.3.0rc2"
+            && self
+                .info
+                .starlark_semantics
+                .starts_with("StarlarkSemantics{")
+            && self.info.starlark_semantics.ends_with('}')
+            && !self
+                .info
+                .starlark_semantics
+                .contains("experimental_builtins_bzl_path=")
+            && !self
+                .info
+                .starlark_semantics
+                .contains("experimental_builtins_injection_override=")
+            && !self
+                .info
+                .starlark_semantics
+                .contains("incompatible_autoload_externally=")
+    }
+
     pub(crate) fn new(client: &dyn BazelClient) -> anyhow::Result<BazelContext> {
         let info = client
             .info()
@@ -84,6 +108,70 @@ mod tests {
 
     use super::BazelContext;
     use crate::document::source_tests::TestBazelClient;
+
+    #[test]
+    fn bundled_cc_common_requires_the_audited_builtins_snapshot() {
+        for (release, semantics, expected) in [
+            ("release 9.0.0", "StarlarkSemantics{}", false),
+            ("release 9.3.0rc2", "StarlarkSemantics{}", true),
+            ("release 8.8.2", "StarlarkSemantics{}", false),
+            ("release 10.0.0rc1", "StarlarkSemantics{}", false),
+            ("development version", "StarlarkSemantics{}", false),
+            ("release 9.0.0-pre.20250101", "StarlarkSemantics{}", false),
+            ("release 9.3.0rc2", "", false),
+            (
+                "release 9.3.0rc2",
+                "StarlarkSemantics{experimental_builtins_bzl_path=}",
+                false,
+            ),
+            (
+                "release 9.3.0rc2",
+                "StarlarkSemantics{experimental_builtins_bzl_path=/custom}",
+                false,
+            ),
+            (
+                "release 9.3.0rc2",
+                "StarlarkSemantics{experimental_builtins_injection_override=[-cc_common]}",
+                false,
+            ),
+            // The inventory does not establish binding availability under
+            // overrides. Keep these settings uncertain without interpreting them.
+            (
+                "release 9.3.0rc2",
+                "StarlarkSemantics{incompatible_autoload_externally=[+cc_common]}",
+                false,
+            ),
+            (
+                "release 9.3.0rc2",
+                "StarlarkSemantics{incompatible_autoload_externally=[cc_common]}",
+                false,
+            ),
+            (
+                "release 9.3.0rc2",
+                "StarlarkSemantics{incompatible_autoload_externally=[-cc_common]}",
+                false,
+            ),
+            (
+                "release 9.3.0rc2",
+                "StarlarkSemantics{incompatible_autoload_externally=[@rules_cc]}",
+                false,
+            ),
+        ] {
+            let context = BazelContext {
+                info: starpls_bazel::client::BazelInfo {
+                    release: release.to_owned(),
+                    starlark_semantics: semantics.to_owned(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            assert_eq!(
+                context.has_bundled_builtins(),
+                expected,
+                "{release}: {semantics}"
+            );
+        }
+    }
 
     #[test]
     fn bzlmod_configuration_controls_repository_mapping() {

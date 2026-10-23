@@ -418,6 +418,7 @@ download = module_extension(implementation, tag_classes={"download": tag_class(a
             Some(FileInfo::Bazel {
                 api_context: APIContext::Module,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);

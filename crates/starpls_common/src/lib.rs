@@ -125,6 +125,8 @@ pub enum FileInfo {
     Bazel {
         api_context: APIContext,
         is_external: bool,
+        /// The existing cc_common value comes from Bazel's bundled namespace.
+        bundled_cc_common: bool,
     },
 }
 
@@ -195,6 +197,7 @@ impl File {
             |FileInfo::Bazel {
                  api_context,
                  is_external: _,
+                 bundled_cc_common: _,
              }| api_context,
         )
     }
@@ -260,6 +263,7 @@ impl File {
             |FileInfo::Bazel {
                  api_context: _,
                  is_external,
+                 bundled_cc_common: _,
              }| is_external,
         )
     }

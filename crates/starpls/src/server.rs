@@ -190,6 +190,7 @@ impl Server {
             Some(FileInfo::Bazel {
                 api_context: APIContext::Prelude,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         ) {
             info!("found prelude file at {:?}", prelude);
@@ -279,6 +280,7 @@ impl Server {
         let info = api_context.map(|api_context| FileInfo::Bazel {
             api_context,
             is_external: !path.starts_with(&self.workspace),
+            bundled_cc_common: false,
         });
         let file = self
             .analysis
@@ -648,6 +650,7 @@ impl Server {
                     (template.fresh(), None)
                 } else {
                     let context = BazelContext::new(&*client)?;
+                    let bundled_builtins = context.has_bundled_builtins();
                     if context.info.workspace.canonicalize()? != workspace.canonicalize()? {
                         anyhow::bail!(
                             "Bazel reported workspace {}, expected {}",
@@ -655,11 +658,13 @@ impl Server {
                             workspace.display()
                         );
                     }
-                    let loader = template.with_context(
-                        context.info.workspace_name,
-                        context.info.output_base.join("external"),
-                        context.bzlmod_enabled,
-                    );
+                    let loader = template
+                        .with_context(
+                            context.info.workspace_name,
+                            context.info.output_base.join("external"),
+                            context.bzlmod_enabled,
+                        )
+                        .with_bundled_builtins(bundled_builtins);
                     loader.finish_mapping(String::new(), Ok(context.main_repo_mapping));
                     let builtins = load_bazel_builtins(Some(&context.info.release));
                     (
@@ -950,6 +955,7 @@ impl ServerSnapshot {
                     context.map(|api_context| FileInfo::Bazel {
                         api_context,
                         is_external: false,
+                        bundled_cc_common: false,
                     }),
                 )??,
             };

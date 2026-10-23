@@ -123,6 +123,7 @@ mod tests {
                 Some(FileInfo::Bazel {
                     api_context: APIContext::Bzl,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
             )
             .unwrap();

@@ -261,6 +261,7 @@ fn prelude_selection_is_a_query_input() {
         Some(FileInfo::Bazel {
             api_context: APIContext::Build,
             is_external: false,
+            bundled_cc_common: false,
         }),
     );
     let first = fixture.add_prelude_file(&mut analysis.db, "value = 1\n");
@@ -392,6 +393,7 @@ fn physical_sources_support_distinct_host_contexts() {
             Some(FileInfo::Bazel {
                 api_context: APIContext::Cquery,
                 is_external: false,
+                bundled_cc_common: false,
             }),
             text.into(),
             1,
@@ -404,6 +406,7 @@ fn physical_sources_support_distinct_host_contexts() {
             Some(FileInfo::Bazel {
                 api_context: APIContext::Bzl,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         )
         .unwrap();

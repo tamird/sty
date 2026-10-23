@@ -314,6 +314,7 @@ pub(crate) struct DefaultFileLoader {
     external_output_base: Option<PathBuf>,
     fetch_repo_sender: Sender<Task>,
     bzlmod_enabled: bool,
+    bundled_builtins: bool,
     repositories: RwLock<HashMap<PathBuf, RepositoryContext>>,
     bazel_load_context: BazelLoadContext,
     configuration_inputs: RwLock<HashMap<PathBuf, Option<Vec<u8>>>>,
@@ -347,6 +348,7 @@ impl DefaultFileLoader {
             external_output_base: external_output_base.into(),
             fetch_repo_sender,
             bzlmod_enabled,
+            bundled_builtins: false,
             repositories: Default::default(),
             bazel_load_context: Default::default(),
             configuration_inputs: Default::default(),
@@ -380,6 +382,11 @@ impl DefaultFileLoader {
             .packages
             .keys()
             .map(PathBuf::as_path)
+    }
+
+    pub(crate) fn with_bundled_builtins(mut self, bundled: bool) -> Self {
+        self.bundled_builtins = bundled;
+        self
     }
 
     pub(crate) fn with_context(
@@ -566,6 +573,7 @@ impl DefaultFileLoader {
             self.fetch_repo_sender.clone(),
             self.bzlmod_enabled,
         )
+        .with_bundled_builtins(self.bundled_builtins)
     }
 
     pub(crate) fn pause(&self, paused: bool) {
@@ -1172,14 +1180,29 @@ impl FileLoader for DefaultFileLoader {
             return Ok(info);
         }
         let repository = self.repository_for_path(path)?;
+        let bundled_cc_common = self.bundled_builtins
+            && repository.as_ref().is_some_and(|repository| {
+                // AutoloadSymbols disables Bzl replacements for this canonical
+                // family. The settings gate excludes binding-removal overrides.
+                // This says nothing about private-call access.
+                let name = repository.name.as_str();
+                let family = name
+                    .split_once('~')
+                    .or_else(|| name.split_once('+'))
+                    .map_or(name, |(family, _)| family);
+                family == "rules_cc"
+            });
         Ok(info.map(
             |FileInfo::Bazel {
                  api_context,
                  is_external,
+                 bundled_cc_common: _,
              }| FileInfo::Bazel {
                 api_context,
                 is_external: repository
                     .map_or(is_external, |repository| !repository.name.is_empty()),
+                bundled_cc_common: bundled_cc_common
+                    && api_context == starpls_bazel::APIContext::Bzl,
             },
         ))
     }
@@ -1232,6 +1255,7 @@ impl FileLoader for DefaultFileLoader {
                 Some(FileInfo::Bazel {
                     api_context: APIContext::Build,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
                 Some(resolved_label.repository),
             )?;
@@ -1290,6 +1314,7 @@ impl FileLoader for DefaultFileLoader {
                     Some(FileInfo::Bazel {
                         api_context: APIContext::Bzl,
                         is_external,
+                        bundled_cc_common: false,
                     }),
                     Some(repository),
                 )
@@ -1652,6 +1677,106 @@ pub(crate) mod source_tests {
     use starpls_ide::FilePosition;
 
     use super::DefaultFileLoader;
+
+    #[test]
+    fn bundled_cc_common_follows_installed_repository_provenance() {
+        use starpls_ide::FileLoader;
+
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("bundled-cc-common-provenance");
+        let workspace = root.join("workspace");
+        let external = root.join("external");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&external).unwrap();
+        let (sender, _) = crossbeam_channel::unbounded();
+        let loader = DefaultFileLoader::new(
+            Arc::new(TestBazelClient::default()),
+            workspace.clone(),
+            Some("rules_cc".to_owned()),
+            external.clone(),
+            sender,
+            true,
+        )
+        .with_bundled_builtins(true);
+        // Old metadata must not retain a grant when ownership is unproved.
+        let info = Some(starpls_common::FileInfo::Bazel {
+            api_context: starpls_bazel::APIContext::Bzl,
+            is_external: false,
+            bundled_cc_common: true,
+        });
+        for (path, expected_external, expected_bundled) in [
+            (
+                external.join("rules_cc+/cc/private/cc_info.bzl"),
+                true,
+                true,
+            ),
+            (external.join("rules_cc+0.2.25/cc/defs.bzl"), true, true),
+            (external.join("rules_cc~0.2.25/cc/defs.bzl"), true, true),
+            (external.join("rules_cc_extra+/cc/defs.bzl"), true, false),
+            (external.join("other+/rules_cc/defs.bzl"), true, false),
+            (
+                external.join("rules_cc+extension~owner/defs.bzl"),
+                true,
+                false,
+            ),
+            // workspace_name is not the actual root MODULE name.
+            (workspace.join("cc/private/cc_info.bzl"), false, false),
+            (root.join("unknown/defs.bzl"), false, false),
+        ] {
+            let admitted = loader.file_info(&path, Dialect::Bazel, info).unwrap();
+            assert_eq!(
+                admitted,
+                Some(starpls_common::FileInfo::Bazel {
+                    api_context: starpls_bazel::APIContext::Bzl,
+                    is_external: expected_external,
+                    bundled_cc_common: expected_bundled,
+                }),
+                "{path:?}"
+            );
+            let refreshed = loader
+                .fresh()
+                .file_info(&path, Dialect::Bazel, info)
+                .unwrap();
+            assert_eq!(refreshed, admitted, "{path:?}");
+        }
+        let build_info = Some(starpls_common::FileInfo::Bazel {
+            api_context: starpls_bazel::APIContext::Build,
+            is_external: true,
+            bundled_cc_common: true,
+        });
+        let admitted = loader
+            .file_info(
+                &external.join("rules_cc+/cc/BUILD.bazel"),
+                Dialect::Bazel,
+                build_info,
+            )
+            .unwrap();
+        assert_eq!(
+            admitted,
+            Some(starpls_common::FileInfo::Bazel {
+                api_context: starpls_bazel::APIContext::Build,
+                is_external: true,
+                bundled_cc_common: false,
+            })
+        );
+        let unproved = loader.fresh().with_bundled_builtins(false);
+        let admitted = unproved
+            .file_info(
+                &external.join("rules_cc+/cc/defs.bzl"),
+                Dialect::Bazel,
+                info,
+            )
+            .unwrap();
+        assert_eq!(
+            admitted,
+            Some(starpls_common::FileInfo::Bazel {
+                api_context: starpls_bazel::APIContext::Bzl,
+                is_external: true,
+                bundled_cc_common: false,
+            })
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn bazel_load_context_rejects_unusable_evidence() {
@@ -2452,6 +2577,7 @@ pub(crate) mod source_tests {
         let info = Some(starpls_common::FileInfo::Bazel {
             api_context: starpls_bazel::APIContext::Bzl,
             is_external: true,
+            bundled_cc_common: false,
         });
         let paths = [
             packages[0].join("defs.bzl"),
@@ -2654,6 +2780,7 @@ pub(crate) mod source_tests {
         let info = Some(starpls_common::FileInfo::Bazel {
             api_context: starpls_bazel::APIContext::Bzl,
             is_external: false,
+            bundled_cc_common: false,
         });
         let file = analysis.file(&installed, Dialect::Bazel, info).unwrap();
         assert_eq!(file.is_external(), Some(true));

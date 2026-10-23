@@ -4112,6 +4112,7 @@ def deferred() -> object:
                 context.map(|api_context| FileInfo::Bazel {
                     api_context,
                     is_external: false,
+                    bundled_cc_common: false,
                 }),
             );
             assert_eq!(

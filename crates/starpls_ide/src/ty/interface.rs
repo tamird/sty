@@ -2119,6 +2119,7 @@ def choose(*, text: bool) -> str | int: ...
             Some(FileInfo::Bazel {
                 api_context: APIContext::Module,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -2637,6 +2638,7 @@ number: int = identity(42)
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         analysis
@@ -2889,6 +2891,7 @@ number: int = identity(42)
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         let stub = fixture.add_file(&mut analysis.db, "BUILD.bzli", "_VALUE: int\n");
@@ -2958,6 +2961,7 @@ number: int = identity(42)
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         let stub = fixture.add_file(&mut analysis.db, "BUILD.bzli", "_VALUE: int\n");
@@ -3302,6 +3306,7 @@ def make() -> _Builder: ...
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -3819,6 +3824,7 @@ value = unmapped.value
             Some(FileInfo::Bazel {
                 api_context: APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);

@@ -2507,7 +2507,7 @@ pub(super) fn native_type_argument<'db>(
 }
 
 pub(super) fn specialized_native_instance<'db>(
-    db: &'db Database,
+    db: &'db dyn ty_python_semantic::Db,
     environment: &ProgramEnvironment<'db>,
     declarations: ProgramFile<'db>,
     name: &str,
@@ -2518,7 +2518,7 @@ pub(super) fn specialized_native_instance<'db>(
 }
 
 pub(super) fn specialized_native_class<'db>(
-    db: &'db Database,
+    db: &'db dyn ty_python_semantic::Db,
     declarations: ProgramFile<'db>,
     name: &str,
     arguments: Vec<Type<'db>>,
@@ -3041,7 +3041,7 @@ fn declared_class<'db>(
 }
 
 pub(super) fn native_class<'db>(
-    db: &'db Database,
+    db: &'db dyn ty_python_semantic::Db,
     file: ProgramFile<'db>,
     name: &str,
 ) -> Option<Type<'db>> {
@@ -3514,6 +3514,7 @@ wrapped(name="macro_valid", child="ok", stamp=1)
             Some(starpls_common::FileInfo::Bazel {
                 api_context: starpls_bazel::APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
@@ -3810,6 +3811,7 @@ typed_rule = rule(implementation, build_setting=setting, attrs={"extra": attr.in
             Some(starpls_common::FileInfo::Bazel {
                 api_context: starpls_bazel::APIContext::Build,
                 is_external: false,
+                bundled_cc_common: false,
             }),
         );
         loader.add_files_from_fixture(&fixture);
