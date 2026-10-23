@@ -3924,14 +3924,14 @@ impl Checker {
             return false;
         }
         let started = Instant::now();
-        for batch in document::repository_mapping_query_batches(&repositories) {
+        if !repositories.is_empty() {
             if self.progress {
                 eprintln!(
                     "Resolving repository mappings: {} repositories",
-                    batch.len()
+                    repositories.len()
                 );
             }
-            self.loader.resolve_repository_mappings(batch);
+            self.loader.resolve_repository_mappings(&repositories);
         }
         if !fetches.is_empty() {
             let results = self.loader.fetch_repositories(&fetches, |message| {

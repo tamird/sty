@@ -25,6 +25,7 @@ use serde_json::Deserializer;
 const DEFAULT_WORKSPACE_NAMES: &[&str] = &["__main__", "_main"];
 // Amortize the extra Bazel command over a substantial reduction in legacy mapping output.
 const MIN_REPOSITORIES_FOR_PROVENANCE: usize = 64;
+const MAX_REPOSITORIES_PER_MAPPING_QUERY: usize = 1024;
 
 fn repository_argument_bytes(repo: &str) -> usize {
     "--repo=@@".len() + repo.len() + 1
@@ -434,7 +435,9 @@ impl BazelCLI {
         state: &mut MappingState,
     ) -> anyhow::Result<Vec<RepoMapping>> {
         let mut mappings = Vec::with_capacity(repos.len());
-        let mut batch_len = repos.len();
+        // Bound native requests after provenance grouping: splitting logical
+        // repositories first would query the same extension once per batch.
+        let mut batch_len = repos.len().min(MAX_REPOSITORIES_PER_MAPPING_QUERY);
         while mappings.len() < repos.len() {
             let batch = &repos[mappings.len()..(mappings.len() + batch_len).min(repos.len())];
             let mut command = Command::new(&self.executable);
@@ -1400,7 +1403,7 @@ exit "$status"
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[test]
-    fn mapping_query_splits_at_the_operating_system_argument_limit() {
+    fn mapping_query_batches_preserve_order_and_propagate_failures() {
         use std::os::unix::fs::PermissionsExt;
 
         use super::BazelClient;
@@ -1411,26 +1414,79 @@ exit "$status"
             &executable,
             r#"#!/bin/sh
 set -eu
-printf . >> "${0%/*}/calls"
 shift 4
+printf '%s\n' "$#" >> "${0%/*}/calls"
+read failure < "${0%/*}/failure"
 for repo do
-  printf '{"ordinal":"%s"}\n' "${repo##*x}"
+  ordinal="${repo##*x}"
+  if test "$ordinal" = "$failure"; then
+    printf 'fixture mapping failure\n' >&2
+    exit 3
+  fi
+  printf '{"ordinal":"%s"}\n' "$ordinal"
 done
 "#,
         )
         .unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let prefix = "x".repeat(2048);
-        let names: Vec<_> = (0..4096).map(|index| format!("{prefix}{index}")).collect();
-        let repositories: Vec<_> = names.iter().map(String::as_str).collect();
-        let mappings = super::BazelCLI::new(executable)
-            .dump_repo_mappings(&repositories)
+        let client = super::BazelCLI::new(executable);
+        assert!(client.dump_repo_mappings(&[]).is_err());
+        assert!(!root.path().join("calls").exists());
+        let limit = super::MAX_REPOSITORIES_PER_MAPPING_QUERY;
+        // Keep an individual argument small enough to spawn, but force the
+        // operating system to split even a capped request.
+        let long = "x".repeat(8192);
+        for (prefix, count, failure) in [
+            ("", 2 * limit + 1, None),
+            ("", 2 * limit + 1, Some(limit)),
+            ("", 2 * limit + 1, None),
+            (long.as_str(), limit, None),
+        ] {
+            std::fs::write(root.path().join("calls"), "").unwrap();
+            std::fs::write(
+                root.path().join("failure"),
+                format!(
+                    "{}\n",
+                    failure.map(|index| index.to_string()).unwrap_or_default()
+                ),
+            )
             .unwrap();
-        assert_eq!(mappings.len(), repositories.len());
-        for (index, mapping) in mappings.iter().enumerate() {
-            assert_eq!(mapping["ordinal"], index.to_string());
+            let names: Vec<_> = (0..count).map(|index| format!("{prefix}{index}")).collect();
+            let repositories: Vec<_> = names.iter().map(String::as_str).collect();
+            let result = client.dump_repo_mappings(&repositories);
+            if failure.is_some() {
+                let error = result.unwrap_err();
+                assert!(
+                    error.to_string().contains("fixture mapping failure"),
+                    "{error:#}"
+                );
+            } else {
+                let mappings = result.unwrap();
+                assert_eq!(mappings.len(), repositories.len());
+                for (index, mapping) in mappings.iter().enumerate() {
+                    assert_eq!(mapping["ordinal"], index.to_string());
+                }
+            }
+            let calls: Vec<usize> = std::fs::read_to_string(root.path().join("calls"))
+                .unwrap()
+                .lines()
+                .map(|count| count.parse().unwrap())
+                .collect();
+            if prefix.is_empty() {
+                assert_eq!(
+                    calls,
+                    if failure.is_some() {
+                        vec![limit, limit]
+                    } else {
+                        vec![limit, limit, 1]
+                    }
+                );
+            } else {
+                assert!(calls.len() > 1);
+                assert_eq!(calls.iter().sum::<usize>(), count);
+                assert!(calls.iter().all(|count| *count <= limit));
+            }
         }
-        assert!(std::fs::read(root.path().join("calls")).unwrap().len() > 1);
     }
 
     #[test]
@@ -1792,7 +1848,7 @@ esac
             );
         }
 
-        let generated: Vec<_> = (0..super::MIN_REPOSITORIES_FOR_PROVENANCE)
+        let generated: Vec<_> = (0..=super::MAX_REPOSITORIES_PER_MAPPING_QUERY)
             .map(|index| format!("generated++ext+{index}"))
             .collect();
         let mapping: std::collections::HashMap<_, _> = generated
@@ -1806,11 +1862,6 @@ esac
         )
         .unwrap();
         let requested: Vec<_> = generated.iter().map(String::as_str).collect();
-        let full_query = format!(
-            "mod --enable_bzlmod dump_repo_mapping {}",
-            requested.join(" ")
-        );
-
         std::fs::write(root.path().join("release"), format!("{release}\n")).unwrap();
         let fresh_client = super::BazelCLI::new(&executable);
         fresh_client.info().unwrap();
@@ -1830,6 +1881,11 @@ esac
             "mod --enable_bzlmod dump_repo_mapping generated++ext+0"
         );
 
+        let requested = &requested[..super::MIN_REPOSITORIES_FOR_PROVENANCE];
+        let full_query = format!(
+            "mod --enable_bzlmod dump_repo_mapping {}",
+            requested.join(" ")
+        );
         let failed_client = super::BazelCLI::new(&executable);
         failed_client.info().unwrap();
         failed_client.dump_repo_mapping("").unwrap();
@@ -1837,7 +1893,7 @@ esac
         std::fs::write(root.path().join("calls"), "").unwrap();
         for _ in 0..2 {
             assert_eq!(
-                failed_client.dump_repo_mappings(&requested).unwrap().len(),
+                failed_client.dump_repo_mappings(requested).unwrap().len(),
                 requested.len()
             );
         }

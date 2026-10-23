@@ -97,8 +97,6 @@ pub(crate) struct RepositoryFetchResult {
 }
 
 const LEGACY_MAPPING_BATCH_BYTES: usize = 16 * 1024;
-// A complete legacy batch can exceed this target when repository names are short.
-const CHECK_MAPPING_QUERY_TARGET: usize = 1024;
 
 fn repository_mapping_batch_len(repositories: &[String]) -> usize {
     let mut bytes = 0;
@@ -110,29 +108,6 @@ fn repository_mapping_batch_len(repositories: &[String]) -> usize {
         })
         .count()
         .max(usize::from(!repositories.is_empty()))
-}
-
-/// Combine complete failure groups into checker queries. The target keeps
-/// progress visible on Bazel versions that stream full JSON mappings.
-pub(crate) fn repository_mapping_query_batches(
-    mut repositories: &[String],
-) -> impl Iterator<Item = &[String]> {
-    std::iter::from_fn(move || {
-        if repositories.is_empty() {
-            return None;
-        }
-        let mut count = 0;
-        while count < repositories.len() {
-            let next = repository_mapping_batch_len(&repositories[count..]);
-            if count > 0 && count + next > CHECK_MAPPING_QUERY_TARGET {
-                break;
-            }
-            count += next;
-        }
-        let (batch, rest) = repositories.split_at(count);
-        repositories = rest;
-        Some(batch)
-    })
 }
 
 /// Obtain per-repository results without publishing into a loader's cache.
@@ -481,9 +456,7 @@ impl DefaultFileLoader {
             if pending.is_empty() {
                 break;
             }
-            for repositories in repository_mapping_query_batches(&pending) {
-                self.resolve_repository_mappings(repositories);
-            }
+            self.resolve_repository_mappings(&pending);
         }
     }
 
@@ -2065,7 +2038,7 @@ pub(crate) mod source_tests {
         let loader =
             DefaultFileLoader::new(client.clone(), Default::default(), None, None, sender, true)
                 .with_deferred_mappings();
-        let repositories = (0..1000)
+        let repositories = (0..4096)
             .map(|index| format!("npm+{}+{index:04}", "x".repeat(100)))
             .collect::<Vec<_>>();
         loader.prepare_repository_mappings(&repositories);
@@ -2081,8 +2054,8 @@ pub(crate) mod source_tests {
         let loader =
             DefaultFileLoader::new(client.clone(), Default::default(), None, None, sender, true)
                 .with_deferred_mappings();
-        // These 2,730 five-byte names fill one legacy batch, which cannot be
-        // split at the checker target. Later names make two more batches.
+        // These 2,730 five-byte names fill one legacy failure group. Later
+        // names make two more groups; only the middle group must fail.
         let mut repositories: Vec<_> = (0..2730).map(|index| format!("a{index:04}")).collect();
         repositories.extend(["fail+".to_owned(), "other+".to_owned()]);
         let suffix = "x".repeat(200);
@@ -2096,7 +2069,7 @@ pub(crate) mod source_tests {
                 .iter()
                 .map(Vec::len)
                 .collect::<Vec<_>>(),
-            [2730, 152, 81, 71]
+            [2882, 2730, 81, 71]
         );
         assert!(loader.repository_mapping("a0000").unwrap().is_some());
         assert!(loader.repository_mapping("other+").is_err());
