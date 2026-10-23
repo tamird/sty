@@ -119,6 +119,8 @@ mod tests {
             ),
             ("value + value", "value: select[str]", true),
             ("value + value", "value: select[str, Literal['str']]", false),
+            ("value + 1", "value: select[int]", true),
+            ("value | {'x': 1}", "value: select[Mapping[str, int]]", true),
             ("select(value) + ['suffix']", "value: Unknown", false),
             ("{'prefix': 1} | select(value)", "value: Any", false),
             ("select(value) + ['suffix']", "value: object", true),
@@ -554,6 +556,137 @@ forward(select({"//:condition": ["selected"]}))
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
+    fn selector_sequence_payloads_prove_concatenation() {
+        let source = r#"
+def append(values: select[list[str]]) -> select[list[str | int], Literal["list"]]:
+    return values + [1]
+def prepend(values: select[list[str]]) -> select[list[str | int], Literal["list"]]:
+    return [1] + values
+def prepend_tuple(values: select[tuple[str, ...]]) -> select[list[str | int], Literal["list"]]:
+    return (1,) + values
+def combine(left: select[Sequence[str]], right: select[Sequence[int]]) -> select[list[str | int], Literal["list"]]:
+    return left + right
+def nullable_peer(left: select[Sequence[str]], right: select[Sequence[int] | None, Literal["list"]]) -> select[list[str | int] | None, Literal["list"]]:
+    return left + right
+def nullable_receiver(left: select[Sequence[str] | None, Literal["list"]], right: select[Sequence[int]]) -> select[list[str | int] | None, Literal["list"]]:
+    return left + right
+def append_nullable(left: select[Sequence[str]], right: select[Sequence[int] | None, Literal["list"]]) -> select[list[str | int] | None, Literal["list"]]:
+    return left + right + [1]
+def prepend_nullable(left: select[Sequence[str]], right: select[Sequence[int] | None, Literal["list"]]) -> select[list[str | int] | None, Literal["list"]]:
+    return [1] + (left + right)
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(file, source.replace("list[str | int]", "list[str]"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 8, "{diagnostics:?}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+
+        analysis.update_file(
+            file,
+            source.replace(
+                "-> select[list[str | int] | None",
+                "-> select[list[str | int]",
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+
+        analysis.update_file(
+            file,
+            format!("{source}\ndef consume(values: select[list[str]]) -> None:\n    pass\ndef caller(values: select[Sequence[str]]) -> None:\n    consume(values + [1])\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
+    fn selector_sequence_payloads_require_compatible_alternatives() {
+        for payload in [
+            "Sequence[str] | None",
+            "Sequence[str] | int",
+            "Sequence[str] | Mapping[str, int]",
+            "str",
+        ] {
+            for expression in [
+                "values + [1]",
+                "[1] + values",
+                "values + peer",
+                "peer + values",
+            ] {
+                let source = format!("def combine(values: select[{payload}], peer: select[Sequence[int]]) -> object:\n    return {expression}\n");
+                let (analysis, fixture) = native_analysis(&source);
+                let diagnostics = analysis
+                    .snapshot()
+                    .diagnostics(fixture.main_file())
+                    .unwrap();
+                assert_eq!(
+                    diagnostics.len(),
+                    1,
+                    "{payload}, {expression}: {diagnostics:?}"
+                );
+                assert_eq!(diagnostics[0].id().as_str(), "unsupported-operator");
+            }
+        }
+    }
+
+    #[test]
+    fn selector_sequence_composition_preserves_generic_kind() {
+        let source = r#"
+def append(values):
+    return values + [1]
+def prepend(values):
+    return [1] + values
+def combine(left, right):
+    return left + right
+def nullable_peer(left, right):
+    return left + right
+"#;
+        let (mut analysis, mut fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "selectors.bzli",
+            r#"
+def append[K](values: select[Sequence[str], K]) -> select[list[str | int], K]: ...
+def prepend[K](values: select[Sequence[str], K]) -> select[list[str | int], K]: ...
+def combine[K](left: select[Sequence[str], K], right: select[Sequence[int]]) -> select[list[str | int], K]: ...
+def nullable_peer[K](left: select[Sequence[str], K], right: select[Sequence[int] | None, Literal["list"]]) -> select[list[str | int] | None, K]: ...
+"#,
+        );
+        analysis.set_type_interfaces([(file, interface)]).unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
