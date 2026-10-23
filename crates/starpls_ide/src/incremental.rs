@@ -17,6 +17,69 @@ use crate::Analysis;
 use crate::FilePosition;
 use crate::LocationLink;
 
+#[test]
+#[cfg(unix)]
+fn open_document_uris_follow_snapshot_ownership() {
+    let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+        .join("open-document-uris");
+    std::fs::create_dir_all(&root).unwrap();
+    let first = root.join("first.bzl");
+    let second = root.join("second.bzl");
+    let uri = root.join("open.bzl");
+    let alias = root.join("alias.bzl");
+    std::fs::write(&first, "first disk contents").unwrap();
+    std::fs::write(&second, "second disk contents").unwrap();
+    std::os::unix::fs::symlink(&first, &uri).unwrap();
+    std::os::unix::fs::symlink(&first, &alias).unwrap();
+    let first = starpls_common::system_path(&first).unwrap();
+    let second = starpls_common::system_path(&second).unwrap();
+    let uri = starpls_common::system_path(&uri).unwrap();
+    let alias = starpls_common::system_path(&alias).unwrap();
+    let mut system = starpls_common::SourceSystem::new(ruff_db::system::OsSystem::new(
+        starpls_common::system_path(&root).unwrap(),
+    ));
+    system
+        .open(uri, "original".into(), Dialect::Bazel, None, 1)
+        .unwrap();
+    let snapshot = system.clone();
+    let error = system
+        .open(first, "duplicate".into(), Dialect::Bazel, None, 2)
+        .unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+    assert_eq!(system.document(uri).unwrap().contents, "original");
+    system
+        .open(uri, "updated".into(), Dialect::Bazel, None, 2)
+        .unwrap();
+    assert_eq!(system.document(uri).unwrap().contents, "updated");
+    assert_eq!(snapshot.document(uri).unwrap().contents, "original");
+
+    std::fs::remove_file(uri.as_std_path()).unwrap();
+    std::os::unix::fs::symlink(second.as_std_path(), uri.as_std_path()).unwrap();
+    assert_eq!(system.source_path(uri).unwrap().as_path(), first);
+    assert!(system.validate_document(uri).is_err());
+    // Other aliases still follow the disk, rather than the open URI's index.
+    std::fs::remove_file(alias.as_std_path()).unwrap();
+    std::os::unix::fs::symlink(second.as_std_path(), alias.as_std_path()).unwrap();
+    assert_eq!(system.source_path(alias).unwrap().as_path(), second);
+
+    let closed = system.close(first).unwrap();
+    assert_eq!(closed.path.as_path(), uri);
+    assert!(system.documents().next().is_none());
+    assert_eq!(system.source_path(uri).unwrap().as_path(), second);
+    assert_eq!(snapshot.source_path(uri).unwrap().as_path(), first);
+    assert_eq!(snapshot.document(first).unwrap().contents, "original");
+    system
+        .open(uri, "reopened".into(), Dialect::Bazel, None, 3)
+        .unwrap();
+    assert_eq!(system.document(second).unwrap().contents, "reopened");
+    assert_eq!(system.close(uri).unwrap().path.as_path(), uri);
+    std::fs::remove_file(uri.as_std_path()).unwrap();
+    std::os::unix::fs::symlink(first.as_std_path(), uri.as_std_path()).unwrap();
+    assert_eq!(system.source_path(uri).unwrap().as_path(), first);
+    assert!(system.documents().next().is_none());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 fn hover_value(analysis: &Analysis, file_id: File) -> String {
     let file = file_id;
     let pos = file.contents(&analysis.db).rfind("value").unwrap();

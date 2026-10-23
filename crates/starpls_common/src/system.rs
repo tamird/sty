@@ -63,6 +63,8 @@ impl OpenDocument {
 pub struct SourceSystem {
     base: Arc<dyn System>,
     documents: HashMap<SystemPathBuf, OpenDocument>,
+    // Physical source for each open logical URI, local to this snapshot.
+    document_sources: HashMap<SystemPathBuf, SystemPathBuf>,
     virtual_sources: HashMap<SystemVirtualPathBuf, String>,
     revision: u64,
     aliases: Arc<Mutex<SourceAliases>>,
@@ -136,6 +138,7 @@ impl SourceSystem {
         Self {
             base: Arc::new(base),
             documents: HashMap::new(),
+            document_sources: HashMap::new(),
             virtual_sources: HashMap::new(),
             revision: 0,
             aliases: Arc::default(),
@@ -163,6 +166,7 @@ impl SourceSystem {
         let Self {
             base: _,
             documents,
+            document_sources,
             virtual_sources: _,
             aliases: _,
             revision,
@@ -181,6 +185,7 @@ impl SourceSystem {
                 revision: file_revision,
             },
         );
+        document_sources.insert(path.clone(), source);
         Ok(path)
     }
 
@@ -224,11 +229,14 @@ impl SourceSystem {
         let Self {
             base: _,
             documents,
+            document_sources,
             virtual_sources: _,
             aliases: _,
             revision: _,
         } = self;
-        documents.remove(&path)
+        let document = documents.remove(&path)?;
+        document_sources.remove(&document.path);
+        Some(document)
     }
 
     pub fn set_document_info(&mut self, source: &SystemPath, info: Option<FileInfo>) {
@@ -243,6 +251,7 @@ impl SourceSystem {
         let Self {
             base: _,
             documents,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -256,11 +265,7 @@ impl SourceSystem {
         if self.documents.contains_key(&path) {
             return Ok(path);
         }
-        if let Some((source, _)) = self
-            .documents
-            .iter()
-            .find(|(_, document)| document.path == path)
-        {
+        if let Some(source) = self.document_sources.get(&path) {
             return Ok(source.clone());
         }
         self.disk_source_path(&path)
@@ -325,6 +330,7 @@ impl SourceSystem {
         let Self {
             base: _,
             documents,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -357,6 +363,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -384,6 +391,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -406,6 +414,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -422,6 +431,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -432,6 +442,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -442,6 +453,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -452,6 +464,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -465,6 +478,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -478,6 +492,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -488,6 +503,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -498,6 +514,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -508,6 +525,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -521,6 +539,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -531,6 +550,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -541,6 +561,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
@@ -551,6 +572,7 @@ impl System for SourceSystem {
         let Self {
             base,
             documents: _,
+            document_sources: _,
             virtual_sources: _,
             aliases: _,
             revision: _,
