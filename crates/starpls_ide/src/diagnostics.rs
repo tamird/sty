@@ -419,6 +419,79 @@ def mapping(values: dict[str, int]) -> select[int, Literal["int"]]:
     }
 
     #[test]
+    fn selector_depset_kind_preserves_element_types() {
+        for (parameters, branches, result, error) in [
+            (
+                "items: list[str]",
+                "{'//conditions:default': make_depset(items)}",
+                "select[depset[str], Literal['depset']]",
+                None,
+            ),
+            (
+                "items: depset[Label]",
+                "{'//conditions:default': items}",
+                "select[depset[str | Label], Literal['depset']]",
+                None,
+            ),
+            (
+                "items: depset[int]",
+                "{'//conditions:default': items}",
+                "select[depset[str], Literal['depset']]",
+                Some("invalid-return-type"),
+            ),
+            (
+                "items: depset[str]",
+                "{'//:enabled': items, '//conditions:default': None}",
+                "select[depset[str] | None, Literal['depset']]",
+                None,
+            ),
+            (
+                "items: depset[str]",
+                "{'//:enabled': None, '//conditions:default': items}",
+                "select[depset[str] | None, Literal['none']]",
+                None,
+            ),
+            (
+                "items: depset[str]",
+                "{'//:enabled': None, '//conditions:default': items}",
+                "select[depset[str] | None, Literal['depset']]",
+                Some("invalid-return-type"),
+            ),
+            (
+                "depset: Callable[[list[str]], list[str]]",
+                "{'//conditions:default': depset(['item'])}",
+                "select[list[str], Literal['list']]",
+                None,
+            ),
+            (
+                "depset: Callable[[list[str]], list[str]]",
+                "{'//conditions:default': depset(['item'])}",
+                "select[list[str], Literal['depset']]",
+                Some("invalid-return-type"),
+            ),
+        ] {
+            let source = format!(
+                r#"
+make_depset = depset
+
+def selected({parameters}) -> {result}:
+    return select({branches})
+"#
+            );
+            let (analysis, fixture) = native_analysis(&source);
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(ids, error.as_slice(), "{source}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
     fn selector_construction_preserves_possible_runtime_kinds() {
         let selected =
             "select[list[str] | None, Literal['list']] | select[list[str] | None, Literal['none']]";

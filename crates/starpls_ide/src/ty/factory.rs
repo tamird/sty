@@ -970,6 +970,9 @@ fn selector_value_kind<'db>(
             return Some("list");
         }
     }
+    if native_type_argument(db, environment, declarations, value, "depset").is_some() {
+        return Some("depset");
+    }
     // Bazel's Label is final and has one native implementation class.
     let label = native_class(db, declarations, "Label")?;
     let label = label.to_instance_approximation(db, environment)?;
