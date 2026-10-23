@@ -689,6 +689,97 @@ element = values.pop()
     }
 
     #[test]
+    fn sequences_preserve_collection_element_types() {
+        let source = r#"
+def sequence(values):
+    # type: (Sequence[int]) -> Collection[int]
+    return values
+
+def projected(values):
+    # type: (Top[list[tuple[Unknown, Unknown]]]) -> Collection[tuple[object, object]]
+    return values
+
+def consume_pairs(values):
+    # type: (Collection[tuple[object, object]]) -> None
+    pass
+
+def dictionary_items(value):
+    # type: (object) -> None
+    if type(value) == "dict":
+        consume_pairs(value.items())
+
+def wrong_sequence(values):
+    # type: (Sequence[str]) -> Collection[int]
+    return values
+
+def wrong_shape(values):
+    # type: (list[str]) -> Collection[tuple[object, object]]
+    return values
+
+def wrong_items(values):
+    # type: (list[tuple[str, str]]) -> Collection[tuple[str, int]]
+    return values
+
+def wrong_projected(values):
+    # type: (Top[list[tuple[Unknown, Unknown]]]) -> Collection[tuple[str, int]]
+    return values
+
+def mutate_sequence(values):
+    # type: (Sequence[int]) -> None
+    values.append(1)
+
+def mutate_projected(values):
+    # type: (Top[list[tuple[Unknown, Unknown]]]) -> None
+    values.append(("key", 1))
+
+def string_is_not_a_collection():
+    # type: () -> Collection[str]
+    return "text"
+"#;
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = analysis
+            .open_document(
+                Path::new("/sequence_collection.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let start = usize::from(diagnostic.range().unwrap().start());
+                let line_number = source[..start].lines().count();
+                (diagnostic.id().as_str(), line_number)
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            [
+                ("invalid-return-type", 21),
+                ("invalid-return-type", 25),
+                ("invalid-return-type", 29),
+                ("invalid-return-type", 33),
+                ("unresolved-attribute", 37),
+                ("invalid-argument-type", 41),
+                ("invalid-return-type", 45),
+            ],
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
     fn dictionary_copy_respects_context() {
         let source = r#"
 def widen(values):

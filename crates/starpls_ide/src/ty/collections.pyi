@@ -8,7 +8,7 @@ class Collection(Iterable[_T_co], Sized, Protocol[_T_co]):
     @type_check_only
     def __contains__(self, value: object, /) -> bool: ...
 
-class Sequence(Generic[_T_co]):
+class Sequence(Collection[_T_co]):
     @type_check_only
     def __len__(self) -> int: ...
     @type_check_only
