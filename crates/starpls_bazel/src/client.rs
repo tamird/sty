@@ -700,6 +700,7 @@ impl BazelClient for BazelCLI {
             "graph",
             &format!("--from=@@{canonical_repo}"),
             "--depth=1",
+            "--include_builtin",
             "--output=json",
         ]);
         let graph_error = match graph {
@@ -1199,7 +1200,7 @@ fi
         );
         assert_eq!(
             std::fs::read_to_string(root.path().join("calls")).unwrap(),
-            "mod show_repo --output=streamed_jsonproto other rules\nmod show_repo --output=streamed_jsonproto @@rules++ext+one @@rules++ext+two @@rules++ext+unknown\nmod graph --from=@@rules++ext+unknown --depth=1 --output=json\n"
+            "mod show_repo --output=streamed_jsonproto other rules\nmod show_repo --output=streamed_jsonproto @@rules++ext+one @@rules++ext+two @@rules++ext+unknown\nmod graph --from=@@rules++ext+unknown --depth=1 --include_builtin --output=json\n"
         );
 
         std::fs::write(root.path().join("calls"), "").unwrap();
@@ -1652,6 +1653,14 @@ exit "$status"
                 }),
             );
         }
+        let builtin = br#"{"key":"<root>","dependencies":[{"key":"bazel_tools@_","name":"bazel_tools","version":""}],"indirectDependencies":[]}"#;
+        assert_eq!(
+            selected_module_from_graph(builtin, "bazel_tools").unwrap(),
+            Some(SelectedModule {
+                name: "bazel_tools".to_owned(),
+                version: None,
+            }),
+        );
         let root = br#"{"key":"<root>","name":"main","version":"1.0.0","dependencies":[],"indirectDependencies":[]}"#;
         assert_eq!(
             selected_module_from_graph(root, "").unwrap(),
