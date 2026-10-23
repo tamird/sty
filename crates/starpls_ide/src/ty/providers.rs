@@ -1551,6 +1551,9 @@ def stored() -> str:
 def required(value: RequiredValue) -> str:
     return value.value
 
+def full_read(value: Intersection[Info, RequiredValue]) -> str:
+    return value.value
+
 required(supplied)
 required(Info(nullable=None, value="present"))
 
@@ -1609,6 +1612,8 @@ def impossible(value: Impossible) -> None:
             ("wrong: Info = struct(nullable=None)", "invalid-assignment"),
             ("def direct(value: Info) -> str:\n    return value.value", "possibly-missing-attribute"),
             ("def negative(value: Info) -> str:\n    if not hasattr(value, 'value'):\n        return value.value\n    return ''", "possibly-missing-attribute"),
+            ("def readonly(value: Intersection[Info, RequiredValue]) -> None:\n    value.value = 'changed'", "invalid-assignment"),
+            ("def partial(value: Info) -> None:\n    value.value = 'changed'", "invalid-assignment"),
             ("def still_nullable(value: Info) -> str:\n    if hasattr(value, 'nullable'):\n        return value.nullable\n    return ''", "invalid-return-type"),
             ("def unknown_extra(value: Open) -> None:\n    return getattr(value, 'extra', None)", "invalid-return-type"),
         ] {
