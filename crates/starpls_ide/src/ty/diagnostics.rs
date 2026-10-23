@@ -270,10 +270,29 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
         let environment = model.program_environment();
         let binding_annotations = super::interface::used_binding_annotations(db, file);
         let contract_sources = if file.is_type_interface(db) {
+            // Repository installations can symlink an authored interface. Its
+            // declarations are used through either path, while load resolution
+            // still belongs to each file's repository context.
+            let aliases = file
+                .source
+                .path(db)
+                .as_system_path()
+                .and_then(|path| db.system.source_aliases(path).ok())
+                .unwrap_or_default();
             db.environment()
                 .type_interfaces(db)
                 .values()
-                .filter(|(_, interface)| *interface == file)
+                .filter(|(_, interface)| {
+                    // Retargeting an interface can change which source's declarations it uses
+                    // without changing either source's text, including currently unused aliases.
+                    let _ = interface.source.revision(db);
+                    interface.source == file.source
+                        || interface
+                            .source
+                            .path(db)
+                            .as_system_path()
+                            .is_some_and(|path| aliases.iter().any(|alias| alias.as_path() == path))
+                })
                 .map(|(source, _)| db.starlark_program_file(*source))
                 .collect::<Vec<_>>()
         } else {

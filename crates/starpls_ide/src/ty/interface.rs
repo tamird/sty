@@ -1618,6 +1618,69 @@ mod tests {
     use crate::LocationLink;
 
     #[test]
+    #[cfg(unix)]
+    fn registered_interface_aliases_share_declaration_usage() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("interface-declaration-usage");
+        std::fs::create_dir_all(&root).unwrap();
+        let source_path = root.join("source.bzl");
+        let authored_path = root.join("authored.bzli");
+        let installed_path = root.join("installed.bzli");
+        let copied_path = root.join("copied.bzli");
+        std::fs::write(&source_path, "_VALUE = 1\nvalue = _VALUE\n").unwrap();
+        for path in [&authored_path, &copied_path] {
+            std::fs::write(path, "_VALUE: int\n").unwrap();
+        }
+        std::os::unix::fs::symlink(&authored_path, &installed_path).unwrap();
+        let mut analysis = Analysis::new(
+            std::sync::Arc::new(crate::SimpleFileLoader::default()),
+            Default::default(),
+        )
+        .unwrap();
+        analysis
+            .set_builtin_defs(Default::default(), Default::default())
+            .unwrap();
+        let source = analysis.file(&source_path, Dialect::Bazel, None).unwrap();
+        let authored = analysis.file(&authored_path, Dialect::Bazel, None).unwrap();
+        let installed = analysis
+            .file(&installed_path, Dialect::Bazel, None)
+            .unwrap();
+        let copied = analysis.file(&copied_path, Dialect::Bazel, None).unwrap();
+        assert_ne!(authored.source, installed.source);
+        analysis.set_type_interfaces([(source, installed)]).unwrap();
+        let assert_usage = |analysis: &Analysis, file, used| {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let names: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            let expected = if used {
+                vec![]
+            } else {
+                vec!["unused-definition"]
+            };
+            assert_eq!(names, expected, "{diagnostics:?}");
+        };
+        assert_usage(&analysis, authored, true);
+        assert_usage(&analysis, installed, true);
+        // Equal contents alone do not associate an interface with a source.
+        assert_usage(&analysis, copied, false);
+        analysis.set_type_interfaces([]).unwrap();
+        assert_usage(&analysis, authored, false);
+        analysis.set_type_interfaces([(source, installed)]).unwrap();
+        assert_usage(&analysis, authored, true);
+        assert_usage(&analysis, installed, true);
+        assert_usage(&analysis, copied, false);
+        // A repository refresh transfers usage to the new symlink target.
+        std::fs::remove_file(&installed_path).unwrap();
+        std::os::unix::fs::symlink(&copied_path, &installed_path).unwrap();
+        analysis.sync_files(&[installed_path]).unwrap();
+        assert_usage(&analysis, authored, false);
+        assert_usage(&analysis, copied, true);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn function_stubs_check_bodies_and_follow_edits() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
