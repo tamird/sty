@@ -2112,17 +2112,40 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
             for (kind, receiver, operand, result, native_operation) in domains.clone() {
                 let required_kind = format!("_starpls_typing.Literal[\"{kind}\"]");
                 if operation == native_operation {
+                    let precise_selector = |payload| {
+                        let selector =
+                            format!("_starpls_types.select[{payload} | None, {required_kind}]");
+                        if kind == "list" {
+                            // Every native Starlark sequence is a Java List, so a
+                            // nonnullable sequence payload also proves compatibility.
+                            format!("_starpls_types.select[{payload}] | {selector}")
+                        } else {
+                            selector
+                        }
+                    };
+                    let selected_receiver = precise_selector(receiver);
+                    let result_kind = if kind == "list" {
+                        // Preserve a generic receiver kind while recording list compatibility.
+                        "_starpls_ty_extensions.Intersection[_SelectKind, _starpls_typing.Literal[\"list\"]]"
+                    } else {
+                        "_SelectKind"
+                    };
                     // Project the receiver's None contribution independently of merged elements.
                     for (plain_operand, _fragment) in select_plain_operands(kind, operand) {
                         writeln!(output, "        @_starpls_typing.overload")?;
                         writeln!(output, "        @_starpls_typing.type_check_only")?;
-                        writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[{receiver} | None, {required_kind}], other: {plain_operand}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue, None], _SelectKind]: ...")?;
+                        writeln!(output, "        def __{reflected}{operation}__(self: {selected_receiver}, other: {plain_operand}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue, None], {result_kind}]: ...")?;
                     }
                     // The peer supplies both the element shape and its whole nullable payload.
-                    let selected = format!("_starpls_ty_extensions.Intersection[_starpls_types.select[{operand} | None, {required_kind}], _starpls_types.select[_SelectPeerValue, {required_kind}]]");
+                    let peer_kind = if kind == "list" {
+                        "_starpls_builtins.object"
+                    } else {
+                        &required_kind
+                    };
+                    let selected = format!("_starpls_ty_extensions.Intersection[{}, _starpls_types.select[_SelectPeerValue, {peer_kind}]]", precise_selector(operand));
                     writeln!(output, "        @_starpls_typing.overload")?;
                     writeln!(output, "        @_starpls_typing.type_check_only")?;
-                    writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[{receiver} | None, {required_kind}], other: {selected}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue | _SelectPeerValue, None], _SelectKind]: ...")?;
+                    writeln!(output, "        def __{reflected}{operation}__(self: {selected_receiver}, other: {selected}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue | _SelectPeerValue, None], {result_kind}]: ...")?;
                 }
                 if operation == "add" {
                     // A None first branch retains its kind even with dictionary payloads.
