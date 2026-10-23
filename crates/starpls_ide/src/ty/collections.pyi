@@ -3,11 +3,14 @@
 # Generic bases retain the nominal collection constraints used by Ty inference.
 
 from _starpls_allocations import _MappingEntries
+from typing_extensions import disjoint_base as _disjoint_base
 
 class Collection(Iterable[_T_co], Sized, Protocol[_T_co]):
     @type_check_only
     def __contains__(self, value: object, /) -> bool: ...
 
+# Starlark sequences cannot also be dictionaries or other disjoint builtins.
+@_disjoint_base
 class Sequence(Collection[_T_co]):
     @type_check_only
     def __len__(self) -> int: ...

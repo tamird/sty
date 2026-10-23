@@ -780,6 +780,84 @@ def string_is_not_a_collection():
     }
 
     #[test]
+    fn sequence_and_dictionary_tags_preserve_parameters() {
+        let source = r#"
+def dictionary_keys(value):
+    # type: (Sequence[int] | Mapping[str, int]) -> list[str]
+    if type(value) == "dict":
+        return value.keys()
+    return []
+
+def list_values(value):
+    # type: (Sequence[int] | Mapping[str, str]) -> list[int]
+    if type(value) == "list":
+        return list(value)
+    return []
+
+def wrong_dictionary_keys(value):
+    # type: (Sequence[int] | Mapping[int, int]) -> list[str]
+    if type(value) == "dict":
+        return value.keys()
+    return []
+
+def strings(value):
+    # type: (Sequence[str]) -> None
+    pass
+
+dictionary_keys({"a": 1})
+dictionary_keys([1])
+dictionary_keys((1,))
+dictionary_keys(range(1))
+list_values([1])
+list_values((1,))
+list_values(range(1))
+list_values({"a": "b"})
+strings("abc".elems())
+dictionary_keys({1: 1})
+list_values(["wrong"])
+"#;
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis.set_analysis_options(Some(true), None);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = analysis
+            .open_document(
+                Path::new("/sequence_tags.bzl"),
+                Dialect::Bazel,
+                None,
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let mut actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let start = usize::from(diagnostic.range().unwrap().start());
+                let line_number = source[..start].lines().count();
+                (diagnostic.id().as_str(), line_number)
+            })
+            .collect();
+        actual.sort_unstable_by_key(|(_, line)| *line);
+        assert_eq!(
+            actual,
+            [
+                ("invalid-return-type", 17),
+                ("invalid-argument-type", 33),
+                ("invalid-argument-type", 34),
+            ],
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
     fn dictionary_copy_respects_context() {
         let source = r#"
 def widen(values):
