@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use annotate_snippets::Level;
 use annotate_snippets::Renderer;
@@ -3165,7 +3166,9 @@ impl CheckCommand {
     }
 
     pub(crate) fn run(self) -> anyhow::Result<ExitCode> {
+        let started = Instant::now();
         let paths = self.input_paths()?;
+        let context_started = Instant::now();
         if self.progress {
             eprintln!("Initializing Bazel context");
         }
@@ -3191,7 +3194,10 @@ impl CheckCommand {
         .with_bundled_builtins(bazel_cx.has_bundled_builtins())
         .with_bazel_load_context(load_context, &self.required_bazel_load_context)?;
         loader.finish_mapping(String::new(), Ok(bazel_cx.main_repo_mapping));
+        log::debug!(target: "sty::timing", "Initialized Bazel context: {:?}", context_started.elapsed());
+        let prepared = Instant::now();
         let (analysis, loader) = self.prepare_analysis(loader, &bazel_cx.info, bazel_cx.rules)?;
+        log::debug!(target: "sty::timing", "Prepared analysis: {:?}", prepared.elapsed());
 
         // Strip off the leading "." from each of the specified extensions.
         // This works better when filtering against files with .extension().
@@ -3205,6 +3211,7 @@ impl CheckCommand {
             .chain(["star", "sky"])
             .collect::<Vec<_>>();
 
+        let selected = Instant::now();
         let mut checker = Checker::new(
             analysis,
             bazel_cx.info,
@@ -3214,7 +3221,15 @@ impl CheckCommand {
             fetch_repo_receiver,
             &self,
         )?;
-        checker.report_diagnostics(self.report.as_deref())
+        log::debug!(
+            target: "sty::timing",
+            "Selected files: {:?}; files={}",
+            selected.elapsed(),
+            checker.files.len(),
+        );
+        let result = checker.report_diagnostics(self.report.as_deref());
+        log::debug!(target: "sty::timing", "Completed check: {:?}", started.elapsed());
+        result
     }
 
     fn prepare_analysis(
@@ -3908,6 +3923,7 @@ impl Checker {
         if repositories.is_empty() && fetches.is_empty() {
             return false;
         }
+        let started = Instant::now();
         for batch in document::repository_mapping_query_batches(&repositories) {
             if self.progress {
                 eprintln!(
@@ -3930,11 +3946,21 @@ impl Checker {
             }
         }
         self.analysis.refresh_loads_after_settlement();
+        log::debug!(
+            target: "sty::timing",
+            "Settled loads: {:?}; mappings={}; fetches={}",
+            started.elapsed(),
+            repositories.len(),
+            fetches.len(),
+        );
         true
     }
 
     fn check_files(&mut self) -> anyhow::Result<CheckResult> {
+        let mut pass = 0;
         loop {
+            pass += 1;
+            let started = Instant::now();
             let mut diagnostics = Vec::new();
             let snapshot = self.analysis.snapshot();
             for (index, file) in self.files.iter().copied().enumerate() {
@@ -3949,12 +3975,26 @@ impl Checker {
                 diagnostics.push((file, snapshot.diagnostics(file)?));
             }
             drop(snapshot);
+            log::debug!(
+                target: "sty::timing",
+                "Collected diagnostics: {:?}; pass={pass}; files={}; diagnostics={}",
+                started.elapsed(),
+                diagnostics.len(),
+                diagnostics.iter().map(|(_, diagnostics)| diagnostics.len()).sum::<usize>(),
+            );
             // Requested-load coverage resolves loads already requested by
             // analysis. Settle those before constructing a graph we'd discard.
             if self.load_scope == LoadScope::Requested && self.resolve_pending_loads() {
                 continue;
             }
+            let started = Instant::now();
             let graph = self.load_graph(diagnostics.iter().map(|(file, _)| *file))?;
+            log::debug!(
+                target: "sty::timing",
+                "Traversed load graph: {:?}; pass={pass}; files={}",
+                started.elapsed(),
+                graph.files.len(),
+            );
             if !self.resolve_pending_loads() {
                 return Ok(CheckResult {
                     loads: graph,
@@ -3982,6 +4022,7 @@ impl Checker {
             loads: graph,
             diagnostics,
         } = self.check_files()?;
+        let started = Instant::now();
         let snapshot = self.analysis.snapshot();
         let mut counts = DiagnosticCounts::default();
         let mut checked = indexmap::IndexSet::new();
@@ -4030,6 +4071,13 @@ impl Checker {
             report.loaded_dependencies.len(),
             report.excluded_inputs.len()
         )?;
+        log::debug!(
+            target: "sty::timing",
+            "Reported diagnostics: {:?}; files={}; dependencies={}",
+            started.elapsed(),
+            report.checked_files.len(),
+            report.loaded_dependencies.len(),
+        );
         if !report.complete {
             anyhow::bail!(
                 "coverage incomplete: {} input failures and {} unresolved loads",

@@ -478,7 +478,14 @@ impl Analysis {
         let environment = db.environment();
         let revision = environment.load_settlement_revision(db) + 1;
         environment.set_load_settlement_revision(db).to(revision);
+        let started = std::time::Instant::now();
         ruff_db::files::Files::sync_all(db);
+        log::debug!(
+            target: "sty::timing",
+            "Synchronized files: {:?}; {:?}",
+            started.elapsed(),
+            ruff_db::Db::files(db),
+        );
     }
 
     /// Replace host resolution only after all snapshots using the old host drain.

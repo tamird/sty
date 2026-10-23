@@ -346,7 +346,21 @@ impl BazelCLI {
         if let Some(directory) = &self.working_directory {
             command.current_dir(directory);
         }
-        let output = command.output()?;
+        let started = std::time::Instant::now();
+        let output = command.output();
+        let subcommand = command
+            .get_args()
+            .filter_map(|argument| argument.to_str())
+            .find(|argument| matches!(*argument, "info" | "mod" | "query" | "fetch"));
+        log::debug!(
+            target: "sty::timing",
+            "Bazel {:?}: {:?}; arguments={}; status={:?}",
+            subcommand,
+            started.elapsed(),
+            command.get_args().len(),
+            output.as_ref().map(|output| output.status),
+        );
+        let output = output?;
         if !output.status.success() {
             bail!(
                 "failed to run Bazel command with exit status {}, stderr={:?}",
@@ -432,6 +446,7 @@ impl BazelCLI {
             if let Some(directory) = &self.working_directory {
                 command.current_dir(directory);
             }
+            let started = std::time::Instant::now();
             let mut child = match command
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
@@ -439,6 +454,12 @@ impl BazelCLI {
             {
                 Ok(child) => child,
                 Err(error) => {
+                    log::debug!(
+                        target: "sty::timing",
+                        "Bazel mapping query spawn failed: {:?}; repositories={}; error={error}",
+                        started.elapsed(),
+                        batch.len(),
+                    );
                     if error.kind() == std::io::ErrorKind::ArgumentListTooLong && batch.len() > 1 {
                         batch_len = batch.len() / 2;
                         continue;
@@ -448,7 +469,7 @@ impl BazelCLI {
             };
             let stdout = child.stdout.take().expect("stdout was piped");
             let mut stderr = child.stderr.take().expect("stderr was piped");
-            let (result, status, errors) = std::thread::scope(|scope| -> anyhow::Result<_> {
+            let response = std::thread::scope(|scope| -> anyhow::Result<_> {
                 let errors = scope.spawn(move || {
                     let mut bytes = Vec::new();
                     stderr.read_to_end(&mut bytes).map(|_| bytes)
@@ -462,7 +483,16 @@ impl BazelCLI {
                 let status = child.wait()?;
                 let errors = errors.join().expect("stderr reader panicked")?;
                 Ok((result, status, errors))
-            })?;
+            });
+            log::debug!(
+                target: "sty::timing",
+                "Bazel mapping query (including stream decoding): {:?}; repositories={}; compact={}; status={:?}",
+                started.elapsed(),
+                batch.len(),
+                state.format == MappingFormat::Compact,
+                response.as_ref().map(|(_, status, _)| status),
+            );
+            let (result, status, errors) = response?;
             let MappingOutput {
                 mappings: batch_mappings,
                 empty_stdout,

@@ -2523,6 +2523,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "log",
  "prost 0.12.3",
  "prost-build 0.12.3",
  "prost-types 0.12.3",
@@ -2574,6 +2575,7 @@ dependencies = [
  "dashmap 5.5.3",
  "expect-test",
  "get-size2",
+ "log",
  "ruff_db",
  "ruff_python_ast",
  "ruff_python_parser",

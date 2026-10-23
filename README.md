@@ -139,6 +139,10 @@ separate `--report` coverage summary retains its version 2 format and
 counts fatal diagnostics as errors. Errors or incomplete coverage still
 fail the command; warnings alone do not.
 
+Set `RUST_LOG=sty::timing=debug` to log phase timings, Bazel subprocess
+durations, and file synchronization counts to stderr when investigating
+slow checks.
+
 Use repeatable `--config '<KEY> = <VALUE>'` arguments to override `[rules]`
 or `[analysis]` settings for one check, for example
 `--config 'rules.non-static-type = "error"'`
