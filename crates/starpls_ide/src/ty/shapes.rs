@@ -383,6 +383,125 @@ mod tests {
     use crate::FilePosition;
 
     #[test]
+    fn hasattr_preserves_required_struct_storage_in_conditionals() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[
+                    ("possibly-missing-attribute".into(), "error".into()),
+                    ("non-static-type".into(), "error".into()),
+                ]
+                .into(),
+            )
+            .unwrap(),
+        );
+        let valid = r#"def constructed():
+    value = struct(field=1)
+    return value.field if hasattr(value, "field") else None
+def native_glob():
+    return native.glob(["*.bzl"]) if hasattr(native, "glob") else None
+def required(value):
+    return value.field if hasattr(value, "field") else None
+def aliased(value):
+    check = hasattr
+    return value.field if check(value, "field") else None
+def optional(value):
+    return value.field if hasattr(value, "field") else None
+def nullable(value):
+    return value.field if hasattr(value, "field") else "absent"
+def dynamic(value, name):
+    return hasattr(value, name)
+def present(value):
+    return hasattr(value, "field")
+"#;
+        let source = fixture.add_file(&mut analysis.db, "api.bzl", valid);
+        let declarations = r#"def constructed() -> int: ...
+def native_glob() -> list[str]: ...
+def required(value: struct[{"field": int}, ...]) -> int: ...
+def aliased(value: struct[{"field": int}, ...]) -> int: ...
+def optional(value: struct[{"field": NotRequired[int]}, ...]) -> int | None: ...
+def nullable(value: struct[{"field": int | None}, ...]) -> int | None: ...
+def dynamic(value: struct[{"field": int}, ...], name: str) -> bool: ...
+def present(value: struct[{"field": int | None}, ...]) -> Literal[True]: ...
+"#;
+        let interface = fixture.add_file(&mut analysis.db, "api.bzli", declarations);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [source, interface] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (invalid, expected) in [
+            (
+                "def bad():\n    # type: () -> int\n    value = struct(field='wrong')\n    return value.field if hasattr(value, 'field') else None",
+                "invalid-return-type",
+            ),
+            (
+                "def bad(value):\n    # type: (struct[{'field': NotRequired[int]}, ...]) -> Literal[True]\n    return hasattr(value, 'field')",
+                "invalid-return-type",
+            ),
+            (
+                "def bad(value):\n    # type: (struct[{'field': int}, ...]) -> Literal[True]\n    return hasattr(value, 'other')",
+                "invalid-return-type",
+            ),
+            (
+                "def bad(value, name):\n    # type: (struct[{'field': int}, ...], str) -> Literal[True]\n    return hasattr(value, name)",
+                "invalid-return-type",
+            ),
+            (
+                "def bad(value):\n    # type: (object) -> Literal[True]\n    return hasattr(value, 'field')",
+                "invalid-return-type",
+            ),
+            (
+                "def bad(value):\n    # type: (struct[{'field': int}, ...]) -> None\n    hasattr(value, 42)",
+                "invalid-argument-type",
+            ),
+            (
+                "def bad(value):\n    # type: (struct[{'field': int}, ...]) -> None\n    hasattr(value, 'field', 'extra')",
+                "too-many-positional-arguments",
+            ),
+            (
+                "def bad(value):\n    # type: (struct[{'field': int}, ...]) -> int\n    def hasattr(value, name):\n        # type: (object, str) -> bool\n        return False\n    return value.field if hasattr(value, 'field') else None",
+                "invalid-return-type",
+            ),
+        ] {
+            analysis.update_file(source, format!("{valid}\n{invalid}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{invalid}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{invalid}: {diagnostic:?}");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= valid.len());
+        }
+        analysis.update_file(
+            source,
+            format!("{valid}\ndef readable(value):\n    return hasattr(value, 'field')\n"),
+        );
+        analysis.update_file(
+            interface,
+            format!(
+                "{declarations}\nclass _Readable(Protocol):\n    @property\n    def field(self) -> int: ...\ndef readable(value: _Readable) -> Literal[True]: ...\n"
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert!(usize::from(diagnostic.range().unwrap().start()) >= valid.len());
+    }
+
+    #[test]
     fn dictionary_shapes_check_calls_and_preserve_optional_keys() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
