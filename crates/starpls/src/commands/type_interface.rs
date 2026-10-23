@@ -722,6 +722,23 @@ mod tests {
             .unwrap();
         let configured = analysis.type_interface_files();
         assert_eq!(configured.len(), 2);
+        for versions in ["", "versions = []\n"] {
+            std::fs::write(
+                workspace.join("sty.toml"),
+                package("first") + "allow-unversioned = true\n" + &package("second"),
+            )
+            .unwrap();
+            std::fs::write(
+                stubs.join("first.toml"),
+                first.replace("versions = ['1']\n", versions),
+            )
+            .unwrap();
+            super::TypeInterfaceOptions::default()
+                .prepare(&loader, &workspace)
+                .and_then(|prepared| prepared.install(&mut analysis, &workspace))
+                .unwrap();
+            assert_eq!(analysis.type_interface_files(), configured);
+        }
         for (config, content, expected) in [
             (
                 "unknown = true\n".to_owned(),
@@ -753,11 +770,25 @@ mod tests {
                 first.replace("[files]", "unknown = true\n[files]"),
                 "unknown field",
             ),
-            (package("first"), first.replace("['1']", "[]"), "nonempty"),
+            (
+                package("first"),
+                first.replace("['1']", "[]"),
+                "requires allow-unversioned = true",
+            ),
             (
                 package("first"),
                 first.replace("versions = ['1']\n", ""),
-                "missing field `versions`",
+                "requires allow-unversioned = true",
+            ),
+            (
+                package("first") + "allow-unversioned = true\n",
+                first.replace("module = 'local'", "module = ''"),
+                "source.module must be nonempty",
+            ),
+            (
+                package("first") + "allow-unversioned = true\n",
+                first.replace("['1']", "['']"),
+                "source.versions entries must be nonempty",
             ),
             (
                 package("first") + "allow-unversioned = true\n",

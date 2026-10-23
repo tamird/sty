@@ -862,8 +862,8 @@ identifies the source file and both registrations.
 ## Version compatibility
 
 `format-version` identifies the manifest schema. Stub packages have independent
-Bazel release versions. An explicit `[source]` table requires `repository`,
-`module`, and a nonempty `versions` list.
+release versions. An explicit `[source]` table requires `repository` and
+`module`. Its `versions` list names accepted Bzlmod module versions.
 
 Bazel's selected module name must equal `source.module`, and its selected
 version must appear in `source.versions`. Bazel dependency declarations specify
@@ -875,6 +875,10 @@ selected artifact. A separate stub package requires `allow-unversioned = true`
 in its consumer's `stub-packages` entry. This option requires an explicit
 `[source]` table. Any available module name must match `source.module`, and
 every available version must match `source.versions`.
+
+With that explicit consumer opt-in, `source.versions` may be omitted or empty.
+Such a package accepts only sources without a selected module version: an empty
+list matches no versioned module.
 
 Incompatible versions, unsupported manifest schemas, unknown fields, unresolved
 repositories, unreadable files, and failed Bazel queries are configuration errors.

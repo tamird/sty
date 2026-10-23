@@ -34,6 +34,7 @@ struct Manifest {
 struct Source {
     repository: String,
     module: String,
+    #[serde(default)]
     versions: Vec<String>,
 }
 
@@ -241,8 +242,14 @@ fn read_manifest(loader: &DefaultFileLoader, package: &mut Package) -> anyhow::R
         }
         return Ok(manifest);
     };
-    if module.is_empty() || versions.is_empty() || versions.iter().any(String::is_empty) {
-        bail!("source.module and source.versions must contain nonempty names and versions");
+    if module.is_empty() {
+        bail!("source.module must be nonempty");
+    }
+    if versions.iter().any(String::is_empty) {
+        bail!("source.versions entries must be nonempty");
+    }
+    if versions.is_empty() && !selection.allow_unversioned {
+        bail!("omitting source.versions or leaving it empty requires allow-unversioned = true");
     }
     if !source_repository.starts_with('@') || source_repository.contains(['/', ':']) {
         bail!("source.repository must name a Bazel repository, such as @rules_foo");
@@ -290,6 +297,9 @@ fn source_repository(
     }
     match selected.and_then(|module| module.version.as_deref()) {
         Some(version) => {
+            if versions.is_empty() {
+                bail!("module {module} selected version {version}, but the stub package accepts only an unversioned source");
+            }
             if !versions.iter().any(|accepted| accepted == version) {
                 bail!(
                     "module {module} selected version {version}, but the stub package accepts {}",
@@ -422,27 +432,63 @@ mod tests {
     }
 
     #[test]
-    fn unversioned_stubs_require_the_same_repository() {
+    fn stub_sources_preserve_module_identity_and_versions() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("stub-package-version-identity");
-        for (source, version, module, allow_unversioned, expected_error) in [
-            ("rules+", None, "rules", false, None),
+        for (source, version, module, allow_unversioned, versions, expected_error) in [
+            ("rules+", None, "rules", false, &["1"][..], None),
             (
                 "other+",
                 None,
                 "rules",
                 false,
+                &["1"],
                 Some("has no selected module version"),
             ),
-            ("other+", None, "rules", true, None),
+            ("other+", None, "rules", true, &["1"], None),
+            ("other+", None, "rules", true, &[], None),
+            ("other+", Some("1"), "rules", false, &["1"], None),
+            ("other+", Some("1"), "rules", true, &["1"], None),
+            (
+                "other+",
+                Some("1"),
+                "rules",
+                true,
+                &[],
+                Some("accepts only an unversioned source"),
+            ),
             (
                 "rules+",
                 Some("2"),
                 "rules",
                 false,
+                &["1"],
                 Some("selected version 2"),
             ),
-            ("rules+", None, "other", false, Some("requires \"rules\"")),
+            (
+                "other+",
+                Some("2"),
+                "rules",
+                true,
+                &["1"],
+                Some("selected version 2"),
+            ),
+            (
+                "rules+",
+                None,
+                "other",
+                false,
+                &["1"],
+                Some("requires \"rules\""),
+            ),
+            (
+                "other+",
+                None,
+                "other",
+                true,
+                &[],
+                Some("requires \"rules\""),
+            ),
         ] {
             let external = root.join("external");
             let mut client = TestBazelClient::default();
@@ -477,7 +523,10 @@ mod tests {
             let source = super::Source {
                 repository: "@renamed".into(),
                 module: "rules".into(),
-                versions: vec!["1".into()],
+                versions: versions
+                    .iter()
+                    .map(|version| (*version).to_owned())
+                    .collect(),
             };
             let repository =
                 super::resolve_source_repository_name(&loader, &package, &source).unwrap();
