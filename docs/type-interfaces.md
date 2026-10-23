@@ -27,7 +27,16 @@ provider, TypedDict, and Protocol declarations remain accepted.
 When Bazel type checks a `.bzl` source file, annotation names must resolve in
 that Bazel version's type environment. Bazel type names and runtime type names
 can differ: `Ctx` describes a build-rule context with runtime type `ctx`.
-A `.bzli` file also accepts sty-specific names such as `repository_ctx`.
+Stub files and type comments can use `repository_ctx` and `module_ctx` for
+contexts whose native annotation types are missing
+([Bazel #32020](https://github.com/bazelbuild/bazel/issues/32020)).
+
+Collection annotations use the Starlark specification's `Collection[T]`,
+`Sequence[T]`, and `Mapping[K, V]`. `Collection` includes lists, tuples, sets,
+and dictionary keys; `Sequence` also requires indexing and slicing. Use `None`
+for the null type. Python's `Iterable` and `NoneType` are undefined annotation
+names. Starlark deliberately merged its `Iterable` abstraction into
+`Collection` in [starlark#318](https://github.com/bazelbuild/starlark/pull/318).
 
 For each name loaded from a mapped `.bzl` module, sty uses the stub declaration
 when present and source inference otherwise. Annotations are resolved in the
@@ -734,7 +743,7 @@ Protocols and TypedDicts accept type parameters using the same syntax as generic
 functions, for example `class _Consumer[T](Protocol)`.
 
 `Hashable` is available for bounded inputs, such as
-`def unique[T: Hashable](values: Iterable[T]) -> list[T]: ...`.
+`def unique[T: Hashable](values: Collection[T]) -> list[T]: ...`.
 It rejects lists and dictionaries and retains the concrete input type. Struct
 fields must themselves satisfy `Hashable`; this conservatively excludes frozen
 structs containing lists. The canonical tuple protocol does not check nested

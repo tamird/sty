@@ -3044,6 +3044,64 @@ mod tests {
     use crate::FilePosition;
 
     #[test]
+    fn annotation_names_follow_starlark_collections() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        for (path, source) in [
+            (
+                "/native.bzl",
+                "def f(values: Iterable[str]) -> NoneType:\n    pass\n",
+            ),
+            (
+                "/comment.bzl",
+                "def f(values):\n    # type: (Iterable[str]) -> NoneType\n    pass\n",
+            ),
+            (
+                "/stub.bzli",
+                "def f(values: Iterable[str]) -> NoneType: ...\n",
+            ),
+        ] {
+            let file = analysis
+                .open_document(Path::new(path), Dialect::Bazel, None, source.into(), 1)
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(
+                ids,
+                ["unresolved-reference", "unresolved-reference"],
+                "{path}: {diagnostics:?}"
+            );
+
+            analysis.update_file(
+                file,
+                source
+                    .replace("Iterable", "Collection")
+                    .replace("NoneType", "None"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{path}: {diagnostics:?}");
+
+            analysis.update_file(
+                file,
+                format!("type Iterable[T] = Collection[T]\ntype NoneType = None\n{source}"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{path}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
     fn bazel_type_constructor_names_resolve_to_metadata_types() {
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
@@ -3119,7 +3177,7 @@ def optional_list(value: struct[{"items": NotRequired[list[str]]}], fallback: li
     return getattr(value, "items", fallback)
 def optional_dict(value: struct[{"items": NotRequired[dict[str, str]]}], fallback: dict[str, str]) -> dict[str, str]:
     return getattr(value, "items", fallback)
-def optional_iterable(value: struct[{"items": NotRequired[Iterable[str]]}]) -> Iterable[str]:
+def optional_collection(value: struct[{"items": NotRequired[Collection[str]]}]) -> Collection[str]:
     return getattr(value, "items", [])
 def optional_mapping(value: struct[{"items": NotRequired[Mapping[str, str]]}]) -> Mapping[str, str]:
     return getattr(value, "items", {})

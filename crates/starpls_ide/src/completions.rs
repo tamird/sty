@@ -727,6 +727,7 @@ mod tests {
             "set",
             "str",
             "string",
+            "Collection",
             "Sequence",
             "Mapping",
             "None",
@@ -770,7 +771,9 @@ mod tests {
                     failures.push(format!("{expression}: missing {expected}: {names:?}"));
                 }
             }
-            for unexpected in ["fail", "len", "print", "value", "return", "True"] {
+            for unexpected in [
+                "fail", "len", "print", "value", "return", "True", "Iterable", "NoneType",
+            ] {
                 if names.contains(&unexpected) {
                     failures.push(format!("{expression}: unexpected {unexpected}: {names:?}"));
                 }

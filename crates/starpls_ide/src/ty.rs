@@ -309,9 +309,7 @@ impl Database {
                     "Any",
                     "Unknown",
                     "unknown",
-                    "NoneType",
                     "Sequence",
-                    "Iterable",
                     "Mapping",
                     "object",
                     "property",
@@ -440,12 +438,6 @@ impl Database {
                         ty_python_semantic::types::Type::unknown(),
                     ))
                 }
-                "NoneType" => {
-                    return Some(ProvidedBindingValue::Value(
-                        KnownClass::NoneType
-                            .to_class_literal(self, &ProgramEnvironment::from_file(file)),
-                    ))
-                }
                 "Unknown" => {
                     return Some(ProvidedBindingValue::Value(
                         ty_python_semantic::types::Type::unknown(),
@@ -461,12 +453,6 @@ impl Database {
                 "Sequence" => {
                     return Some(ProvidedBindingValue::Value(
                         KnownClass::Sequence
-                            .to_class_literal(self, &ProgramEnvironment::from_file(file)),
-                    ))
-                }
-                "Iterable" => {
-                    return Some(ProvidedBindingValue::Value(
-                        KnownClass::Iterable
                             .to_class_literal(self, &ProgramEnvironment::from_file(file)),
                     ))
                 }

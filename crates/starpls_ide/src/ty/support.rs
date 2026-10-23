@@ -582,7 +582,7 @@ def first(values):
     return values[0]
 
 def consume(values):
-    # type: (Iterable[int]) -> None
+    # type: (Collection[int]) -> None
     pass
 
 def as_mapping(values):
@@ -734,14 +734,14 @@ def update_mapping(target, source, source_bad):
     target.update(struct(items = lambda: [("key", 1)]))
 
 def update_projected(source):
-    # type: (Intersection[Top[dict[Unknown, int]], Iterable[str]]) -> dict[str, int]
+    # type: (Intersection[Top[dict[Unknown, int]], Collection[str]]) -> dict[str, int]
     result = {}  # type: dict[str, int]
     result.update(source)
     result.update(source, extra = 1)
     return result
 
 def invalid_projected(target, wrong_values, keys_only):
-    # type: (dict[str, int], Intersection[Top[dict[Unknown, str]], Iterable[str]], Iterable[str]) -> None
+    # type: (dict[str, int], Intersection[Top[dict[Unknown, str]], Collection[str]], Collection[str]) -> None
     target.update(wrong_values)
     target.update(keys_only)
 "#;

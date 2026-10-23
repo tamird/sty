@@ -1197,14 +1197,14 @@ def contains(values: Collection[str], candidate: object) -> bool:
     }
 
     #[test]
-    fn nested_iterable_annotations_preserve_element_types() {
+    fn nested_collection_annotations_preserve_element_types() {
         let source = r#"
-def nested(values: Iterable[Iterable[str]]) -> None:
+def nested(values: Collection[Collection[str]]) -> None:
     pass
-def deeper(values: Iterable[Iterable[Iterable[str]]]) -> None:
+def deeper(values: Collection[Collection[Collection[str]]]) -> None:
     pass
 def specifications(values):
-    # type: (Iterable[tuple[Collection[str], Mapping[str, Collection[str]]]]) -> None
+    # type: (Collection[tuple[Collection[str], Mapping[str, Collection[str]]]]) -> None
     pass
 nested([["ok"]])
 nested((("ok",),))
