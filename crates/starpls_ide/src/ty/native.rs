@@ -1398,6 +1398,7 @@ fn declarations(
                     let field_type = if class.name == "_ApplePlatformTypes"
                         || (class.name == "apple_common" && field.name == "platform_type")
                         || (class.name == "DormantDependency" && field.name == "label")
+                        || (dialect == Dialect::Bazel && class.name == "File")
                     {
                         format!("_starpls_typing.Final[{field_type}]")
                     } else {
@@ -8054,6 +8055,42 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
             panic!("{diagnostics:?}");
         };
         assert_eq!(diagnostic.id().as_str(), "unresolved-reference");
+    }
+
+    #[test]
+    fn bazel_file_fields_are_readonly() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = "def source(file: File) -> tuple[bool, str]:\n    return (file.is_source, file.basename)\n";
+        let file = analysis
+            .open_document(
+                Path::new("/source.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for assignment in ["file.is_source = False", "file.basename = 'renamed'"] {
+            analysis.update_file(
+                file,
+                format!("{source}def mutate(file: File) -> None:\n    {assignment}\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
+            assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
+        }
     }
 
     #[test]
