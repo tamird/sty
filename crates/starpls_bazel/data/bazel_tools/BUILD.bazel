@@ -1,0 +1,7 @@
+exports_files(
+    [
+        "stubs.toml",
+        "utils.bzli",
+    ],
+    visibility = ["//visibility:public"],
+)

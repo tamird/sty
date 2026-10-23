@@ -1,0 +1,20 @@
+# Bazel repository authentication helper contracts.
+# Source owner: @bazel_tools//tools/build_defs/repo:utils.bzl.
+
+type _Netrc = dict[str, dict[str, str]]
+type _Auth = dict[str, dict[str, str]]
+type _NetrcPath = str | Label | path
+type _AuthAttrs = struct[{
+    "netrc": NotRequired[_NetrcPath | None],
+    "auth_patterns": NotRequired[dict[str, str] | None],
+}, ...]
+
+def read_netrc[A](ctx: repository_ctx[A], filename: _NetrcPath) -> _Netrc: ...
+def parse_netrc(contents: str, filename: _NetrcPath | None = ...) -> _Netrc: ...
+def use_netrc(
+    netrc: Mapping[str, Mapping[str, str]],
+    urls: Collection[str],
+    patterns: Mapping[str, str],
+) -> _Auth: ...
+def read_user_netrc[A](ctx: repository_ctx[A]) -> _Netrc: ...
+def get_auth(ctx: repository_ctx[_AuthAttrs], urls: Collection[str]) -> _Auth: ...

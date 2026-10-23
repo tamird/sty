@@ -1,0 +1,8 @@
+format-version = 1
+
+[source]
+repository = "@bazel_tools"
+module = "bazel_tools"
+
+[files]
+"tools/build_defs/repo/utils.bzl" = "utils.bzli"
