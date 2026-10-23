@@ -23,7 +23,9 @@ use starpls_common::File;
 use ty_python_core::definition::Definition;
 use ty_python_semantic::lint::LintMetadata;
 use ty_python_semantic::types::ide_support::call_input_types_with_context;
+use ty_python_semantic::types::ide_support::unreachable_ranges;
 use ty_python_semantic::types::ide_support::CallInputError;
+use ty_python_semantic::types::ide_support::UnreachableRange;
 use ty_python_semantic::types::CallableTypeKind;
 use ty_python_semantic::types::OverloadBodyAnalysis;
 use ty_python_semantic::types::OverloadBodyView;
@@ -70,6 +72,11 @@ pub(super) fn diagnostics<'db>(
         model: &model,
         explicit_any,
         non_static,
+        unreachable: if non_static {
+            unreachable_ranges(db, program)
+        } else {
+            &[]
+        },
         overload_bodies,
         domain: None,
         diagnostics: Vec::new(),
@@ -84,12 +91,26 @@ struct Checks<'a, 'db> {
     model: &'a SemanticModel<'db>,
     explicit_any: bool,
     non_static: bool,
+    unreachable: &'a [UnreachableRange],
     overload_bodies: &'a [OverloadBodyAnalysis<'db>],
     domain: Option<OverloadBodyView<'db>>,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl<'db> Checks<'_, 'db> {
+    fn is_unreachable(&self, range: TextRange) -> bool {
+        if self.domain.is_some() {
+            // Overload bodies have their own domain-specific reachability.
+            return false;
+        }
+        let end = self
+            .unreachable
+            .partition_point(|unreachable| unreachable.range.start() <= range.start());
+        self.unreachable[..end]
+            .last()
+            .is_some_and(|unreachable| unreachable.range.contains_range(range))
+    }
+
     fn definition(&self, node: AnyNodeRef<'_>) -> Option<Definition<'db>> {
         let index = ty_python_core::semantic_index(self.db, self.model.program_file());
         let definitions = index.try_definitions(node)?;
@@ -184,7 +205,7 @@ impl<'db> Checks<'_, 'db> {
     }
 
     fn check_expression(&mut self, expression: &Expr, subject: &str) {
-        if !self.non_static {
+        if !self.non_static || self.is_unreachable(expression.range()) {
             return;
         }
         if let Some(ty) = self.expression_type(expression) {
@@ -205,6 +226,9 @@ impl<'db> Checks<'_, 'db> {
         expression: &Expr,
         callback: Option<&super::context::CallbackContract<'_, 'db>>,
     ) {
+        if self.is_unreachable(expression.range()) {
+            return;
+        }
         match callback.filter(|callback| callback.argument.range() == expression.range()) {
             Some(callback) => self.check_type(expression.range(), callback.ty, "argument"),
             None => self.check_expression(expression, "argument"),
@@ -320,7 +344,10 @@ impl<'db> Checks<'_, 'db> {
                 self.check_expression(expression, "variable");
             }
         }
-        if self.non_static && !self.file.is_type_interface(self.db) {
+        if self.non_static
+            && !self.is_unreachable(expression.range())
+            && !self.file.is_type_interface(self.db)
+        {
             if let Expr::Call(call) = expression {
                 let callback = if self.domain.is_none() {
                     super::context::callback_contract(self.db, self.model, call)
@@ -586,6 +613,8 @@ impl<'ast> Visitor<'ast> for AnyAnnotations<'_, '_> {
 
 #[cfg(test)]
 mod tests {
+    use salsa::Setter;
+    use starpls_hir::Db as _;
     use starpls_hir::Fixture;
 
     use crate::Analysis;
@@ -599,6 +628,121 @@ mod tests {
                 .collect(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn non_static_checks_follow_imported_reachability() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let mode = fixture.add_file(&mut analysis.db, "mode.bzl", "MODE = 'local'\n");
+        fixture.add_file(&mut analysis.db, "api.bzli", "def gradual() -> Any: ...\n");
+        let source = r#"
+load("mode.bzl", "MODE")
+load("api.bzli", "gradual")
+
+_VALUES = ["known"]
+
+def pruned() -> None:
+    if MODE == "local":
+        return
+    for value in _VALUES:
+        print(value)
+
+def active() -> None:
+    for value in _VALUES:
+        print(value)
+
+def operand() -> bool:
+    return MODE == "local" or gradual()
+
+def returned() -> object:
+    if MODE == "local":
+        return 0
+    return gradual()
+"#;
+        let file = fixture.add_file(&mut analysis.db, "main.bzl", source);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_rules(rules(&["non-static-type"]));
+        for use_code_flow_analysis in [false, true, false] {
+            let environment = analysis.db.environment();
+            let mut options = environment.options(&analysis.db).clone();
+            options.use_code_flow_analysis = use_code_flow_analysis;
+            environment.set_options(&mut analysis.db).to(options);
+            for selected in ["local", "remote", "local"] {
+                analysis.update_file(mode, format!("MODE = '{selected}'\n"));
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                let strict: Vec<_> = diagnostics
+                    .iter()
+                    .filter(|diagnostic| diagnostic.id().as_str() == "non-static-type")
+                    .collect();
+                assert!(
+                    diagnostics.iter().all(|diagnostic| matches!(
+                        diagnostic.id().as_str(),
+                        "non-static-type" | "unreachable-code"
+                    )),
+                    "{selected}, flow reporting {use_code_flow_analysis}: {diagnostics:?}"
+                );
+                if selected == "local" {
+                    assert!(strict.is_empty(), "{diagnostics:?}");
+                } else {
+                    for expression in ["MODE == \"local\" or gradual()", "gradual()"] {
+                        let start = source.rfind(expression).unwrap();
+                        assert!(
+                            strict.iter().any(|diagnostic| {
+                                diagnostic.headline_message().contains("returned value")
+                                    && diagnostic.range().unwrap().start().to_usize() == start
+                            }),
+                            "{expression}: {diagnostics:?}"
+                        );
+                    }
+                    assert!(
+                        strict.iter().all(|diagnostic| {
+                            diagnostic.range().unwrap().start().to_usize()
+                                >= source.find("def operand").unwrap()
+                        }),
+                        "{diagnostics:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unreachable_type_comments_still_reject_explicit_any() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(
+            "def example() -> None:\n    if False:\n        value = 42  # type: Any\n        print(value)\n",
+        );
+        analysis.set_rules(rules(&["non-static-type", "explicit-any"]));
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "explicit-any");
+    }
+
+    #[test]
+    fn unreachable_declarations_still_require_static_types() {
+        let source = "def outer() -> None:\n    if False:\n        def example(value: Any) -> Any:\n            return value\n        print(example)\n";
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        let file = fixture.main_file();
+        analysis.set_rules(rules(&["non-static-type"]));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        for (name, subject) in [("example", "function return"), ("value", "parameter")] {
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == "non-static-type"
+                        && diagnostic.headline_message().contains(subject)
+                        && diagnostic.range().unwrap().start().to_usize()
+                            == source.find(name).unwrap()
+                }),
+                "{subject}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(file, source.replace("Any", "int"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
