@@ -78,6 +78,21 @@ impl ExistingRuleScope {
     }
 }
 
+/// Private native type for providers propagated to a visited rule's toolchain.
+pub const ASPECT_TOOLCHAIN_PROVIDERS: &str = "_AspectToolchainProviders";
+
+/// Whether the live inventory exposes the visited rule's toolchain context.
+pub fn has_aspect_toolchains(builtins: &Builtins) -> bool {
+    builtins.r#type.iter().any(|class| {
+        class.name == "rule_attributes"
+            && class.field.iter().any(|field| {
+                field.name == "toolchains"
+                    && field.callable.is_none()
+                    && normalize_doc(&field.r#type, true) == "ToolchainContext"
+            })
+    })
+}
+
 /// The major and minor components reported by `bazel info release`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BazelVersion {
@@ -105,6 +120,25 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         return;
     };
     let version = (major, minor);
+    // Bazel 8 exposes provider lookup on this value; Bazel 9 also exposes label.
+    // https://github.com/bazelbuild/bazel/commit/419fdac42b
+    if version >= (9, 0)
+        && has_aspect_toolchains(builtins)
+        && !builtins
+            .r#type
+            .iter()
+            .any(|class| class.name == ASPECT_TOOLCHAIN_PROVIDERS)
+    {
+        builtins.r#type.push(Type {
+            name: ASPECT_TOOLCHAIN_PROVIDERS.to_owned(),
+            field: vec![Value {
+                name: "label".to_owned(),
+                r#type: "Label".to_owned(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+    }
     if version >= (8, 0) {
         // Bazel 8 removed the option to return mutable dictionaries.
         // https://github.com/bazelbuild/bazel/commit/0fa8f9f39542a093ebc6819642b58dce643c7af3
