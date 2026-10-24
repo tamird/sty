@@ -49,6 +49,7 @@ use ty_python_semantic::types::TypedDictType;
 use ty_python_semantic::types::UnionType;
 use ty_python_semantic::ProgramEnvironment;
 
+use super::forwarded_rule::BoundRule;
 use crate::Database;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -112,6 +113,7 @@ pub(super) struct RuleData {
     /// Additional context attributes, when all possible names are known but
     /// these attributes are only present on some paths.
     pub(super) conditional_context_attributes: Option<Box<[RuleAttributeData]>>,
+    pub(super) outputs: Option<RuleOutputs>,
     pub(super) fragments: Fragments,
     pub(super) complete: bool,
     /// Whether the generated call signature has no unresolved shape requirements.
@@ -157,6 +159,12 @@ impl Fragments {
         self.names.sort_unstable();
         self.names.dedup();
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
+pub(super) struct RuleOutputs {
+    pub(super) fields: Box<[(Name, FileRange)]>,
+    pub(super) complete: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
@@ -756,7 +764,12 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
     if !preserves_argument_order(&call.call().arguments) {
         return None;
     }
-    match declaration(db, call.declaration()?)? {
+    let source = call.declaration()?;
+    let Some(builtin) = declaration(db, source) else {
+        let forwarded = BoundRule::bind(db, call, source)?;
+        return rule_with_inputs(db, call, RuleKind::Build, Some(&forwarded));
+    };
+    match builtin {
         BuiltinFunction::Attribute(kind) => attribute(db, call, kind),
         BuiltinFunction::BuildSetting(mut kind) => {
             if let BuildSetting::String { allow_multiple } = &mut kind {
@@ -1365,18 +1378,6 @@ fn keyword_is_absent(call: &CheckedCall<'_, '_>, name: &str) -> bool {
     })
 }
 
-fn keyword_is_omitted_or<'db>(
-    call: &CheckedCall<'_, 'db>,
-    name: &str,
-    predicate: impl FnOnce(Type<'db>, Option<&Expr>) -> bool,
-) -> bool {
-    match call.argument(name) {
-        CheckedArgument::Omitted => true,
-        CheckedArgument::Value { ty, expression } => predicate(ty, expression),
-        CheckedArgument::Indeterminate => keyword_is_absent(call, name),
-    }
-}
-
 pub(super) fn literal_sequence_elements(expression: &Expr) -> Option<&[Expr]> {
     let elements = match expression {
         Expr::List(list) => {
@@ -1493,15 +1494,61 @@ pub(super) fn common_rule_attrs<'db>(
 }
 
 fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> Option<Type<'db>> {
+    rule_with_inputs(db, call, kind, None)
+}
+
+struct RuleInputs<'call, 'a, 'db> {
+    site: &'call CheckedCall<'a, 'db>,
+    forwarded: Option<&'call BoundRule<'a, 'db>>,
+}
+
+impl<'a, 'db> RuleInputs<'_, 'a, 'db> {
+    fn argument(&self, name: &str) -> CheckedArgument<'a, 'db> {
+        match self.forwarded {
+            Some(bound) => bound.option(name),
+            None => self.site.argument(name),
+        }
+    }
+
+    fn flag(&self, name: &str) -> Option<bool> {
+        argument_bool(self.argument(name))
+    }
+
+    fn omitted_or(
+        &self,
+        name: &str,
+        predicate: impl FnOnce(Type<'db>, Option<&Expr>) -> bool,
+    ) -> bool {
+        match self.argument(name) {
+            CheckedArgument::Omitted => true,
+            CheckedArgument::Value { ty, expression } => predicate(ty, expression),
+            CheckedArgument::Indeterminate => keyword_is_absent(self.site, name),
+        }
+    }
+}
+
+fn rule_with_inputs<'a, 'db>(
+    db: &'db Database,
+    call: &CheckedCall<'a, 'db>,
+    kind: RuleKind,
+    forwarded: Option<&BoundRule<'a, 'db>>,
+) -> Option<Type<'db>> {
+    let inputs = RuleInputs {
+        site: call,
+        forwarded,
+    };
     let environment = ProgramEnvironment::from_file(call.file());
-    let declaration = call.declaration()?;
+    let declaration = match forwarded {
+        Some(bound) => bound.forwarder.native,
+        None => call.declaration()?,
+    };
     let declarations = declaration.program_file(db);
     let rules = db
         .get_builtin_defs(&starpls_common::Dialect::Bazel)
         .rules(db);
     let common = starpls_bazel::attr::make_common_attributes(rules);
     let parent = if matches!(kind, RuleKind::Build) {
-        match call.argument("parent") {
+        match inputs.argument("parent") {
             CheckedArgument::Omitted => None,
             CheckedArgument::Value { ty, expression: _ } => (!ty.is_none(db)).then_some(ty),
             CheckedArgument::Indeterminate => Some(Type::unknown()),
@@ -1510,7 +1557,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         None
     };
     let parent_data = parent.and_then(|parent| {
-        let base = declared_class(db, call, "rule")?;
+        let base = native_class(db, declarations, "rule")?;
         let base = base.to_instance_approximation(db, &environment)?;
         if !parent.is_subtype_of(db, &environment, base) {
             return None;
@@ -1518,45 +1565,70 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         let data = parent.provided_data(db, &environment)?;
         data.downcast_ref::<RuleData>()
     });
-    let fragments = if matches!(kind, RuleKind::Build)
+    let fragments =
+        if matches!(kind, RuleKind::Build) && db.environment().options(db).infer_ctx_attributes {
+            let mut fragments =
+                super::context::fragment_argument(db, call, inputs.argument("fragments"));
+            if parent.is_some() {
+                if let Some(parent) = parent_data {
+                    fragments.names.extend_from_slice(&parent.fragments.names);
+                    fragments.open |= parent.fragments.open;
+                    fragments.normalize();
+                } else {
+                    fragments.open = true;
+                }
+            }
+            fragments
+        } else {
+            Fragments::default()
+        };
+    let outputs = if matches!(kind, RuleKind::Build)
         && db.environment().options(db).infer_ctx_attributes
     {
-        let mut fragments = super::context::fragment_argument(db, call, call.argument("fragments"));
-        if parent.is_some() {
-            if let Some(parent) = parent_data {
-                fragments.names.extend_from_slice(&parent.fragments.names);
-                fragments.open |= parent.fragments.open;
-                fragments.normalize();
-            } else {
-                fragments.open = true;
+        match inputs.argument("outputs") {
+            CheckedArgument::Omitted => Some(RuleOutputs {
+                fields: Box::default(),
+                complete: true,
+            }),
+            CheckedArgument::Indeterminate => None,
+            CheckedArgument::Value { expression, ty: _ } => {
+                let mapping = match forwarded {
+                    Some(_) => expression.and_then(|expr| call.dictionary_items(db, expr)),
+                    None => call.dictionary_argument(db, "outputs"),
+                };
+                let complete = mapping.as_ref().is_some_and(|mapping| {
+                    mapping.is_complete() && mapping.items.iter().all(DictionaryItem::is_required)
+                });
+                let fields = mapping
+                    .into_iter()
+                    .flat_map(|mapping| mapping.items.into_vec())
+                    .filter(DictionaryItem::is_required)
+                    .map(|item| (item.name, FileRange::new(call.file().file(db), item.source)))
+                    .collect();
+                Some(RuleOutputs { fields, complete })
             }
         }
-        fragments
     } else {
-        Fragments::default()
+        None
     };
     let inherited_initializer =
         parent.is_some() && parent_data.is_none_or(|data| data.may_have_initializer);
     let may_have_initializer = matches!(kind, RuleKind::Build)
-        && (inherited_initializer
-            || !keyword_is_omitted_or(call, "initializer", |ty, _| ty.is_none(db)));
+        && (inherited_initializer || !inputs.omitted_or("initializer", |ty, _| ty.is_none(db)));
     let test = if matches!(kind, RuleKind::Build) && parent.is_none() {
-        any_enabled([
-            boolean_argument(call, "test"),
-            boolean_argument(call, "analysis_test"),
-        ])
+        any_enabled([inputs.flag("test"), inputs.flag("analysis_test")])
     } else {
         Some(false)
     };
     let executable = if parent.is_some() {
         parent_data.and_then(|data| data.executable)
     } else if matches!(kind, RuleKind::Build) {
-        any_enabled([test, boolean_argument(call, "executable")])
+        any_enabled([test, inputs.flag("executable")])
     } else {
         Some(false)
     };
     let binary = if parent.is_none() && matches!(kind, RuleKind::Build) {
-        match (test, boolean_argument(call, "executable")) {
+        match (test, inputs.flag("executable")) {
             (Some(true), _) | (_, Some(false)) => Some(false),
             (Some(false), Some(true)) => Some(true),
             _ => None,
@@ -1566,7 +1638,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     };
     let mut test_attributes = common.test;
     let mut binary_attributes = common.binary;
-    let inherit_common = matches!(call.argument("inherit_attrs"), CheckedArgument::Value { ty, expression: _ }
+    let inherit_common = matches!(inputs.argument("inherit_attrs"), CheckedArgument::Value { ty, expression: _ }
         if ty.string_literal_value(db) == Some("common"));
     let mut common = match kind {
         RuleKind::Build => common.build,
@@ -1581,7 +1653,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
             .collect(),
     };
     let build_setting = if matches!(kind, RuleKind::Build) {
-        match call.argument("build_setting") {
+        match inputs.argument("build_setting") {
             CheckedArgument::Omitted => None,
             CheckedArgument::Value { ty, expression: _ } => (!ty.is_none(db)).then_some(ty),
             CheckedArgument::Indeterminate => Some(Type::unknown()),
@@ -1603,7 +1675,12 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         common.append(&mut binary_attributes);
     }
     let mut documentation = Documentation {
-        text: doc_string(db, call),
+        text: match inputs.argument("doc") {
+            CheckedArgument::Value { ty, expression: _ } => {
+                ty.string_literal_value(db).map(Into::into)
+            }
+            _ => None,
+        },
         parameters: common
             .iter()
             .map(|attribute| {
@@ -1715,24 +1792,28 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         }
     };
     let uncertain_parent = parent.is_some() && !complete;
-    let own_attributes = match call.argument("attrs") {
-        CheckedArgument::Omitted => Some(DictionaryItems {
-            items: Box::default(),
-            extra_items: DictionaryExtraItems::Closed,
-            first_entry: DictionaryFirstEntry::Empty,
-        }),
-        CheckedArgument::Value { ty, expression: _ } => {
-            if matches!(kind, RuleKind::Repository) && ty.is_none(db) {
-                Some(DictionaryItems {
-                    items: Box::default(),
-                    extra_items: DictionaryExtraItems::Closed,
-                    first_entry: DictionaryFirstEntry::Empty,
-                })
-            } else {
-                call.dictionary_argument(db, "attrs")
+    let own_attributes = if let Some(bound) = forwarded {
+        Some(bound.attrs.clone())
+    } else {
+        match inputs.argument("attrs") {
+            CheckedArgument::Omitted => Some(DictionaryItems {
+                items: Box::default(),
+                extra_items: DictionaryExtraItems::Closed,
+                first_entry: DictionaryFirstEntry::Empty,
+            }),
+            CheckedArgument::Value { ty, expression: _ } => {
+                if matches!(kind, RuleKind::Repository) && ty.is_none(db) {
+                    Some(DictionaryItems {
+                        items: Box::default(),
+                        extra_items: DictionaryExtraItems::Closed,
+                        first_entry: DictionaryFirstEntry::Empty,
+                    })
+                } else {
+                    call.dictionary_argument(db, "attrs")
+                }
             }
+            CheckedArgument::Indeterminate => None,
         }
-        CheckedArgument::Indeterminate => None,
     };
     let own_attributes = own_attributes.unwrap_or(DictionaryItems {
         items: Box::default(),
@@ -1760,7 +1841,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     let initializer_preserves_call_shape = matches!(kind, RuleKind::Build)
         && parent.is_none()
         && is_complete
-        && match call.argument("initializer") {
+        && match inputs.argument("initializer") {
             CheckedArgument::Value { ty, expression: _ } => {
                 initializer_accepts_rule_attributes(db, &environment, ty)
             }
@@ -1777,11 +1858,11 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         && match kind {
             RuleKind::Build => {
                 parent_data.is_none_or(|data| data.call_shape_complete)
-                    && keyword_is_omitted_or(call, "dependency_resolution_rule", |ty, _| {
+                    && inputs.omitted_or("dependency_resolution_rule", |ty, _| {
                         ty.as_bool_literal() == Some(false)
                     })
                     && (!may_have_initializer || initializer_preserves_call_shape)
-                    && keyword_is_omitted_or(call, "subrules", |_, expression| {
+                    && inputs.omitted_or("subrules", |_, expression| {
                         expression
                             .and_then(literal_sequence_elements)
                             .is_some_and(<[Expr]>::is_empty)
@@ -2084,6 +2165,7 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
                     documentation,
                     attributes: descriptors.into_boxed_slice(),
                     conditional_context_attributes,
+                    outputs,
                     fragments,
                     complete,
                     call_shape_complete,
@@ -2291,7 +2373,11 @@ fn callable_signature<'db>(
 }
 
 fn boolean_argument(call: &CheckedCall<'_, '_>, name: &str) -> Option<bool> {
-    match call.argument(name) {
+    argument_bool(call.argument(name))
+}
+
+fn argument_bool(argument: CheckedArgument<'_, '_>) -> Option<bool> {
+    match argument {
         CheckedArgument::Omitted => Some(false),
         CheckedArgument::Value { ty, expression: _ } => ty.as_bool_literal(),
         CheckedArgument::Indeterminate => None,

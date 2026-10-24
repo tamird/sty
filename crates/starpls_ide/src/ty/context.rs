@@ -127,13 +127,29 @@ pub(super) fn type_application<'db>(
     )
 }
 
+fn constructor<'db>(
+    db: &'db Database,
+    source: Definition<'db>,
+) -> Option<(Definition<'db>, BuiltinFunction, Name)> {
+    if let Some(kind) = factory::declaration(db, source) {
+        return Some((source, kind, Name::new("implementation")));
+    }
+    let summary = super::forwarded_rule::definition(db, source).as_ref()?;
+    Some((
+        summary.native,
+        BuiltinFunction::Rule { repository: false },
+        summary.implementation.clone(),
+    ))
+}
+
 pub(super) fn contextual_parameters(db: &Database, definition: Definition<'_>) -> Box<[Name]> {
     if !db.environment().options(db).infer_ctx_attributes {
         return Box::default();
     }
-    match factory::declaration(db, definition) {
-        Some(BuiltinFunction::Rule { repository: _ }) => Box::from([Name::new("implementation")]),
-        Some(BuiltinFunction::Aspect) => Box::from([Name::new("implementation")]),
+    match constructor(db, definition) {
+        Some((_, BuiltinFunction::Rule { repository: _ } | BuiltinFunction::Aspect, parameter)) => {
+            Box::from([parameter])
+        }
         _ => Box::default(),
     }
 }
@@ -143,11 +159,15 @@ pub(super) fn argument_context<'db>(
     call: &CheckedCall<'_, 'db>,
     parameter: &str,
 ) -> Option<Type<'db>> {
-    if !db.environment().options(db).infer_ctx_attributes || parameter != "implementation" {
+    if !db.environment().options(db).infer_ctx_attributes {
+        return None;
+    }
+    let (_, _, implementation) = constructor(db, call.declaration()?)?;
+    if parameter != implementation.as_str() {
         return None;
     }
     // Named functions receive body contracts through their own parameter definitions.
-    if let CheckedArgument::Value { ty, expression: _ } = call.argument("implementation") {
+    if let CheckedArgument::Value { ty, expression: _ } = call.argument(parameter) {
         if matches!(ty, Type::FunctionLiteral(_)) {
             return None;
         }
@@ -162,8 +182,8 @@ fn registration_invocation<'db>(
     if !db.environment().options(db).infer_ctx_attributes {
         return None;
     }
-    let declaration = call.declaration()?;
-    let kind = match factory::declaration(db, declaration)? {
+    let (declaration, factory, _) = constructor(db, call.declaration()?)?;
+    let kind = match factory {
         BuiltinFunction::Rule { repository } => {
             if repository {
                 ContextKind::Repository
@@ -242,7 +262,13 @@ pub(super) fn call_diagnostics<'db>(
     ) {
         return args_map_each_diagnostics(db, call);
     }
-    let CheckedArgument::Value { ty, expression } = call.argument("implementation") else {
+    let Some((_, _, parameter)) = call
+        .declaration()
+        .and_then(|source| constructor(db, source))
+    else {
+        return Vec::new();
+    };
+    let CheckedArgument::Value { ty, expression } = call.argument(parameter.as_str()) else {
         return Vec::new();
     };
     let Some(invocation) = registration_invocation(db, call) else {
@@ -467,8 +493,7 @@ pub(super) fn callback_contract<'a, 'db>(
         return None;
     }
     let registration = resolved_call_signature(model, call)?;
-    let declaration = registration.definition?;
-    let factory = factory::declaration(db, declaration)?;
+    let (declaration, factory, implementation) = constructor(db, registration.definition?)?;
     let inferred_context = match factory {
         BuiltinFunction::Rule { repository } => Some(if repository {
             ContextKind::Repository
@@ -479,7 +504,8 @@ pub(super) fn callback_contract<'a, 'db>(
         BuiltinFunction::ModuleExtension => None,
         _ => return None,
     };
-    let Argument::Expression(argument) = argument(call, &registration, "implementation").ok()??
+    let Argument::Expression(argument) =
+        argument(call, &registration, implementation.as_str()).ok()??
     else {
         return None;
     };
@@ -606,7 +632,7 @@ pub(super) fn parameter_type<'db>(
         let Some(declaration) = signature.definition else {
             continue;
         };
-        let Some(factory) = factory::declaration(db, declaration) else {
+        let Some((_, factory, parameter_name)) = constructor(db, declaration) else {
             continue;
         };
         if !matches!(
@@ -621,7 +647,7 @@ pub(super) fn parameter_type<'db>(
         }
         // An unknown expansion could register this callback with another schema;
         // every possible body contract must be accounted for.
-        let Some(argument) = argument(call, &signature, "implementation").ok()? else {
+        let Some(argument) = argument(call, &signature, parameter_name.as_str()).ok()? else {
             continue;
         };
         let ty = match argument {
@@ -637,7 +663,7 @@ pub(super) fn parameter_type<'db>(
                 let implementation = entries
                     .items
                     .iter()
-                    .find(|item| item.name == "implementation")?;
+                    .find(|item| item.name == parameter_name)?;
                 if !implementation.is_required() {
                     return None;
                 }
@@ -680,8 +706,7 @@ fn registration_parameter_type<'db>(
     signature: &CallSignatureDetails<'db>,
 ) -> Option<Type<'db>> {
     let environment = model.program_environment();
-    let declaration = signature.definition?;
-    let factory = factory::declaration(db, declaration)?;
+    let (declaration, factory, _) = constructor(db, signature.definition?)?;
     let declarations = declaration.program_file(db);
     let context_kind = match factory {
         BuiltinFunction::Macro => {
@@ -871,7 +896,7 @@ fn registration_context_type<'db>(
         db,
         Registration {
             file,
-            declaration: signature.definition?,
+            declaration: constructor(db, signature.definition?)?.0,
             result: call.inferred_type(model)?,
             kind: context_kind,
             aspect_fragments: if context_kind == ContextKind::Aspect {
@@ -896,7 +921,7 @@ fn registration_context_type<'db>(
     )
 }
 
-fn empty_mapping<'db>() -> DictionaryItems<'db> {
+pub(super) fn empty_mapping<'db>() -> DictionaryItems<'db> {
     DictionaryItems {
         items: Box::default(),
         extra_items: DictionaryExtraItems::Closed,
@@ -1149,35 +1174,22 @@ fn context_type<'db>(
         if view == View::Outputs {
             let output = factory::native_class(db, declarations, "File")?
                 .to_instance_approximation(db, &environment)?;
-            match dictionary_argument("outputs").ok()? {
-                Some(mapping) => {
-                    let is_complete = mapping.is_complete();
-                    let DictionaryItems {
-                        items,
-                        extra_items: _,
-                        first_entry: _,
-                    } = mapping;
-                    let is_complete = is_complete && items.iter().all(DictionaryItem::is_required);
-                    complete &= is_complete;
-                    for DictionaryItem {
-                        name,
-                        ty: _,
-                        source,
-                        kind: _,
-                    } in IntoIterator::into_iter(items).filter(DictionaryItem::is_required)
-                    {
-                        insert_field(
-                            &mut fields,
-                            ProvidedField {
-                                name,
-                                ty: if is_complete { output } else { Type::unknown() },
-                                is_required: true,
-                                source: Some(FileRange::new(file.file(db), source)),
-                            },
-                        );
-                    }
-                }
-                None => complete = false,
+            let outputs = rule?.outputs.as_ref()?;
+            complete &= outputs.complete;
+            for (name, source) in &outputs.fields {
+                insert_field(
+                    &mut fields,
+                    ProvidedField {
+                        name: name.clone(),
+                        ty: if outputs.complete {
+                            output
+                        } else {
+                            Type::unknown()
+                        },
+                        is_required: true,
+                        source: Some(*source),
+                    },
+                );
             }
             match rule?.executable {
                 Some(true) => insert_field(
@@ -1718,13 +1730,23 @@ impl<'a> Visitor<'a> for RegistrationCalls<'a> {
             Expr::Call(call) => {
                 // Skip calls that cannot supply an implementation argument.
                 // The shared matcher still decides every candidate's meaning.
-                if !call.arguments.args.is_empty()
-                    || call.arguments.keywords.iter().any(|keyword| {
-                        keyword
-                            .arg
-                            .as_ref()
-                            .is_none_or(|name| name.as_str() == "implementation")
-                    })
+                let could_be_callback = |value: &Expr| {
+                    !value.is_literal_expr()
+                        && !matches!(
+                            value,
+                            Expr::Dict(_)
+                                | Expr::List(_)
+                                | Expr::Tuple(_)
+                                | Expr::Set(_)
+                                | Expr::Lambda(_)
+                        )
+                };
+                if call.arguments.args.iter().any(could_be_callback)
+                    || call
+                        .arguments
+                        .keywords
+                        .iter()
+                        .any(|keyword| keyword.arg.is_none() || could_be_callback(&keyword.value))
                 {
                     self.calls.push(call);
                 }
@@ -3545,6 +3567,206 @@ example(name="ok", args=["flag"], output_licenses=["notice"])
         let source = "def flag() -> bool: return True\ndef implementation(ctx): print(ctx.attr.output_licenses)\nexample = rule(implementation=implementation, executable=flag())\nexample(name='ok', output_licenses=['notice'])\n";
         analysis.update_file(file, source.to_owned());
         assert!(analysis.snapshot().diagnostics(file).unwrap().is_empty());
+    }
+
+    #[test]
+    fn forwarded_rule_checks_the_caller_and_registered_implementation() {
+        let factory = r#"def make(callback, attrs={}, **kwargs):
+    return rule(implementation=callback, attrs=attrs, **kwargs)
+"#;
+        let source = r#"load("facade.bzl", wrap="make")
+def text(value: str) -> None: pass
+def number(value: int) -> None: pass
+def impl(ctx):
+    number(ctx.attr.message)
+    text(ctx.attr._tool)
+    text(ctx.attr.timeout)
+options = {"callback": impl, "attrs": {"message": attr.string(mandatory=True), "_tool": attr.string()}, "test": True, "exec_groups": {"tool": exec_group()}}
+example_test = wrap(**options)
+example_test(name="good", message="yes", timeout="short", generator_name="explicit")
+example_test(name="wrong", message=42)
+example_test(name="typo", message="yes", mesage="yes")
+example_test(name="missing")
+"#;
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        fixture.add_file(&mut analysis.db, "factory.bzl", factory);
+        fixture.add_file(
+            &mut analysis.db,
+            "facade.bzl",
+            "load('factory.bzl', _make='make')\nmake = _make\n",
+        );
+        let file = fixture.add_file(&mut analysis.db, "defs.bzl", source);
+        loader.add_files_from_fixture(&fixture);
+        enable_context(&mut analysis);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let mut locations: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let range = diagnostic.primary_span().unwrap().range().unwrap();
+                (range.start(), diagnostic.id().as_str(), &source[range])
+            })
+            .collect();
+        locations.sort_unstable_by_key(|(start, _, _)| *start);
+        let locations: Vec<_> = locations
+            .into_iter()
+            .map(|(_, id, source)| (id, source))
+            .collect();
+        assert_eq!(
+            locations,
+            [
+                ("invalid-argument-type", "ctx.attr.message"),
+                ("invalid-argument-type", "message=42"),
+                ("unknown-argument", "mesage=\"yes\""),
+                ("missing-argument", "example_test(name=\"missing\")"),
+            ]
+        );
+    }
+
+    #[test]
+    fn forwarded_rule_uses_native_parent_and_outputs() {
+        let source = r#"def make(cb, attrs, **options): return rule(implementation=cb, attrs=attrs, **options)
+def number(value: int) -> None: pass
+def text(value: str) -> None: pass
+def file(value: File) -> None: pass
+def base_impl(ctx): return []
+base = rule(implementation=base_impl, attrs={"inherited": attr.int(mandatory=True)}, extendable=True)
+def child_impl(ctx):
+    text(ctx.attr.own)
+    number(ctx.attr.inherited)
+child = make(child_impl, {"own": attr.string()}, parent=base)
+child(name="good", own="x", inherited=42)
+child(name="bad", own="x", inherited="wrong")
+def files_impl(ctx):
+    file(ctx.outputs.out)
+    number(ctx.outputs.out)
+output_rule = make(files_impl, {}, outputs={"out": "%{name}.txt"})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let mut found: Vec<_> = diagnostics
+            .iter()
+            .map(|d| {
+                (
+                    d.id().as_str(),
+                    &source[d.primary_span().unwrap().range().unwrap()],
+                )
+            })
+            .collect();
+        found.sort_unstable();
+        assert_eq!(
+            found,
+            [
+                ("invalid-argument-type", "ctx.outputs.out"),
+                ("invalid-argument-type", "inherited=\"wrong\"")
+            ]
+        );
+    }
+
+    #[test]
+    fn forwarded_rule_preserves_native_fragment_members() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        let (producer, call) = (
+            "def make(cb, attrs, **kwargs): return rule(implementation=cb, attrs=attrs, **kwargs)",
+            "make(impl, {}, fragments=['apple'])",
+        );
+        let source = format!("{producer}\ndef text(value: str) -> None: pass\ndef impl(ctx):\n    text(ctx.fragments.apple.single_arch_cpu)\n    ctx.fragments.apple.missing_member\nr = {call}\n");
+        analysis.update_file(file, source.clone());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let result: Vec<_> = diagnostics
+            .iter()
+            .map(|d| {
+                (
+                    d.id().as_str(),
+                    &source[d.primary_span().unwrap().range().unwrap()],
+                )
+            })
+            .collect();
+        assert_eq!(
+            result,
+            [("unresolved-attribute", "ctx.fragments.apple.missing_member")],
+            "{producer}"
+        );
+    }
+
+    #[test]
+    fn forwarded_rule_accounts_for_every_callback_registration() {
+        let source = r#"def make(implementation, attrs):
+    return rule(implementation=implementation, attrs=attrs)
+def text(value: str) -> None: pass
+def number(value: int) -> None: pass
+def shared(ctx):
+    text(ctx.attr.value)
+    number(ctx.attr.value)
+first = make(shared, {"value": attr.int()})
+second = make(implementation=shared, attrs={"value": attr.string()})
+first(name="bad", value="wrong")
+second(name="bad", value=42)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diag| diag.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn forwarded_rule_requires_a_native_constructor_and_known_options() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        for (factory, options) in [
+            (
+                "def make(impl, attrs, **kwargs): return rule(implementation=impl, attrs=attrs, **kwargs)",
+                "**options()",
+            ),
+            (
+                "def make(impl, attrs, **kwargs): return rule(implementation=impl, attrs=attrs, **kwargs)",
+                "unknown_option=True",
+            ),
+            (
+                "def make(impl, attrs, **kwargs): return rule(implementation=impl, attrs=attrs, **kwargs)",
+                "test='wrong'",
+            ),
+            (
+                "def make(impl, attrs, **kwargs): return rule(implementation=impl, attrs=attrs, **kwargs)",
+                "exec_groups={'tool': 42}",
+            ),
+            (
+                "def make(impl, attrs, **kwargs): return rule(implementation=impl, attrs=attrs, **kwargs)",
+                "implementation=other",
+            ),
+            (
+                "def make(impl, attrs, rule): return rule(implementation=impl, attrs=attrs)",
+                "rule=other",
+            ),
+        ] {
+            let source = format!(
+                "{factory}\ndef impl(ctx): return []\ndef options() -> dict[str, bool]: return {{}}\ndef other(**kwargs): return struct()\ntarget = make(impl, {{'value': attr.string()}}, {options})\ndef consume(row: KeywordArgs[target]) -> None: pass\n"
+            );
+            analysis.update_file(file, source);
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|d| d.id().as_str() == "invalid-type-form"),
+                "{factory}: {diagnostics:?}"
+            );
+        }
     }
 
     #[test]

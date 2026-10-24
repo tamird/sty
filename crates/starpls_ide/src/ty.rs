@@ -34,6 +34,7 @@ mod annotations;
 mod context;
 mod diagnostics;
 mod factory;
+mod forwarded_rule;
 mod host;
 pub(crate) mod interface;
 mod keywords;

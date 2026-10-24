@@ -33,6 +33,7 @@ use ty_python_core::ProgramFile;
 use ty_python_semantic::provided::ProvidedBindingResolution;
 use ty_python_semantic::provided::ProvidedBindingValue;
 use ty_python_semantic::types::Type;
+use ty_python_semantic::Db as _;
 
 use crate::Database;
 
@@ -232,26 +233,87 @@ pub(super) fn callee_loaded_from(
     let Expr::Name(name) = callee else {
         return false;
     };
-    let index = ty_python_core::semantic_index(db, scope.program_file(db));
-    let Some(use_id) = index.try_expression_use_id(name.into()) else {
+    let Some(definition) = binding_at_name(db, scope, name) else {
         return false;
     };
-    let mut bindings = index
-        .use_def_map(scope.file_scope_id(db))
-        .bindings_at_use(use_id);
-    let Some(definition) = bindings
-        .next()
-        .and_then(|binding| binding.binding.definition())
-    else {
-        return false;
-    };
-    if bindings.next().is_some() {
-        return false;
-    }
     let Some((caller, module, _)) = binding_names(db, definition) else {
         return false;
     };
     matches!(resolve_dependency(db, caller, &module), LoadResolution::Resolved(file) if file == owner)
+}
+
+fn binding_at_name<'db>(
+    db: &'db Database,
+    scope: ScopeId<'db>,
+    name: &ruff_python_ast::ExprName,
+) -> Option<Definition<'db>> {
+    let index = ty_python_core::semantic_index(db, scope.program_file(db));
+    let use_id = index.try_expression_use_id(name.into())?;
+    let mut bindings = index
+        .use_def_map(scope.file_scope_id(db))
+        .bindings_at_use(use_id);
+    let binding = bindings.next()?.binding.definition()?;
+    bindings.next().is_none().then_some(binding)
+}
+
+/// A source module has finished before an imported function is called. Follow only the
+/// assignments that re-exported that exact function, using the value at each assignment.
+/// Lookups use the installed source even when a companion supplies a different contract.
+pub(super) fn loaded_function_at_call<'db>(
+    db: &'db Database,
+    scope: ScopeId<'db>,
+    callee: &Expr,
+    target: Definition<'db>,
+) -> Option<()> {
+    let caller = scope.program_file(db);
+    if !scope.file_scope_id(db).is_global()
+        || caller == target.program_file(db)
+        || !db.provided_exports_are_frozen(caller)
+    {
+        return None;
+    }
+    let mut binding = binding_at_name(db, scope, callee.as_name_expr()?)?;
+    let mut seen = Vec::new();
+    loop {
+        if binding == target {
+            return Some(());
+        }
+        if seen.contains(&binding) {
+            return None;
+        }
+        seen.push(binding);
+        binding = match binding.kind(db) {
+            DefinitionKind::ProvidedBinding(_) => {
+                let (caller, module, name) = binding_names(db, binding)?;
+                let LoadResolution::Resolved(loaded) = resolve_dependency(db, caller, &module)
+                else {
+                    return None;
+                };
+                let file = db.starlark_program_file(loaded);
+                if !db.provided_exports_are_frozen(file) {
+                    return None;
+                }
+                let exports = super::interface::export_definitions(db, file, &name);
+                let [export] = exports.as_slice() else {
+                    return None;
+                };
+                *export
+            }
+            DefinitionKind::Assignment(assignment) => {
+                if assignment.unpack().is_some() {
+                    return None;
+                }
+                let file = binding.program_file(db);
+                let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+                binding_at_name(
+                    db,
+                    binding.scope(db),
+                    assignment.value(&parsed).as_name_expr()?,
+                )?
+            }
+            _ => return None,
+        };
+    }
 }
 
 /// A load introduces a local binding, but only a declaration or assignment exports it again.
