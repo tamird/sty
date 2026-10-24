@@ -2031,7 +2031,7 @@ fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
     fn function_stubs_check_overload_return_branches() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
-        let body = "def choose(*, text):\n    if text:\n        return 'value'\n    return 42\n";
+        let body = "def choose(*, text: bool) -> str | int:\n    if text:\n        return 'value'\n    return 42\n";
         let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
         let stub = fixture.add_file(
             &mut analysis.db,
