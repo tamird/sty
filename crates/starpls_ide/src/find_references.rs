@@ -7,7 +7,6 @@ use ruff_text_size::TextRange;
 use ruff_text_size::TextSize;
 use starpls_common::parsed_module;
 use starpls_common::File;
-use starpls_hir::Db as _;
 use ty_ide::references_in_file;
 use ty_ide::ReferenceTarget;
 use ty_python_core::definition::Definition;
@@ -429,33 +428,24 @@ fn occurrences(
 fn pair_definitions<'db>(db: &'db Database, search: &mut Search<'db>) -> anyhow::Result<()> {
     let original = search.definitions.clone();
     for definition in original.iter().filter_map(ResolvedDefinition::definition) {
-        let file = definition.file(db);
-        let pairs: Vec<_> = db
-            .environment()
-            .type_interfaces(db)
-            .values()
-            .filter(|(source, stub)| source.source == file || stub.source == file)
-            .collect();
-        if pairs.len() > 1 {
-            bail!("The selected stub describes multiple implementations");
-        }
-        let Some((source, stub)) = pairs.first() else {
+        let Some(file) = db.starlark_file(definition.program_file(db)) else {
             continue;
         };
-        if db
-            .environment()
-            .type_interfaces(db)
-            .values()
-            .filter(|(_, candidate)| candidate.source == stub.source)
-            .count()
-            > 1
+        let mut pairs = crate::ty::interface::pairs_for_file(db, file);
+        let Some((source, stub)) = pairs.next() else {
+            continue;
+        };
+        if pairs.next().is_some()
+            || crate::ty::interface::pairs_for_file(db, stub)
+                .nth(1)
+                .is_some()
         {
             bail!("The selected stub describes multiple implementations");
         }
-        let other = if source.source == file {
-            *stub
+        let other = if source.source == file.source {
+            stub
         } else {
-            *source
+            source
         };
         let other_program = db.starlark_program_file(other);
         if definition.scope(db) == global_scope(db, definition.program_file(db)) {

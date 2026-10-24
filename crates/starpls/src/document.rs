@@ -1651,6 +1651,64 @@ pub(crate) mod source_tests {
 
     use super::DefaultFileLoader;
 
+    #[cfg(unix)]
+    #[test]
+    fn adjacent_interface_uses_the_installed_external_path() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("installed-interface");
+        let workspace = root.join("workspace");
+        let external = root.join("external");
+        let installed = external.join("rules+");
+        let checkout = root.join("checkout");
+        for dir in [&workspace, &installed, &checkout] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let source = checkout.join("defs.bzl");
+        std::fs::write(&source, "def f(x): pass\n").unwrap();
+        std::fs::write(checkout.join("defs.bzli"), "def f(x: int) -> None: ...\n").unwrap();
+        for filename in ["published.bzl", "untyped.bzl"] {
+            std::os::unix::fs::symlink(&source, installed.join(filename)).unwrap();
+        }
+        std::fs::write(
+            installed.join("published.bzli"),
+            "def f(x: bool) -> None: ...\n",
+        )
+        .unwrap();
+        let (sender, _) = crossbeam_channel::unbounded();
+        let loader = Arc::new(DefaultFileLoader::new(
+            Arc::new(TestBazelClient::default()),
+            workspace.clone(),
+            None,
+            external,
+            sender,
+            false,
+        ));
+        let mut analysis = Analysis::new(loader, Default::default()).unwrap();
+        for (filename, expected) in [
+            ("published", vec!["invalid-argument-type"]),
+            ("untyped", vec![]),
+        ] {
+            let caller = analysis
+                .open_document(
+                    &workspace.join(format!("caller_{filename}.bzl")),
+                    Dialect::Bazel,
+                    None,
+                    format!("load('@@rules+//:{filename}.bzl', 'f')\nf('text')\n"),
+                    1,
+                )
+                .unwrap();
+            let diagnostics: Vec<_> = analysis
+                .snapshot()
+                .diagnostics(caller)
+                .unwrap()
+                .iter()
+                .map(|diag| diag.id().as_str().to_owned())
+                .collect();
+            assert_eq!(diagnostics, expected, "{filename}");
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn bundled_cc_common_follows_installed_repository_provenance() {
         use starpls_ide::FileLoader;

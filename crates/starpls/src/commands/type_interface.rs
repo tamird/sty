@@ -243,7 +243,7 @@ impl PreparedInterfaces {
         };
         analysis.set_type_interfaces(mappings)?;
         if let Err(error) = analysis.set_bazel_builtin_extension(builtin_extension) {
-            analysis.set_type_interfaces(Vec::new())?;
+            analysis.invalidate_type_interfaces();
             return Err(error);
         }
         analysis.set_rules(rules);

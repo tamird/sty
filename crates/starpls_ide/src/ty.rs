@@ -823,13 +823,9 @@ impl ty_python_semantic::Db for Database {
         }
         let source_file = self.starlark_file(file)?;
         if matches!(usage, BuiltinUsage::Annotation) {
-            if let Some((_, interface)) = self
-                .environment()
-                .type_interfaces(self)
-                .get(&source_file.source)
-            {
+            if let Some((_, interface)) = interface::pair_for_source(self, source_file) {
                 let binding = ProvidedBindingValue::Export {
-                    file: self.starlark_program_file(*interface),
+                    file: self.starlark_program_file(interface),
                     name: Name::new(name),
                     value: None,
                 };

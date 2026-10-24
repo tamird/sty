@@ -2369,7 +2369,7 @@ registered = rule(**options)
         let source = fixture.add_file(&mut analysis.db, "source.bzl", text);
         let stub = fixture.add_file(
             &mut analysis.db,
-            "source.bzli",
+            "contract.bzli",
             "def implementation(ctx) -> list[DefaultInfo]: ...\ndef unrelated(value) -> None: ...\n",
         );
         loader.add_files_from_fixture(&fixture);

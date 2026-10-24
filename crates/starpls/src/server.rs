@@ -616,7 +616,7 @@ impl Server {
             }
         }
         drop(snapshot);
-        self.analysis.set_type_interfaces(Vec::new())?;
+        self.analysis.invalidate_type_interfaces();
         self.analysis.set_bazel_builtin_extension(None)?;
         self.analysis.set_all_workspace_targets(Vec::new());
         self.invalidate_diagnostics();

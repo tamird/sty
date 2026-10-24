@@ -422,10 +422,14 @@ impl Analysis {
             .collect()
     }
 
-    /// Open documents and explicitly configured contracts are diagnostic roots.
+    /// Open documents, their companions, and explicitly configured contracts are diagnostic roots.
     pub fn diagnostic_files(&self) -> Vec<File> {
         let mut files = self.open_files();
-        for interface in self.type_interface_files() {
+        let companions: Vec<_> = files
+            .iter()
+            .filter_map(|file| ty::interface::adjacent_pair(&self.db, *file).map(|(_, stub)| stub))
+            .collect();
+        for interface in self.type_interface_files().into_iter().chain(companions) {
             if !files.iter().any(|file| file.source == interface.source) {
                 files.push(interface);
             }
@@ -631,12 +635,22 @@ impl AnalysisSnapshot {
         })
     }
 
+    /// The implicit companion for this logical source or interface, if no explicit mapping wins.
+    pub fn adjacent_interface_pair(&self, file: File) -> Option<(File, File)> {
+        ty::interface::adjacent_pair(&self.db, file)
+    }
+
     pub fn is_type_interface_root(&self, file: File) -> bool {
         let Self { db } = self;
-        db.environment()
-            .type_interfaces(db)
-            .values()
-            .any(|(_, interface)| interface.source == file.source)
+        file.is_type_interface(db)
+            && (db
+                .environment()
+                .type_interfaces(db)
+                .values()
+                .any(|(_, interface)| interface.source == file.source)
+                || self
+                    .adjacent_interface_pair(file)
+                    .is_some_and(|(source, _)| self.document(source.path(db)).is_some()))
     }
 
     pub fn file_revision(&self, file: File) -> Cancellable<ruff_db::file_revision::FileRevision> {
@@ -754,6 +768,12 @@ impl AnalysisSnapshot {
                     .ok()
                 })
                 .collect();
+            let companions: Vec<_> = files
+                .iter()
+                .filter_map(|file| ty::interface::adjacent_pair(db, *file))
+                .flat_map(|(source, stub)| [source, stub])
+                .collect();
+            files.extend(companions);
             for (source, stub) in db.environment().type_interfaces(db).values() {
                 files.extend([*source, *stub]);
             }

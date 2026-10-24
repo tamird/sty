@@ -293,7 +293,9 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
                             .as_system_path()
                             .is_some_and(|path| aliases.iter().any(|alias| alias.as_path() == path))
                 })
-                .map(|(source, _)| db.starlark_program_file(*source))
+                .map(|(source, _)| *source)
+                .chain(super::interface::adjacent_pair(db, file).map(|(source, _)| source))
+                .map(|source| db.starlark_program_file(source))
                 .collect::<Vec<_>>()
         } else {
             Vec::new()

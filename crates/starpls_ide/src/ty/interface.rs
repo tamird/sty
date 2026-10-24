@@ -227,16 +227,75 @@ struct ImplementationAnnotations {
     errors: Vec<(TextRange, TextRange, String)>,
 }
 
-fn implementation_annotations(db: &dyn Db, file: File) -> Option<&ImplementationAnnotations> {
-    if BindingSource::from_file(file).is_some()
-        || !db
-            .environment()
-            .type_interfaces(db)
-            .contains_key(&file.source)
+/// A companion belongs to the installed Bazel module. The underlying source text
+/// may be shared by symlinks in several repositories, each with a different API.
+pub(crate) fn adjacent_pair(db: &dyn Db, file: File) -> Option<(File, File)> {
+    if !file.allows_native_annotations(db) || !db.environment().interface_configuration_ready(db) {
+        return None;
+    }
+    let stub = file.is_type_interface(db);
+    let replace_extension = |extension: &str| {
+        File::from_path(
+            db,
+            &file.path(db).with_extension(extension),
+            file.dialect,
+            file.info,
+        )
+        .ok()
+    };
+    let source = if stub {
+        replace_extension("bzl")?
+    } else {
+        file
+    };
+    if db
+        .environment()
+        .type_interfaces(db)
+        .contains_key(&source.source)
     {
         return None;
     }
-    implementation_annotations_query(db, file.source, (file.dialect, file.info)).as_ref()
+    let interface = if stub {
+        file
+    } else {
+        replace_extension("bzli")?
+    };
+    Some((source, interface))
+}
+
+pub(crate) fn pairs_for_file(db: &dyn Db, file: File) -> impl Iterator<Item = (File, File)> + '_ {
+    db.environment()
+        .type_interfaces(db)
+        .values()
+        .copied()
+        .filter(move |(source, interface)| {
+            source.source == file.source || interface.source == file.source
+        })
+        .chain(adjacent_pair(db, file))
+}
+
+pub(super) fn pair_for_source(db: &dyn Db, file: File) -> Option<(File, File)> {
+    db.environment()
+        .type_interfaces(db)
+        .get(&file.source)
+        .copied()
+        .or_else(|| adjacent_pair(db, file).filter(|(source, _)| *source == file))
+}
+
+fn implementation_annotations(db: &dyn Db, file: File) -> Option<&ImplementationAnnotations> {
+    if BindingSource::from_file(file).is_some() || file.is_type_interface(db) {
+        return None;
+    }
+    let (implementation, interface) = pair_for_source(db, file)?;
+    if implementation != file {
+        return None;
+    }
+    Some(implementation_annotations_query(
+        db,
+        file.source,
+        (file.dialect, file.info),
+        interface,
+    ))
 }
 
 /// Correspondence is needed during indexing and must depend only on syntax.
@@ -245,17 +304,14 @@ fn implementation_annotations_query(
     db: &dyn Db,
     source: ruff_db::files::File,
     context: (Dialect, Option<FileInfo>),
-) -> Option<ImplementationAnnotations> {
+    interface: File,
+) -> ImplementationAnnotations {
     let (dialect, info) = context;
     let file = File {
         source,
         dialect,
         info,
     };
-    let &(implementation, interface) = db.environment().type_interfaces(db).get(&source)?;
-    if implementation != file {
-        return None;
-    }
     let source_names = module_bindings(db, file);
     let stub_names = module_bindings(db, interface);
     let parsed = starpls_common::parsed_module(db, file).load(db);
@@ -419,7 +475,7 @@ fn implementation_annotations_query(
             ));
         }
     }
-    Some(result)
+    result
 }
 
 pub(super) fn implementation_annotation<'db>(
@@ -464,11 +520,7 @@ pub(super) fn source_parameter<'db>(
         return None;
     }
     // One stub may describe several implementations. It then has no unique body schema.
-    let mut sources = db
-        .environment()
-        .type_interfaces(db)
-        .values()
-        .filter_map(|(source, interface)| (*interface == file).then_some(*source));
+    let mut sources = pairs_for_file(db, file).map(|(source, _)| source);
     let source = sources.next()?;
     if sources.next().is_some() {
         return None;
@@ -1024,6 +1076,18 @@ pub(super) fn used_binding_annotations(db: &Database, file: File) -> FxHashSet<T
 }
 
 impl Analysis {
+    /// While registrations are incomplete an invalid explicit override cannot fall back
+    /// to an otherwise valid sibling.
+    pub fn invalidate_type_interfaces(&mut self) {
+        let Self { db } = self;
+        db.environment()
+            .set_type_interfaces(db)
+            .to(FxHashMap::default());
+        db.environment()
+            .set_interface_configuration_ready(db)
+            .to(false);
+    }
+
     /// Replace the explicit trusted contracts atomically after validating every mapping.
     pub fn set_type_interfaces(
         &mut self,
@@ -1065,6 +1129,9 @@ impl Analysis {
             }
         }
         db.environment().set_type_interfaces(db).to(mappings);
+        db.environment()
+            .set_interface_configuration_ready(db)
+            .to(true);
         Ok(())
     }
 
@@ -1121,17 +1188,13 @@ impl Database {
     }
 
     pub(crate) fn type_interface(&self, from: File, source: File) -> Option<File> {
-        let mappings = self.environment().type_interfaces(self);
-        if mappings.is_empty() {
-            return None;
-        }
-        let (implementation, interface) = mappings.get(&source.source)?;
+        let (implementation, interface) = pair_for_source(self, source)?;
         if implementation.api_context() == Some(APIContext::Build) {
             return None;
         }
         // An interface may import the implementation's existing nominal providers.
         // It must not resolve that import back to its own declaration of the name.
-        (interface.source != from.source).then_some(*interface)
+        (interface.source != from.source).then_some(interface)
     }
 
     pub(crate) fn load_export_file<'db>(
@@ -1828,7 +1891,7 @@ mod tests {
         let source = fixture.add_file(&mut analysis.db, "source.bzl", source_text);
         let stub = fixture.add_file(
             &mut analysis.db,
-            "source.bzli",
+            "contract.bzli",
             "load('types.bzli', _Entry='Entry')\ndef collect(value: _Entry) -> list[_Entry]: ...\n",
         );
         loader.add_files_from_fixture(&fixture);

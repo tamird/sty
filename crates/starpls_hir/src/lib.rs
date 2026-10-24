@@ -81,6 +81,7 @@ pub struct Environment {
     pub load_settlement_revision: u64,
     #[returns(ref)]
     pub type_interfaces: FxHashMap<ruff_db::files::File, (File, File)>,
+    pub interface_configuration_ready: bool,
 }
 
 impl Environment {
@@ -97,6 +98,7 @@ impl Environment {
             0,
             0,
             FxHashMap::default(),
+            true,
         )
     }
 

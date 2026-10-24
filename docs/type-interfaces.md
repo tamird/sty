@@ -53,7 +53,7 @@ direct module assignment with the same name. ty checks the assigned value in
 the stub annotation's context, including private bindings used by functions.
 
 Annotation expressions in the implementation can also refer to declarations and
-imports in its registered stub. Source lexical bindings take precedence over
+imports in its stub. Source lexical bindings take precedence over
 these names. Stub declarations are available in annotations and type comments;
 runtime expressions use the implementation's own bindings.
 
@@ -268,18 +268,24 @@ to the result in either mode.
 
 ## Project configuration
 
-Projects register their own interfaces in `sty.toml` at the Bazel workspace root:
+For a module installed as `lib/paths.bzl`, sty looks for `lib/paths.bzli` in the
+same Bazel repository. Ship both files at those paths. Multiple repositories can
+install symlinks to the same implementation and supply different interfaces.
+
+An explicit mapping overrides the companion. Use `sty.toml` at the Bazel
+workspace root for separately distributed stubs and for BUILD or MODULE bindings:
 
 ```toml
 [type-interfaces]
-"lib/paths.bzl" = "lib/paths.bzli"
+"lib/paths.bzl" = "contracts/paths.bzli"
 "BUILD.bazel" = "BUILD.bzli"
 ```
 
 Paths are relative to the configuration file. The CLI and language server use
 these mappings. The CLI also accepts repeatable `--type_interface SOURCE=STUB`
-arguments. Each source requires one registration across local mappings, arguments,
-and selected stub packages; duplicate registrations are configuration errors.
+arguments. A source may have one explicit registration across local mappings,
+arguments, and selected stub packages. Duplicate registrations are configuration
+errors even when the mappings name the same file.
 
 The `[rules]` table accepts ty and sty diagnostic names with levels `ignore`,
 `warn`, or `error`. Unknown names and levels are configuration errors.
@@ -298,7 +304,7 @@ missing-type-argument = "error"
 `missing-parameter-annotation` checks every named parameter, including `*args`
 and `**kwargs`. `missing-return-annotation` checks function returns. Both include
 private and nested functions and are disabled by default. Inline annotations,
-type comments, registered `.bzli` annotations, and generated Bazel contracts
+type comments, `.bzli` annotations, and generated Bazel contracts
 satisfy these rules. Implicit method receivers use ty's inferred receiver type.
 Local variables continue to use inference. Projects that prefer inferred returns
 can enable only the parameter rule.

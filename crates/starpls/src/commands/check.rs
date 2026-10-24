@@ -722,6 +722,62 @@ mod tests {
     }
 
     #[test]
+    fn adjacent_interface_checks_callers_and_selected_implementations() {
+        for (name, selected, config, expected) in [
+            (
+                "caller",
+                vec!["caller.bzl"],
+                "",
+                vec![("caller.bzl", "invalid-argument-type")],
+            ),
+            (
+                "implementation",
+                vec!["defs.bzl"],
+                "",
+                vec![("defs.bzl", "invalid-return-type")],
+            ),
+            (
+                "override",
+                vec!["caller.bzl", "defs.bzl"],
+                "[type-interfaces]\n'defs.bzl'='override.bzli'\n",
+                vec![],
+            ),
+        ] {
+            let mut checker = local_checker_with_options(
+                &format!("adjacent-interface-{name}"),
+                &[
+                    ("sty.toml", config),
+                    ("defs.bzl", "def f(x): return 'string'\ndef typed(value):\n    # type: (_Item) -> _Item\n    return value\n"),
+                    ("defs.bzli", "type _Item = int\ndef f(x: int) -> int: ...\n"),
+                    ("override.bzli", "type _Item = str\ndef f(x: string) -> string: ...\n"),
+                    (
+                        "caller.bzl",
+                        "load(':defs.bzl', 'f')\nresult = f('string')\n",
+                    ),
+                ],
+                CheckCommand {
+                    paths: selected.into_iter().map(str::to_owned).collect(),
+                    ..Default::default()
+                },
+            );
+            let result = checker.check_files().unwrap();
+            let snapshot = checker.analysis.snapshot();
+            let diagnostics: Vec<_> = result
+                .diagnostics
+                .iter()
+                .flat_map(|(file, diagnostics)| {
+                    let basename = snapshot.path(*file).file_name().unwrap().to_str().unwrap();
+                    diagnostics
+                        .iter()
+                        .map(move |diagnostic| (basename, diagnostic.id().as_str()))
+                })
+                .collect();
+            assert_eq!(diagnostics, expected, "{name}");
+            std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+        }
+    }
+
+    #[test]
     fn local_interface_sources_allow_mappings_without_paths() {
         let mut checker = local_checker_with_options(
             "checker-local-interfaces-only",

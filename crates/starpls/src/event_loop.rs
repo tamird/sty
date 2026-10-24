@@ -2177,8 +2177,8 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("BUILD"), "").unwrap();
         std::fs::write(root.join("source.bzl"), "def f(value): pass\n").unwrap();
-        std::fs::write(root.join("source.bzli"), "def f(value: int): ...\n").unwrap();
-        let manifest = "format-version = 1\n[source]\nrepository = '@'\nmodule = 'local'\nversions = ['1']\n[files]\n'source.bzl' = 'source.bzli'\n";
+        std::fs::write(root.join("contract.bzli"), "def f(value: int): ...\n").unwrap();
+        let manifest = "format-version = 1\n[source]\nrepository = '@'\nmodule = 'local'\nversions = ['1']\n[files]\n'source.bzl' = 'contract.bzli'\n";
         std::fs::write(root.join("stubs.toml"), manifest).unwrap();
         server.loader = Arc::new(DefaultFileLoader::new(
             server.bazel_client.clone(),
@@ -2281,7 +2281,7 @@ mod tests {
         // Unsaved interfaces remain authoritative across a valid dependency reload.
         server
             .open_document(
-                &root.join("source.bzli"),
+                &root.join("contract.bzli"),
                 "def f(value: str): ...\n".into(),
                 3,
             )
@@ -2305,7 +2305,7 @@ mod tests {
         assert_eq!(
             server
                 .analysis
-                .document(&root.join("source.bzli"))
+                .document(&root.join("contract.bzli"))
                 .unwrap()
                 .version,
             3
@@ -2407,7 +2407,7 @@ mod tests {
         let defs = workspace.join("defs.bzl");
         std::fs::write(&defs, "def f(): pass\n").unwrap();
         let stub = root.join("defs.bzli");
-        let installed_stub = workspace.join("defs.bzli");
+        let installed_stub = workspace.join("registered.bzli");
         std::fs::write(&stub, "def f(): ...\n").unwrap();
         std::os::unix::fs::symlink(&stub, &installed_stub).unwrap();
         server.loader = Arc::new(DefaultFileLoader::new(
@@ -2811,6 +2811,76 @@ mod tests {
         assert!(updates[0].diagnostics.is_empty());
         assert_eq!(updates[0].version, Some(7));
     }
+    #[test]
+    fn adjacent_interface_follows_unsaved_and_watched_edits() {
+        let TestServer {
+            mut server, disk, ..
+        } = server();
+        let source = SystemPath::new("/workspace/defs.bzl");
+        let interface = SystemPath::new("/workspace/defs.bzli");
+        disk.write_file(source, "def f(x): pass\n").unwrap();
+        let caller = std::path::Path::new("/workspace/caller.bzl");
+        server
+            .open_document(caller, "load(':defs.bzl', 'f')\nf('text')\n".into(), 1)
+            .unwrap();
+        let caller = server
+            .analysis
+            .snapshot()
+            .open_file(caller)
+            .unwrap()
+            .unwrap();
+        let version = server.configuration.revision;
+        let errors = |server: &Server| {
+            server
+                .analysis
+                .snapshot()
+                .diagnostics(caller)
+                .unwrap()
+                .iter()
+                .map(|diag| diag.id().as_str().to_owned())
+                .collect::<Vec<_>>()
+        };
+        let ints = "def f(x: int) -> None: ...\n";
+        let strings = "def f(x: string) -> None: ...\n";
+        assert!(errors(&server).is_empty());
+        server
+            .open_document(interface.as_std_path(), ints.into(), 1)
+            .unwrap();
+        assert_eq!(errors(&server), ["invalid-argument-type"]);
+        server
+            .open_document(interface.as_std_path(), strings.into(), 2)
+            .unwrap();
+        assert!(errors(&server).is_empty());
+        server
+            .analysis
+            .close_document(interface.as_std_path())
+            .unwrap();
+        disk.write_file(interface, ints).unwrap();
+        let changed = |server: &mut Server, typ| {
+            crate::handlers::notifications::did_change_watched_files(
+                server,
+                lsp_types::DidChangeWatchedFilesParams {
+                    changes: vec![lsp_types::FileEvent {
+                        uri: lsp_types::Url::from_file_path(interface.as_std_path()).unwrap(),
+                        typ,
+                    }],
+                },
+            )
+            .unwrap();
+        };
+        changed(&mut server, lsp_types::FileChangeType::CREATED);
+        assert_eq!(errors(&server), ["invalid-argument-type"]);
+        // An incomplete configuration may reserve this source for an explicit override.
+        server.analysis.invalidate_type_interfaces();
+        assert!(errors(&server).is_empty());
+        server.analysis.set_type_interfaces([]).unwrap();
+        assert_eq!(errors(&server), ["invalid-argument-type"]);
+        disk.remove_file(interface).unwrap();
+        changed(&mut server, lsp_types::FileChangeType::DELETED);
+        assert!(errors(&server).is_empty());
+        assert_eq!(server.configuration.revision, version);
+    }
+
     #[test]
     fn closed_interfaces_remain_live_diagnostic_roots() {
         let TestServer {
