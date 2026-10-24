@@ -197,7 +197,9 @@ fn registration_invocation<'db>(
         },
         &|class| Some(call.class_type(db, class)),
     )?;
-    callback_invocation(db, call.file(), declaration, kind, context)
+    callback_invocation(db, call.file(), declaration, kind, context, &|class| {
+        Some(call.class_type(db, class))
+    })
 }
 
 fn callback_invocation<'db>(
@@ -206,11 +208,13 @@ fn callback_invocation<'db>(
     declaration: Definition<'db>,
     kind: ContextKind,
     context: Type<'db>,
+    class_type: &dyn Fn(ProvidedClass<'db>) -> Option<Type<'db>>,
 ) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(file);
     let mut parameters = Vec::new();
     if kind == ContextKind::Aspect {
-        let target = unrestricted_target_type(db, &environment, declaration.program_file(db))?;
+        let target =
+            aspect_target_type(db, &environment, declaration.program_file(db), class_type)?;
         parameters.push(Parameter::positional_only(None).with_annotated_type(target));
     }
     parameters.push(Parameter::positional_only(None).with_annotated_type(context));
@@ -331,7 +335,9 @@ pub(super) fn callback_contract<'a, 'db>(
         Some(context_kind) => {
             let context =
                 registration_context_type(db, model, file, call, &registration, context_kind)?;
-            callback_invocation(db, file, declaration, context_kind, context)?
+            callback_invocation(db, file, declaration, context_kind, context, &|class| {
+                model.provided_class_at_call(call, class)
+            })?
         }
         None => module_extension_invocation(db, model, call, &registration)?,
     };
@@ -571,7 +577,9 @@ fn registration_parameter_type<'db>(
             return None;
         }
         if function.parameters.index(parameter) == Some(0) {
-            return unrestricted_target_type(db, &environment, declarations);
+            return aspect_target_type(db, &environment, declarations, &|class| {
+                model.provided_class_at_call(call, class)
+            });
         }
     }
     registration_context_type(db, model, file, call, signature, context_kind)
@@ -1367,6 +1375,45 @@ fn unrestricted_target_type<'db>(
     factory::native_class(db, declarations, "File")
         .and_then(|_| analyzed_target_type(db, environment, declarations, None))
         .or_else(|| target.to_instance_approximation(db, environment))
+}
+
+fn aspect_target_type<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    declarations: ProgramFile<'db>,
+    class_type: &dyn Fn(ProvidedClass<'db>) -> Option<Type<'db>>,
+) -> Option<Type<'db>> {
+    let native = |name| {
+        let class = factory::native_class(db, declarations, name)?;
+        class.to_instance_approximation(db, environment)
+    };
+    let base = native("FilesToRunProvider").and_then(|provider| {
+        factory::specialized_native_class(db, declarations, "Target", vec![provider])
+    });
+    let Some((base, action)) = base.zip(native("Action")) else {
+        return unrestricted_target_type(db, environment, declarations);
+    };
+    // Starlark aspects run on rule targets (or their merged aspect view),
+    // which expose ActionApi lists and always have FilesToRunProvider.
+    // Ordinary Target values also include files and groups without actions.
+    let class = class_type(ProvidedClass {
+        name: Name::new("Target"),
+        bases: vec![base].into_boxed_slice(),
+        class_members: Box::default(),
+        instance_fields: ProvidedInstanceFields {
+            fields: Box::from([ProvidedField {
+                name: Name::new("actions"),
+                ty: KnownClass::List.to_specialized_instance(db, environment, &[action]),
+                is_required: true,
+                source: None,
+            }]),
+            has_dynamic_fields: false,
+            implications: Box::default(),
+            data: None,
+        }
+        .into(),
+    })?;
+    class.to_instance_approximation(db, environment)
 }
 
 fn analyzed_target_type<'db>(
@@ -2289,7 +2336,7 @@ subrule(implementation=subrule_impl, attrs={"_x": "not an attribute"})
             "../../../starpls/src/builtin/builtin.pb"
         ))
         .unwrap();
-        for missing in ["File", "FilesToRunProvider"] {
+        for missing in ["File", "FilesToRunProvider", "Action"] {
             let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
             enable_context_inference(&mut analysis);
             let mut builtins = builtins.clone();
@@ -3516,6 +3563,63 @@ example = make_aspect(implementation=implementation, attrs={
             ["invalid-assignment", "invalid-assignment"],
             "{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn aspect_targets_expose_actions_without_widening_general_targets() {
+        let source = r#"def consume(target: Target) -> None: pass
+def implementation(subject, context) -> list[DefaultInfo]:
+    actions: list[Action] = subject.actions
+    mnemonic: str = subject.actions[0].mnemonic
+    files: depset[File] = subject.files
+    executable: File | None = subject[DefaultInfo].files_to_run.executable
+    present: bool = DefaultInfo in subject
+    consume(subject)
+    print(actions, mnemonic, files, executable, present, context)
+    return []
+example = aspect(implementation=implementation)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        check_field(
+            &analysis.snapshot(),
+            file,
+            source,
+            "subject.actions",
+            "list[Action]",
+            "",
+        );
+        for (from, to, expected) in [
+            (
+                "actions: list[Action]",
+                "actions: list[str]",
+                "invalid-assignment",
+            ),
+            ("mnemonic: str", "mnemonic: int", "invalid-assignment"),
+            ("return []", "return subject.actions", "invalid-return-type"),
+        ] {
+            analysis.update_file(file, source.replace(from, to));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{to}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{to}: {diagnostic:?}");
+        }
+        for source in [
+            "def ordinary(target: Target):\n    return target.actions\n",
+            "def implementation(target: Target, ctx):\n    print(target.actions)\n    return []\nexample = aspect(implementation=implementation)\n",
+            "def implementation(ctx):\n    print(ctx.attr.dep.actions)\n    return []\nexample = rule(implementation=implementation, attrs={'dep': attr.label(mandatory=True, allow_files=False)})\n",
+        ] {
+            analysis.update_file(file, source.to_owned());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{source}: {diagnostics:?}");
+            };
+            assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+        }
     }
 
     #[test]
