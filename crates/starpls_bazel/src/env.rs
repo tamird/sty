@@ -275,7 +275,41 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         && ["File", "root"]
             .iter()
             .all(|name| builtins.r#type.iter().any(|class| class.name == *name));
+    // The method shipped in 9.2 and in the 10.0 prereleases starting with
+    // 20260621.2. Earlier 10.0 snapshots predate the 9.2 backport.
+    let transition_composition_available =
+        if let Some(snapshot) = release.strip_prefix("release 10.0.0-pre.") {
+            snapshot.split_once('.').is_some_and(|(date, build)| {
+                match (date.parse::<u32>(), build.parse::<u32>()) {
+                    (Ok(date), Ok(build)) => (date, build) >= (20260621, 2),
+                    _ => false,
+                }
+            })
+        } else {
+            version >= (9, 2)
+        };
     for class in &mut builtins.r#type {
+        // ConfigurationTransitionApi.andThen is inherited by both native types.
+        // https://github.com/bazelbuild/bazel/blob/9.2.0/src/main/java/com/google/devtools/build/lib/starlarkbuildapi/config/ConfigurationTransitionApi.java
+        if transition_composition_available
+            && matches!(class.name.as_str(), "transition" | "ExecTransitionFactory")
+            && !class.field.iter().any(|field| field.name == "and_then")
+        {
+            class.field.push(Value {
+                name: "and_then".to_owned(),
+                doc: "Applies this transition, then the supplied transition.".to_owned(),
+                callable: Some(Callable {
+                    param: vec![Param {
+                        name: "transition".to_owned(),
+                        r#type: "transition; or ExecTransitionFactory".to_owned(),
+                        is_mandatory: true,
+                        ..Default::default()
+                    }],
+                    return_type: "transition".to_owned(),
+                }),
+                ..Default::default()
+            });
+        }
         if class.name == "actions" {
             if shareable_artifact_available {
                 add_shareable_artifact(class);
