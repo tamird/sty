@@ -2882,6 +2882,41 @@ mod tests {
     }
 
     #[test]
+    fn adjacent_interface_follows_unsaved_build_edits() {
+        let TestServer { mut server, .. } = server();
+        let source = std::path::Path::new("/workspace/BUILD.bazel");
+        server
+            .open_document(source, "_VALUE = 42\nvalue = _VALUE\n".into(), 1)
+            .unwrap();
+        let source = server
+            .analysis
+            .snapshot()
+            .open_file(source)
+            .unwrap()
+            .unwrap();
+        let diagnostics = |server: &Server| {
+            server
+                .analysis
+                .snapshot()
+                .diagnostics(source)
+                .unwrap()
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str().to_owned())
+                .collect::<Vec<_>>()
+        };
+        assert!(diagnostics(&server).is_empty());
+        let interface = std::path::Path::new("/workspace/BUILD.bzli");
+        server
+            .open_document(interface, "_VALUE: str\n".into(), 1)
+            .unwrap();
+        assert_eq!(diagnostics(&server), ["invalid-assignment"]);
+        server
+            .open_document(interface, "_VALUE: int\n".into(), 2)
+            .unwrap();
+        assert!(diagnostics(&server).is_empty());
+    }
+
+    #[test]
     fn closed_interfaces_remain_live_diagnostic_roots() {
         let TestServer {
             mut server,

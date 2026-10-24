@@ -276,6 +276,41 @@ pub fn system_path(path: &std::path::Path) -> anyhow::Result<&ruff_db::system::S
     Ok(ruff_db::system::SystemPath::new(path))
 }
 
+/// Bazel's package definition filenames, in precedence order.
+pub const BAZEL_BUILD_FILE_NAMES: [&str; 2] = ["BUILD.bazel", "BUILD"];
+
+/// Locate the active BUILD file in a Bazel package.
+pub fn bazel_build_file(
+    db: &dyn Db,
+    directory: &std::path::Path,
+) -> anyhow::Result<Option<PathBuf>> {
+    for name in BAZEL_BUILD_FILE_NAMES {
+        let path = directory.join(name);
+        let system_path = system_path(&path)?;
+        match ruff_db::files::system_path_to_file(db, system_path) {
+            Ok(_) => return Ok(Some(path)),
+            Err(ruff_db::files::FileError::IsADirectory) => {}
+            Err(ruff_db::files::FileError::NotFound) => {
+                // Ruff tracks absent and inaccessible paths with the same status.
+                // Only an absent higher-priority name permits the fallback.
+                match db.system().path_metadata(system_path) {
+                    Ok(metadata) => {
+                        if metadata.file_type().is_file() {
+                            anyhow::bail!("Bazel BUILD file changed while resolving {system_path}");
+                        }
+                    }
+                    Err(error) => {
+                        if error.kind() != std::io::ErrorKind::NotFound {
+                            return Err(error.into());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// Normalize a host path with the same rules as Ruff's file interner.
 pub fn absolute_path(path: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
     if path.is_absolute() {

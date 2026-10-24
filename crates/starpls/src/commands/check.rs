@@ -825,7 +825,14 @@ mod tests {
             ("only.bzl", "value = True\n"),
             ("pkg/unreferenced.bzl", "def f(): return 'bad'\n"),
             ("pkg/unreferenced.bzli", "def f() -> int: ...\n"),
+            ("pkg/BUILD.bazel", "_ROWS = [{'name': 42}]\nrows = _ROWS\n"),
+            ("pkg/BUILD.bzl/marker.txt", ""),
+            (
+                "pkg/BUILD.bzli",
+                "type _Row = dict[{'name': str}]\n_ROWS: list[_Row]\n",
+            ),
             ("types.bzli", "type Number = int\n"),
+            ("orphan/BUILD.bzli", "_VALUE: int\n"),
             ("nested/MODULE.bazel", ""),
             ("nested/hidden.bzl", "def f(): return 'bad'\n"),
             ("nested/hidden.bzli", "def f() -> int: ...\n"),
@@ -837,13 +844,24 @@ mod tests {
                 "batch",
                 true,
                 false,
-                vec!["pkg/unreferenced.bzl", "pkg/unreferenced.bzli"],
+                vec![
+                    "pkg/BUILD.bazel",
+                    "pkg/BUILD.bzli",
+                    "pkg/unreferenced.bzl",
+                    "pkg/unreferenced.bzli",
+                ],
             ),
             (
                 "batch-extra",
                 true,
                 true,
-                vec!["only.bzl", "pkg/unreferenced.bzl", "pkg/unreferenced.bzli"],
+                vec![
+                    "only.bzl",
+                    "pkg/BUILD.bazel",
+                    "pkg/BUILD.bzli",
+                    "pkg/unreferenced.bzl",
+                    "pkg/unreferenced.bzli",
+                ],
             ),
         ] {
             let mut checker = local_checker_with_options(
@@ -857,8 +875,9 @@ mod tests {
             );
             let root = checker.bazel_info.workspace.clone();
             let report = root.join("coverage.json");
+            let mut output = Vec::new();
             let status = checker
-                .report_diagnostics_to(Some(&report), &mut Vec::new(), &mut Vec::new())
+                .report_diagnostics_to(Some(&report), &mut output, &mut Vec::new())
                 .unwrap();
             assert_eq!(
                 status,
@@ -886,13 +905,28 @@ mod tests {
             checked.sort();
             assert_eq!(checked, expected, "{case}");
             if audit {
-                let paired = report["checked_interface_sources"]["files"]
+                let output = String::from_utf8(output).unwrap();
+                assert!(
+                    output.contains("key \"name\" with declared type `str`"),
+                    "{output}"
+                );
+                let mut paired: Vec<_> = report["checked_interface_sources"]["files"]
                     .as_array()
-                    .unwrap();
-                assert_eq!(paired.len(), 1);
+                    .unwrap()
+                    .iter()
+                    .map(|file| {
+                        std::path::Path::new(file["path"].as_str().unwrap())
+                            .strip_prefix(&root)
+                            .unwrap()
+                    })
+                    .collect();
+                paired.sort();
                 assert_eq!(
-                    paired[0]["path"].as_str(),
-                    root.join("pkg/unreferenced.bzl").to_str()
+                    paired,
+                    [
+                        std::path::Path::new("pkg/BUILD.bazel"),
+                        std::path::Path::new("pkg/unreferenced.bzl")
+                    ]
                 );
             }
             std::fs::remove_dir_all(root).unwrap();
@@ -1511,6 +1545,16 @@ mod tests {
         name: &str,
         overlays: &[(&str, &str, &str)],
     ) -> (Checker, Arc<TestBazelClient>) {
+        let client = Arc::new(TestBazelClient::default());
+        let checker = overlay_checker_with_client(name, overlays, client.clone());
+        (checker, client)
+    }
+
+    fn overlay_checker_with_client(
+        name: &str,
+        overlays: &[(&str, &str, &str)],
+        client: Arc<TestBazelClient>,
+    ) -> Checker {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap()).join(name);
         let external = root.join("external");
         std::fs::create_dir_all(&external).unwrap();
@@ -1523,10 +1567,8 @@ mod tests {
                 physical,
             });
         }
-        let client = Arc::new(TestBazelClient::default());
         let (sender, receiver) = crossbeam_channel::unbounded();
-        let loader =
-            DefaultFileLoader::new(client.clone(), root.clone(), None, external, sender, true);
+        let loader = DefaultFileLoader::new(client, root.clone(), None, external, sender, true);
         let info = starpls_bazel::client::BazelInfo {
             workspace: root,
             ..Default::default()
@@ -1534,10 +1576,7 @@ mod tests {
         let (analysis, loader) = options
             .prepare_analysis(loader, &info, Default::default())
             .unwrap();
-        (
-            Checker::new(analysis, info, vec![], &[], loader, receiver, &options).unwrap(),
-            client,
-        )
+        Checker::new(analysis, info, vec![], &[], loader, receiver, &options).unwrap()
     }
 
     #[test]
@@ -1558,6 +1597,57 @@ mod tests {
             .workspace
             .join("external/stubs+")
             .exists());
+    }
+
+    #[test]
+    fn source_overlays_pair_adjacent_build_interfaces_without_fetching() {
+        let (mut checker, client) = overlay_checker(
+            "overlay-build-and-interface",
+            &[
+                (
+                    "stubs+/BUILD.bazel",
+                    "build.txt",
+                    "_VALUE = 'valid'\nvalue = _VALUE\n",
+                ),
+                ("stubs+/BUILD.bzli", "interface.txt", "_VALUE: str\n"),
+            ],
+        );
+        assert_eq!(checker.report_diagnostics(None).unwrap(), ExitCode::SUCCESS);
+        assert_eq!(checker.files.len(), 2);
+        assert!(client.fetch_requests.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn source_overlays_explicit_interfaces_skip_adjacent_repositories() {
+        let name = "overlay-explicit-interface";
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap()).join(name);
+        let adjacent = root.join("external/stubs+/BUILD.bzli");
+        std::fs::create_dir_all(adjacent.parent().unwrap()).unwrap();
+        std::fs::write(adjacent, "_VALUE: int\n").unwrap();
+        std::fs::write(root.join("explicit.bzli"), "_VALUE: str\n").unwrap();
+        std::fs::write(
+            root.join("sty.toml"),
+            "[type-interfaces]\n\"external/stubs+/BUILD.bazel\" = \"explicit.bzli\"\n",
+        )
+        .unwrap();
+        let client = Arc::new(TestBazelClient::default());
+        client
+            .fetch_failures
+            .lock()
+            .unwrap()
+            .insert("stubs+".to_owned(), "archive unavailable".to_owned());
+        let mut checker = overlay_checker_with_client(
+            name,
+            &[(
+                "stubs+/BUILD.bazel",
+                "build.txt",
+                "_VALUE = 'valid'\nvalue = _VALUE\n",
+            )],
+            client.clone(),
+        );
+        assert_eq!(checker.report_diagnostics(None).unwrap(), ExitCode::SUCCESS);
+        assert_eq!(checker.files.len(), 2);
+        assert!(client.fetch_requests.lock().unwrap().is_empty());
     }
 
     #[test]
@@ -1901,6 +1991,63 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
         };
         assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
         assert_eq!(*client.fetch_requests.lock().unwrap(), ["stubs+"]);
+    }
+
+    #[test]
+    fn source_overlays_validate_adjacent_build_interfaces() {
+        for (case, refreshed) in [("refreshed", true), ("failed", false)] {
+            let name = format!("overlay-build-interface-{case}");
+            let root =
+                std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap()).join(&name);
+            let interface = root.join("external/stubs+/BUILD.bzli");
+            std::fs::create_dir_all(interface.parent().unwrap()).unwrap();
+            std::fs::write(&interface, "_VALUE: int\n").unwrap();
+            let client = Arc::new(TestBazelClient::default());
+            if refreshed {
+                client.fetch_files.lock().unwrap().insert(
+                    "stubs+".to_owned(),
+                    (interface.clone(), "_VALUE: str\n".to_owned()),
+                );
+            } else {
+                client
+                    .fetch_failures
+                    .lock()
+                    .unwrap()
+                    .insert("stubs+".to_owned(), "archive unavailable".to_owned());
+            }
+            let mut checker = overlay_checker_with_client(
+                &name,
+                &[(
+                    "stubs+/BUILD.bazel",
+                    "build.txt",
+                    "_VALUE = 'valid'\nvalue = _VALUE\n",
+                )],
+                client.clone(),
+            );
+            let report_path = root.join("report.json");
+            let result = checker.report_diagnostics(Some(&report_path));
+            if refreshed {
+                assert_eq!(result.unwrap(), ExitCode::SUCCESS);
+            } else {
+                assert!(result.is_err());
+            }
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+            assert_eq!(report["complete"], refreshed, "{case}: {report}");
+            assert_eq!(report["diagnostics"]["errors"], 0, "{case}: {report}");
+            assert_eq!(
+                report["checked_files"].as_array().unwrap().len(),
+                if refreshed { 2 } else { 1 },
+                "{case}: {report}"
+            );
+            if !refreshed {
+                assert_eq!(
+                    report["input_errors"][0]["path"].as_str(),
+                    interface.to_str()
+                );
+            }
+            assert_eq!(*client.fetch_requests.lock().unwrap(), ["stubs+"]);
+        }
     }
 
     #[test]
@@ -3973,12 +4120,37 @@ impl Checker {
             .iter()
             .map(|path| starpls_common::absolute_path(Path::new(path)))
             .collect::<anyhow::Result<Vec<_>>>()?;
+        let mut overlay_interfaces = indexmap::IndexSet::new();
+        for SourceOverlay {
+            logical,
+            physical: _,
+        } in &options.source_overlay
+        {
+            let logical = starpls_common::absolute_path(logical)?;
+            if checker.ignored_paths.contains(&logical) {
+                checker.exclusions.insert(logical, Exclusion::Ignored);
+            } else if let Some(file) =
+                checker.input_file(&logical, true, extensions, options.bazel_only)?
+            {
+                if let Some(interface) = checker
+                    .analysis
+                    .adjacent_interface_path(file)
+                    .filter(|path| path.is_file())
+                {
+                    overlay_interfaces.insert(interface);
+                }
+                checker.files.insert(file);
+            }
+        }
         // Validate all selected external repositories in one batch before
-        // walking their directories or admitting cached source files.
+        // walking their directories or admitting cached source files. An overlaid
+        // source is already trusted, but its physical interface still belongs to
+        // the installed repository.
         let fetches = checker.loader.fetch_source_repositories(
             paths
                 .iter()
                 .filter(|path| !checker.ignored_paths.contains(path))
+                .chain(overlay_interfaces.iter())
                 .map(PathBuf::as_path),
             |message| {
                 if checker.progress {
@@ -3989,16 +4161,12 @@ impl Checker {
         if !fetches.is_empty() {
             checker.analysis.invalidate_loads();
         }
-        for SourceOverlay {
-            logical,
-            physical: _,
-        } in &options.source_overlay
-        {
-            let logical = starpls_common::absolute_path(logical)?;
-            if checker.ignored_paths.contains(&logical) {
-                checker.exclusions.insert(logical, Exclusion::Ignored);
-            } else {
-                checker.load_file(&logical, true, extensions, options.bazel_only)?;
+        for path in overlay_interfaces {
+            if let Err(error) = checker.loader.ensure_repository_for_path(&path) {
+                checker.input_errors.push(InputError {
+                    path,
+                    message: format!("{error:#}"),
+                });
             }
         }
         // The local implementation audit also owns unreferenced companion pairs. Reuse
@@ -4071,10 +4239,7 @@ impl Checker {
                         || entry.depth() == 0)
                         && entry.path().is_file()
                 {
-                    if companions_only
-                        && !(entry.path().extension().is_some_and(|ext| ext == "bzli")
-                            && entry.path().with_extension("bzl").is_file())
-                    {
+                    if companions_only && !Self::has_adjacent_source_candidate(entry.path()) {
                         continue;
                     }
                     match checker.input_file(
@@ -4252,6 +4417,20 @@ impl Checker {
             self.files.insert(file);
         }
         Ok(())
+    }
+
+    fn has_adjacent_source_candidate(path: &Path) -> bool {
+        if !path
+            .extension()
+            .is_some_and(|extension| extension == "bzli")
+        {
+            return false;
+        }
+        path.with_extension("bzl").is_file()
+            || path.file_name().is_some_and(|name| name == "BUILD.bzli")
+                && starpls_common::BAZEL_BUILD_FILE_NAMES
+                    .iter()
+                    .any(|name| path.with_file_name(name).is_file())
     }
 
     fn input_file(

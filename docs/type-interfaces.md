@@ -273,12 +273,13 @@ same Bazel repository. Ship both files at those paths. Multiple repositories can
 install symlinks to the same implementation and supply different interfaces.
 
 An explicit mapping overrides the companion. Use `sty.toml` at the Bazel
-workspace root for separately distributed stubs and for BUILD or MODULE bindings:
+workspace root to associate sources with stubs in other locations or to annotate
+MODULE.bazel bindings:
 
 ```toml
 [type-interfaces]
 "lib/paths.bzl" = "contracts/paths.bzli"
-"BUILD.bazel" = "BUILD.bzli"
+"MODULE.bazel" = "contracts/module.bzli"
 ```
 
 Paths are relative to the configuration file. The CLI and language server use
@@ -417,10 +418,12 @@ default, including suppressions made obsolete by adding an annotation.
 
 ## BUILD and MODULE.bazel annotations
 
-An explicit mapping such as `BUILD.bazel=BUILD.bzli` or
-`MODULE.bazel=MODULE.bzli` applies variable annotations to top-level assignments
-in BUILD files, MODULE.bazel files, and `.MODULE.bazel` fragments, including
-private names:
+An adjacent `BUILD.bzli` applies variable annotations to top-level assignments
+in the package's active BUILD file, including private names. Bazel chooses
+`BUILD.bazel` ahead of `BUILD`. If a `BUILD.bzl` file is present,
+`BUILD.bzli` belongs to that module and the BUILD file requires an explicit
+mapping. Explicit mappings also support `MODULE.bazel`, `.MODULE.bazel`
+fragments, and stubs stored elsewhere.
 
 ```starlark
 type _Case = dict[{"name": str, "enabled": bool}]
