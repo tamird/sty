@@ -2733,6 +2733,9 @@ fn write_function(
             }
             // Encoding accepts any object; unsupported values raise rather than return.
             (CallableKind::Method("json"), "encode", "x") => Some("_starpls_builtins.object"),
+            // Tag classes copy concrete dictionaries. The read-only mapping view
+            // preserves unions of invariant dictionary specializations.
+            (CallableKind::Function, "tag_class", "attrs") => (classes.contains("Attribute") && env::normalize_doc(r#type, true) == "dict").then_some("_starpls_ty_extensions.Intersection[_starpls_ty_extensions.Top[_starpls_builtins.dict[_starpls_typing.Any, _starpls_typing.Any]], _starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]] | _DictSchema[_starpls_types.Attribute[_starpls_builtins.object]]"),
             // Rule construction reads each dictionary while preserving its key and value types.
             (CallableKind::Function, "rule" | "aspect", "attrs") => classes.contains("Attribute").then_some("_starpls_typing.Mapping[_RuleAttributeName, _RuleAttribute]"),
             // A None value removes an inherited macro attribute.
@@ -4522,14 +4525,14 @@ def check_literal_keys(attrs: dict[_starpls_typing.Literal["dep"], _starpls_type
     }
 
     #[test]
-    fn rule_attributes_preserve_static_descriptor_types() {
+    fn attribute_dictionaries_preserve_static_descriptor_types() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
         .unwrap();
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
-            .set_builtin_defs(builtins, Default::default())
+            .set_builtin_defs(builtins.clone(), Default::default())
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
@@ -4537,43 +4540,115 @@ def check_literal_keys(attrs: dict[_starpls_typing.Literal["dep"], _starpls_type
             )
             .unwrap(),
         );
-        let source = r#"def implementation(context: ctx[object, object]) -> list[object]:
+        let rule = r#"def implementation(context: ctx[object, object]) -> list[object]:
     return []
 def register(attributes: Mapping[str, Attribute[bool]] | Mapping[str, Attribute[str]]) -> rule:
     return rule(implementation=implementation, attrs=attributes)
 empty = rule(implementation=implementation, attrs={})
 empty(name="empty")
 "#;
+        let tag = r#"def register(attributes: dict[str, Attribute[bool]] | dict[str, Attribute[str]]) -> tag_class:
+    return tag_class(attrs=attributes)
+def register_schema(attributes: dict[{"patches": Attribute[list[Label]], "strip": Attribute[int]}]) -> tag_class:
+    return tag_class(attrs=attributes)
+def register_literal_key(attributes: dict[Literal["enabled"], Attribute[bool]]) -> tag_class:
+    return tag_class(attrs=attributes)
+empty = tag_class()
+explicit_empty = tag_class(attrs={})
+patch = tag_class(attrs={"patches": attr.label_list(), "strip": attr.int()})
+"#;
         let file = analysis
             .open_document(
                 Path::new("/attrs.bzl"),
                 Dialect::Bazel,
                 None,
-                source.into(),
+                String::new(),
                 1,
             )
             .unwrap();
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        for (attribute, expected) in [
-            ("int", "invalid-argument-type"),
-            ("Attribute", "non-static-type"),
+        for source in [rule, tag] {
+            analysis.update_file(file, source.into());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+            for (attribute, expected) in [
+                ("int", "invalid-argument-type"),
+                ("Attribute", "non-static-type"),
+            ] {
+                let invalid = source
+                    .replace("Attribute[bool]", attribute)
+                    .replace("Attribute[str]", attribute);
+                let argument = invalid.rfind("attributes").unwrap();
+                analysis.update_file(file, invalid);
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert!(
+                    diagnostics.iter().any(|diagnostic| {
+                        diagnostic.id().as_str() == expected
+                            && (attribute != "Attribute"
+                                || diagnostic
+                                    .range()
+                                    .is_some_and(|range| usize::from(range.start()) == argument))
+                    }),
+                    "{attribute}: {diagnostics:#?}"
+                );
+            }
+        }
+        for statement in [
+            "tag_class(attrs={42: attr.string()})",
+            "tag_class(attrs={'name': None})",
+            "tag_class(attrs=None)",
+            "tag_class(attrs=[('name', attr.string())])",
+            "def mapping(attributes: Mapping[str, Attribute[str]]) -> tag_class:\n    return tag_class(attrs=attributes)",
         ] {
-            let invalid = source
-                .replace("Attribute[bool]", attribute)
-                .replace("Attribute[str]", attribute);
-            let argument = invalid.rfind("attributes").unwrap();
-            analysis.update_file(file, invalid);
+            analysis.update_file(file, format!("{tag}{statement}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(
-                diagnostics.iter().any(|diagnostic| {
-                    diagnostic.id().as_str() == expected
-                        && (attribute != "Attribute"
-                            || diagnostic
-                                .range()
-                                .is_some_and(|range| usize::from(range.start()) == argument))
+                diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
+                "{statement}: {diagnostics:#?}"
+            );
+            assert!(
+                diagnostics.iter().all(|diagnostic| {
+                    matches!(diagnostic.id().as_str(), "invalid-argument-type" | "invalid-key")
+                        && usize::from(diagnostic.range().unwrap().start()) >= tag.len()
                 }),
-                "{attribute}: {diagnostics:?}"
+                "{statement}: {diagnostics:#?}"
+            );
+        }
+        let mut custom = builtins.clone();
+        custom.global.extend(env::make_bzl_builtins().global);
+        custom
+            .global
+            .iter_mut()
+            .find(|global| global.name == "tag_class")
+            .unwrap()
+            .callable
+            .as_mut()
+            .unwrap()
+            .param
+            .iter_mut()
+            .find(|parameter| parameter.name == "attrs")
+            .unwrap()
+            .r#type = "string".into();
+        let mut missing = builtins;
+        missing.r#type.retain(|class| class.name != "Attribute");
+        for (builtins, source, expected) in [
+            (
+                custom,
+                "tag_class(attrs={'name': attr.string()})",
+                "invalid-argument-type",
+            ),
+            (missing, "tag_class(attrs={})", "non-static-type"),
+        ] {
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            analysis.update_file(file, source.into());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(!diagnostics.is_empty());
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|diagnostic| diagnostic.id().as_str() == expected),
+                "{diagnostics:#?}"
             );
         }
     }
