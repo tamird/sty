@@ -9291,6 +9291,8 @@ def annotated_api(value: cc_common, configuration: FeatureConfiguration) -> bool
 def check_access(internal: CcInternal, allowlist: list[tuple[str, str]]) -> None:
     internal.check_private_api(allowlist=allowlist)
     return internal.check_private_api(allowlist=(('rules_cc', 'cc', 42, None),), depth=0)
+def execution_os(internal: CcInternal, rule_ctx: ctx[object, object]) -> str:
+    return internal.exec_os(rule_ctx)
 def borrowed(internal: CcInternal) -> HeaderInfo:
     return internal.create_header_info()
 def nullable_header(header: HeaderInfo) -> GeneratedFile | None:
@@ -9345,6 +9347,7 @@ def inspect(internal: CcInternal, action: actions, file: File) -> None:
             ("internal.check_private_api(allowlist=[(42, 'cc')])", "invalid-argument-type"),
             ("internal.check_private_api(allowlist=[], depth='1')", "invalid-argument-type"),
             ("internal.check_private_api([], allowlist=[])", "too-many-positional-arguments"),
+            ("internal.exec_os(42)", "invalid-argument-type"),
             ("internal.create_header_info(header_module=file)", "invalid-argument-type"),
             ("internal.create_header_info(pic_header_module=42)", "invalid-argument-type"),
             ("internal.create_header_info(modular_public_headers=[42])", "invalid-argument-type"),
