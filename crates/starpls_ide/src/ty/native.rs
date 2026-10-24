@@ -1155,11 +1155,24 @@ fn declarations(
             writeln!(body, "        def __getattr__(self, name: _starpls_builtins.str) -> _starpls_typing.Any: ...")?;
         }
         if class.name == "OutputGroupInfo" {
-            names.extend(["__getattr__", "__getitem__", "__contains__"]);
+            names.extend([
+                "__getattr__",
+                "__getitem__",
+                "__contains__",
+                "__iter__",
+                "__len__",
+            ]);
             writeln!(body, "        @_starpls_typing.type_check_only")?;
             writeln!(body, "        def __getattr__(self, name: _starpls_builtins.str) -> _starpls_types.depset[_starpls_types.File]: ...")?;
             writeln!(body, "        def __getitem__(self, name: _starpls_builtins.str) -> _starpls_types.depset[_starpls_types.File]: ...")?;
             writeln!(body, "        def __contains__(self, name: _starpls_builtins.object) -> _starpls_builtins.bool: ...")?;
+            writeln!(body, "        @_starpls_typing.type_check_only")?;
+            writeln!(body, "        def __iter__(self) -> _starpls_typing.Iterator[_starpls_builtins.str]: ...")?;
+            writeln!(body, "        @_starpls_typing.type_check_only")?;
+            writeln!(
+                body,
+                "        def __len__(self) -> _starpls_builtins.int: ..."
+            )?;
         }
         if class.name == "ToolchainContext" {
             names.extend(["__getitem__", "__contains__"]);
@@ -7647,14 +7660,20 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
             .unwrap();
         let source = r#"def inspect(target: Target, file: File):
     OutputGroupInfo(listed=[file], tupled=(file,), nested=depset([file]))
+    special_names = OutputGroupInfo(__iter__=depset([file]), __len__=depset([file]))
+    special_names.__iter__.to_list()
+    special_names.__len__.to_list()
     groups = target[OutputGroupInfo]
     named: list[File] = groups.custom.to_list()
     indexed: list[File] = groups['custom'].to_list()
+    group_names: Collection[str] = groups
+    iterated_names: list[str] = [name for name in groups]
+    group_count: int = len(groups)
     present: bool = 'custom' in groups
     absent: bool = 42 in groups
     if hasattr(groups, 'custom'):
         groups.custom.to_list()[0].path
-    (named, indexed, present, absent)
+    (named, indexed, group_names, iterated_names, group_count, present, absent)
 "#;
         let file = analysis
             .open_document(
@@ -7669,6 +7688,9 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         for (statement, expected) in [
             ("target[OutputGroupInfo][42]", "invalid-argument-type"),
+            ("bad: Collection[File] = groups; bad", "invalid-assignment"),
+            ("special_names.__iter__()", "call-non-callable"),
+            ("special_names.__len__()", "call-non-callable"),
             (
                 "bad: list[str] = target[OutputGroupInfo].custom.to_list(); bad",
                 "invalid-assignment",
