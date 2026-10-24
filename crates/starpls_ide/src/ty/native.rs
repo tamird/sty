@@ -41,6 +41,9 @@ use ty_python_semantic::types::UnionType;
 use ty_python_semantic::ProgramEnvironment;
 use ty_python_semantic::ResolvedDefinition;
 
+// These host values remain immutable across Bazel evaluation boundaries.
+const IMMUTABLE_ATOMS: [&str; 4] = ["Label", "File", "DottedVersion", "depset"];
+
 const STANDARD_PATH: &str = "starpls-native:standard.pyi";
 const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
 const STORED_GLOB: &str = "_starpls_native_stored_glob";
@@ -1090,10 +1093,7 @@ fn declarations(
             writeln!(body, "        def __hash__(self: _starpls_types.struct[_starpls_typing.Hashable]) -> _starpls_builtins.int: ...")?;
         }
         let mut names = BTreeSet::new();
-        if matches!(
-            class.name.as_str(),
-            "Label" | "File" | "DottedVersion" | "depset"
-        ) {
+        if IMMUTABLE_ATOMS.contains(&class.name.as_str()) {
             names.insert("__hash__");
             writeln!(body, "        @_starpls_typing.type_check_only")?;
             writeln!(
@@ -1959,9 +1959,45 @@ _starpls_annotation_{} = ctx
     }
     output.push_str("class _starpls_annotation_KeywordArgs: ...\n");
     output.push_str("_starpls_annotation_ExactDict = _starpls_allocations.dict\n\n");
-    output.push_str("class _starpls_annotation_record(_starpls_types.ProviderInstance):\n    @_starpls_typing.type_check_only\n    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_builtins.object: ...\n\n");
+    output.push_str(
+        r#"class _starpls_annotation_record(_starpls_types.ProviderInstance):
+    @_starpls_typing.type_check_only
+    def __getattr__(self, name: _starpls_builtins.str) -> _starpls_builtins.object: ...
+
+_RecordHashReceiver = _starpls_typing.TypeVar("_RecordHashReceiver")
+class _ClosedRecord(_starpls_annotation_record, _starpls_typing.Generic[_RecordHashReceiver]):
+    @_starpls_typing.type_check_only
+    def __hash__(self: _RecordHashReceiver) -> _starpls_builtins.int: ...
+
+"#,
+    );
     output.push_str("_starpls_annotation_ProviderKey = _starpls_types.ProviderKey\n");
     output.push_str("_starpls_annotation_ProviderInstance = _starpls_types.ProviderInstance\n");
+    // A built-in provider constructor is hashable by identity, but is not a
+    // deeply immutable field of another provider. Prove field immutability
+    // with the concrete Starlark types that guarantee it.
+    output.push_str(
+        r#"type _ImmutableField = (
+    None | _starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.float
+    | _starpls_builtins.str
+    | _starpls_builtins.tuple[_ImmutableField, ...]
+    | _starpls_ty_extensions.Intersection[_starpls_annotation_record, _starpls_typing.Hashable]
+"#,
+    );
+    if classes.contains_key("struct") {
+        output.push_str("    | _starpls_types.struct[_ImmutableField]\n");
+    }
+    for name in IMMUTABLE_ATOMS {
+        if classes.contains_key(name) {
+            let argument = if name == "depset" {
+                "[_starpls_builtins.object]"
+            } else {
+                ""
+            };
+            writeln!(output, "    | _starpls_types.{name}{argument}")?;
+        }
+    }
+    output.push_str(")\n");
     output.push_str("_starpls_annotation_Intersection = _starpls_ty_extensions.Intersection\n");
     output.push_str("_starpls_annotation_Top = _starpls_ty_extensions.Top\n");
     if java_common_available {

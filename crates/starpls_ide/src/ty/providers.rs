@@ -42,6 +42,7 @@ use ty_python_semantic::types::CheckedArgument;
 use ty_python_semantic::types::CheckedCall;
 use ty_python_semantic::types::IntersectionType;
 use ty_python_semantic::types::KnownClass;
+use ty_python_semantic::types::KnownInstanceType;
 use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::ParameterKind;
 use ty_python_semantic::types::Parameters;
@@ -444,17 +445,51 @@ pub(super) fn instance<'db>(
         open,
         generic: function.type_params.is_some(),
     };
+    let environment = ProgramEnvironment::from_file(file);
+    let record = db.annotation_builtin(db.starlark_file(file)?, "record");
+    let base = record
+        .and_then(|record| {
+            if open {
+                return Some(record);
+            }
+            let TypeDefinition::StaticClass(owner) = record.definition(db, &environment)? else {
+                return None;
+            };
+            let export = |name| {
+                ProvidedBindingValue::Export {
+                    file: owner.program_file(db),
+                    name: Name::new(name),
+                    value: None,
+                }
+                .resolve_type(db)
+            };
+            let Type::KnownInstance(KnownInstanceType::TypeAliasType(field)) =
+                export("_ImmutableField")?
+            else {
+                return None;
+            };
+            // Intern the alias itself: expanding its recursive value here can give
+            // the same generic provider different identities during inference.
+            let field = Type::TypeAlias(field);
+            let receiver = Type::protocol_with_readonly_members(
+                db,
+                &environment,
+                declaration.fields.iter().map(|name| (name.as_str(), field)),
+            );
+            let class = export("_ClosedRecord")?.as_class_literal()?;
+            Some(Type::from(class.apply_specialization(db, |context| {
+                context.specialize(db, vec![receiver])
+            })))
+        })
+        .or(record);
     let class = ProvidedClass {
         name: function.name.id.clone(),
-        bases: db
-            .annotation_builtin(db.starlark_file(file)?, "record")
-            .into_iter()
-            .collect(),
+        bases: base.into_iter().collect(),
         class_members: Box::default(),
         instance_fields: ProvidedInstanceFieldsSource::Deferred(ProvidedData::new(declaration)),
     }
     .into_type_at_expression(db, file, expression.into())?;
-    class.to_instance_approximation(db, &ProgramEnvironment::from_file(file))
+    class.to_instance_approximation(db, &environment)
 }
 
 pub(super) fn fields<'db>(
@@ -1268,6 +1303,100 @@ mod tests {
 
     use crate::Analysis;
     use crate::FilePosition;
+
+    #[test]
+    fn dictionary_membership_uses_provider_fields() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let implementation = |lookup: &str| {
+            format!(
+                r#"
+Action = provider(fields=["label", "name"])
+Box = provider(fields=["value"])
+Extra = provider()
+Named = provider(fields=["__hash__"])
+
+def payload(value):
+    return value.__hash__
+
+def contains(action, extra, opaque, keys):
+    return {lookup}
+"#
+            )
+        };
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "actions.bzl",
+            &implementation(
+                &[
+                    "action in keys",
+                    "Box(value=(action, 'cc')) in keys",
+                    "Box(value=struct(label=action.label)) in keys",
+                    "Named(__hash__='payload') in keys",
+                ]
+                .join(" and "),
+            ),
+        );
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "actions.bzli",
+            r#"
+def Action(*, label: Label, name: str) -> record[{"label": Label, "name": str}]: ...
+def Box[T](*, value: T) -> record[{"value": T}]: ...
+def Extra(*, name: str, **fields: object) -> record[{"name": str}, ...]: ...
+def Named(*, __hash__: str) -> record[{"__hash__": str}]: ...
+def payload(value: Named) -> str: ...
+def contains(action: Action, extra: Extra, opaque: Hashable, keys: dict[Action, bool]) -> bool: ...
+"#,
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [source, interface] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (lookup, expected) in [
+            ("Box(value=[action]) in keys", "unsupported-operator"),
+            ("Box(value=([action],)) in keys", "unsupported-operator"),
+            (
+                "Box(value=Box(value=[action])) in keys",
+                "unsupported-operator",
+            ),
+            (
+                "Box(value=provider(fields=['name'])(name='safe')) in keys",
+                "unsupported-operator",
+            ),
+            ("Box(value=DefaultInfo) in keys", "unsupported-operator"),
+            ("Box(value=range(1)) in keys", "unsupported-operator"),
+            ("Box(value=opaque) in keys", "unsupported-operator"),
+            ("Box(value=(opaque,)) in keys", "unsupported-operator"),
+            (
+                "Box(value=struct(x=opaque)) in keys",
+                "unsupported-operator",
+            ),
+            ("Box(value=extra) in keys", "unsupported-operator"),
+            ("extra in keys", "unsupported-operator"),
+            ("action.__hash__ == 1", "unresolved-attribute"),
+        ] {
+            analysis.update_file(source, implementation(lookup));
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == expected),
+                "{lookup}: {diagnostics:?}"
+            );
+        }
+    }
 
     #[test]
     fn provider_keys_preserve_constructors_and_reject_unrelated_callables() {
