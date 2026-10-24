@@ -627,7 +627,7 @@
             "is_star_star_arg": false
           }
         ],
-        "return_type": "Unknown"
+        "return_type": "repo_rule_proxy"
       }
     }
   ]

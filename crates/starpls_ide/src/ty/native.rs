@@ -58,6 +58,7 @@ const LEGACY_PROVIDER_GLOBALS: &[&str] = &[
 ];
 pub(super) const MODULE_EXTENSION_TYPE: &str = "ModuleExtension";
 pub(super) const MODULE_EXTENSION_PROXY_TYPE: &str = "module_extension_proxy";
+pub(super) const REPOSITORY_RULE_PROXY_TYPE: &str = "repo_rule_proxy";
 
 /// Bazel type constructor names and the corresponding type names in API metadata.
 /// https://github.com/bazelbuild/bazel/commit/89086de828f7aa63564054819947edb9a7697e1f
@@ -784,6 +785,12 @@ fn declarations(
     }
     if dialect == Dialect::Bazel {
         classes
+            .entry(REPOSITORY_RULE_PROXY_TYPE.to_owned())
+            .or_insert_with(|| Type {
+                name: REPOSITORY_RULE_PROXY_TYPE.to_owned(),
+                ..Default::default()
+            });
+        classes
             .entry("repo_metadata".to_owned())
             .or_insert_with(|| Type {
                 name: "repo_metadata".to_owned(),
@@ -1283,6 +1290,17 @@ fn declarations(
             writeln!(
                 body,
                 "        def __call__(self, /, *, name: _starpls_builtins.str, **kwargs: _starpls_typing.Any) -> None: ..."
+            )?;
+        }
+        if dialect == Dialect::Bazel
+            && class.name == REPOSITORY_RULE_PROXY_TYPE
+            && class.field.iter().all(|field| field.name != "__call__")
+        {
+            // The proxy owns these arguments; the selected rule owns all other keywords.
+            // https://github.com/bazelbuild/bazel/blob/7.0.0/src/main/java/com/google/devtools/build/lib/bazel/bzlmod/ModuleFileGlobals.java#L715-L745
+            writeln!(
+                body,
+                "        def __call__(self, /, *, name: _starpls_builtins.str, dev_dependency: _starpls_builtins.bool = ..., **kwargs: _starpls_unknown) -> None: ..."
             )?;
         }
         // WorkspaceFactory exports WORKSPACE functions through native, omits
@@ -6628,6 +6646,85 @@ def names(directory: path) -> list[str]:
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn repository_rule_proxy_checks_its_own_parameters() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "owner.bzl",
+            "def _impl(ctx): pass\nrepository = repository_rule(implementation=_impl, attrs={'url': attr.string()})\n",
+        );
+        let source = r#"unused = use_repo_rule('unused.bzl', 'missing')
+repository = use_repo_rule('owner.bzl', 'repository')
+repository(name='valid', dev_dependency=False, url='https://example.invalid')
+repository()
+repository(name=42)
+repository(name='invalid_dev', dev_dependency='no')
+repository('positional', name='named')
+"#;
+        let file = fixture.add_file_with_options(
+            &mut analysis.db,
+            "MODULE.bazel",
+            source,
+            Dialect::Bazel,
+            Some(starpls_common::FileInfo::Bazel {
+                api_context: APIContext::Module,
+                is_external: false,
+                bundled_cc_common: false,
+            }),
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let actual = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let range = diagnostic.range().unwrap();
+                (diagnostic.id().as_str(), &source[range])
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual,
+            [
+                ("missing-argument", "repository()"),
+                ("invalid-argument-type", "name=42"),
+                ("invalid-argument-type", "dev_dependency='no'"),
+                ("too-many-positional-arguments", "'positional'"),
+            ]
+        );
+        assert!(!loader
+            .requests
+            .lock()
+            .unwrap()
+            .contains(&"unused.bzl".to_owned()));
+
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = "repository = use_repo_rule('unavailable.bzl', 'repository')\nrepository(name='test', url='unverified')\n";
+        analysis.update_file(file, source.to_owned());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.id().as_str() == "non-static-type"
+                    && &source[diagnostic.range().unwrap()] == "repository"
+            }),
+            "{diagnostics:?}"
+        );
     }
 
     #[test]
