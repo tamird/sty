@@ -15,6 +15,7 @@ use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 use ruff_text_size::TextSize;
 use rustc_hash::FxHashMap;
+use salsa::Accumulator;
 use starpls_common::Db;
 use starpls_hir::Db as _;
 use starpls_syntax::source::decode_string_value;
@@ -156,8 +157,7 @@ pub(super) fn resolve<'db>(
         unreachable!("only supplied load definitions reach the Starlark loader");
     };
     let error = |message: String| {
-        let mut diagnostic =
-            Diagnostic::new(DiagnosticId::lint("load-error"), Severity::Warning, message);
+        let mut diagnostic = load_error(message);
         diagnostic.annotate(Annotation::primary(
             Span::from(source_file.source).with_range(binding.binding.range),
         ));
@@ -336,7 +336,7 @@ pub(super) fn is_loaded_alias(db: &Database, file: ProgramFile<'_>, name: &str) 
     has_load
 }
 
-/// A syntactic load edge, including files whose exported values are unused.
+/// A dependency on another Starlark source.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LoadDependency {
     /// The module path, or the original source literal if it cannot be represented as UTF-8.
@@ -350,6 +350,32 @@ pub enum LoadResolution {
     Resolved(starpls_common::File),
     Pending,
     Failed(String),
+}
+
+#[salsa::accumulator]
+#[derive(Debug)]
+pub(crate) struct ObservedLoad {
+    pub(crate) from: starpls_common::File,
+    pub(crate) dependency: LoadDependency,
+}
+
+pub(super) fn observe_dependency(
+    db: &dyn Db,
+    from: starpls_common::File,
+    module: &str,
+    range: TextRange,
+) -> LoadResolution {
+    let resolution = resolve_dependency(db, from, module);
+    ObservedLoad {
+        from,
+        dependency: LoadDependency {
+            module: module.into(),
+            range,
+            resolution: resolution.clone(),
+        },
+    }
+    .accumulate(db);
+    resolution
 }
 
 pub(crate) fn dependencies(db: &dyn Db, file: starpls_common::File) -> &[LoadDependency] {
@@ -555,9 +581,9 @@ pub(super) fn diagnostics(db: &Database, file: ProgramFile<'_>) -> Vec<Diagnosti
         resolution,
     } in dependencies(db, source_file)
     {
-        let message = match resolution {
+        let mut diagnostic = match resolution {
             LoadResolution::Resolved(loaded) => {
-                if loaded.source == source_file.source {
+                let message = if loaded.source == source_file.source {
                     "Cannot load the current file".to_owned()
                 } else if db.environment().options(db).skip_load_cycle_checks {
                     continue;
@@ -565,21 +591,26 @@ pub(super) fn diagnostics(db: &Database, file: ProgramFile<'_>) -> Vec<Diagnosti
                     format!("Detected circular import\n{}", cycle.join("\n"))
                 } else {
                     continue;
-                }
+                };
+                load_error(message)
             }
             LoadResolution::Pending => continue,
-            LoadResolution::Failed(error) => {
-                format!("Could not resolve module {module:?}: {error}")
-            }
+            LoadResolution::Failed(error) => failed_load_error(module, error),
         };
-        let mut diagnostic =
-            Diagnostic::new(DiagnosticId::lint("load-error"), Severity::Warning, message);
         diagnostic.annotate(Annotation::primary(
             Span::from(source_file.source).with_range(*range),
         ));
         diagnostics.push(diagnostic);
     }
     diagnostics
+}
+
+pub(super) fn failed_load_error(module: &str, cause: &str) -> Diagnostic {
+    load_error(format!("Could not resolve module {module:?}: {cause}"))
+}
+
+fn load_error(message: String) -> Diagnostic {
+    Diagnostic::new(DiagnosticId::lint("load-error"), Severity::Warning, message)
 }
 
 fn load_call(expr: &Expr) -> Option<&ExprCall> {

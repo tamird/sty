@@ -3340,6 +3340,137 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
     }
 
     #[test]
+    fn repository_proxy_dependencies_follow_active_source_revision() {
+        let source = concat!(
+            "selected = use_repo_rule('//:rules.bzl', 'ordinary')\n",
+            "selected(name='example')\n",
+            "missing = use_repo_rule('//:missing.bzl', 'ordinary')\n",
+            "missing(name='missing')\n",
+        );
+        let mut checker = local_checker_with_options(
+            "checker-repository-proxy-dependencies",
+            &[
+                ("BUILD", ""),
+                ("MODULE.bazel", source),
+                ("rules.bzl", "def ordinary(name): pass\n"),
+            ],
+            CheckCommand {
+                paths: vec!["MODULE.bazel".to_owned()],
+                ..Default::default()
+            },
+        );
+        let checked = checker.check_files().unwrap();
+        let [(module, diagnostics)] = checked.diagnostics.as_slice() else {
+            panic!("expected one selected MODULE file");
+        };
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect::<Vec<_>>(),
+            ["invalid-argument-type", "load-error"],
+        );
+        let [unresolved] = checked.loads.unresolved[module].as_slice() else {
+            panic!("expected the active missing repository rule source");
+        };
+        assert_eq!(unresolved.module.as_ref(), "//:missing.bzl");
+        assert_eq!(
+            &source[unresolved.range],
+            "use_repo_rule('//:missing.bzl', 'ordinary')"
+        );
+        let snapshot = checker.analysis.snapshot();
+        assert!(checked
+            .loads
+            .files
+            .iter()
+            .any(|file| snapshot.path(*file) == checker.bazel_info.workspace.join("rules.bzl")));
+        drop(snapshot);
+
+        let module = *module;
+        checker.analysis.update_file(module, String::new());
+        let checked = checker.check_files().unwrap();
+        assert!(checked.diagnostics[0].1.is_empty());
+        assert_eq!(
+            checked.loads.files.into_iter().collect::<Vec<_>>(),
+            [module]
+        );
+        assert!(checked.loads.unresolved.is_empty());
+        std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+    }
+
+    #[test]
+    fn repository_proxy_report_preserves_distinct_missing_selector_sites() {
+        let source = concat!(
+            "first = use_repo_rule('//:missing.bzl', 'first')\n",
+            "first(name='first')\n",
+            "first(name='repeated')\n",
+            "second = use_repo_rule('//:missing.bzl', 'second')\n",
+            "second(name='second')\n",
+        );
+        let mut checker = local_checker_with_options(
+            "checker-repository-proxy-distinct-sites",
+            &[("MODULE.bazel", source)],
+            CheckCommand {
+                paths: vec!["MODULE.bazel".to_owned()],
+                ..Default::default()
+            },
+        );
+        let checked = checker.check_files().unwrap();
+        let [(module, _)] = checked.diagnostics.as_slice() else {
+            panic!("expected one selected MODULE file");
+        };
+        assert_eq!(
+            checked.loads.unresolved[module]
+                .iter()
+                .map(|edge| &source[edge.range])
+                .collect::<Vec<_>>(),
+            [
+                "use_repo_rule('//:missing.bzl', 'first')",
+                "use_repo_rule('//:missing.bzl', 'second')",
+            ]
+        );
+        std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+    }
+
+    #[test]
+    fn repository_proxy_report_refreshes_resolved_dependencies() {
+        let mut checker = local_checker_with_options(
+            "checker-repository-proxy-resolved-dependency",
+            &[(
+                "MODULE.bazel",
+                "selected = use_repo_rule('//:missing.bzl', 'selected')\nselected(name='example')\n",
+            )],
+            CheckCommand {
+                paths: vec!["MODULE.bazel".to_owned()],
+                ..Default::default()
+            },
+        );
+        let checked = checker.check_files().unwrap();
+        assert_eq!(checked.loads.unresolved.len(), 1);
+        let dependency = checker.bazel_info.workspace.join("missing.bzl");
+        std::fs::write(&dependency, "def selected(name): pass\n").unwrap();
+        checker.analysis.invalidate_loads();
+        let checked = checker.check_files().unwrap();
+        assert!(
+            checked.loads.unresolved.is_empty(),
+            "{:?}",
+            checked.loads.unresolved
+        );
+        let snapshot = checker.analysis.snapshot();
+        assert!(checked
+            .loads
+            .files
+            .iter()
+            .any(|file| snapshot.path(*file) == dependency));
+        assert_eq!(
+            checked.diagnostics[0].1[0].id().as_str(),
+            "invalid-argument-type"
+        );
+        drop(snapshot);
+        std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+    }
+
+    #[test]
     fn exclusion_paths_must_stay_workspace_relative() {
         let workspace = std::env::current_dir().unwrap();
         for pattern in [
@@ -4497,14 +4628,25 @@ impl Checker {
             files: self.files.clone(),
             unresolved: Default::default(),
         };
-        graph.files.extend(checked);
+        let snapshot = self.analysis.snapshot();
+        let mut observed_loads = HashMap::<File, indexmap::IndexMap<_, _>>::new();
+        for file in checked {
+            graph.files.insert(file);
+            if file.api_context() == Some(starpls_bazel::APIContext::Module) {
+                for (from, dependency) in snapshot.diagnostic_loads(file)? {
+                    observed_loads
+                        .entry(from)
+                        .or_default()
+                        .insert(dependency.range, dependency);
+                }
+            }
+        }
         // Requests survive cached queries. Current roots and load statements
         // determine which of those requests still belong to this check.
         let mut requests: HashMap<File, HashSet<String>> = Default::default();
         for (file, module) in self.loader.recorded_loads() {
             requests.entry(file).or_default().insert(module);
         }
-        let snapshot = self.analysis.snapshot();
         let mut requested_counterparts: HashMap<File, Vec<File>> = HashMap::new();
         for (source, interface) in self.analysis.type_interface_pairs() {
             if self.load_scope == LoadScope::Transitive {
@@ -4587,6 +4729,9 @@ impl Checker {
                         dependencies.push(edge);
                     }
                 }
+            }
+            if let Some(observed) = observed_loads.remove(&file) {
+                dependencies.extend(observed.into_values());
             }
             let mut unresolved = Vec::new();
             for edge in dependencies {

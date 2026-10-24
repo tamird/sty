@@ -4,6 +4,8 @@ use starpls_common::File;
 use starpls_common::FileInfo;
 use starpls_hir::diagnostics_for_file;
 
+use crate::ty::load::LoadDependency;
+use crate::ty::load::ObservedLoad;
 use crate::Database;
 
 #[salsa::db]
@@ -32,6 +34,13 @@ pub(crate) fn diagnostics(db: &Database, file: File) -> Vec<Diagnostic> {
         info,
     } = file;
     cached_diagnostics(db, source, (dialect, info))
+}
+
+pub(crate) fn observed_loads(db: &Database, file: File) -> Vec<(File, LoadDependency)> {
+    cached_diagnostics::accumulated::<ObservedLoad>(db, file.source, (file.dialect, file.info))
+        .into_iter()
+        .map(|load| (load.from, load.dependency.clone()))
+        .collect()
 }
 
 #[salsa::tracked(returns(clone))]

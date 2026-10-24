@@ -42,6 +42,7 @@ pub(crate) mod load;
 mod module_extension;
 mod native;
 mod providers;
+mod repository_rule;
 mod shapes;
 mod strictness;
 mod support;
@@ -642,6 +643,16 @@ impl ty_python_semantic::Db for Database {
         parameter: &str,
     ) -> Option<Type<'db>> {
         context::argument_context(self, call, parameter)
+    }
+
+    fn provided_call_target<'db>(
+        &'db self,
+        file: ProgramFile<'db>,
+        call: &ruff_python_ast::ExprCall,
+        class: Type<'db>,
+        data: &ty_python_semantic::provided::ProvidedData,
+    ) -> Result<Option<Type<'db>>, Diagnostic> {
+        repository_rule::call_target(self, file, call, class, data)
     }
 
     fn provided_call_result<'db>(

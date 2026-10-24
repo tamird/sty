@@ -686,6 +686,11 @@ impl AnalysisSnapshot {
         self.query(|db| diagnostics::diagnostics(db, file_id))
     }
 
+    /// Source dependencies observed while checking this file.
+    pub fn diagnostic_loads(&self, file: File) -> Cancellable<Vec<(File, LoadDependency)>> {
+        self.query(|db| diagnostics::observed_loads(db, file))
+    }
+
     pub fn load_dependencies(&self, file: File) -> Cancellable<Vec<LoadDependency>> {
         self.query(|db| ty::load::dependencies(db, file).to_vec())
     }
