@@ -19,27 +19,16 @@ pub(crate) struct BazelContext {
 
 impl BazelContext {
     pub(crate) fn has_bundled_builtins(&self) -> bool {
-        // The bundled namespace's closed field inventory is audited at this
-        // exact release; other versions retain the existing uncertain view.
-        // A custom builtins tree or injection override can replace its value.
-        self.info.release == "release 9.3.0rc2"
-            && self
-                .info
-                .starlark_semantics
-                .starts_with("StarlarkSemantics{")
-            && self.info.starlark_semantics.ends_with('}')
-            && !self
-                .info
-                .starlark_semantics
-                .contains("experimental_builtins_bzl_path=")
-            && !self
-                .info
-                .starlark_semantics
-                .contains("experimental_builtins_injection_override=")
-            && !self
-                .info
-                .starlark_semantics
-                .contains("incompatible_autoload_externally=")
+        // These releases ship the same cc_common_bazel.bzl. A custom builtins
+        // tree or symbol override can replace or remove that namespace.
+        let release = self.info.release.as_str();
+        let semantics = &self.info.starlark_semantics;
+        matches!(release, "release 9.3.0rc2" | "release 9.3.0")
+            && semantics.starts_with("StarlarkSemantics{")
+            && semantics.ends_with('}')
+            && !semantics.contains("experimental_builtins_bzl_path=")
+            && !semantics.contains("experimental_builtins_injection_override=")
+            && !semantics.contains("incompatible_autoload_externally=")
     }
 
     pub(crate) fn new(client: &dyn BazelClient) -> anyhow::Result<BazelContext> {
@@ -114,6 +103,8 @@ mod tests {
         for (release, semantics, expected) in [
             ("release 9.0.0", "StarlarkSemantics{}", false),
             ("release 9.3.0rc2", "StarlarkSemantics{}", true),
+            ("release 9.3.0", "StarlarkSemantics{}", true),
+            ("release 8.8.1", "StarlarkSemantics{}", false),
             ("release 8.8.2", "StarlarkSemantics{}", false),
             ("release 10.0.0rc1", "StarlarkSemantics{}", false),
             ("development version", "StarlarkSemantics{}", false),
@@ -147,7 +138,7 @@ mod tests {
                 false,
             ),
             (
-                "release 9.3.0rc2",
+                "release 9.3.0",
                 "StarlarkSemantics{incompatible_autoload_externally=[-cc_common]}",
                 false,
             ),

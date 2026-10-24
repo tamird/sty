@@ -538,7 +538,7 @@ impl DefaultFileLoader {
     }
 
     pub(crate) fn fresh(&self) -> Self {
-        Self::new(
+        let loader = Self::new(
             self.bazel_client.clone(),
             self.workspace.clone(),
             self.workspace_name.clone(),
@@ -546,7 +546,12 @@ impl DefaultFileLoader {
             self.fetch_repo_sender.clone(),
             self.bzlmod_enabled,
         )
-        .with_bundled_builtins(self.bundled_builtins)
+        .with_bundled_builtins(self.bundled_builtins);
+        if self.bundled_builtins {
+            // The current mapping decides private builtin access in the main repository.
+            loader.prepare_repository_mappings(&[String::new()]);
+        }
+        loader
     }
 
     pub(crate) fn pause(&self, paused: bool) {
@@ -1159,6 +1164,14 @@ impl FileLoader for DefaultFileLoader {
         let repository = self.repository_for_path(path)?;
         let bundled_cc_common = self.bundled_builtins
             && repository.as_ref().is_some_and(|repository| {
+                if repository.name.is_empty() {
+                    // Bazel's BuiltinRestriction admits a ruleset in the main
+                    // repository when its apparent name resolves back to main.
+                    return path.starts_with(&self.workspace)
+                        && matches!(self.repository_mappings.read().get(""),
+                            Some(RepositoryMapping::Ready(mapping))
+                                if mapping.get("rules_cc").is_some_and(String::is_empty));
+                }
                 // AutoloadSymbols disables Bzl replacements for this canonical
                 // family. The settings gate excludes binding-removal overrides.
                 // This says nothing about private-call access.
@@ -1635,6 +1648,7 @@ pub(crate) fn dialect_and_api_context_for_workspace_path(
 
 #[cfg(test)]
 pub(crate) mod source_tests {
+    use std::collections::HashMap;
     use std::path::Path;
     use std::sync::Arc;
 
@@ -1806,7 +1820,7 @@ pub(crate) mod source_tests {
         std::fs::create_dir_all(&workspace).unwrap();
         std::fs::create_dir_all(&external).unwrap();
         let (sender, _) = crossbeam_channel::unbounded();
-        let loader = DefaultFileLoader::new(
+        let mut loader = DefaultFileLoader::new(
             Arc::new(TestBazelClient::default()),
             workspace.clone(),
             Some("rules_cc".to_owned()),
@@ -1855,6 +1869,32 @@ pub(crate) mod source_tests {
                 .file_info(&path, Dialect::Bazel, info)
                 .unwrap();
             assert_eq!(refreshed, admitted, "{path:?}");
+        }
+        for (canonical, expected) in [("", true), ("shadow+", false)] {
+            let mapping = Arc::new(HashMap::from([(
+                "rules_cc".to_owned(),
+                canonical.to_owned(),
+            )]));
+            loader.bazel_client = Arc::new(TestBazelClient {
+                repository_mappings: HashMap::from([(String::new(), mapping)]),
+                ..Default::default()
+            });
+            // Configuration refresh must observe the current mapping without any stub package.
+            loader = loader.fresh();
+            for (path, bundled) in [
+                (workspace.join("cc/private/cc_info.bzl"), expected),
+                (root.join("unknown/defs.bzli"), false),
+            ] {
+                assert_eq!(
+                    loader.file_info(&path, Dialect::Bazel, info).unwrap(),
+                    Some(starpls_common::FileInfo::Bazel {
+                        api_context: starpls_bazel::APIContext::Bzl,
+                        is_external: false,
+                        bundled_cc_common: bundled,
+                    }),
+                    "{path:?}: @rules_cc maps to {canonical:?}"
+                );
+            }
         }
         let build_info = Some(starpls_common::FileInfo::Bazel {
             api_context: starpls_bazel::APIContext::Build,
