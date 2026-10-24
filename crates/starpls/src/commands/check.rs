@@ -778,6 +778,175 @@ mod tests {
     }
 
     #[test]
+    fn adjacent_interface_shares_the_source_provider_with_its_callers() {
+        let mut checker = local_checker_with_options(
+            "adjacent-provider",
+            &[
+                (
+                    "defs.bzl",
+                    "Info = provider(fields = ['count'])\ninvalid = Info(count = 'bad')\n",
+                ),
+                (
+                    "defs.bzli",
+                    "def Info(*, count: int) -> record[{'count': int}]: ...\n",
+                ),
+                (
+                    "caller.bzl",
+                    "load(':defs.bzl', 'Info')\nvalue = Info(count = 'bad')\n",
+                ),
+            ],
+            CheckCommand {
+                paths: ["defs.bzl", "caller.bzl", "defs.bzli"]
+                    .map(str::to_owned)
+                    .into(),
+                ..Default::default()
+            },
+        );
+        let checked = checker.check_files().unwrap();
+        let snapshot = checker.analysis.snapshot();
+        for (file, diagnostics) in &checked.diagnostics {
+            let path = snapshot.path(*file);
+            let expected = if path.extension().unwrap() == "bzli" {
+                vec![]
+            } else {
+                vec!["invalid-argument-type"]
+            };
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(ids, expected, "{}", path.display());
+        }
+        std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+    }
+
+    #[test]
+    fn adjacent_interface_keeps_the_original_provider_through_reexports() {
+        let caller = concat!(
+            "load(':owner.bzl', Direct = 'Info')\n",
+            "load(':public.bzl', 'Value', Alias = 'Info')\n",
+            "def reexport(info: Direct) -> Alias: return info\n",
+            "def declared_value() -> int: return Value\n",
+            "good = Alias(count='ok')\nbad = Alias(count=1)\n",
+        );
+        for (case, facade) in [
+            (
+                "declaration",
+                "def Info(*, count: int) -> record[{'count': int}]: ...\n",
+            ),
+            ("owner-import", "load(':owner.bzl', 'Info')\n"),
+            ("other-import", "load(':other.bzl', Info='Other')\n"),
+            (
+                "other-assignment",
+                "load(':other.bzl', _Other='Other')\nInfo = _Other\n",
+            ),
+        ] {
+            let facade = format!("{facade}Value: int\n");
+            let mut checker = local_checker_with_options(
+                &format!("adjacent-provider-import-{case}"),
+                &[
+                    ("owner.bzl", "Info = provider(fields = ['count'])\ndef make() -> str: return 'source'\nValue = make()\n"),
+                    (
+                        "owner.bzli",
+                        "def Info(*, count: str) -> record[{'count': str}]: ...\n",
+                    ),
+                    (
+                        "public.bzl",
+                        "load(':owner.bzl', _Info = 'Info', _Value = 'Value')\nInfo = _Info\nValue = _Value\n",
+                    ),
+                    ("public.bzli", &facade),
+                    ("other.bzl", "Other = provider(fields = ['count'])\n"),
+                    (
+                        "other.bzli",
+                        "def Other(*, count: int) -> record[{'count': int}]: ...\n",
+                    ),
+                    ("caller.bzl", caller),
+                ],
+                CheckCommand {
+                    paths: vec!["caller.bzl".into()],
+                    ..Default::default()
+                },
+            );
+            let checked = checker.check_files().unwrap();
+            let diagnostics: Vec<_> = checked
+                .diagnostics
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .collect();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{diagnostics:?}")
+            };
+            assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+            let range = diagnostic.primary_span().unwrap().range().unwrap();
+            assert_eq!(&caller[range], "count=1", "{diagnostic:?}");
+            std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+        }
+    }
+
+    #[test]
+    fn adjacent_interface_reexport_cannot_retype_a_foreign_provider() {
+        for registered in [false, true] {
+            let config = if registered {
+                "[type-interfaces]\n'public.bzl'='public.bzli'\n"
+            } else {
+                ""
+            };
+            let mut checker = local_checker_with_options(
+                &format!("adjacent-provider-reexport-{registered}"),
+                &[
+                    ("sty.toml", config),
+                    (
+                        "owner.bzl",
+                        "Info = provider(fields = ['count'])\nvalue = Info(count = 'bad')\n",
+                    ),
+                    (
+                        "public.bzl",
+                        "load(':owner.bzl', _Info = 'Info')\nInfo = _Info\n",
+                    ),
+                    (
+                        "public.bzli",
+                        "def Info(*, count: int) -> record[{'count': int}]: ...\n",
+                    ),
+                ],
+                CheckCommand {
+                    paths: ["public.bzli", "owner.bzl"].map(str::to_owned).into(),
+                    ..Default::default()
+                },
+            );
+            let result = checker.check_files().unwrap();
+            let snapshot = checker.analysis.snapshot();
+            let diagnostics: Vec<_> = result
+                .diagnostics
+                .iter()
+                .flat_map(|(file, diagnostics)| {
+                    let name = snapshot.path(*file).file_name().unwrap().to_str().unwrap();
+                    diagnostics
+                        .iter()
+                        .map(move |d| (name, d.id().as_str(), d.concise_message().to_string()))
+                })
+                .collect();
+            if registered {
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+                assert_eq!(
+                    (diagnostics[0].0, diagnostics[0].1),
+                    ("owner.bzl", "invalid-argument-type")
+                );
+            } else {
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+                assert_eq!(
+                    (diagnostics[0].0, diagnostics[0].1),
+                    ("public.bzli", "invalid-provider-interface")
+                );
+                assert!(
+                    diagnostics[0].2.contains("owner.bzl")
+                        && diagnostics[0].2.contains("explicitly map")
+                );
+            }
+            std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+        }
+    }
+
+    #[test]
     fn local_interface_sources_allow_mappings_without_paths() {
         let mut checker = local_checker_with_options(
             "checker-local-interfaces-only",

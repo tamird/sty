@@ -19,7 +19,6 @@ use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use starpls_hir::Db as _;
 use ty_python_core::definition::Definition;
 use ty_python_core::definition::DefinitionKind;
 use ty_python_core::definition::ParameterDefinitionNodeKind;
@@ -547,8 +546,60 @@ struct InitializerContract<'db> {
 fn initializer_contracts(
     db: &dyn super::interface::Db,
 ) -> FxHashMap<Definition<'_>, Vec<InitializerContract<'_>>> {
+    collect_initializers(db, super::interface::registered_provider_pairs(db))
+}
+
+#[salsa::tracked(returns(ref))]
+fn adjacent_initializers<'db>(
+    db: &'db dyn super::interface::Db,
+    owner: ProgramFile<'db>,
+) -> FxHashMap<Definition<'db>, Vec<InitializerContract<'db>>> {
+    collect_initializers(db, super::interface::owned_provider_pairs(db, owner))
+}
+
+/// A companion cannot supply context to a function checked in another module.
+pub(super) fn foreign_initializer<'db>(
+    db: &'db dyn super::interface::Db,
+    declaration: Definition<'db>,
+) -> Option<starpls_common::File> {
+    let owner = super::interface::adjacent_provider_owner(db, declaration.program_file(db))?;
+    adjacent_initializers(db, owner)
+        .iter()
+        .find_map(|(function, contracts)| {
+            let module = function.program_file(db);
+            if module == owner
+                || !contracts
+                    .iter()
+                    .any(|contract| contract.declaration == declaration)
+            {
+                return None;
+            }
+            db.starlark_file(module)
+        })
+}
+
+fn initializer_contract<'db>(
+    db: &'db dyn super::interface::Db,
+    definition: Definition<'db>,
+) -> Option<&'db InitializerContract<'db>> {
+    let mut contracts = initializer_contracts(db)
+        .get(&definition)
+        .into_iter()
+        .chain(
+            super::interface::adjacent_provider_owner(db, definition.program_file(db))
+                .and_then(|owner| adjacent_initializers(db, owner).get(&definition)),
+        )
+        .flatten();
+    let first = contracts.next()?;
+    contracts.all(|other| first == other).then_some(first)
+}
+
+fn collect_initializers<'db>(
+    db: &'db dyn super::interface::Db,
+    pairs: &super::interface::ProviderPairs<'db>,
+) -> FxHashMap<Definition<'db>, Vec<InitializerContract<'db>>> {
     let mut result: FxHashMap<_, Vec<_>> = FxHashMap::default();
-    for ((file, node), declarations) in super::interface::provider_pairs(db) {
+    for ((file, node), declarations) in pairs {
         let [declaration] = declarations.as_slice() else {
             continue;
         };
@@ -670,12 +721,7 @@ pub(super) fn parameter_type<'db>(
             _ => None,
         })?;
     let model = SemanticModel::new(db, file);
-    let [contract] = initializer_contracts(db)
-        .get(&function.definition(&model))?
-        .as_slice()
-    else {
-        return None;
-    };
+    let contract = initializer_contract(db, function.definition(&model))?;
     let contract = contract.declaration;
     let contract_file = contract.program_file(db);
     let parsed = ruff_db::parsed::parsed_module(db, contract_file.python_file(db)).load(db);
@@ -792,9 +838,7 @@ pub(super) fn return_contract<'db>(
     db: &'db Database,
     definition: Definition<'db>,
 ) -> Option<(Type<'db>, FileRange)> {
-    let [contract] = initializer_contracts(db).get(&definition)?.as_slice() else {
-        return None;
-    };
+    let contract = initializer_contract(db, definition)?;
     let (fields, source) = field_contract(db, contract.declaration)?;
     let parsed =
         ruff_db::parsed::parsed_module(db, contract.provider_file.python_file(db)).load(db);
@@ -1140,6 +1184,23 @@ pub(super) fn call_diagnostics(db: &Database, call: &CheckedCall<'_, '_>) -> Vec
     diagnostics
 }
 
+pub(super) fn is_provider_origin<'db>(
+    db: &'db dyn super::interface::Db,
+    file: ProgramFile<'db>,
+    node: u32,
+) -> bool {
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let AnyRootNodeRef::Expr(Expr::Call(call)) = parsed.get_by_index(NodeIndex::from(node)) else {
+        return false;
+    };
+    resolve_function(db, file, &call.func, &mut FxHashSet::default()).is_some_and(|definition| {
+        matches!(
+            super::factory::declaration(db, definition),
+            Some(super::factory::BuiltinFunction::Provider)
+        )
+    })
+}
+
 pub(super) fn declaration_diagnostics(
     db: &Database,
     file: starpls_common::File,
@@ -1147,11 +1208,7 @@ pub(super) fn declaration_diagnostics(
     if !file.is_type_interface(db) {
         return Vec::new();
     }
-    let mapped = db
-        .environment()
-        .type_interfaces(db)
-        .values()
-        .any(|(_, interface)| *interface == file);
+    let mapped = super::interface::pairs_for_file(db, file).next().is_some();
     let program = db.starlark_program_file(file);
     let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
     let index = ty_python_core::semantic_index(db, program);
@@ -1182,29 +1239,12 @@ pub(super) fn declaration_diagnostics(
         if !mapped {
             continue;
         }
-        let valid_source =
-            super::interface::provider_pairs(db)
-                .iter()
-                .any(|((file, node), declarations)| {
-                    if !declarations.contains(&definition) {
-                        return false;
-                    }
-                    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
-                    let AnyRootNodeRef::Expr(Expr::Call(call)) =
-                        parsed.get_by_index(NodeIndex::from(*node))
-                    else {
-                        return false;
-                    };
-                    resolve_function(db, *file, &call.func, &mut FxHashSet::default()).is_some_and(
-                        |definition| {
-                            matches!(
-                                super::factory::declaration(db, definition),
-                                Some(super::factory::BuiltinFunction::Provider)
-                            )
-                        },
-                    )
-                });
-        if !valid_source {
+        let valid_source = super::interface::provider_origins(db, definition)
+            .into_iter()
+            .any(|(file, node)| is_provider_origin(db, file, node));
+        if !valid_source
+            && super::interface::foreign_provider_owner(db, file, function.name.as_str()).is_none()
+        {
             let mut diagnostic = Diagnostic::new(
                 DiagnosticId::Lint(super::diagnostics::INVALID_PROVIDER_INTERFACE.name()),
                 Severity::Error,
@@ -2527,7 +2567,7 @@ Info, _raw = provider(fields=["value"], init=_init)
     }
 
     #[test]
-    fn open_provider_contracts_check_loaded_initializers_and_source_fields() {
+    fn adjacent_interface_and_explicit_contracts_check_loaded_initializers() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
         analysis
@@ -2555,6 +2595,13 @@ Info, _raw = provider(fields=["value"], init=_init)
             "def Info(value: str) -> record[{'value': str}, ...]: ...\n",
         );
         loader.add_files_from_fixture(&fixture);
+        let implicit = analysis.snapshot().diagnostics(stub).unwrap();
+        let [diagnostic] = implicit.as_slice() else {
+            panic!("{implicit:?}")
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-provider-interface");
+        assert!(diagnostic.headline_message().contains("helper.bzl"));
+        assert!(diagnostic.headline_message().contains("explicitly map"));
         analysis.set_type_interfaces([(source, stub)]).unwrap();
         for file in [source, stub, helper] {
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();

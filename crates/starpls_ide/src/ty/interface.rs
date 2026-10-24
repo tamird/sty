@@ -798,27 +798,37 @@ pub(super) fn pairing_diagnostics(
         ));
         diagnostics.push(diagnostic);
     };
-    for definitions in provider_pairs(db)
-        .values()
-        .filter(|definitions| definitions.len() > 1)
-    {
-        for definition in definitions {
-            if definition.program_file(db) == program {
-                report(
-                    definition.kind(db).target_range(&parsed),
-                    "Multiple stub classes describe the same provider declaration".into(),
-                );
-            }
+    let index = semantic_index(db, program);
+    for statement in parsed.suite() {
+        let Some([definition]) = index.try_definitions(statement.into()) else {
+            continue;
+        };
+        if !is_provider_definition(db, *definition) {
+            continue;
         }
-    }
-    let mut origins: FxHashMap<Definition<'_>, usize> = FxHashMap::default();
-    for definitions in provider_pairs(db).values() {
-        for definition in definitions {
-            *origins.entry(*definition).or_default() += 1;
+        let name = match statement {
+            Stmt::ClassDef(class) => &class.name,
+            Stmt::FunctionDef(function) => &function.name,
+            _ => continue,
+        };
+        if let Some(owner) = foreign_provider_owner(db, file, name.as_str()) {
+            report(name.range, format!("Provider `{name}` is created in {}; load its declaration from the owner's stub or explicitly map this interface", owner.path(db).display()));
+            continue;
         }
-    }
-    for (definition, count) in origins {
-        if count > 1 && definition.program_file(db) == program {
+        if let Some(initializer) = super::providers::foreign_initializer(db, *definition) {
+            report(name.range, format!("Provider `{name}` uses an initializer in {}; explicitly map this interface to check its implementation", initializer.path(db).display()));
+        }
+        let origins = provider_origins(db, *definition);
+        if origins
+            .iter()
+            .any(|origin| provider_declarations(db, *origin).len() > 1)
+        {
+            report(
+                definition.kind(db).target_range(&parsed),
+                "Multiple stub classes describe the same provider declaration".into(),
+            );
+        }
+        if origins.len() > 1 {
             report(
                 definition.kind(db).target_range(&parsed),
                 "A provider declaration cannot describe distinct source providers".into(),
@@ -1178,10 +1188,8 @@ impl Database {
         source: ProgramFile<'db>,
         call: NodeIndex,
     ) -> Option<Type<'db>> {
-        let [definition] = provider_pairs(self)
-            .get(&(source, call.as_u32()?))?
-            .as_slice()
-        else {
+        let declarations = provider_declarations(self, (source, call.as_u32()?));
+        let [definition] = declarations.as_slice() else {
             return None;
         };
         Some(SemanticModel::new(self, definition.program_file(self)).definition_type(*definition))
@@ -1205,7 +1213,9 @@ impl Database {
     ) -> ProgramFile<'db> {
         if let Some(interface) = self.type_interface(from, source) {
             let file = self.starlark_program_file(interface);
-            if !export_definitions(self, file, name).is_empty() {
+            if !export_definitions(self, file, name).is_empty()
+                && foreign_provider_owner(self, interface, name).is_none()
+            {
                 return file;
             }
         }
@@ -1233,40 +1243,135 @@ impl Database {
     }
 }
 
-/// Correspondence is syntax and binding provenance; type inference begins after selection.
+fn is_provider_definition(db: &dyn Db, definition: Definition) -> bool {
+    match definition.kind(db) {
+        DefinitionKind::Class(class) => {
+            let file = definition.program_file(db).python_file(db);
+            let parsed = ruff_db::parsed::parsed_module(db, file).load(db);
+            is_provider_class(class.node(&parsed))
+        }
+        DefinitionKind::Function(_) => super::providers::is_declaration(db, definition),
+        _ => false,
+    }
+}
+
+pub(super) fn foreign_provider_owner(db: &dyn Db, stub: File, name: &str) -> Option<File> {
+    let (source, _) = adjacent_pair(db, stub)?;
+    let source = db.starlark_program_file(source);
+    let exports = export_definitions(db, source, name);
+    let [export] = exports.as_slice() else {
+        return None;
+    };
+    let (owner, node) = provider_origin(db, *export, &mut FxHashSet::default())?;
+    if owner == source || !super::providers::is_provider_origin(db, owner, node) {
+        return None;
+    }
+    db.starlark_file(owner)
+}
+
+type ProviderOrigin<'db> = (ProgramFile<'db>, u32);
+pub(super) type ProviderPairs<'db> = FxHashMap<ProviderOrigin<'db>, Vec<Definition<'db>>>;
+
+/// Explicit registrations can associate a public export with a provider created elsewhere.
 #[salsa::tracked(returns(ref))]
-pub(super) fn provider_pairs(
-    db: &dyn Db,
-) -> FxHashMap<(ProgramFile<'_>, u32), Vec<Definition<'_>>> {
-    let mut pairs: FxHashMap<_, Vec<_>> = FxHashMap::default();
-    for (implementation, interface) in db.environment().type_interfaces(db).values() {
+pub(super) fn registered_provider_pairs(db: &dyn Db) -> ProviderPairs<'_> {
+    collect_provider_pairs(
+        db,
+        db.environment().type_interfaces(db).values().copied(),
+        false,
+    )
+}
+
+pub(super) fn adjacent_provider_owner<'db>(
+    db: &'db dyn Db,
+    program: ProgramFile<'db>,
+) -> Option<ProgramFile<'db>> {
+    let (source, _) = adjacent_pair(db, db.starlark_file(program)?)?;
+    Some(db.starlark_program_file(source))
+}
+
+#[salsa::tracked(returns(ref))]
+pub(super) fn owned_provider_pairs<'db>(
+    db: &'db dyn Db,
+    owner: ProgramFile<'db>,
+) -> ProviderPairs<'db> {
+    let file = db
+        .starlark_file(owner)
+        .expect("an installed source owns the companion");
+    collect_provider_pairs(db, adjacent_pair(db, file), true)
+}
+
+fn provider_maps<'db>(
+    db: &'db dyn Db,
+    anchor: ProgramFile<'db>,
+) -> impl Iterator<Item = &'db ProviderPairs<'db>> {
+    std::iter::once(registered_provider_pairs(db))
+        .chain(adjacent_provider_owner(db, anchor).map(|owner| owned_provider_pairs(db, owner)))
+}
+
+fn provider_declarations<'db>(
+    db: &'db dyn Db,
+    origin: ProviderOrigin<'db>,
+) -> Vec<Definition<'db>> {
+    let mut declarations = Vec::new();
+    for definition in provider_maps(db, origin.0)
+        .filter_map(|pairs| pairs.get(&origin))
+        .flatten()
+    {
+        if !declarations.contains(definition) {
+            declarations.push(*definition);
+        }
+    }
+    declarations
+}
+
+pub(super) fn provider_origins<'db>(
+    db: &'db dyn Db,
+    declaration: Definition<'db>,
+) -> Vec<ProviderOrigin<'db>> {
+    let mut origins = Vec::new();
+    for (origin, declarations) in provider_maps(db, declaration.program_file(db)).flatten() {
+        if declarations.contains(&declaration) && !origins.contains(origin) {
+            origins.push(*origin);
+        }
+    }
+    origins
+}
+
+fn collect_provider_pairs<'db>(
+    db: &'db dyn Db,
+    interfaces: impl IntoIterator<Item = (File, File)>,
+    local: bool,
+) -> ProviderPairs<'db> {
+    let mut pairs: ProviderPairs<'db> = FxHashMap::default();
+    for (implementation, interface) in interfaces {
         if implementation.api_context() == Some(APIContext::Build) {
             continue;
         }
-        let file = db.starlark_program_file(*interface);
+        let file = db.starlark_program_file(interface);
         for symbol in place_table(db, global_scope(db, file)).symbols() {
             let definitions = export_definitions(db, file, symbol.name());
             let [definition] = definitions.as_slice() else {
                 continue;
             };
-            let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
-            let provider = match definition.kind(db) {
-                DefinitionKind::Class(class) => is_provider_class(class.node(&parsed)),
-                DefinitionKind::Function(_) => super::providers::is_declaration(db, *definition),
-                _ => false,
-            };
-            if !provider {
+            if !is_provider_definition(db, *definition) {
                 continue;
             }
             let implementations =
-                export_definitions(db, db.starlark_program_file(*implementation), symbol.name());
-            let [implementation] = implementations.as_slice() else {
+                export_definitions(db, db.starlark_program_file(implementation), symbol.name());
+            let [export] = implementations.as_slice() else {
                 continue;
             };
-            let Some(origin) = provider_origin(db, *implementation, &mut FxHashSet::default())
-            else {
+            let Some(origin) = provider_origin(db, *export, &mut FxHashSet::default()) else {
                 continue;
             };
+            // Merely opening a re-export must never change the meaning of the origin.
+            if local
+                && (origin.0 != db.starlark_program_file(implementation)
+                    || definition.program_file(db) != file)
+            {
+                continue;
+            }
             let definitions = pairs.entry(origin).or_default();
             if !definitions.contains(definition) {
                 definitions.push(*definition);
@@ -1289,12 +1394,11 @@ pub(super) fn plain_provider_schema<'db>(
     if class.node(&declaration).type_params.is_some() {
         return None;
     }
-    let mut origins = provider_pairs(db)
-        .iter()
-        .filter(|(_, definitions)| definitions.as_slice() == [definition])
-        .map(|(origin, _)| *origin);
-    let (file, node) = origins.next()?;
-    if origins.next().is_some() {
+    let origins = provider_origins(db, definition);
+    let &[origin @ (file, node)] = origins.as_slice() else {
+        return None;
+    };
+    if provider_declarations(db, origin).as_slice() != [definition] {
         return None;
     }
     let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
@@ -1441,7 +1545,7 @@ pub(super) fn storage_constructor_declaration<'db>(
             )?;
         }
     }
-    let declarations = provider_pairs(db).get(&(file, node))?;
+    let declarations = provider_declarations(db, (file, node));
     let [declaration] = declarations.as_slice() else {
         return None;
     };

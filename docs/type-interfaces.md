@@ -419,9 +419,13 @@ its instances:
 def FilesInfo(files: list[File]) -> record[{"files": depset[File]}]: ...
 ```
 
-The declaration pairs with the source module's `provider(...)` binding,
-including aliases and reexports. `FilesInfo` denotes the constructor in value
-expressions and its nominal instance type in annotations. Two provider
+A companion can declare a nominal provider created by its paired source.
+When a module re-exports another module's provider, import the owner's
+declaration in the re-exporting stub. To describe a foreign constructor or
+check the body of an imported initializer, register the interface explicitly.
+
+`FilesInfo` denotes the constructor in value expressions and its nominal
+instance type in annotations. Two provider
 declarations with the same fields have distinct identities. Recursive fields
 can refer to the constructor's name:
 
