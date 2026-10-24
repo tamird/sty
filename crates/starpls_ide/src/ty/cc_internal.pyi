@@ -23,6 +23,14 @@
         # Other private host methods remain unmodeled, including freeze.
         def __getattr__(self, name: _starpls_builtins.str) -> _starpls_unknown: ...
 
+        def check_private_api(
+            self, *,
+            allowlist: _starpls_typing.Sequence[
+                _starpls_builtins.tuple[_starpls_builtins.str, _starpls_builtins.str, *_starpls_builtins.tuple[_starpls_builtins.object, ...]]
+            ],
+            depth: _starpls_builtins.int = ...,
+        ) -> None: ...
+
         def create_header_info(
             self, *,
             header_module: _starpls_types._GeneratedFile | None = ...,

@@ -9262,7 +9262,7 @@ def invalid(action: actions, artifact_root: root, file: File) -> None:
     }
 
     #[test]
-    fn bundled_cc_common_header_info_contracts() {
+    fn bundled_cc_common_internal_contracts() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
@@ -9288,6 +9288,9 @@ def existing_api(configuration: FeatureConfiguration) -> str:
     return cc_common.get_tool_for_action(feature_configuration=configuration, action_name='compile')
 def annotated_api(value: cc_common, configuration: FeatureConfiguration) -> bool:
     return value.is_enabled(feature_configuration=configuration, feature_name='feature')
+def check_access(internal: CcInternal, allowlist: list[tuple[str, str]]) -> None:
+    internal.check_private_api(allowlist=allowlist)
+    return internal.check_private_api(allowlist=(('rules_cc', 'cc', 42, None),), depth=0)
 def borrowed(internal: CcInternal) -> HeaderInfo:
     return internal.create_header_info()
 def nullable_header(header: HeaderInfo) -> GeneratedFile | None:
@@ -9337,6 +9340,11 @@ def inspect(internal: CcInternal, action: actions, file: File) -> None:
             ("consume_namespace(cc_common)", "invalid-argument-type"),
             ("cc_common.is_enabled", "unresolved-attribute"),
             ("cc_common.CcToolchainInfo", "unresolved-attribute"),
+            ("internal.check_private_api(allowlist=[['rules_cc', 'cc']])", "invalid-argument-type"),
+            ("internal.check_private_api(allowlist=[('rules_cc',)])", "invalid-argument-type"),
+            ("internal.check_private_api(allowlist=[(42, 'cc')])", "invalid-argument-type"),
+            ("internal.check_private_api(allowlist=[], depth='1')", "invalid-argument-type"),
+            ("internal.check_private_api([], allowlist=[])", "too-many-positional-arguments"),
             ("internal.create_header_info(header_module=file)", "invalid-argument-type"),
             ("internal.create_header_info(pic_header_module=42)", "invalid-argument-type"),
             ("internal.create_header_info(modular_public_headers=[42])", "invalid-argument-type"),
