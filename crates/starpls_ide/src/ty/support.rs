@@ -280,7 +280,7 @@ fn assemble(original: &str, replacements: &str, scalars: &[&str]) -> anyhow::Res
             if !is_final {
                 edits.push((TextRange::empty(class.start()), "@final\n".to_owned()));
             }
-            scalar_members(original, &class.body, &mut edits)?;
+            scalar_members(original, name, &class.body, &mut edits)?;
         }
     }
     for name in classes.keys().copied().chain(scalars.iter().copied()) {
@@ -393,6 +393,7 @@ fn decorated_range(range: TextRange, decorators: &[ast::Decorator]) -> TextRange
 /// Fail on new declaration shapes so a typeshed update requires an owner audit.
 fn scalar_members(
     source: &str,
+    owner: &str,
     statements: &[ast::Stmt],
     edits: &mut Vec<(TextRange, String)>,
 ) -> anyhow::Result<()> {
@@ -401,7 +402,10 @@ fn scalar_members(
             ast::Stmt::FunctionDef(function) => {
                 let range = decorated_range(function.range(), &function.decorator_list);
                 let name = function.name.as_str();
-                if name.starts_with("__") && name.ends_with("__") {
+                if name.starts_with("__")
+                    && name.ends_with("__")
+                    && !(owner == "range" && name == "__hash__")
+                {
                     let start = usize::from(range.start());
                     let line_start = source[..start].rfind('\n').map_or(0, |index| index + 1);
                     let indent = &source[line_start..start];
@@ -410,15 +414,22 @@ fn scalar_members(
                         TextRange::empty(range.start()),
                         format!("@type_check_only\n{indent}"),
                     ));
+                    if owner == "tuple" && name == "__hash__" {
+                        // Bazel asks every element whether it can be a dictionary key.
+                        edits.push((
+                            function.parameters.range(),
+                            "(self: tuple[Hashable, ...])".to_owned(),
+                        ));
+                    }
                 } else {
                     // Keep conditional suites syntactically nonempty.
                     edits.push((range, "pass".to_owned()));
                 }
             }
             ast::Stmt::If(branch) => {
-                scalar_members(source, &branch.body, edits)?;
+                scalar_members(source, owner, &branch.body, edits)?;
                 for clause in &branch.elif_else_clauses {
-                    scalar_members(source, &clause.body, edits)?;
+                    scalar_members(source, owner, &clause.body, edits)?;
                 }
             }
             ast::Stmt::Expr(expression) => {

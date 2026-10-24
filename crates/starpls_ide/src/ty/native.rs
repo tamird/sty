@@ -8286,7 +8286,14 @@ def record() -> struct[int]:
             let diagnostics = analysis.snapshot().diagnostics(checked).unwrap();
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
         }
-        for invalid in ["[1]", "{'key': 1}", "struct(value = [1])"] {
+        for invalid in [
+            "[1]",
+            "{'key': 1}",
+            "struct(value = [1])",
+            "(1, [2])",
+            "range(1)",
+            "(range(1),)",
+        ] {
             analysis.update_file(file, format!("{source}keep({invalid})\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             let [diagnostic, result] = diagnostics.as_slice() else {
