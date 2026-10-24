@@ -290,6 +290,31 @@ errors even when the mappings name the same file.
 The `[rules]` table accepts ty and sty diagnostic names with levels `ignore`,
 `warn`, or `error`. Unknown names and levels are configuration errors.
 
+### Strict rule group
+
+Set the `strict` group to apply one severity to these additional checks:
+
+- Function contracts: `missing-parameter-annotation`, `missing-return-annotation`,
+  `missing-type-argument`.
+- Gradual types and boundaries: `explicit-any`, `non-static-type`,
+  `unsound-assignment`, `unsound-return-statement`.
+- Suppressions: `blanket-ignore-comment`.
+- Possible runtime errors: `possibly-unresolved-reference`,
+  `possibly-missing-attribute`, `division-by-zero`.
+
+```toml
+[rules]
+strict = "error"
+non-static-type = "warn"
+```
+
+Within a configuration layer, an individual rule setting takes precedence over
+the group, regardless of its position. CLI `--config` arguments override the
+workspace configuration in command-line order. The editor uses the workspace
+configuration. Configure
+`analysis.strict-generic-narrowing`, `analysis.require-valid-suppressions`, and
+code-flow analysis separately.
+
 ### Requiring annotations
 
 Projects can require type contracts at function boundaries:

@@ -40,7 +40,7 @@ pub(super) struct AnalysisOptions {
 
 #[derive(Clone, Debug)]
 pub(super) struct ConfigOverride {
-    rules: BTreeMap<String, String>,
+    pub(super) rules: BTreeMap<String, String>,
     analysis: AnalysisOptions,
 }
 
@@ -72,9 +72,9 @@ impl FromStr for ConfigOverride {
 }
 
 impl ConfigOverride {
-    pub(super) fn apply(&self, config: &mut ProjectConfig) {
+    pub(super) fn apply_analysis(&self, config: &mut AnalysisOptions) {
         let Self {
-            rules,
+            rules: _,
             analysis:
                 AnalysisOptions {
                     strict_generic_narrowing,
@@ -83,18 +83,17 @@ impl ConfigOverride {
                     static_json_decode,
                 },
         } = self;
-        config.rules.extend(rules.clone());
         if let Some(value) = strict_generic_narrowing {
-            config.analysis.strict_generic_narrowing = Some(*value);
+            config.strict_generic_narrowing = Some(*value);
         }
         if let Some(value) = widen_singleton_collection_elements {
-            config.analysis.widen_singleton_collection_elements = Some(*value);
+            config.widen_singleton_collection_elements = Some(*value);
         }
         if let Some(value) = require_valid_suppressions {
-            config.analysis.require_valid_suppressions = Some(*value);
+            config.require_valid_suppressions = Some(*value);
         }
         if let Some(value) = static_json_decode {
-            config.analysis.static_json_decode = Some(*value);
+            config.static_json_decode = Some(*value);
         }
     }
 }

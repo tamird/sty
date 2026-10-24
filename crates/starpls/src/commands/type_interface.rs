@@ -56,32 +56,24 @@ impl TypeInterfaceOptions {
         workspace: &Path,
         overrides: &[super::project_config::ConfigOverride],
     ) -> anyhow::Result<PreparedInterfaces> {
-        let mut config = super::project_config::ProjectConfig::load(loader, workspace)?;
-        if !overrides.is_empty() {
-            // A command-line replacement must not conceal invalid project policy.
-            starpls_ide::DiagnosticRules::from_settings(&config.rules).with_context(|| {
-                format!(
-                    "invalid configuration {}",
-                    workspace.join("sty.toml").display()
-                )
-            })?;
-            for override_ in overrides {
-                override_.apply(&mut config);
-            }
-        }
         let super::project_config::ProjectConfig {
             stub_packages,
             type_interfaces,
             rules,
-            analysis,
+            mut analysis,
             bazel,
-        } = config;
-        let mut rules = starpls_ide::DiagnosticRules::from_settings(&rules).with_context(|| {
+        } = super::project_config::ProjectConfig::load(loader, workspace)?;
+        let layers =
+            std::iter::once(&rules).chain(overrides.iter().map(|override_| &override_.rules));
+        let mut rules = starpls_ide::DiagnosticRules::from_layers(layers).with_context(|| {
             format!(
                 "invalid configuration {}",
                 workspace.join("sty.toml").display()
             )
         })?;
+        for override_ in overrides {
+            override_.apply_analysis(&mut analysis);
+        }
         rules.set_require_valid_suppressions(analysis.require_valid_suppressions.unwrap_or(false));
         let mut registrations = super::stub_package::load(loader, workspace, stub_packages)?;
         let resolve = |path: &Path| -> anyhow::Result<PathBuf> {
@@ -394,6 +386,8 @@ mod tests {
 
     #[test]
     fn local_configuration_installs_interfaces_and_analysis_policy() {
+        use ruff_db::diagnostic::Severity;
+
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("local-type-configuration");
         std::fs::create_dir_all(&root).unwrap();
@@ -441,6 +435,7 @@ mod tests {
         for invalid in [
             "[rules]\nmisspelled = 'error'\n",
             "[rules]\nmissing-type-argument = 'warning'\n",
+            "[rules]\nstrict = 'warning'\n",
             "[unknown]\n",
             "[analysis]\nmisspelled = true\n",
             "[analysis]\nstrict-generic-narrowing = 'yes'\n",
@@ -496,6 +491,51 @@ mod tests {
             .unwrap();
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
         assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+
+        std::fs::write(
+            root.join("sty.toml"),
+            format!(
+                "{}strict = 'error'\n",
+                config.replace("'error'", "'ignore'")
+            ),
+        )
+        .unwrap();
+        let overrides = [
+            "rules.strict = 'warn'".parse().unwrap(),
+            "rules.missing-return-annotation = 'ignore'"
+                .parse()
+                .unwrap(),
+        ];
+        for (prepared, return_severity, type_argument_severity) in [
+            (
+                options.prepare(&loader, &root).unwrap(),
+                Some(Severity::Error),
+                None,
+            ),
+            (
+                options
+                    .prepare_with_overrides(&loader, &root, &overrides)
+                    .unwrap(),
+                None,
+                Some(Severity::Warning),
+            ),
+        ] {
+            prepared.install(&mut analysis, &root).unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+            for (name, severity) in [
+                ("missing-return-annotation", return_severity),
+                ("missing-type-argument", type_argument_severity),
+            ] {
+                assert_eq!(
+                    diagnostics
+                        .iter()
+                        .find(|d| d.id().as_str() == name)
+                        .map(|d| d.severity()),
+                    severity,
+                    "{name}: {diagnostics:?}"
+                );
+            }
+        }
         std::fs::remove_dir_all(root).unwrap();
     }
 

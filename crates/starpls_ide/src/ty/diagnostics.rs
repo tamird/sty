@@ -1,5 +1,6 @@
 //! Starlark diagnostic policy over Ty's inference, bindings, and reachability facts.
 
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use ruff_db::diagnostic::Annotation;
@@ -26,6 +27,7 @@ use ty_python_core::place::ScopedPlaceId;
 use ty_python_core::scope::ScopeKind;
 use ty_python_core::semantic_index;
 use ty_python_semantic::lint::Level;
+use ty_python_semantic::lint::LintId;
 use ty_python_semantic::lint::LintMetadata;
 use ty_python_semantic::lint::LintRegistry;
 use ty_python_semantic::lint::LintRegistryBuilder;
@@ -117,6 +119,23 @@ pub(super) static NON_STATIC_TYPE: LintMetadata = LintMetadata {
     )
 };
 
+const STRICT_RULE_GROUP: &str = "strict";
+const STY_STRICT_LINTS: [&LintMetadata; 4] = [
+    &MISSING_PARAMETER_ANNOTATION,
+    &MISSING_RETURN_ANNOTATION,
+    &EXPLICIT_ANY,
+    &NON_STATIC_TYPE,
+];
+const TY_STRICT_LINTS: [&str; 7] = [
+    "missing-type-argument",
+    "unsound-assignment",
+    "unsound-return-statement",
+    "blanket-ignore-comment",
+    "possibly-unresolved-reference",
+    "possibly-missing-attribute",
+    "division-by-zero",
+];
+
 pub(super) fn registry() -> &'static LintRegistry {
     static REGISTRY: LazyLock<LintRegistry> = LazyLock::new(|| {
         let mut builder =
@@ -131,11 +150,10 @@ pub(super) fn registry() -> &'static LintRegistry {
             &INVALID_MODULE_ANNOTATION,
             &INVALID_FUNCTION_INTERFACE,
             &UNVERIFIED_OVERLOAD,
-            &MISSING_PARAMETER_ANNOTATION,
-            &MISSING_RETURN_ANNOTATION,
-            &EXPLICIT_ANY,
-            &NON_STATIC_TYPE,
-        ] {
+        ]
+        .into_iter()
+        .chain(STY_STRICT_LINTS)
+        {
             builder.register_lint(lint);
         }
         builder.build()
@@ -160,31 +178,48 @@ impl Default for DiagnosticRules {
 }
 
 impl DiagnosticRules {
-    pub fn from_settings(
-        settings: &std::collections::BTreeMap<String, String>,
+    pub fn from_settings(settings: &BTreeMap<String, String>) -> anyhow::Result<Self> {
+        Self::from_layers([settings])
+    }
+
+    /// Applies configuration layers in order of increasing precedence.
+    pub fn from_layers<'a>(
+        layers: impl IntoIterator<Item = &'a BTreeMap<String, String>>,
     ) -> anyhow::Result<Self> {
         let mut rules = Self::default();
-        for (name, level) in settings {
-            let lint = registry()
-                .get(name)
-                .map_err(|error| anyhow::anyhow!("invalid rule {name:?}: {error}"))?;
-            let severity = match level.as_str() {
-                "ignore" => None,
-                "warn" => Some(Severity::Warning),
-                "error" => Some(Severity::Error),
-                _ => anyhow::bail!(
-                    "invalid level {level:?} for rule {name:?}: expected ignore, warn, or error"
-                ),
-            };
-            for selection in [&mut rules.ordinary, &mut rules.with_flow] {
-                if let Some(severity) = severity {
-                    selection.enable(lint, severity, LintSource::File);
-                } else {
-                    selection.disable(lint);
+        for settings in layers {
+            if let Some(level) = settings.get(STRICT_RULE_GROUP) {
+                let severity = parse_rule_level(STRICT_RULE_GROUP, level)?;
+                let lints = STY_STRICT_LINTS.into_iter().map(LintId::of).chain(
+                    TY_STRICT_LINTS
+                        .into_iter()
+                        .map(|name| registry().get(name).expect("ty registers strict lints")),
+                );
+                for lint in lints {
+                    rules.set_severity(lint, severity);
                 }
+            }
+            for (name, level) in settings {
+                if name == STRICT_RULE_GROUP {
+                    continue;
+                }
+                let lint = registry()
+                    .get(name)
+                    .map_err(|error| anyhow::anyhow!("invalid rule {name:?}: {error}"))?;
+                rules.set_severity(lint, parse_rule_level(name, level)?);
             }
         }
         Ok(rules)
+    }
+
+    fn set_severity(&mut self, lint: LintId, severity: Option<Severity>) {
+        for selection in [&mut self.ordinary, &mut self.with_flow] {
+            if let Some(severity) = severity {
+                selection.enable(lint, severity, LintSource::File);
+            } else {
+                selection.disable(lint);
+            }
+        }
     }
 
     pub fn set_require_valid_suppressions(&mut self, require: bool) {
@@ -207,6 +242,17 @@ impl DiagnosticRules {
             ordinary
         }
     }
+}
+
+fn parse_rule_level(name: &str, level: &str) -> anyhow::Result<Option<Severity>> {
+    Ok(match level {
+        "ignore" => None,
+        "warn" => Some(Severity::Warning),
+        "error" => Some(Severity::Error),
+        _ => anyhow::bail!(
+            "invalid level {level:?} for rule {name:?}: expected ignore, warn, or error"
+        ),
+    })
 }
 
 #[salsa::input]
@@ -543,5 +589,41 @@ impl<'ast> Visitor<'ast> for DeprecatedArguments<'_, '_> {
             self.check_call(call);
         }
         visitor::walk_expr(self, expression);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DiagnosticRules;
+    use super::Severity;
+
+    #[test]
+    fn strict_rule_group_respects_individual_levels() {
+        let rules = DiagnosticRules::from_settings(
+            &[
+                ("strict".into(), "error".into()),
+                ("missing-type-argument".into(), "ignore".into()),
+                ("unsound-return-statement".into(), "warn".into()),
+            ]
+            .into(),
+        )
+        .unwrap();
+
+        for flow in [false, true] {
+            for (name, expected) in [
+                ("non-static-type", Some(Severity::Error)),
+                ("division-by-zero", Some(Severity::Error)),
+                ("possibly-unresolved-reference", Some(Severity::Error)),
+                ("missing-type-argument", None),
+                ("unsound-return-statement", Some(Severity::Warning)),
+                ("unused-definition", Some(Severity::Warning)),
+            ] {
+                let actual = rules
+                    .selection(flow)
+                    .iter()
+                    .find_map(|(lint, severity)| (lint.name.as_str() == name).then_some(severity));
+                assert_eq!(actual, expected, "{name}, flow={flow}");
+            }
+        }
     }
 }
