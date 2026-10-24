@@ -552,6 +552,43 @@ fn declarations(
             ..Default::default()
         });
     }
+    if dialect == Dialect::Bazel
+        && ["Provider", "Label", "depset"]
+            .iter()
+            .all(|name| classes.contains_key(*name))
+        && contexts.iter().any(|(_, globals)| {
+            globals
+                .get("AnalysisFailureInfo")
+                .is_some_and(|value| native_provider_instance(value) == Some("AnalysisFailureInfo"))
+        })
+    {
+        // Bazel exports the provider key, but omits these undocumented classes.
+        // AnalysisFailureInfo.getCauses returns Depset.of(AnalysisFailure.class, ...).
+        // https://github.com/bazelbuild/bazel/blob/7.4.0/src/main/java/com/google/devtools/build/lib/analysis/test/AnalysisFailureInfo.java
+        for (name, fields) in [
+            (
+                "AnalysisFailure",
+                vec![("label", "Label"), ("message", "string")],
+            ),
+            (
+                "AnalysisFailureInfo",
+                vec![("causes", "depset of AnalysisFailure")],
+            ),
+        ] {
+            classes.entry(name.to_owned()).or_insert_with(|| Type {
+                name: name.to_owned(),
+                field: fields
+                    .into_iter()
+                    .map(|(name, ty)| Value {
+                        name: name.to_owned(),
+                        r#type: ty.to_owned(),
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            });
+        }
+    }
     if classes.get("attr").is_some_and(|class| {
         class
             .field
@@ -1484,7 +1521,11 @@ fn declarations(
                         || (class.name == "apple_common" && field.name == "platform_type")
                         || (class.name == "DormantDependency" && field.name == "label")
                         || (dialect == Dialect::Bazel && class.name == "File")
-                    {
+                        || (dialect == Dialect::Bazel
+                            && matches!(
+                                class.name.as_str(),
+                                "AnalysisFailure" | "AnalysisFailureInfo"
+                            )) {
                         format!("_starpls_typing.Final[{field_type}]")
                     } else {
                         field_type
@@ -6457,6 +6498,170 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
                 diagnostics.iter().any(|d| d.id().as_str() == expected),
                 "{expression}: {diagnostics:?}"
             );
+        }
+    }
+
+    #[test]
+    fn analysis_failure_provider_retains_identity_and_causes() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def messages(target: Target) -> tuple[list[str], list[Label]]:
+    key = AnalysisFailureInfo
+    if key not in target:
+        return ([], [])
+    info = target[key]
+    _forwarded: ProviderInstance = info
+    _forwarded
+    causes = info.causes.to_list()
+    return ([cause.message for cause in causes], [cause.label for cause in causes])
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/analysis_failure.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for (invalid, expected) in [
+            ("AnalysisFailureInfo()", "call-non-callable"),
+            ("AnalysisFailure()", "unresolved-reference"),
+            (
+                "target[AnalysisFailureInfo].causes = depset([])",
+                "invalid-assignment",
+            ),
+            (
+                "target[AnalysisFailureInfo].causes.to_list()[0].message = 'changed'",
+                "invalid-assignment",
+            ),
+            (
+                "target[AnalysisFailureInfo].causes.to_list()[0].label = Label('//:changed')",
+                "invalid-assignment",
+            ),
+            (
+                "wrong: DefaultInfo = target[AnalysisFailureInfo]",
+                "invalid-assignment",
+            ),
+            (
+                "wrong: list[str] = target[AnalysisFailureInfo].causes.to_list()",
+                "invalid-assignment",
+            ),
+            (
+                "wrong: int = target[AnalysisFailureInfo].causes.to_list()[0].message",
+                "invalid-assignment",
+            ),
+            (
+                "wrong: str = target[AnalysisFailureInfo].causes.to_list()[0].label",
+                "invalid-assignment",
+            ),
+            (
+                "target[AnalysisFailureInfo].causes.to_list().append('wrong')",
+                "invalid-argument-type",
+            ),
+        ] {
+            analysis.update_file(
+                file,
+                format!("{source}\ndef invalid(target: Target) -> None:\n    {invalid}\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.id().as_str() == expected),
+                "{invalid}: {diagnostics:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn analysis_failure_classes_require_the_exported_provider_and_native_types() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for missing in ["AnalysisFailureInfo", "Provider", "Label", "depset"] {
+            let mut incomplete = builtins.clone();
+            if missing == "AnalysisFailureInfo" {
+                incomplete.global.retain(|value| value.name != missing);
+            } else {
+                incomplete.r#type.retain(|class| class.name != missing);
+            }
+            let source = declarations(
+                Dialect::Bazel,
+                &incomplete,
+                &BuildLanguage::default(),
+                &BTreeSet::default(),
+            )
+            .unwrap();
+            assert!(!source.contains("    class AnalysisFailure:"), "{missing}");
+            assert!(
+                !source.contains("    class AnalysisFailureInfo("),
+                "{missing}"
+            );
+        }
+    }
+
+    #[test]
+    fn analysis_failure_completion_preserves_host_classes_and_dialect() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let standard = declarations(
+            Dialect::Standard,
+            &builtins,
+            &BuildLanguage::default(),
+            &BTreeSet::default(),
+        )
+        .unwrap();
+        assert!(!standard.contains("    class AnalysisFailure:"));
+        assert!(!standard.contains("    class AnalysisFailureInfo("));
+
+        for (name, field) in [
+            ("AnalysisFailure", "native_failure_detail"),
+            ("AnalysisFailureInfo", "native_info_detail"),
+        ] {
+            builtins.r#type.push(Type {
+                name: name.into(),
+                field: vec![Value {
+                    name: field.into(),
+                    r#type: "int".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            });
+        }
+        for dialect in [Dialect::Bazel, Dialect::Standard] {
+            let source = declarations(
+                dialect,
+                &builtins,
+                &BuildLanguage::default(),
+                &BTreeSet::default(),
+            )
+            .unwrap();
+            let field_type = if dialect == Dialect::Bazel {
+                "_starpls_typing.Final[_starpls_builtins.int]"
+            } else {
+                "_starpls_builtins.int"
+            };
+            for field in ["native_failure_detail", "native_info_detail"] {
+                assert!(source.contains(&format!("        {field}: {field_type}\n")));
+            }
         }
     }
 

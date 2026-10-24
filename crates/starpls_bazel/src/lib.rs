@@ -105,6 +105,7 @@ pub const KNOWN_CONFIGURATION_FRAGMENT_TYPES: &[&str] = &[
 ];
 
 pub const KNOWN_PROVIDER_TYPES: &[&str] = &[
+    "AnalysisFailureInfo",
     "AnalysisTestResultInfo",
     "AndroidNeverLinkLibrariesProvider",
     "ApkInfo",
