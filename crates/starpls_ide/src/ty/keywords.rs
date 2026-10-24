@@ -318,10 +318,19 @@ wrapper(name="ok", optional="set")
             )
             .unwrap(),
         );
-        let source_text = r#"
-def _impl(ctx):
+        let fields_text = r#"
+def _impl(ctx: ctx[object, object]) -> list[ProviderInstance]:
     return []
 common = {"items": attr.string_list(mandatory=True)}
+library = struct(attrs=common, implementation=_impl, provides=[DefaultInfo])
+library_rule = rule(implementation=library.implementation, attrs=dict(**library.attrs), provides=library.provides)
+"#;
+        let fields = fixture.add_file(&mut analysis.db, "fields.bzl", fields_text);
+        let source_text = r#"
+load("fields.bzl", "library")
+def _impl(ctx):
+    return []
+common = dict(**library.attrs)
 local = {"fixed": attr.bool(mandatory=True), "number": attr.int()}
 launcher = struct(toolchain_type = "//:launcher")
 target = rule(_impl, attrs=common | local, toolchains=[launcher.toolchain_type])
@@ -359,7 +368,7 @@ wrapper(items=[], number=1, tags=["manual"])
         let caller = fixture.add_file(&mut analysis.db, "main.bzl", caller_text);
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(source, interface)]).unwrap();
-        for file in [interface, source, caller] {
+        for file in [fields, interface, source, caller] {
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{file:?}: {diagnostics:?}");
         }
@@ -400,6 +409,23 @@ wrapper(items=[], number=1, tags=["manual"])
         analysis.update_file(
             caller,
             "load('api.bzl', 'wrapper')\nwrapper(items=[], number=1)\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(ids, ["invalid-argument-type"], "{diagnostics:?}");
+
+        analysis.update_file(
+            caller,
+            "load('api.bzl', 'wrapper')\nwrapper(items=['item'])\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.update_file(
+            fields,
+            fields_text.replace("attr.string_list", "attr.int_list"),
         );
         let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
         let ids: Vec<_> = diagnostics
