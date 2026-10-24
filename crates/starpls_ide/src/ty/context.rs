@@ -17,6 +17,7 @@ use ruff_python_ast::Expr;
 use ruff_python_ast::ExprCall;
 use ruff_python_ast::Stmt;
 use ruff_text_size::Ranged;
+use ruff_text_size::TextRange;
 use starpls_bazel::attr::AttributeKind;
 use starpls_common::Dialect;
 use starpls_hir::Db as _;
@@ -241,11 +242,7 @@ pub(super) fn call_diagnostics<'db>(
     ) {
         return args_map_each_diagnostics(db, call);
     }
-    let CheckedArgument::Value {
-        ty,
-        expression: Some(argument),
-    } = call.argument("implementation")
-    else {
+    let CheckedArgument::Value { ty, expression } = call.argument("implementation") else {
         return Vec::new();
     };
     let Some(invocation) = registration_invocation(db, call) else {
@@ -259,7 +256,7 @@ pub(super) fn call_diagnostics<'db>(
         db,
         &environment,
         call.file(),
-        argument,
+        expression.map_or_else(|| call.call().range(), Ranged::range),
         ty,
         invocation,
     )]
@@ -432,7 +429,7 @@ fn callback_diagnostic(
     db: &Database,
     environment: &ProgramEnvironment<'_>,
     file: ProgramFile<'_>,
-    argument: &Expr,
+    range: TextRange,
     ty: Type<'_>,
     invocation: Type<'_>,
 ) -> Diagnostic {
@@ -446,7 +443,7 @@ fn callback_diagnostic(
         ),
     );
     diagnostic.annotate(Annotation::primary(
-        Span::from(file.file(db)).with_range(argument.range()),
+        Span::from(file.file(db)).with_range(range),
     ));
     diagnostic
 }
@@ -553,7 +550,7 @@ pub(super) fn diagnostics(db: &Database, file: starpls_common::File) -> Vec<Diag
                 db,
                 &environment,
                 program,
-                argument,
+                argument.range(),
                 ty,
                 invocation,
             ))
@@ -4443,6 +4440,24 @@ def deferred() -> object:
                 }
             }
         }
+    }
+
+    #[test]
+    fn packed_registration_checks_the_implementation_signature() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        enable_context(&mut analysis);
+        let source = "def wrong(ctx: str) -> None: pass\ndef valid(ctx: object) -> None: pass\nbad = rule(**{'implementation': wrong})\ngood = rule(**{'implementation': valid})\n";
+        let file = fixture.main_file();
+        analysis.update_file(file, source.to_owned());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [error] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(error.id().as_str(), "invalid-argument-type");
+        assert_eq!(
+            &source[error.primary_span().unwrap().range().unwrap()],
+            "rule(**{'implementation': wrong})"
+        );
     }
 
     #[test]
