@@ -1382,7 +1382,46 @@ fn declarations(
                         )?;
                         continue;
                     }
-                    if matches!(class.name.as_str(), "repository_ctx" | "module_ctx")
+                    if matches!(class.name.as_str(), "transition" | "ExecTransitionFactory")
+                        && field.name == "and_then"
+                        && callable.return_type == "transition"
+                        && matches!(callable.param.as_slice(), [param] if param.name == "transition"
+                            && param.is_mandatory && matches!(param.r#type.as_str(), "transition" | "transition; or ExecTransitionFactory"))
+                        && declared_classes.contains("transition")
+                        && declared_classes.contains("ExecTransitionFactory")
+                    {
+                        // A split on either side stays split. An exec transition is a
+                        // patch transition, so it preserves the other operand's kind.
+                        let transition = "_starpls_types.transition";
+                        let exec = "_starpls_types.ExecTransitionFactory";
+                        let split = format!("{transition}[_starpls_typing.Literal[\"split\"]]");
+                        let ordinary =
+                            format!("{transition}[_starpls_typing.Literal[\"ordinary\"]]");
+                        let generic = format!("{transition}[_TransitionKind]");
+                        let any = format!("{transition} | {exec}");
+                        let patch = format!("{ordinary} | {exec}");
+                        let split_self = format!("_starpls_self: {split}");
+                        let signatures: &[(&str, &str, &str)] = if class.name == "transition" {
+                            &[
+                                (&split_self, &any, &split),
+                                ("_starpls_self", &split, &split),
+                                ("_starpls_self", &patch, &generic),
+                                ("_starpls_self", transition, transition),
+                            ]
+                        } else {
+                            &[
+                                ("_starpls_self", &generic, &generic),
+                                ("_starpls_self", exec, &ordinary),
+                            ]
+                        };
+                        let documentation = callable_documentation(field, callable)?;
+                        for (receiver, operand, result) in signatures {
+                            writeln!(body, "        @_starpls_typing.overload")?;
+                            writeln!(body, "        def and_then({receiver}, transition: {operand}, /) -> {result}:")?;
+                            writeln!(body, "            {}", quoted(&documentation))?;
+                            writeln!(body, "            ...")?;
+                        }
+                    } else if matches!(class.name.as_str(), "repository_ctx" | "module_ctx")
                         && field.name == "getenv"
                     {
                         // The inventory omits allowReturnNones. A supplied string
@@ -7286,6 +7325,78 @@ def inspect(
                 assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
                 assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
             }
+        }
+    }
+
+    #[test]
+    fn transition_composition_tracks_split_results_and_bazel_release() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let source = r#"
+def split(value):
+    # type: (transition[Literal["split"]]) -> None
+    pass
+def ordinary(value):
+    # type: (transition[Literal["ordinary"]]) -> None
+    pass
+def compose(s, p, opaque):
+    # type: (transition[Literal["split"]], transition[Literal["ordinary"]], transition) -> None
+    split(s.and_then(opaque))
+    split(opaque.and_then(s))
+    split(config.exec().and_then(s))
+    ordinary(p.and_then(config.exec()))
+    ordinary(config.exec().and_then(p))
+    ordinary(config.exec().and_then(config.exec()))
+"#;
+        for (release, available) in [
+            ("release 9.1.0", false),
+            ("release 9.2.0", true),
+            ("release 10.0.0-pre.20260516.1", false),
+            ("release 10.0.0-pre.20260621.2", true),
+        ] {
+            let mut inventory = builtins.clone();
+            env::apply_versioned_signatures(&mut inventory, release);
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(inventory, Default::default())
+                .unwrap();
+            let file = analysis
+                .open_document(
+                    Path::new("/compose.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    if available {
+                        source.into()
+                    } else {
+                        "config.target().and_then(config.exec())\n".into()
+                    },
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            if !available {
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+                assert_eq!(diagnostics[0].id().as_str(), "unresolved-attribute");
+                continue;
+            }
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            analysis.update_file(file, format!(
+                "{source}    ordinary(s.and_then(p))\n    split(p.and_then(opaque))\n    s.and_then(1)\n    s.and_then(transition=p)\n"
+            ));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics.iter().map(|diag| diag.id().as_str()).collect();
+            assert_eq!(
+                ids,
+                [
+                    "invalid-argument-type",
+                    "invalid-argument-type",
+                    "no-matching-overload",
+                    "no-matching-overload"
+                ],
+                "{diagnostics:?}"
+            );
         }
     }
 
