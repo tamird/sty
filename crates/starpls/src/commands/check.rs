@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use annotate_snippets::Level;
@@ -16,6 +17,8 @@ use anyhow::anyhow;
 use anyhow::Context;
 use clap::Args;
 use clap::ValueEnum;
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use ruff_db::diagnostic::Diagnostic;
 use ruff_db::diagnostic::DiagnosticFormat;
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
@@ -1365,40 +1368,155 @@ mod tests {
     }
 
     #[test]
+    fn shared_generic_producer_is_checked_across_workers() {
+        for workers in [1, 4] {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(workers)
+                .stack_size(ruff_db::STACK_SIZE)
+                .build()
+                .unwrap();
+            pool.install(|| {
+                let mut checker = local_checker_with_options(
+                    &format!("checker-shared-generic-producer-{workers}"),
+                    &[
+                        (
+                            "sty.toml",
+                            "[type-interfaces]\n'pipeline.bzl'='pipeline.bzli'\n\
+                             [analysis]\nstrict-generic-narrowing=true\n\
+                             [rules]\nnon-static-type='error'\nunsound-assignment='error'\nunsound-return-statement='error'\n",
+                        ),
+                        (
+                            "pipeline.bzl",
+                            r#"def wrap(values):
+    return struct(values = values)
+
+def identity(value):
+    return value
+
+def run(transform, values):
+    current = wrap(values)
+    for _ in [0]:
+        result = transform(current)
+        if type(result) != "struct":
+            fail("expected a struct")
+        current = wrap(result.values)
+    return current
+"#,
+                        ),
+                        (
+                            "pipeline.bzli",
+                            r#"type Bundle[T] = struct[{"values": list[T]}]
+
+class Transformer(Protocol):
+    def __call__[T](self, __value: Bundle[T]) -> Bundle[T]: ...
+
+def wrap[T](values: list[T]) -> Bundle[T]: ...
+def identity[T](value: Bundle[T]) -> Bundle[T]: ...
+def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
+"#,
+                        ),
+                        (
+                            "valid.bzl",
+                            "load(':pipeline.bzl', 'identity', 'run')\nvalues: list[str] = run(identity, ['valid']).values\n",
+                        ),
+                        (
+                            "invalid.bzl",
+                            "load(':pipeline.bzl', 'identity', 'run')\nvalues: list[str] = run(identity, [42]).values\n",
+                        ),
+                    ],
+                    CheckCommand {
+                        paths: vec![
+                            "pipeline.bzl".to_owned(),
+                            "valid.bzl".to_owned(),
+                            "invalid.bzl".to_owned(),
+                        ],
+                        check_local_interface_sources: true,
+                        ..Default::default()
+                    },
+                );
+                let result = checker.check_files().unwrap();
+                assert!(result.loads.unresolved.is_empty());
+                assert_eq!(result.diagnostics.len(), 4);
+                let snapshot = checker.analysis.snapshot();
+                for (file, diagnostics) in result.diagnostics {
+                    let expected = if snapshot.path(file).ends_with("invalid.bzl") {
+                        vec!["invalid-assignment"]
+                    } else {
+                        vec![]
+                    };
+                    let actual: Vec<_> = diagnostics
+                        .iter()
+                        .map(|diagnostic| diagnostic.id().as_str())
+                        .collect();
+                    assert_eq!(actual, expected, "{diagnostics:?}");
+                }
+            });
+        }
+    }
+
+    #[test]
     fn source_overlays_fetch_dependencies_in_the_installed_repository() {
-        let (mut checker, client) = overlay_checker(
-            "overlay-demanded-dependency",
-            &[(
-                "stubs+/BUILD.bazel",
-                "build.txt",
-                "load('@dep//:defs.bzl', 'consume')\nconsume(42)\n",
-            )],
-        );
-        client.fetch_files.lock().unwrap().insert(
-            "rules+".to_owned(),
-            (
-                checker
+        for workers in [1, 4] {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(workers)
+                .stack_size(ruff_db::STACK_SIZE)
+                .build()
+                .unwrap();
+            pool.install(|| {
+                let (mut checker, client) = overlay_checker(
+                    &format!("overlay-demanded-dependency-{workers}"),
+                    &[
+                        (
+                            "stubs+/BUILD.bazel",
+                            "build.txt",
+                            "load('@dep//:defs.bzl', 'consume')\nconsume(42)\n",
+                        ),
+                        (
+                            "stubs+/consumer.bzl",
+                            "consumer.txt",
+                            "load('@dep//:defs.bzl', 'consume')\nconsume('valid')\n",
+                        ),
+                    ],
+                );
+                client.fetch_files.lock().unwrap().insert(
+                    "rules+".to_owned(),
+                    (
+                        checker
+                            .bazel_info
+                            .workspace
+                            .join("external/rules+/defs.bzl"),
+                        "def consume(value: str) -> None:\n    print(value)\n".to_owned(),
+                    ),
+                );
+                let result = checker.check_files().unwrap();
+                assert!(result.loads.unresolved.is_empty());
+                assert_eq!(
+                    result
+                        .diagnostics
+                        .iter()
+                        .map(|(file, _)| *file)
+                        .collect::<Vec<_>>(),
+                    checker.files.iter().copied().collect::<Vec<_>>(),
+                );
+                let diagnostics: Vec<Vec<_>> = result
+                    .diagnostics
+                    .iter()
+                    .map(|(_, diagnostics)| {
+                        diagnostics
+                            .iter()
+                            .map(|diagnostic| diagnostic.id().as_str())
+                            .collect()
+                    })
+                    .collect();
+                assert_eq!(diagnostics, [vec!["invalid-argument-type"], vec![]]);
+                assert_eq!(*client.fetch_requests.lock().unwrap(), ["rules+"]);
+                assert!(!checker
                     .bazel_info
                     .workspace
-                    .join("external/rules+/defs.bzl"),
-                "def consume(value: str) -> None:\n    print(value)\n".to_owned(),
-            ),
-        );
-        let result = checker.check_files().unwrap();
-        assert!(result.loads.unresolved.is_empty());
-        let [(_, diagnostics)] = result.diagnostics.as_slice() else {
-            panic!("{:?}", result.diagnostics)
-        };
-        let [diagnostic] = diagnostics.as_slice() else {
-            panic!("{diagnostics:?}")
-        };
-        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
-        assert_eq!(*client.fetch_requests.lock().unwrap(), ["rules+"]);
-        assert!(!checker
-            .bazel_info
-            .workspace
-            .join("external/stubs+")
-            .exists());
+                    .join("external/stubs+")
+                    .exists());
+            });
+        }
     }
 
     #[test]
@@ -3907,7 +4025,7 @@ impl Checker {
     /// before retrying pending queries. Mapping queries can regenerate files too.
     fn resolve_pending_loads(&mut self) -> bool {
         let repositories = self.loader.pending_repository_mappings();
-        let fetches: Vec<_> = self
+        let mut fetches: Vec<_> = self
             .fetch_repo_receiver
             .try_iter()
             .map(|task| {
@@ -3920,6 +4038,7 @@ impl Checker {
             })
             .filter(|repo| self.loader.begin_fetch(repo.clone()))
             .collect();
+        fetches.sort_unstable();
         if repositories.is_empty() && fetches.is_empty() {
             return false;
         }
@@ -3961,20 +4080,46 @@ impl Checker {
         loop {
             pass += 1;
             let started = Instant::now();
-            let mut diagnostics = Vec::new();
-            let snapshot = self.analysis.snapshot();
-            for (index, file) in self.files.iter().copied().enumerate() {
-                if self.progress && (index == 0 || (index + 1) % 100 == 0) {
-                    eprintln!(
-                        "Checking {}/{}: {}",
-                        index + 1,
-                        self.files.len(),
-                        snapshot.path(file).display()
-                    );
-                }
-                diagnostics.push((file, snapshot.diagnostics(file)?));
-            }
-            drop(snapshot);
+            let Self {
+                analysis,
+                bazel_info: _,
+                files,
+                selected_interface_sources: _,
+                exclusions: _,
+                input_errors: _,
+                ignored_paths: _,
+                loader: _,
+                fetch_repo_receiver: _,
+                progress,
+                load_scope: _,
+                output_format: _,
+            } = &*self;
+            let files: Vec<_> = files.iter().copied().collect();
+            let file_count = files.len();
+            let completed = Mutex::new(0_usize);
+            // Indexed collection preserves selection order. Every job's snapshot
+            // drains before repository work can change analysis inputs below.
+            let diagnostics = files
+                .into_par_iter()
+                .map_with(analysis.snapshot(), |snapshot, file| {
+                    let diagnostics = snapshot.diagnostics(file)?;
+                    if *progress {
+                        let mut completed = completed.lock().expect("check progress poisoned");
+                        *completed += 1;
+                        if *completed == 1
+                            || completed.is_multiple_of(100)
+                            || *completed == file_count
+                        {
+                            eprintln!(
+                                "Checked {}/{file_count}: {}",
+                                *completed,
+                                snapshot.path(file).display()
+                            );
+                        }
+                    }
+                    Ok((file, diagnostics))
+                })
+                .collect::<starpls_ide::Cancellable<Vec<_>>>()?;
             log::debug!(
                 target: "sty::timing",
                 "Collected diagnostics: {:?}; pass={pass}; files={}; diagnostics={}",

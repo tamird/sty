@@ -577,6 +577,7 @@ impl Analysis {
     }
 }
 
+#[derive(Clone)]
 pub struct AnalysisSnapshot {
     db: Database,
 }

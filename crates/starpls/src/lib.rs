@@ -67,7 +67,12 @@ pub fn run() -> anyhow::Result<ExitCode> {
 fn dispatch(cli: Cli) -> anyhow::Result<ExitCode> {
     let Cli { command } = cli;
     match command {
-        Some(Commands::Check(cmd)) => cmd.run(),
+        Some(Commands::Check(cmd)) => {
+            rayon::ThreadPoolBuilder::new()
+                .stack_size(ruff_db::STACK_SIZE)
+                .build_global()?;
+            cmd.run()
+        }
         Some(Commands::Server(cmd)) => cmd.run().map(|()| ExitCode::SUCCESS),
         Some(Commands::Version) => run_version().map(|()| ExitCode::SUCCESS),
         None => ServerCommand::default().run().map(|()| ExitCode::SUCCESS),
