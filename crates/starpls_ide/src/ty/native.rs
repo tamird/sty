@@ -99,7 +99,7 @@ enum CallableKind<'a> {
     ArgsCollection {
         with_name: bool,
         options: &'a [Param],
-        input: ArgsCollectionInput,
+        overload: ArgsCollectionOverload,
     },
     ResolveCommand,
     DeclareGeneratedFile {
@@ -110,10 +110,11 @@ enum CallableKind<'a> {
 }
 
 #[derive(Clone, Copy)]
-enum ArgsCollectionInput {
-    Sequence,
-    Depset,
-    Combined,
+enum ArgsCollectionOverload {
+    Unmapped,
+    SequenceWithCallback,
+    DepsetWithCallback,
+    InventoryOptions,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1364,13 +1365,18 @@ fn declarations(
                     } else if let Some(options) =
                         args_collection_options(class, field, &declared_classes)
                     {
-                        let inputs: &[_] = if has_erased_map_each(options, &declared_classes) {
-                            // Each input domain binds the callback's element type separately.
-                            &[ArgsCollectionInput::Sequence, ArgsCollectionInput::Depset]
+                        let overloads: &[_] = if has_erased_map_each(options, &declared_classes) {
+                            // Only a callback constrains the element type; each input
+                            // domain binds it separately.
+                            &[
+                                ArgsCollectionOverload::Unmapped,
+                                ArgsCollectionOverload::SequenceWithCallback,
+                                ArgsCollectionOverload::DepsetWithCallback,
+                            ]
                         } else {
-                            &[ArgsCollectionInput::Combined]
+                            &[ArgsCollectionOverload::InventoryOptions]
                         };
-                        for &input in inputs {
+                        for &overload in overloads {
                             for with_name in [false, true] {
                                 writeln!(body, "        @_starpls_typing.overload")?;
                                 write_function(
@@ -1381,7 +1387,7 @@ fn declarations(
                                     CallableKind::ArgsCollection {
                                         with_name,
                                         options,
-                                        input,
+                                        overload,
                                     },
                                     AnnotationUse::Value,
                                     &declared_classes,
@@ -2411,10 +2417,10 @@ fn write_function(
         CallableKind::ArgsCollection {
             with_name,
             options,
-            input,
+            overload,
         } => (
             CallableKind::Method("Args"),
-            Some((with_name, options, input)),
+            Some((with_name, options, overload)),
         ),
         kind => (kind, None),
     };
@@ -2440,10 +2446,15 @@ fn write_function(
         }
         _ => None,
     };
-    let args_map_each = args_collection
-        .is_some_and(|(_, _, input)| !matches!(input, ArgsCollectionInput::Combined));
-    let type_parameters = if args_map_each {
-        // Without a callback, an unconstrained element retains the original input contract.
+    let args_overload = args_collection.map(|(_, _, overload)| overload);
+    let mapped_args = matches!(
+        args_overload,
+        Some(
+            ArgsCollectionOverload::SequenceWithCallback
+                | ArgsCollectionOverload::DepsetWithCallback
+        )
+    );
+    let type_parameters = if mapped_args {
         "[_ArgsElement = _starpls_builtins.object]"
     } else {
         ""
@@ -2461,9 +2472,9 @@ fn write_function(
     if keyword_only {
         output.push_str(", *");
     }
-    let parameters = if let Some((with_name, options, input)) = args_collection {
+    let parameters = if let Some((with_name, options, overload)) = args_collection {
         // Java's Sequence includes Starlark lists, tuples and ranges, but not strings.
-        let element = if args_map_each {
+        let element = if mapped_args {
             "_ArgsElement"
         } else {
             "_starpls_builtins.object"
@@ -2475,10 +2486,12 @@ fn write_function(
         };
         let sequence = format!("_starpls_ty_extensions.Intersection[_starpls_typing.Sequence[{element}], _starpls_ty_extensions.Not[_starpls_builtins.str]]");
         let depset = format!("_starpls_types.depset[{element}]");
-        let values = match input {
-            ArgsCollectionInput::Sequence => sequence,
-            ArgsCollectionInput::Depset => depset,
-            ArgsCollectionInput::Combined => format!("{sequence} | {depset}"),
+        let values = match overload {
+            ArgsCollectionOverload::SequenceWithCallback => sequence,
+            ArgsCollectionOverload::DepsetWithCallback => depset,
+            ArgsCollectionOverload::Unmapped | ArgsCollectionOverload::InventoryOptions => {
+                format!("{sequence} | {depset}")
+            }
         };
         write!(output, ", {prefix}: {values}, /, *")?;
         keyword_only = true;
@@ -2499,13 +2512,14 @@ fn write_function(
             is_star_star_arg,
         } = parameter;
         let name = name.trim_start_matches('*');
+        let is_mandatory = *is_mandatory || (mapped_args && name == "map_each");
         // This inventory omits parameter kinds. A required parameter after an
         // optional one proves a keyword-only boundary, but optional tails do
         // not. Preserve explicit variadics and avoid inventing other boundaries.
         let transitive = matches!(kind, CallableKind::Function)
             && value.name == "depset"
             && name == "transitive";
-        if ((*is_mandatory && optional) || transitive || (legacy_prefix && name == "stripPrefix"))
+        if ((is_mandatory && optional) || transitive || (legacy_prefix && name == "stripPrefix"))
             && !keyword_only
             && !is_star_arg
             && !is_star_star_arg
@@ -2653,10 +2667,14 @@ fn write_function(
                 (classes.contains("Args") && env::normalize_doc(r#type, true) == "sequence")
                     .then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Args]")
             }
-            (CallableKind::Method("Args"), "add_all" | "add_joined", "map_each") => args_map_each.then_some(concat!(
-                "_starpls_typing.Callable[[_ArgsElement], _starpls_builtins.str | _starpls_typing.Sequence[_starpls_builtins.str] | None] | ",
-                "_starpls_typing.Callable[[_ArgsElement, _starpls_types.DirectoryExpander], _starpls_builtins.str | _starpls_typing.Sequence[_starpls_builtins.str] | None] | None",
-            )),
+            (CallableKind::Method("Args"), "add_all" | "add_joined", "map_each") => match args_overload {
+                Some(ArgsCollectionOverload::Unmapped) => Some("None"),
+                Some(ArgsCollectionOverload::SequenceWithCallback | ArgsCollectionOverload::DepsetWithCallback) => Some(concat!(
+                    "_starpls_typing.Callable[[_ArgsElement], _starpls_builtins.str | _starpls_typing.Sequence[_starpls_builtins.str] | None] | ",
+                    "_starpls_typing.Callable[[_ArgsElement, _starpls_types.DirectoryExpander], _starpls_builtins.str | _starpls_typing.Sequence[_starpls_builtins.str] | None]",
+                )),
+                Some(ArgsCollectionOverload::InventoryOptions) | None => None,
+            },
             // These APIs require dictionaries with string keys and values.
             (CallableKind::Method("actions"), "expand_template", "substitutions")
             | (CallableKind::Method("repository_ctx"), "template", "substitutions")
@@ -2808,7 +2826,7 @@ fn write_function(
             } else {
                 parameter_type
             };
-            if *is_mandatory {
+            if is_mandatory {
                 parameter_type
             } else {
                 format!("{parameter_type} | None")
@@ -9827,6 +9845,19 @@ def check(args: Args, file: File) -> None:
             .unwrap();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let gradual = r#"def check(args: Args, value, mixed: list[object] | depset[object]) -> None:
+    args.add_all([value])
+    args.add_joined("--values", [value], join_with=",", map_each=None)
+    args.add_all(mixed)
+"#;
+        analysis.update_file(file, gradual.into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            !diagnostics.iter().any(|diagnostic| diagnostic
+                .range()
+                .is_some_and(|range| gradual[range].starts_with("args.add_"))),
+            "{diagnostics:#?}"
+        );
         analysis.set_rules(Default::default());
         for invalid in [
             "args.add_all(42)",
