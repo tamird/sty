@@ -1212,14 +1212,7 @@ impl FileLoader for DefaultFileLoader {
             }
 
             let parent = try_opt!(resolved_label.resolved_path.parent());
-            let build_file = try_opt!(fs::read_dir(parent)
-                .into_iter()
-                .flat_map(|entries| entries.into_iter())
-                .find_map(|entry| match entry.ok()?.file_name().to_str()? {
-                    file_name @ ("BUILD" | "BUILD.bazel") => Some(file_name.to_string()),
-                    _ => None,
-                }));
-            let path = parent.join(build_file);
+            let path = try_opt!(starpls_common::bazel_build_file(db, parent)?);
 
             let build_file = self.read_file(
                 db,
@@ -1650,6 +1643,63 @@ pub(crate) mod source_tests {
     use starpls_ide::FilePosition;
 
     use super::DefaultFileLoader;
+
+    #[test]
+    fn target_navigation_uses_the_active_build_file() {
+        let disk = InMemorySystem::default();
+        disk.create_directory_all(SystemPath::new("/workspace"))
+            .unwrap();
+        for name in ["BUILD", "BUILD.bazel"] {
+            disk.write_file(
+                SystemPath::new(&format!("/workspace/{name}")),
+                "filegroup(name = 'dep')\n",
+            )
+            .unwrap();
+        }
+        let (sender, _) = crossbeam_channel::unbounded();
+        let loader = DefaultFileLoader::new(
+            Arc::new(TestBazelClient::default()),
+            "/workspace".into(),
+            None,
+            None,
+            sender,
+            false,
+        );
+        let mut analysis = Analysis::with_system(Arc::new(loader), Default::default(), disk);
+        let caller = analysis
+            .open_document(
+                Path::new("/workspace/caller.bzl"),
+                Dialect::Bazel,
+                None,
+                "label = '//:dep'\n".into(),
+                1,
+            )
+            .unwrap();
+        let snapshot = analysis.snapshot();
+        let locations = snapshot
+            .goto_definition(
+                FilePosition {
+                    file_id: caller,
+                    pos: 11.into(),
+                },
+                false,
+            )
+            .unwrap()
+            .unwrap();
+        let [starpls_ide::LocationLink::Local {
+            target_file_id,
+            origin_selection_range: _,
+            target_range: _,
+            target_selection_range: _,
+        }] = locations.as_slice()
+        else {
+            panic!("{locations:?}")
+        };
+        assert_eq!(
+            snapshot.path(*target_file_id),
+            Path::new("/workspace/BUILD.bazel")
+        );
+    }
 
     #[cfg(unix)]
     #[test]
