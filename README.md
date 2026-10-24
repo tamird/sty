@@ -275,12 +275,14 @@ Names loaded from the mapped `.bzl` module use stub declarations when present an
 inference otherwise. Stubs may load provider types for use in annotations. Function bodies
 use `...` or `pass`, and optional defaults use `= ...`.
 
-Run `sty check --check-interface-sources` to check every configured interface against
-its implementation, including sources from external Bazel repositories. Excluding a
-configured interface makes coverage incomplete. Use
-`--check-local-interface-sources` to select implementations only from the current
-repository. Either option accepts additional input paths and fails if an implementation
-selected by the option is excluded or if no implementation is selected.
+Ship `defs.bzli` beside `defs.bzl` to type its callers and check its
+implementation. An explicit stub mapping overrides that companion.
+`sty check --check-local-interface-sources` discovers companion pairs in the
+current repository and checks locally owned configured sources. To check a file
+inventory and every configured implementation, including external repositories,
+use `--check-interface-sources`. Additional input paths select ordinary source
+files in either mode. The [stub specification](docs/type-interfaces.md) describes
+how to publish separately versioned stub packages.
 
 ### Bazel host builtins
 

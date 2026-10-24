@@ -27,19 +27,12 @@ jobs:
       - uses: tamird/sty@FULL_COMMIT_SHA
 ```
 
-Map the repository's implementations to their `.bzli` files in `sty.toml` at the
-Bazel workspace root:
+Ship a companion next to the implementation, for example `foo/defs.bzli` next
+to `foo/defs.bzl`. The action checks each companion against its implementation
+in the current Bazel repository, including pairs that no caller loads. It also
+checks registered interfaces and their locally owned sources. The optional
+`files` input adds implementations or directories, including dependency sources.
 
-```toml
-[type-interfaces]
-"foo/defs.bzl" = "foo/defs.bzli"
-"foo/private/helpers.bzl" = "foo/private/helpers.bzli"
-```
-
-The action checks all registered interfaces and every paired implementation owned
-by the checked Bazel repository, including pairs from local stub manifests. The
-optional `files` input adds implementations or directories, including dependency
-sources.
 The check follows loads and enables inference of `ctx.attr` fields from Bazel rule
 declarations, and reports possibly unbound names and unreachable code. Run the
 corresponding local check with:

@@ -79,12 +79,11 @@ pub(crate) struct CheckCommand {
     #[clap(long)]
     audit_loads: bool,
 
-    /// Check every configured interface's source in the current Bazel repository.
+    /// Check the current repository’s companion pairs and locally owned configured implementations.
     #[clap(long)]
     check_local_interface_sources: bool,
 
-    /// Check every configured interface's source, including external Bazel repositories.
-    /// Requires at least one configured implementation source.
+    /// Check selected companion pairs and every configured source, including external repositories.
     #[clap(long, conflicts_with = "check_local_interface_sources")]
     check_interface_sources: bool,
 
@@ -821,6 +820,86 @@ mod tests {
     }
 
     #[test]
+    fn adjacent_interface_local_batch_selects_only_owned_pairs() {
+        let sources = [
+            ("only.bzl", "value = True\n"),
+            ("pkg/unreferenced.bzl", "def f(): return 'bad'\n"),
+            ("pkg/unreferenced.bzli", "def f() -> int: ...\n"),
+            ("types.bzli", "type Number = int\n"),
+            ("nested/MODULE.bazel", ""),
+            ("nested/hidden.bzl", "def f(): return 'bad'\n"),
+            ("nested/hidden.bzli", "def f() -> int: ...\n"),
+            ("files.txt", "only.bzl\n"),
+        ];
+        for (case, audit, inventory, expected) in [
+            ("ordinary", false, true, vec!["only.bzl"]),
+            (
+                "batch",
+                true,
+                false,
+                vec!["pkg/unreferenced.bzl", "pkg/unreferenced.bzli"],
+            ),
+            (
+                "batch-extra",
+                true,
+                true,
+                vec!["only.bzl", "pkg/unreferenced.bzl", "pkg/unreferenced.bzli"],
+            ),
+        ] {
+            let mut checker = local_checker_with_options(
+                &format!("adjacent-interface-selection-{case}"),
+                &sources,
+                CheckCommand {
+                    files_from: inventory.then(|| "files.txt".into()),
+                    check_local_interface_sources: audit,
+                    ..Default::default()
+                },
+            );
+            let root = checker.bazel_info.workspace.clone();
+            let report = root.join("coverage.json");
+            let status = checker
+                .report_diagnostics_to(Some(&report), &mut Vec::new(), &mut Vec::new())
+                .unwrap();
+            assert_eq!(
+                status,
+                if audit {
+                    ExitCode::FAILURE
+                } else {
+                    ExitCode::SUCCESS
+                },
+                "{case}"
+            );
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(report).unwrap()).unwrap();
+            let mut checked: Vec<_> = report["checked_files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|file| {
+                    std::path::Path::new(file["path"].as_str().unwrap())
+                        .strip_prefix(&root)
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                })
+                .collect();
+            checked.sort();
+            assert_eq!(checked, expected, "{case}");
+            if audit {
+                let paired = report["checked_interface_sources"]["files"]
+                    .as_array()
+                    .unwrap();
+                assert_eq!(paired.len(), 1);
+                assert_eq!(
+                    paired[0]["path"].as_str(),
+                    root.join("pkg/unreferenced.bzl").to_str()
+                );
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
     fn adjacent_interface_keeps_the_original_provider_through_reexports() {
         let caller = concat!(
             "load(':owner.bzl', Direct = 'Info')\n",
@@ -881,6 +960,32 @@ mod tests {
             assert_eq!(&caller[range], "count=1", "{diagnostic:?}");
             std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
         }
+    }
+
+    #[test]
+    fn adjacent_interface_audit_reports_an_excluded_declaration() {
+        let checker = local_checker_with_options(
+            "adjacent-interface-exclusion",
+            &[
+                ("defs.bzl", "def f(): return 1\n"),
+                ("defs.bzli", "def f() -> int: ...\n"),
+            ],
+            CheckCommand {
+                paths: vec!["defs.bzl".into()],
+                check_interface_sources: true,
+                ignore_patterns: vec!["defs.bzli".into()],
+                ..Default::default()
+            },
+        );
+        let [error] = checker.input_errors.as_slice() else {
+            panic!(
+                "expected one input error, got {}",
+                checker.input_errors.len()
+            )
+        };
+        assert_eq!(error.path, checker.bazel_info.workspace.join("defs.bzli"));
+        assert!(error.message.contains("excluded"));
+        std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
     }
 
     #[test]
@@ -3854,14 +3959,174 @@ impl Checker {
         };
 
         let interfaces = checker.analysis.type_interface_files();
-        if paths.is_empty() && interfaces.is_empty() && options.source_overlay.is_empty() {
+        if paths.is_empty()
+            && interfaces.is_empty()
+            && options.source_overlay.is_empty()
+            && !options.check_local_interface_sources
+        {
             checker.input_errors.push(InputError {
                 path: checker.bazel_info.workspace.clone(),
                 message: "no input paths or configured interfaces were selected".to_owned(),
             });
         }
+        let paths = paths
+            .iter()
+            .map(|path| starpls_common::absolute_path(Path::new(path)))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        // Validate all selected external repositories in one batch before
+        // walking their directories or admitting cached source files.
+        let fetches = checker.loader.fetch_source_repositories(
+            paths
+                .iter()
+                .filter(|path| !checker.ignored_paths.contains(path))
+                .map(PathBuf::as_path),
+            |message| {
+                if checker.progress {
+                    eprintln!("{message}");
+                }
+            },
+        )?;
+        if !fetches.is_empty() {
+            checker.analysis.invalidate_loads();
+        }
+        for SourceOverlay {
+            logical,
+            physical: _,
+        } in &options.source_overlay
+        {
+            let logical = starpls_common::absolute_path(logical)?;
+            if checker.ignored_paths.contains(&logical) {
+                checker.exclusions.insert(logical, Exclusion::Ignored);
+            } else {
+                checker.load_file(&logical, true, extensions, options.bazel_only)?;
+            }
+        }
+        // The local implementation audit also owns unreferenced companion pairs. Reuse
+        // ordinary directory selection for paths the caller already asked us to walk.
+        let workspace = checker.bazel_info.workspace.clone();
+        let directories: HashSet<_> = paths.iter().filter(|path| path.is_dir()).cloned().collect();
+        let census = options.check_local_interface_sources && !directories.contains(&workspace);
+        let selections = paths
+            .into_iter()
+            .map(|path| (path, false))
+            .chain(census.then_some((workspace, true)));
+        for (path, companions_only) in selections {
+            if checker.ignored_paths.contains(&path) {
+                checker.exclusions.insert(path, Exclusion::Ignored);
+                continue;
+            }
+            if let Err(error) = checker.loader.ensure_repository_for_path(&path) {
+                checker.input_errors.push(InputError {
+                    path,
+                    message: format!("{error:#}"),
+                });
+                continue;
+            }
+            if checker.analysis.document(&path).is_some() {
+                checker.load_file(&path, true, extensions, options.bazel_only)?;
+                continue;
+            }
+            let mut walk = WalkDir::new(&path).into_iter();
+            while let Some(entry) = walk.next() {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(error) => {
+                        checker.input_errors.push(InputError {
+                            path: error.path().unwrap_or(&path).to_path_buf(),
+                            message: error.to_string(),
+                        });
+                        continue;
+                    }
+                };
+                if !document::visit_source_entry(&entry, &[])
+                    || checker.ignored_paths.contains(entry.path())
+                {
+                    checker
+                        .exclusions
+                        .insert(entry.path().to_path_buf(), Exclusion::Ignored);
+                    if entry.file_type().is_dir() {
+                        walk.skip_current_dir();
+                    }
+                    continue;
+                }
+                if companions_only
+                    && entry.depth() > 0
+                    && (directories.contains(entry.path()) || entry.file_name() == ".git")
+                {
+                    walk.skip_current_dir();
+                    continue;
+                }
+                if entry.depth() > 0
+                    && entry.file_type().is_dir()
+                    && document::is_repository_root(entry.path())
+                {
+                    checker
+                        .exclusions
+                        .insert(entry.path().to_path_buf(), Exclusion::NestedRepository);
+                    walk.skip_current_dir();
+                    continue;
+                }
+                if entry.file_type().is_file()
+                    || ((options.check_local_interface_sources && entry.path_is_symlink())
+                        || entry.depth() == 0)
+                        && entry.path().is_file()
+                {
+                    if companions_only
+                        && !(entry.path().extension().is_some_and(|ext| ext == "bzli")
+                            && entry.path().with_extension("bzl").is_file())
+                    {
+                        continue;
+                    }
+                    match checker.input_file(
+                        entry.path(),
+                        entry.depth() == 0,
+                        extensions,
+                        options.bazel_only,
+                    ) {
+                        Ok(file) => {
+                            let Some(file) = file else { continue };
+                            if !companions_only
+                                || checker
+                                    .analysis
+                                    .snapshot()
+                                    .adjacent_interface_pair(file)
+                                    .is_some()
+                            {
+                                checker.files.insert(file);
+                            }
+                        }
+                        Err(error) => checker.input_errors.push(InputError {
+                            path: entry.path().to_path_buf(),
+                            message: format!("{error:#}"),
+                        }),
+                    }
+                } else if entry.depth() == 0 && !entry.file_type().is_dir() {
+                    checker.input_errors.push(InputError {
+                        path: entry.path().to_path_buf(),
+                        message: "input is not a regular source file or directory".to_owned(),
+                    });
+                }
+            }
+        }
+
         let snapshot = checker.analysis.snapshot();
+        let mut pairs: indexmap::IndexSet<_> = checker
+            .analysis
+            .type_interface_pairs()
+            .into_iter()
+            .collect();
+        let adjacent: indexmap::IndexSet<_> = checker
+            .files
+            .iter()
+            .filter_map(|file| snapshot.adjacent_interface_pair(*file))
+            .collect();
         let builtin_extension = checker.analysis.bazel_builtin_extension_file();
+        let mut interfaces: indexmap::IndexSet<_> = interfaces.into_iter().collect();
+        interfaces.extend(
+            adjacent
+                .iter()
+                .filter_map(|(source, stub)| checker.files.contains(source).then_some(*stub)),
+        );
         for file in interfaces {
             let path = snapshot.path(file);
             if checker.ignored_paths.contains(path) {
@@ -3883,9 +4148,10 @@ impl Checker {
                 checker.files.insert(file);
             }
         }
+        pairs.extend(adjacent);
         if let Some(InterfaceSources { mode, files }) = &mut checker.selected_interface_sources {
             let main_repository = checker.loader.main_repository();
-            for (source, _) in checker.analysis.type_interface_pairs() {
+            for (source, _) in pairs {
                 let path = snapshot.path(source);
                 let Some(repository) = checker.loader.repository_for_path(path)? else {
                     checker.input_errors.push(InputError {
@@ -3930,108 +4196,6 @@ impl Checker {
             }
         }
         drop(snapshot);
-        let paths = paths
-            .iter()
-            .map(|path| starpls_common::absolute_path(Path::new(path)))
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        // Validate all selected external repositories in one batch before
-        // walking their directories or admitting cached source files.
-        let fetches = checker.loader.fetch_source_repositories(
-            paths
-                .iter()
-                .filter(|path| !checker.ignored_paths.contains(path))
-                .map(PathBuf::as_path),
-            |message| {
-                if checker.progress {
-                    eprintln!("{message}");
-                }
-            },
-        )?;
-        if !fetches.is_empty() {
-            checker.analysis.invalidate_loads();
-        }
-        for SourceOverlay {
-            logical,
-            physical: _,
-        } in &options.source_overlay
-        {
-            let logical = starpls_common::absolute_path(logical)?;
-            if checker.ignored_paths.contains(&logical) {
-                checker.exclusions.insert(logical, Exclusion::Ignored);
-            } else {
-                checker.load_file(&logical, true, extensions, options.bazel_only)?;
-            }
-        }
-        for path in paths {
-            if checker.ignored_paths.contains(&path) {
-                checker.exclusions.insert(path, Exclusion::Ignored);
-                continue;
-            }
-            if let Err(error) = checker.loader.ensure_repository_for_path(&path) {
-                checker.input_errors.push(InputError {
-                    path,
-                    message: format!("{error:#}"),
-                });
-                continue;
-            }
-            if checker.analysis.document(&path).is_some() {
-                checker.load_file(&path, true, extensions, options.bazel_only)?;
-                continue;
-            }
-            let mut walk = WalkDir::new(&path).into_iter();
-            while let Some(entry) = walk.next() {
-                let entry = match entry {
-                    Ok(entry) => entry,
-                    Err(error) => {
-                        checker.input_errors.push(InputError {
-                            path: error.path().unwrap_or(&path).to_path_buf(),
-                            message: error.to_string(),
-                        });
-                        continue;
-                    }
-                };
-                if !document::visit_source_entry(&entry, &[])
-                    || checker.ignored_paths.contains(entry.path())
-                {
-                    checker
-                        .exclusions
-                        .insert(entry.path().to_path_buf(), Exclusion::Ignored);
-                    if entry.file_type().is_dir() {
-                        walk.skip_current_dir();
-                    }
-                    continue;
-                }
-                if entry.depth() > 0
-                    && entry.file_type().is_dir()
-                    && document::is_repository_root(entry.path())
-                {
-                    checker
-                        .exclusions
-                        .insert(entry.path().to_path_buf(), Exclusion::NestedRepository);
-                    walk.skip_current_dir();
-                    continue;
-                }
-                if entry.file_type().is_file() || (entry.depth() == 0 && entry.path().is_file()) {
-                    if let Err(error) = checker.load_file(
-                        entry.path(),
-                        entry.depth() == 0,
-                        extensions,
-                        options.bazel_only,
-                    ) {
-                        checker.input_errors.push(InputError {
-                            path: entry.path().to_path_buf(),
-                            message: format!("{error:#}"),
-                        });
-                    }
-                } else if entry.depth() == 0 && !entry.file_type().is_dir() {
-                    checker.input_errors.push(InputError {
-                        path: entry.path().to_path_buf(),
-                        message: "input is not a regular source file or directory".to_owned(),
-                    });
-                }
-            }
-        }
-
         if let Some(InterfaceSources { mode, files }) = &checker.selected_interface_sources {
             let missing_implementation = checker.input_errors.is_empty()
                 && match mode {
@@ -4084,6 +4248,19 @@ impl Checker {
         extensions: &[&str],
         bazel_only: bool,
     ) -> anyhow::Result<()> {
+        if let Some(file) = self.input_file(path, is_explicit, extensions, bazel_only)? {
+            self.files.insert(file);
+        }
+        Ok(())
+    }
+
+    fn input_file(
+        &mut self,
+        path: &Path,
+        is_explicit: bool,
+        extensions: &[&str],
+        bazel_only: bool,
+    ) -> anyhow::Result<Option<File>> {
         let path = starpls_common::absolute_path(path)?;
 
         let Some((dialect, api_context)) =
@@ -4095,12 +4272,12 @@ impl Checker {
                 }
                 self.exclusions.insert(path, Exclusion::UnsupportedFile);
             }
-            return Ok(());
+            return Ok(None);
         };
 
         if bazel_only && dialect != Dialect::Bazel {
             self.exclusions.insert(path, Exclusion::NotBazel);
-            return Ok(());
+            return Ok(None);
         }
         self.loader.ensure_repository_for_path(&path)?;
 
@@ -4110,10 +4287,7 @@ impl Checker {
             bundled_cc_common: false,
         });
 
-        let file = self.analysis.file(&path, dialect, info)?;
-        self.files.insert(file);
-
-        Ok(())
+        self.analysis.file(&path, dialect, info).map(Some)
     }
 
     fn report_diagnostics_for_file(
@@ -4192,6 +4366,14 @@ impl Checker {
                     graph.files.len(),
                     snapshot.path(file).display()
                 );
+            }
+            if let Some((source, interface)) = snapshot.adjacent_interface_pair(file) {
+                let counterpart = if source == file { interface } else { source };
+                if (self.load_scope == LoadScope::Transitive || requests.contains_key(&counterpart))
+                    && graph.files.insert(counterpart)
+                {
+                    frontier.push(counterpart);
+                }
             }
             if let Some(counterparts) = requested_counterparts.get(&file) {
                 for &counterpart in counterparts {
