@@ -99,6 +99,7 @@ enum CallableKind<'a> {
     ArgsCollection {
         with_name: bool,
         options: &'a [Param],
+        input: ArgsCollectionInput,
     },
     ResolveCommand,
     DeclareGeneratedFile {
@@ -106,6 +107,13 @@ enum CallableKind<'a> {
     },
     Rule(&'a starpls_bazel::build::RuleDefinition),
     Provider(Option<&'a str>),
+}
+
+#[derive(Clone, Copy)]
+enum ArgsCollectionInput {
+    Sequence,
+    Depset,
+    Combined,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1349,17 +1357,29 @@ fn declarations(
                     } else if let Some(options) =
                         args_collection_options(class, field, &declared_classes)
                     {
-                        for with_name in [false, true] {
-                            writeln!(body, "        @_starpls_typing.overload")?;
-                            write_function(
-                                &mut body,
-                                "        ",
-                                field,
-                                callable,
-                                CallableKind::ArgsCollection { with_name, options },
-                                AnnotationUse::Value,
-                                &declared_classes,
-                            )?;
+                        let inputs: &[_] = if has_erased_map_each(options, &declared_classes) {
+                            // Each input domain binds the callback's element type separately.
+                            &[ArgsCollectionInput::Sequence, ArgsCollectionInput::Depset]
+                        } else {
+                            &[ArgsCollectionInput::Combined]
+                        };
+                        for &input in inputs {
+                            for with_name in [false, true] {
+                                writeln!(body, "        @_starpls_typing.overload")?;
+                                write_function(
+                                    &mut body,
+                                    "        ",
+                                    field,
+                                    callable,
+                                    CallableKind::ArgsCollection {
+                                        with_name,
+                                        options,
+                                        input,
+                                    },
+                                    AnnotationUse::Value,
+                                    &declared_classes,
+                                )?;
+                            }
                         }
                     } else if class.name == "json" && field.name == "decode" {
                         let documentation = callable_documentation(field, callable)?;
@@ -2332,6 +2352,14 @@ fn args_collection_options<'a>(
     .then_some(options)
 }
 
+fn has_erased_map_each(options: &[Param], classes: &BTreeSet<String>) -> bool {
+    classes.contains("DirectoryExpander")
+        && options.iter().any(|parameter| {
+            parameter.name == "map_each"
+                && env::normalize_doc(&parameter.r#type, true) == "callable; or None"
+        })
+}
+
 fn shareable_artifact_signature(callable: &Callable, classes: &BTreeSet<String>) -> bool {
     let [path, root] = callable.param.as_slice() else {
         return false;
@@ -2373,9 +2401,14 @@ fn write_function(
             namespace.map_or(CallableKind::Function, CallableKind::Method),
             None,
         ),
-        CallableKind::ArgsCollection { with_name, options } => {
-            (CallableKind::Method("Args"), Some((with_name, options)))
-        }
+        CallableKind::ArgsCollection {
+            with_name,
+            options,
+            input,
+        } => (
+            CallableKind::Method("Args"),
+            Some((with_name, options, input)),
+        ),
         kind => (kind, None),
     };
     let name = if provider || matches!(kind, CallableKind::Rule(_)) {
@@ -2400,7 +2433,15 @@ fn write_function(
         }
         _ => None,
     };
-    write!(output, "{indent}def {name}(")?;
+    let args_map_each = args_collection
+        .is_some_and(|(_, _, input)| !matches!(input, ArgsCollectionInput::Combined));
+    let type_parameters = if args_map_each {
+        // Without a callback, an unconstrained element retains the original input contract.
+        "[_ArgsElement = _starpls_builtins.object]"
+    } else {
+        ""
+    };
+    write!(output, "{indent}def {name}{type_parameters}(")?;
     let mut separator = "";
     if provider || !matches!(kind, CallableKind::Function) {
         output.push_str("_starpls_self");
@@ -2413,13 +2454,24 @@ fn write_function(
     if keyword_only {
         output.push_str(", *");
     }
-    let parameters = if let Some((with_name, options)) = args_collection {
+    let parameters = if let Some((with_name, options, input)) = args_collection {
         // Java's Sequence includes Starlark lists, tuples and ranges, but not strings.
-        let values = "_starpls_ty_extensions.Intersection[_starpls_typing.Sequence[_starpls_builtins.object], _starpls_ty_extensions.Not[_starpls_builtins.str]] | _starpls_types.depset[_starpls_builtins.object]";
+        let element = if args_map_each {
+            "_ArgsElement"
+        } else {
+            "_starpls_builtins.object"
+        };
         let prefix = if with_name {
             "arg_name_or_values: _starpls_builtins.str, values"
         } else {
             "arg_name_or_values"
+        };
+        let sequence = format!("_starpls_ty_extensions.Intersection[_starpls_typing.Sequence[{element}], _starpls_ty_extensions.Not[_starpls_builtins.str]]");
+        let depset = format!("_starpls_types.depset[{element}]");
+        let values = match input {
+            ArgsCollectionInput::Sequence => sequence,
+            ArgsCollectionInput::Depset => depset,
+            ArgsCollectionInput::Combined => format!("{sequence} | {depset}"),
         };
         write!(output, ", {prefix}: {values}, /, *")?;
         keyword_only = true;
@@ -2594,6 +2646,10 @@ fn write_function(
                 (classes.contains("Args") && env::normalize_doc(r#type, true) == "sequence")
                     .then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Args]")
             }
+            (CallableKind::Method("Args"), "add_all" | "add_joined", "map_each") => args_map_each.then_some(concat!(
+                "_starpls_typing.Callable[[_ArgsElement], _starpls_builtins.str | _starpls_typing.Sequence[_starpls_builtins.str] | None] | ",
+                "_starpls_typing.Callable[[_ArgsElement, _starpls_types.DirectoryExpander], _starpls_builtins.str | _starpls_typing.Sequence[_starpls_builtins.str] | None] | None",
+            )),
             // These APIs require dictionaries with string keys and values.
             (CallableKind::Method("actions"), "expand_template", "substitutions")
             | (CallableKind::Method("repository_ctx"), "template", "substitutions")
@@ -9727,7 +9783,7 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
         );
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
-            .set_builtin_defs(builtins, Default::default())
+            .set_builtin_defs(builtins.clone(), Default::default())
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
@@ -9735,12 +9791,23 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
             )
             .unwrap(),
         );
-        let source = r#"def check(args: Args, file: File) -> None:
+        let source = r#"def file_path(file: File) -> str:
+    return file.short_path
+def format_number(value: int) -> str:
+    return str(value)
+def format_pair(value: tuple[str, str]) -> str:
+    return value[0] + value[1]
+def wrong_result(file: File) -> list[int]:
+    return [1]
+def check(args: Args, file: File) -> None:
     chained: Args = args.add_all(depset([file]))
     args.add_all("--headers", [file])
     args.add_all(range(3))
     chained.add_joined((file,), join_with=",")
     args.add_joined("--headers", depset([file]), join_with=",")
+    args.add_all([file], map_each=file_path)
+    args.add_all(range(3), map_each=format_number)
+    args.add_joined(depset([("a", "b")]), map_each=format_pair, join_with=",")
 "#;
         let file = analysis
             .open_document(
@@ -9761,6 +9828,9 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
             "args.add_all('--headers', values=[file])",
             "args.add_joined([file])",
             "args.add_all([file], format_each=42)",
+            "args.add_all([file], map_each=format_pair)",
+            "args.add_all(range(3), map_each=file_path)",
+            "args.add_joined([file], map_each=wrong_result, join_with=',')",
         ] {
             analysis.update_file(file, format!("{source}    {invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -9769,6 +9839,35 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
             };
             assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
         }
+
+        let args = builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "Args")
+            .unwrap();
+        let method = args
+            .field
+            .iter_mut()
+            .find(|field| field.name == "add_all")
+            .unwrap();
+        let callable = method.callable.as_mut().unwrap();
+        let map_each = callable
+            .param
+            .iter_mut()
+            .find(|parameter| parameter.name == "map_each")
+            .unwrap();
+        map_each.r#type = "int".into();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let custom = "def check(args: Args) -> None:\n    args.add_all([1], map_each=42)\n    args.add_all([1], map_each='wrong')\n";
+        analysis.update_file(file, custom.into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        assert_eq!(&custom[diagnostic.range().unwrap()], "map_each='wrong'");
     }
 
     #[test]
