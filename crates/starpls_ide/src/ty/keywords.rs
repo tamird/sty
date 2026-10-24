@@ -321,7 +321,10 @@ wrapper(name="ok", optional="set")
         let source_text = r#"
 def _impl(ctx):
     return []
-target = rule(_impl, attrs={"items": attr.string_list(mandatory=True), "fixed": attr.bool(mandatory=True), "number": attr.int()})
+common = {"items": attr.string_list(mandatory=True)}
+local = {"fixed": attr.bool(mandatory=True), "number": attr.int()}
+launcher = struct(toolchain_type = "//:launcher")
+target = rule(_impl, attrs=common | local, toolchains=[launcher.toolchain_type])
 def wrapper(**kwargs):
     target(name="generated", fixed=True, **kwargs)
 "#;
