@@ -1171,10 +1171,13 @@ collect(["a"])
 collect(("a",))
 collect(set(["a"]))
 collect({"a": 1})
+collect(native.existing_rules())
 def widen(values: Collection[str]) -> Collection[object]:
     return values
-def contains(values: Collection[str], candidate: object) -> bool:
+def contains(values: Collection[str], candidate: str) -> bool:
     return candidate in values
+[] in [[]]
+[] in set(["a"])
 "#;
         let (mut analysis, fixture) = native_analysis(source);
         analysis.set_rules(
@@ -1186,12 +1189,37 @@ def contains(values: Collection[str], candidate: object) -> bool:
         let file = fixture.main_file();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        analysis.update_file(file, format!("{source}collect([1])\ncollect('abc')\n"));
+        let invalid = r#"collect([1])
+collect("abc")
+[] in {"a": 1}
+def contains_unknown(values: Collection[str], candidate: object) -> bool:
+    return candidate in values
+def contains_nested(values: Collection[list[int]]) -> bool:
+    return [1] in values
+empty: dict[str, int] = {}
+contains_unknown(empty, [1])
+"#;
+        let source = format!("{source}{invalid}");
+        analysis.update_file(file, source.clone());
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+        let actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic.id().as_str(),
+                    &source[diagnostic.range().unwrap()],
+                )
+            })
+            .collect();
         assert_eq!(
-            ids,
-            ["invalid-argument-type", "invalid-argument-type"],
+            actual,
+            [
+                ("invalid-argument-type", "[1]"),
+                ("invalid-argument-type", "\"abc\""),
+                ("unsupported-operator", "[] in {\"a\": 1}"),
+                ("unsupported-operator", "candidate in values"),
+                ("unsupported-operator", "[1] in values"),
+            ],
             "{diagnostics:?}"
         );
     }

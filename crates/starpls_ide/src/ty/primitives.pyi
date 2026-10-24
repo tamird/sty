@@ -4,7 +4,7 @@
 # Special methods encode operations for Ty and are omitted from completion.
 
 from types import NotImplementedType
-from typing import Collection, TYPE_CHECKING
+from typing import Collection, Hashable, TYPE_CHECKING
 from typing_extensions import Never
 from _starpls_allocations import _DictEntries, _MappingEntries, dict as _AllocatedDict
 
@@ -356,7 +356,7 @@ class dict(Mapping[_KT, _VT]):
     @type_check_only
     def __setitem__(self, key: _KT, value: _VT, /) -> None: ...
     @type_check_only
-    def __contains__(self: dict[_T, _S], key: object, /) -> bool: ...
+    def __contains__(self: dict[_T, _S], key: Hashable, /) -> bool: ...
     @type_check_only
     def __or__(self, other: dict[_T1, _T2], /) -> _AllocatedDict[_KT | _T1, _VT | _T2]: ...
     @overload

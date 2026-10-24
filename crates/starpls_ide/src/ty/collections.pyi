@@ -5,9 +5,11 @@
 from _starpls_allocations import _MappingEntries
 from typing_extensions import disjoint_base as _disjoint_base
 
+# Dictionary membership requires hashable keys. The structural Hashable
+# protocol approximates that requirement for an abstract collection.
 class Collection(Iterable[_T_co], Sized, Protocol[_T_co]):
     @type_check_only
-    def __contains__(self, value: object, /) -> bool: ...
+    def __contains__(self, value: Hashable, /) -> bool: ...
 
 # Starlark sequences cannot also be dictionaries or other disjoint builtins.
 @_disjoint_base
@@ -33,7 +35,7 @@ class Mapping(_MappingEntries[_KT, _VT_co], Generic[_KT, _VT_co]):
     @type_check_only
     def __iter__(self) -> Iterator[_KT]: ...
     @type_check_only
-    def __contains__(self, key: object, /) -> bool: ...
+    def __contains__(self, key: Hashable, /) -> bool: ...
     @type_check_only
     def __getitem__(self, key: _KT, /) -> _VT_co: ...
     @overload
