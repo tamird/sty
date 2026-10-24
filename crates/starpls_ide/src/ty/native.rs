@@ -1787,6 +1787,11 @@ fn declarations(
     if classes.contains_key("repository_ctx") || classes.contains_key("module_ctx") {
         output.push_str("_ExecuteEnvironmentValue = _starpls_typing.TypeVar(\"_ExecuteEnvironmentValue\", bound=\"_starpls_builtins.str | None\")\n");
     }
+    if classes.contains_key("ctx") && classes.contains_key("File") {
+        output.push_str("_SymlinkFile = _starpls_typing.TypeVar(\"_SymlinkFile\", bound=\"_starpls_types.File\")\n");
+        output.push_str("_RootSymlinkKey = _starpls_typing.TypeVar(\"_RootSymlinkKey\", bound=_starpls_builtins.str)\n");
+        output.push_str("_RootSymlinkFile = _starpls_typing.TypeVar(\"_RootSymlinkFile\", bound=\"_starpls_types.File\")\n");
+    }
     if dialect == Dialect::Bazel
         && classes.get("ctx").is_some_and(|context| {
             context
@@ -2593,6 +2598,16 @@ fn write_function(
             }
             (CallableKind::ResolveCommand, _, "label_dict") => {
                 (classes.contains("Label") && classes.contains("File") && env::normalize_doc(r#type, true) == "dict").then_some("_starpls_builtins.dict[_starpls_types.Label, _ResolveCommandFiles]")
+            }
+            // Bazel reads each dictionary independently and casts its entries to (String, Artifact).
+            (CallableKind::Method("ctx"), "runfiles", "symlinks" | "root_symlinks") => {
+                (classes.contains("File") && classes.contains("SymlinkEntry") && classes.contains("depset")
+                    && env::normalize_doc(r#type, true) == "dict; or depset of SymlinkEntrys")
+                    .then_some(if name == "symlinks" {
+                        "_starpls_builtins.dict[_StringKey, _SymlinkFile] | _DictSchema[_starpls_types.File] | _starpls_types.depset[_starpls_types.SymlinkEntry]"
+                    } else {
+                        "_starpls_builtins.dict[_RootSymlinkKey, _RootSymlinkFile] | _DictSchema[_starpls_types.File] | _starpls_types.depset[_starpls_types.SymlinkEntry]"
+                    })
             }
             // Spawn actions copy each dictionary independently into string maps.
             (CallableKind::Method("actions"), "run" | "run_shell", "env") => {
@@ -7010,6 +7025,57 @@ def inspect(
             analysis.update_file(file, format!("visibility({value})\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert_eq!(diagnostics.len(), 1, "{value}: {diagnostics:?}");
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        }
+    }
+
+    #[test]
+    fn runfiles_symlink_inputs() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def collect(context: ctx[object, object], file: File) -> None:
+    runfiles = context.runfiles(symlinks={"alias": file})
+    context.runfiles(symlinks=runfiles.symlinks, root_symlinks=runfiles.root_symlinks)
+    generated = {"generated": context.actions.declare_file("out")}
+    context.runfiles(symlinks=generated, root_symlinks={"source": file})
+    first: dict[Literal["first"], File] = {"first": file}
+    second: dict[Literal["second"], File] = {"second": file}
+    context.runfiles(symlinks=first, root_symlinks=second)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/symlinks.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        analysis.set_rules(crate::DiagnosticRules::default());
+        for invalid in [
+            "symlinks={'alias': 'not a file'}",
+            "root_symlinks={1: file}",
+            "symlinks=depset([file])",
+        ] {
+            analysis.update_file(file, format!("{source}    context.runfiles({invalid})\n"));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{invalid}: {diagnostics:?}");
             assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
         }
     }
