@@ -111,7 +111,7 @@ pub(super) struct RuleData {
     /// Additional context attributes, when all possible names are known but
     /// these attributes are only present on some paths.
     pub(super) conditional_context_attributes: Option<Box<[RuleAttributeData]>>,
-    pub(super) fragments: Box<[Name]>,
+    pub(super) fragments: Fragments,
     pub(super) complete: bool,
     /// Whether the generated call signature has no unresolved shape requirements.
     call_shape_complete: bool,
@@ -119,6 +119,43 @@ pub(super) struct RuleData {
     may_have_initializer: bool,
     pub(super) executable: Option<bool>,
     pub(super) build_setting: Option<BuildSetting>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, get_size2::GetSize)]
+pub(super) struct Fragments {
+    pub(super) names: Vec<Name>,
+    pub(super) open: bool,
+}
+
+impl Fragments {
+    pub(super) fn from_expression<'ast, 'name>(
+        expression: Option<&'ast Expr>,
+        name: impl Fn(&'ast Expr) -> Option<&'name str>,
+    ) -> Self {
+        let Some(elements) = expression.and_then(literal_sequence_elements) else {
+            return Self {
+                names: Vec::new(),
+                open: true,
+            };
+        };
+        let mut fragments = Self::default();
+        for element in elements {
+            let Some(name) = name(element) else {
+                fragments.open = true;
+                continue;
+            };
+            if starpls_bazel::KNOWN_CONFIGURATION_FRAGMENT_TYPES.contains(&name) {
+                fragments.names.push(Name::new(name));
+            }
+        }
+        fragments.normalize();
+        fragments
+    }
+
+    fn normalize(&mut self) {
+        self.names.sort_unstable();
+        self.names.dedup();
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
@@ -1459,16 +1496,23 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
         let data = parent.provided_data(db, &environment)?;
         data.downcast_ref::<RuleData>()
     });
-    let fragments =
-        if matches!(kind, RuleKind::Build) && db.environment().options(db).infer_ctx_attributes {
-            let mut fragments = parent_data.map_or_else(Vec::new, |data| data.fragments.to_vec());
-            fragments.extend(super::context::fragments_for_call(db, call));
-            fragments.sort_unstable();
-            fragments.dedup();
-            fragments.into_boxed_slice()
-        } else {
-            Box::default()
-        };
+    let fragments = if matches!(kind, RuleKind::Build)
+        && db.environment().options(db).infer_ctx_attributes
+    {
+        let mut fragments = super::context::fragment_argument(db, call, call.argument("fragments"));
+        if parent.is_some() {
+            if let Some(parent) = parent_data {
+                fragments.names.extend_from_slice(&parent.fragments.names);
+                fragments.open |= parent.fragments.open;
+                fragments.normalize();
+            } else {
+                fragments.open = true;
+            }
+        }
+        fragments
+    } else {
+        Fragments::default()
+    };
     let inherited_initializer =
         parent.is_some() && parent_data.is_none_or(|data| data.may_have_initializer);
     let may_have_initializer = matches!(kind, RuleKind::Build)

@@ -905,33 +905,37 @@ fn empty_mapping<'db>() -> DictionaryItems<'db> {
 }
 
 pub(super) fn fragments_for_call<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Vec<Name> {
-    match call.argument("fragments") {
-        CheckedArgument::Value { expression, .. } => {
-            fragment_names(db, expression, |element| call.expression_type(element))
+    fragment_argument(db, call, call.argument("fragments")).names
+}
+
+pub(super) fn fragment_argument<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    argument: CheckedArgument<'_, 'db>,
+) -> factory::Fragments {
+    match argument {
+        CheckedArgument::Omitted => factory::Fragments::default(),
+        CheckedArgument::Indeterminate => factory::Fragments {
+            names: Vec::new(),
+            open: true,
+        },
+        CheckedArgument::Value { expression, ty: _ } => {
+            factory::Fragments::from_expression(expression, |element| {
+                call.expression_type(element)?.string_literal_value(db)
+            })
         }
-        _ => Vec::new(),
     }
 }
 
 fn fragment_names<'db>(
     db: &'db Database,
     expression: Option<&Expr>,
-    infer_type: impl Fn(&Expr) -> Option<Type<'db>>,
+    infer: impl Fn(&Expr) -> Option<Type<'db>>,
 ) -> Vec<Name> {
-    let mut names: Vec<_> = expression
-        .and_then(factory::literal_sequence_elements)
-        .into_iter()
-        .flatten()
-        .filter_map(|element| {
-            let name = infer_type(element)?.string_literal_value(db)?;
-            starpls_bazel::KNOWN_CONFIGURATION_FRAGMENT_TYPES
-                .contains(&name)
-                .then(|| Name::new(name))
-        })
-        .collect();
-    names.sort_unstable();
-    names.dedup();
-    names
+    factory::Fragments::from_expression(expression, |element| {
+        infer(element)?.string_literal_value(db)
+    })
+    .names
 }
 
 struct Registration<'db> {
@@ -1256,11 +1260,13 @@ fn context_type<'db>(
         );
     }
     let fragment_names = match context_kind {
-        ContextKind::Build => rule.map_or(&[][..], |rule| rule.fragments.as_ref()),
+        ContextKind::Build => rule.map_or(&[][..], |rule| rule.fragments.names.as_slice()),
         ContextKind::Aspect => &aspect_fragments,
         ContextKind::Repository => unreachable!(),
     };
-    if !fragment_names.is_empty() {
+    let open_fragments =
+        context_kind == ContextKind::Build && rule.is_some_and(|rule| rule.fragments.open);
+    if open_fragments || !fragment_names.is_empty() {
         let fields: Box<[_]> = fragment_names
             .iter()
             .filter_map(|name| {
@@ -1274,9 +1280,9 @@ fn context_type<'db>(
                 })
             })
             .collect();
-        if !fields.is_empty() {
+        if open_fragments || !fields.is_empty() {
             if let Some(base) = factory::native_class(db, declarations, "fragments") {
-                let ty = make_class("fragments", base, fields, false, Box::default())?;
+                let ty = make_class("fragments", base, fields, open_fragments, Box::default())?;
                 context_fields.push(ProvidedField {
                     name: Name::new("fragments"),
                     ty,
@@ -1845,6 +1851,24 @@ with_target = subrule(implementation = shared, attrs = {
                 ("invalid-argument-type", "_maybe"),
                 ("unresolved-attribute", "_both.path"),
             ]
+        );
+    }
+
+    #[test]
+    fn inherited_fragments_remain_typed_when_a_child_list_is_unknown() {
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
+        enable_context(&mut analysis);
+        let source = "def base_impl(ctx): return []\nbase = rule(implementation=base_impl, fragments=['apple'], extendable=True)\ndef additional() -> list[str]: return ['cpp']\ndef child_impl(ctx):\n    ctx.fragments.cpp\n    ctx.fragments.apple.missing_member\nchild = rule(implementation=child_impl, parent=base, fragments=additional())\n";
+        let file = fixture.main_file();
+        analysis.update_file(file, source.to_owned());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [error] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(error.id().as_str(), "unresolved-attribute");
+        assert_eq!(
+            &source[error.primary_span().unwrap().range().unwrap()],
+            "ctx.fragments.apple.missing_member"
         );
     }
 
