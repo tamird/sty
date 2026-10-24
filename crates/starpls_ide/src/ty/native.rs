@@ -709,6 +709,21 @@ fn declarations(
             ..Default::default()
         });
     }
+    let toolchain_key =
+        "_starpls_builtins.str | _starpls_types.Label | _starpls_types.ToolchainTypeInfo";
+    let aspect_toolchains_available = dialect == Dialect::Bazel
+        && ["ToolchainContext", "ToolchainTypeInfo", "Label", "Provider"]
+            .iter()
+            .all(|name| classes.contains_key(*name))
+        && env::has_aspect_toolchains(builtins);
+    if aspect_toolchains_available {
+        classes
+            .entry(env::ASPECT_TOOLCHAIN_PROVIDERS.to_owned())
+            .or_insert_with(|| Type {
+                name: env::ASPECT_TOOLCHAIN_PROVIDERS.to_owned(),
+                ..Default::default()
+            });
+    }
     let propagation_context_available = dialect == Dialect::Bazel
         && classes.contains_key("Label")
         && classes.contains_key("struct");
@@ -1192,10 +1207,27 @@ fn declarations(
         }
         if class.name == "ToolchainContext" {
             names.extend(["__getitem__", "__contains__"]);
-            // Aspect toolchain contexts can return aspect providers, so the
-            // shared native type cannot promise a ToolchainInfo result.
-            writeln!(body, "        def __getitem__(self, key: _starpls_builtins.str | _starpls_types.Label | _starpls_types.ToolchainTypeInfo) -> _starpls_typing.Any: ...")?;
-            writeln!(body, "        def __contains__(self, key: _starpls_builtins.str | _starpls_types.Label | _starpls_types.ToolchainTypeInfo) -> _starpls_builtins.bool: ...")?;
+            writeln!(
+                body,
+                "        def __getitem__(self, key: {toolchain_key}) -> _starpls_typing.Any: ..."
+            )?;
+            writeln!(
+                body,
+                "        def __contains__(self, key: {toolchain_key}) -> _starpls_builtins.bool: ..."
+            )?;
+        }
+        if class.name == env::ASPECT_TOOLCHAIN_PROVIDERS {
+            // ToolchainAspectsProviders accepts exported providers for both membership
+            // and indexing. It is not the configured target that supplied them.
+            names.extend(["__getitem__", "__contains__"]);
+            body.push_str(
+                r#"        @_starpls_typing.overload
+        def __getitem__(self, key: _starpls_types.Provider[_ProviderValue]) -> _ProviderValue: ...
+        @_starpls_typing.overload
+        def __getitem__(self, key: _starpls_types.ProviderKey) -> _starpls_types.ProviderInstance: ...
+        def __contains__(self, key: _starpls_types.ProviderKey) -> _starpls_builtins.bool: ...
+"#,
+            );
         }
         if class.name == "select" {
             names.extend(["__add__", "__radd__", "__or__", "__ror__"]);
@@ -1487,6 +1519,11 @@ fn declarations(
                     {
                         // CcCompilationContextApi declares these as StarlarkList<FileT>.
                         Some("_starpls_builtins.list[_starpls_types.File]")
+                    } else if aspect_toolchains_available
+                        && class.name == "rule_attributes"
+                        && field.name == "toolchains"
+                    {
+                        Some("_starpls_typing.Final[_starpls_types._AspectToolchainContext]")
                     } else if matches!(class.name.as_str(), "ctx" | "rule_attributes")
                         && classes.contains_key("struct")
                     {
@@ -1565,7 +1602,10 @@ fn declarations(
                     });
                     let field_type = if class.name == "_ApplePlatformTypes"
                         || (class.name == "apple_common" && field.name == "platform_type")
-                        || (class.name == "DormantDependency" && field.name == "label")
+                        || (matches!(
+                            class.name.as_str(),
+                            "DormantDependency" | env::ASPECT_TOOLCHAIN_PROVIDERS
+                        ) && field.name == "label")
                         || (dialect == Dialect::Bazel && class.name == "File")
                         || (dialect == Dialect::Bazel
                             && matches!(
@@ -1587,6 +1627,15 @@ fn declarations(
                 }
             }
         }
+    }
+    if aspect_toolchains_available {
+        // AspectBaseTargetResolvedToolchainContext exposes aspect-provided values on
+        // the visited rule's toolchains. An unresolved optional toolchain is None.
+        writeln!(
+            body,
+            "    class _AspectToolchainContext(ToolchainContext):\n        def __getitem__(self, key: {toolchain_key}) -> _starpls_types.{} | None: ...",
+            env::ASPECT_TOOLCHAIN_PROVIDERS,
+        )?;
     }
     if classes.contains_key("apple_common") && classes.contains_key("apple_platform") {
         // ApplePlatform.getStarlarkStruct exports each enum value under its
@@ -4125,6 +4174,109 @@ def module_lookup(context: module_ctx) -> path:
             panic!("{diagnostics:?}");
         };
         assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+    }
+
+    #[test]
+    fn aspect_rule_toolchains_preserve_provider_types() {
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins.clone(), Default::default())
+            .unwrap();
+        let source = r#"def lookup(c: ctx[object, object], key: Label) -> DefaultInfo | None:
+    resolved = c.rule.toolchains[key]
+    if resolved == None or DefaultInfo not in resolved:
+        return None
+    return resolved[DefaultInfo]
+
+def wrong_return(c: ctx[object, object, object], key: Label) -> File | None:
+    providers = c.rule.toolchains[key]
+    if providers == None:
+        return None
+    return providers[DefaultInfo]
+
+def wrong_provider(c: ctx[object, object], key: Label) -> object:
+    providers = c.rule.toolchains[key]
+    if providers == None:
+        return None
+    return providers[42]
+
+def optional(c: ctx[object, object], key: Label) -> DefaultInfo:
+    return c.rule.toolchains[key][DefaultInfo]
+
+def own(c: ctx[object, object], key: Label) -> object:
+    return c.toolchains[key].custom_tool
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/aspect.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| (
+                    diagnostic.id().as_str(),
+                    &source[diagnostic.range().unwrap()]
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("invalid-return-type", "providers[DefaultInfo]"),
+                ("invalid-argument-type", "providers"),
+                ("not-subscriptable", "c.rule.toolchains[key][DefaultInfo]"),
+            ],
+        );
+        let label_source = "def label(c: ctx[object, object], key: Label) -> Label | None:\n    resolved = c.rule.toolchains[key]\n    return None if resolved == None else resolved.label\n";
+        for (release, exposes_label) in [
+            ("development", false),
+            ("release 8.8.1", false),
+            ("release 9.0.0", true),
+        ] {
+            let mut profile = builtins.clone();
+            env::apply_versioned_signatures(&mut profile, release);
+            analysis
+                .set_builtin_defs(profile, Default::default())
+                .unwrap();
+            analysis.update_file(file, label_source.into());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            if exposes_label {
+                assert!(diagnostics.is_empty(), "{release}: {diagnostics:?}");
+            } else {
+                let [diagnostic] = diagnostics.as_slice() else {
+                    panic!("{release}: {diagnostics:?}");
+                };
+                assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+                assert_eq!(&label_source[diagnostic.range().unwrap()], "resolved.label");
+            }
+        }
+        // Bazel 7's rule_attributes inventory has no toolchains field.
+        builtins
+            .r#type
+            .iter_mut()
+            .find(|class| class.name == "rule_attributes")
+            .unwrap()
+            .field
+            .retain(|field| field.name != "toolchains");
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source =
+            "def attempt(c: ctx[object, object]) -> object:\n    return c.rule.toolchains\n";
+        analysis.update_file(file, source.into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+        assert_eq!(&source[diagnostic.range().unwrap()], "c.rule.toolchains");
     }
 
     #[test]
