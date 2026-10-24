@@ -152,13 +152,20 @@ pub(super) fn json_policy_binding<'db>(
 }
 
 pub(super) fn is_builtin_function(db: &dyn ty_python_core::Db, definition: Definition<'_>) -> bool {
+    is_builtin_declaration(db, definition)
+        && matches!(definition.scope(db).node(db), NodeWithScopeKind::Module)
+}
+
+pub(super) fn is_builtin_declaration(
+    db: &dyn ty_python_core::Db,
+    definition: Definition<'_>,
+) -> bool {
     let path = definition.program_file(db).file(db).path(db);
-    let is_builtin_source = match path {
+    match path {
         FilePath::SystemVirtual(path) => matches!(path.as_str(), STANDARD_PATH | BAZEL_PATH),
         FilePath::Vendored(path) => path.as_str() == "stdlib/builtins.pyi",
         _ => false,
-    };
-    is_builtin_source && matches!(definition.scope(db).node(db), NodeWithScopeKind::Module)
+    }
 }
 
 pub(super) fn export_name(context: APIContext, name: &str) -> String {
@@ -9868,6 +9875,118 @@ def check(args: Args, file: File) -> None:
         };
         assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
         assert_eq!(&custom[diagnostic.range().unwrap()], "map_each='wrong'");
+    }
+
+    #[test]
+    fn bazel_args_map_each_checks_the_invoked_callback() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let source = r#"def path(file: File) -> str:
+    return file.short_path
+def expanded(file: File, expander: DirectoryExpander) -> list[str]:
+    return [file.short_path]
+def number(value: int) -> str:
+    return str(value)
+def skip(file: File) -> None:
+    pass
+path_alias = path
+def check(args: Args, file: File) -> None:
+    args.add_all([file], map_each=path)
+    args.add_all("--files", (file,), map_each=expanded)
+    args.add_all(range(3), map_each=number)
+    args.add_all([file], map_each=skip)
+    args.add_all([file], map_each=str)
+    args.add_all([file], map_each=path_alias)
+    args.add_all([file], map_each=path if file.is_directory else None)
+    args.add_all([file], map_each=path if file.is_directory else expanded)
+    args.add_all(*(([file],) if file.is_directory else ("--files", [file])), map_each=path)
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/args.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+
+        for (callback, invocation) in [
+            (
+                "def wrong(value: File, suffix: str = '') -> str:\n    return value.short_path + suffix\n",
+                "args.add_all([file], map_each=wrong)",
+            ),
+            (
+                "def wrong(value: File, **kwargs) -> str:\n    return value.short_path\n",
+                "args.add_all([file], **{'map_each': wrong})",
+            ),
+            (
+                "def wrong(value: File, suffix: str = '') -> str:\n    return value.short_path + suffix\n",
+                "args.add_all([file] if file.is_directory else depset([file]), map_each=wrong)",
+            ),
+            (
+                "def wrong(value: File, suffix: str = '') -> str:\n    return value.short_path + suffix\n",
+                "args.add_all(*(([file],) if file.is_directory else ('--files', [file])), map_each=wrong)",
+            ),
+            (
+                "def right(value: File) -> str:\n    return value.short_path\ndef wrong(value: File, suffix: str = '') -> str:\n    return value.short_path + suffix\n",
+                "args.add_all([file], map_each=right if file.is_directory else wrong)",
+            ),
+        ] {
+            analysis.update_file(
+                file,
+                format!("{callback}def check(args: Args, file: File) -> None:\n    {invocation}\n"),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert_eq!(
+                diagnostics
+                    .iter()
+                    .filter(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type")
+                    .count(),
+                1,
+                "{callback}{invocation}: {diagnostics:#?}"
+            );
+        }
+
+        analysis.update_file(file, "def check(args: Args, file: File, callback: Callable[[File], str]) -> None:\n    args.add_all([file], map_each=callback)\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"
+                    && diagnostic
+                        .concise_message()
+                        .to_string()
+                        .contains("how many arguments")),
+            "{diagnostics:#?}"
+        );
+
+        analysis.update_file(
+            file,
+            "def check(args: Args, file: File) -> None:\n    args.add_all([file], map_each=lambda value: str(value), allow_closure=True)\n    render = lambda value: str(value)\n    args.add_all([file], map_each=render, allow_closure=True)\n".into(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            !diagnostics.iter().any(|diagnostic| diagnostic
+                .concise_message()
+                .to_string()
+                .contains("how many arguments")),
+            "{diagnostics:#?}"
+        );
     }
 
     #[test]

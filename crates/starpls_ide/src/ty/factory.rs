@@ -600,6 +600,7 @@ pub(super) enum BuiltinFunction {
     Provider,
     Select,
     Download { always_blocking: bool },
+    ArgsMapEach,
 }
 
 // Keep parse and lexical-owner dependencies behind a small, backdated declaration identity.
@@ -659,6 +660,8 @@ pub(super) fn declaration<'db>(
             "attr" => Some(BuiltinFunction::Attribute(attribute_kind(
                 function.name.as_str(),
             )?)),
+            "Args" => matches!(function.name.as_str(), "add_all" | "add_joined")
+                .then_some(BuiltinFunction::ArgsMapEach),
             "config" => Some(BuiltinFunction::BuildSetting(
                 match function.name.as_str() {
                     "bool" => BuildSetting::Bool,
@@ -716,7 +719,7 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
             },
         ),
         BuiltinFunction::Macro => rule(db, call, RuleKind::Macro),
-        BuiltinFunction::Aspect | BuiltinFunction::Subrule => None,
+        BuiltinFunction::Aspect | BuiltinFunction::Subrule | BuiltinFunction::ArgsMapEach => None,
         BuiltinFunction::TagClass => super::module_extension::tag_class(db, call),
         BuiltinFunction::ModuleExtension => super::module_extension::extension(db, call),
         BuiltinFunction::UseExtension => super::module_extension::proxy(db, call),

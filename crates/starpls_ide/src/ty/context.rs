@@ -234,6 +234,13 @@ pub(super) fn call_diagnostics<'db>(
     if call.has_binding_errors() {
         return Vec::new();
     }
+    if matches!(
+        call.declaration()
+            .and_then(|declaration| factory::declaration(db, declaration)),
+        Some(BuiltinFunction::ArgsMapEach)
+    ) {
+        return args_map_each_diagnostics(db, call);
+    }
     let CheckedArgument::Value {
         ty,
         expression: Some(argument),
@@ -256,6 +263,169 @@ pub(super) fn call_diagnostics<'db>(
         ty,
         invocation,
     )]
+}
+
+fn args_map_each_diagnostics<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+) -> Vec<Diagnostic> {
+    let CheckedArgument::Value {
+        ty: callback,
+        expression,
+    } = call.argument("map_each")
+    else {
+        return Vec::new();
+    };
+    if callback.is_none(db) {
+        return Vec::new();
+    }
+    let environment = ProgramEnvironment::from_file(call.file());
+    let Some(Type::Union(alternatives)) = call.expected_parameter_type(db, "map_each") else {
+        return Vec::new();
+    };
+    let mut invocations = [None, None];
+    for &alternative in alternatives.elements(db) {
+        if alternative.is_none(db) {
+            continue;
+        }
+        let Some(signature) = alternative.single_callable_signature(db, &environment) else {
+            return Vec::new();
+        };
+        let slot = match signature.parameters().iter().len() {
+            1 => &mut invocations[0],
+            2 => &mut invocations[1],
+            _ => return Vec::new(),
+        };
+        if slot.replace(alternative).is_some() {
+            return Vec::new();
+        }
+    }
+    let [Some(one), Some(two)] = invocations else {
+        return Vec::new();
+    };
+    let callbacks = callback
+        .as_union()
+        .map_or(std::slice::from_ref(&callback), |union| union.elements(db));
+    callbacks
+        .iter()
+        .filter_map(|callback| {
+            if callback.is_none(db) {
+                return None;
+            }
+            let arity = callback
+                .definition(db, &environment)
+                .and_then(|definition| definition.definition())
+                .and_then(|definition| args_callback_arity(db, definition))
+                .or_else(|| {
+                    expression.and_then(|expression| args_expression_arity(db, call.file(), expression))
+                });
+            let (id, severity, message) = match arity {
+                Some(count) => {
+                    let invocation = if count == 1 { one } else { two };
+                    if callback.is_assignable_to(db, &environment, invocation) {
+                        return None;
+                    }
+                    (
+                        DiagnosticId::Lint(LintName::of("invalid-argument-type")),
+                        Severity::Error,
+                        format!(
+                            "Bazel passes {count} positional argument{} to `map_each`: expected `{}`, found `{}`",
+                            if count == 1 { "" } else { "s" },
+                            invocation.display(db, &environment),
+                            callback.display(db, &environment),
+                        ),
+                    )
+                }
+                None => {
+                    if callback.is_subtype_of(db, &environment, one)
+                        && callback.is_subtype_of(db, &environment, two)
+                    {
+                        return None;
+                    }
+                    (
+                        DiagnosticId::Lint(super::diagnostics::NON_STATIC_TYPE.name()),
+                        Severity::Warning,
+                        "Cannot determine how many arguments Bazel passes to this `map_each` callback"
+                            .to_owned(),
+                    )
+                }
+            };
+            let range = expression.map_or_else(|| call.call().range(), |expression| expression.range());
+            let mut diagnostic = Diagnostic::new(id, severity, message);
+            diagnostic.annotate(Annotation::primary(
+                Span::from(call.file().file(db)).with_range(range),
+            ));
+            Some(diagnostic)
+        })
+        .collect()
+}
+
+/// Bazel's `StarlarkCustomCommandLine` passes a directory expander to Starlark
+/// functions with more than one declared parameter, including keyword-only and
+/// variadic parameters. Native callables receive one argument.
+#[salsa::tracked(returns(copy))]
+fn args_callback_arity<'db>(
+    db: &'db dyn super::interface::Db,
+    definition: Definition<'db>,
+) -> Option<usize> {
+    if super::native::is_builtin_declaration(db, definition) {
+        return Some(1);
+    }
+    let file = definition.program_file(db);
+    if db.starlark_file(file)?.is_type_interface(db) {
+        return None;
+    }
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    match definition.kind(db) {
+        DefinitionKind::Function(function) => Some(args_invocation_arity(
+            function.node(&parsed).parameters.len(),
+        )),
+        DefinitionKind::Assignment(assignment) => {
+            if assignment.unpack().is_some() {
+                return None;
+            }
+            args_lambda_arity(assignment.value(&parsed))
+        }
+        DefinitionKind::AnnotatedAssignment(assignment) => {
+            assignment.value(&parsed).and_then(args_lambda_arity)
+        }
+        _ => None,
+    }
+}
+
+fn args_expression_arity(db: &Database, file: ProgramFile<'_>, expression: &Expr) -> Option<usize> {
+    if let Some(arity) = args_lambda_arity(expression) {
+        return Some(arity);
+    }
+    let Expr::Name(name) = expression else {
+        return None;
+    };
+    let index = ty_python_core::semantic_index(db, file);
+    let scope = index.try_expression_scope_id(expression)?;
+    let use_id = index.try_expression_use_id(name.into())?;
+    let mut bindings = index.use_def_map(scope).bindings_at_use(use_id);
+    let definition = bindings.next()?.binding.definition()?;
+    if bindings.next().is_some() {
+        return None;
+    }
+    args_callback_arity(db, definition)
+}
+
+fn args_lambda_arity(expression: &Expr) -> Option<usize> {
+    let lambda = expression.as_lambda_expr()?;
+    let parameters = lambda
+        .parameters
+        .as_ref()
+        .map_or(0, |parameters| parameters.len());
+    Some(args_invocation_arity(parameters))
+}
+
+fn args_invocation_arity(parameters: usize) -> usize {
+    if parameters > 1 {
+        2
+    } else {
+        1
+    }
 }
 
 fn callback_diagnostic(
@@ -560,6 +730,7 @@ fn registration_parameter_type<'db>(
         BuiltinFunction::Provider => return None,
         BuiltinFunction::Select => return None,
         BuiltinFunction::Download { always_blocking: _ } => return None,
+        BuiltinFunction::ArgsMapEach => return None,
     };
     let parameter_count = if context_kind == ContextKind::Aspect {
         2
