@@ -276,12 +276,15 @@ pub fn system_path(path: &std::path::Path) -> anyhow::Result<&ruff_db::system::S
     Ok(ruff_db::system::SystemPath::new(path))
 }
 
+/// Bazel's package definition filenames, in precedence order.
+pub const BAZEL_BUILD_FILE_NAMES: [&str; 2] = ["BUILD.bazel", "BUILD"];
+
 /// Locate the active BUILD file in a Bazel package.
 pub fn bazel_build_file(
     db: &dyn Db,
     directory: &std::path::Path,
 ) -> anyhow::Result<Option<PathBuf>> {
-    for name in ["BUILD.bazel", "BUILD"] {
+    for name in BAZEL_BUILD_FILE_NAMES {
         let path = directory.join(name);
         let system_path = system_path(&path)?;
         match ruff_db::files::system_path_to_file(db, system_path) {

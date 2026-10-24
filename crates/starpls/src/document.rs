@@ -1143,6 +1143,10 @@ impl DefaultFileLoader {
 }
 
 impl FileLoader for DefaultFileLoader {
+    fn prepare_adjacent_file(&self, path: &Path) -> anyhow::Result<()> {
+        self.ensure_repository_for_path(path)
+    }
+
     fn file_info(
         &self,
         path: &Path,
@@ -1724,6 +1728,15 @@ pub(crate) mod source_tests {
             "def f(x: bool) -> None: ...\n",
         )
         .unwrap();
+        let build = checkout.join("BUILD.bazel");
+        std::fs::write(&build, "_VALUE = 'bad'\nvalue = _VALUE\n").unwrap();
+        std::fs::write(checkout.join("BUILD.bzli"), "_VALUE: int\n").unwrap();
+        for package in ["published", "untyped"] {
+            let directory = installed.join(package);
+            std::fs::create_dir(&directory).unwrap();
+            std::os::unix::fs::symlink(&build, directory.join("BUILD.bazel")).unwrap();
+        }
+        std::fs::write(installed.join("published/BUILD.bzli"), "_VALUE: int\n").unwrap();
         let (sender, _) = crossbeam_channel::unbounded();
         let loader = Arc::new(DefaultFileLoader::new(
             Arc::new(TestBazelClient::default()),
@@ -1734,9 +1747,13 @@ pub(crate) mod source_tests {
             false,
         ));
         let mut analysis = Analysis::new(loader, Default::default()).unwrap();
-        for (filename, expected) in [
-            ("published", vec!["invalid-argument-type"]),
-            ("untyped", vec![]),
+        for (filename, expected_module, expected_build) in [
+            (
+                "published",
+                vec!["invalid-argument-type"],
+                vec!["invalid-assignment"],
+            ),
+            ("untyped", vec![], vec![]),
         ] {
             let caller = analysis
                 .open_document(
@@ -1754,7 +1771,26 @@ pub(crate) mod source_tests {
                 .iter()
                 .map(|diag| diag.id().as_str().to_owned())
                 .collect();
-            assert_eq!(diagnostics, expected, "{filename}");
+            assert_eq!(diagnostics, expected_module, "{filename}");
+            let build = analysis
+                .file(
+                    &installed.join(filename).join("BUILD.bazel"),
+                    Dialect::Bazel,
+                    Some(starpls_common::FileInfo::Bazel {
+                        api_context: starpls_bazel::APIContext::Build,
+                        is_external: true,
+                        bundled_cc_common: false,
+                    }),
+                )
+                .unwrap();
+            let diagnostics: Vec<_> = analysis
+                .snapshot()
+                .diagnostics(build)
+                .unwrap()
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str().to_owned())
+                .collect();
+            assert_eq!(diagnostics, expected_build, "{filename}");
         }
         std::fs::remove_dir_all(root).unwrap();
     }

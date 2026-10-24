@@ -1,6 +1,7 @@
 //! Stub exports supply trusted client contracts and annotations for source declarations.
 
 use std::collections::hash_map::Entry;
+use std::path::PathBuf;
 
 use ruff_db::files::FileRange;
 use ruff_python_ast::name::Name;
@@ -19,6 +20,7 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use salsa::Setter;
 use starpls_bazel::APIContext;
+use starpls_common::Db as _;
 use starpls_common::Dialect;
 use starpls_common::File;
 use starpls_common::FileInfo;
@@ -53,6 +55,12 @@ pub(crate) trait Db: ty_python_semantic::Db + starpls_hir::Db {
     fn program_settings(&self) -> &ty_python_core::program::ProgramSettings;
     fn starlark_program_file(&self, file: File) -> ProgramFile<'_>;
     fn starlark_file(&self, file: ProgramFile<'_>) -> Option<File>;
+    fn adjacent_file(
+        &self,
+        path: &std::path::Path,
+        dialect: Dialect,
+        info: Option<FileInfo>,
+    ) -> Option<File>;
 }
 
 #[salsa::db]
@@ -65,6 +73,23 @@ impl Db for Database {
     }
     fn starlark_file(&self, file: ProgramFile<'_>) -> Option<File> {
         Database::starlark_file(self, file)
+    }
+    fn adjacent_file(
+        &self,
+        path: &std::path::Path,
+        dialect: Dialect,
+        info: Option<FileInfo>,
+    ) -> Option<File> {
+        let system_path = starpls_common::system_path(path).ok()?;
+        let source = ruff_db::files::system_path_to_file(self, system_path).ok()?;
+        if has_explicit_interface(self, source) {
+            return None;
+        }
+        if self.loader.prepare_adjacent_file(path).is_err() {
+            self.depend_on_load_settlement();
+            return None;
+        }
+        Database::file(self, path, dialect, info).ok()
     }
 }
 
@@ -115,8 +140,8 @@ pub(super) fn diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_>
     let parsed = ruff_db::parsed::parsed_module(db, program.python_file(db)).load(db);
     let model = SemanticModel::new(db, program);
     let mut diagnostics = Vec::new();
-    for (source, interface) in db.environment().type_interfaces(db).values() {
-        if *interface != file {
+    for (source, interface) in pairs_for_file(db, file) {
+        if interface != file {
             continue;
         }
         let Some(BindingAnnotations {
@@ -124,7 +149,7 @@ pub(super) fn diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_>
             interface: _,
             owners: _,
             errors,
-        }) = binding_annotations(db, *source)
+        }) = binding_annotations(db, source)
         else {
             continue;
         };
@@ -227,40 +252,95 @@ struct ImplementationAnnotations {
     errors: Vec<(TextRange, TextRange, String)>,
 }
 
-/// A companion belongs to the installed Bazel module. The underlying source text
-/// may be shared by symlinks in several repositories, each with a different API.
-pub(crate) fn adjacent_pair(db: &dyn Db, file: File) -> Option<(File, File)> {
-    if !file.allows_native_annotations(db) || !db.environment().interface_configuration_ready(db) {
-        return None;
-    }
-    let stub = file.is_type_interface(db);
-    let replace_extension = |extension: &str| {
-        File::from_path(
-            db,
-            &file.path(db).with_extension(extension),
-            file.dialect,
-            file.info,
-        )
-        .ok()
-    };
-    let source = if stub {
-        replace_extension("bzl")?
-    } else {
-        file
-    };
-    if db
-        .environment()
-        .type_interfaces(db)
-        .contains_key(&source.source)
+fn has_explicit_interface(db: &dyn Db, source: ruff_db::files::File) -> bool {
+    db.environment().type_interfaces(db).contains_key(&source)
+}
+
+pub(crate) fn adjacent_interface_path(db: &dyn Db, file: File) -> Option<PathBuf> {
+    if !db.environment().interface_configuration_ready(db)
+        || has_explicit_interface(db, file.source)
     {
         return None;
     }
-    let interface = if stub {
-        file
+    let path = file.path(db);
+    let module = file.allows_native_annotations(db)
+        && path.extension().is_some_and(|extension| extension == "bzl");
+    let build = file.dialect == Dialect::Bazel
+        && file.api_context() == Some(APIContext::Build)
+        && path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| starpls_common::BAZEL_BUILD_FILE_NAMES.contains(&name));
+    (module || build).then(|| path.with_extension("bzli"))
+}
+
+/// A companion belongs to the installed Bazel source. The underlying source text
+/// may be shared by symlinks in several repositories, each with a different API.
+pub(crate) fn adjacent_pair(db: &dyn Db, file: File) -> Option<(File, File)> {
+    if !db.environment().interface_configuration_ready(db) {
+        return None;
+    }
+    let (source, interface) = if file.is_type_interface(db) {
+        (adjacent_source(db, file)?, file)
     } else {
-        replace_extension("bzli")?
+        let path = adjacent_interface_path(db, file)?;
+        if file.api_context() == Some(APIContext::Build) {
+            let interface = bazel_sibling(db, file, &path, APIContext::Bzl)?;
+            let source = adjacent_source(db, interface)?;
+            if source != file {
+                return None;
+            }
+            (source, interface)
+        } else {
+            (file, db.adjacent_file(&path, file.dialect, file.info)?)
+        }
     };
     Some((source, interface))
+}
+
+fn adjacent_source(db: &dyn Db, interface: File) -> Option<File> {
+    let module = interface.path(db).with_extension("bzl");
+    if let Some(source) = db.adjacent_file(&module, interface.dialect, interface.info) {
+        return Some(source);
+    }
+    if interface.path(db).file_name()? != "BUILD.bzli" {
+        return None;
+    }
+    // A regular source that cannot be read still owns its companion.
+    match db
+        .system()
+        .path_metadata(starpls_common::system_path(&module).ok()?)
+    {
+        Ok(metadata) => {
+            if metadata.file_type().is_file() {
+                return None;
+            }
+        }
+        Err(error) => {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                return None;
+            }
+        }
+    }
+    let path = starpls_common::bazel_build_file(db, interface.path(db).parent()?).ok()??;
+    bazel_sibling(db, interface, &path, APIContext::Build)
+}
+
+fn bazel_sibling(
+    db: &dyn Db,
+    file: File,
+    path: &std::path::Path,
+    api_context: APIContext,
+) -> Option<File> {
+    db.adjacent_file(
+        path,
+        Dialect::Bazel,
+        Some(FileInfo::Bazel {
+            api_context,
+            is_external: file.is_external().unwrap_or(false),
+            bundled_cc_common: false,
+        }),
+    )
 }
 
 pub(crate) fn pairs_for_file(db: &dyn Db, file: File) -> impl Iterator<Item = (File, File)> + '_ {
@@ -891,7 +971,7 @@ fn binding_annotations_query(
         dialect,
         info,
     };
-    let &(implementation, interface) = db.environment().type_interfaces(db).get(&source)?;
+    let (implementation, interface) = pair_for_source(db, file)?;
     if implementation != file {
         return None;
     }
@@ -1058,8 +1138,8 @@ pub(super) fn used_binding_annotations(db: &Database, file: File) -> FxHashSet<T
     }
     let parsed = starpls_common::parsed_module(db, file).load(db);
     let mut used = FxHashSet::default();
-    for (source, interface) in db.environment().type_interfaces(db).values() {
-        if *interface != file {
+    for (source, interface) in pairs_for_file(db, file) {
+        if interface != file {
             continue;
         }
         let Some(BindingAnnotations {
@@ -1067,7 +1147,7 @@ pub(super) fn used_binding_annotations(db: &Database, file: File) -> FxHashSet<T
             interface: _,
             owners,
             errors: _,
-        }) = binding_annotations(db, *source)
+        }) = binding_annotations(db, source)
         else {
             continue;
         };
@@ -2819,7 +2899,7 @@ number: int = identity(42)
             .unwrap();
         let schema =
             "class _Case(TypedDict):\n    name: str\n    enabled: bool\n_CASES: list[_Case]\n";
-        let stub = fixture.add_file(&mut analysis.db, "BUILD.bzli", schema);
+        let stub = fixture.add_file(&mut analysis.db, "bindings.bzli", schema);
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(source, stub)]).unwrap();
         for (source_text, stub_text, expected_type, error) in [
@@ -2909,6 +2989,63 @@ number: int = identity(42)
             .unwrap()
             .iter()
             .any(|d| d.id().as_str() == "invalid-assignment"));
+    }
+
+    #[test]
+    fn adjacent_build_annotations_select_the_active_source() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let build_info = Some(FileInfo::Bazel {
+            api_context: APIContext::Build,
+            is_external: false,
+            bundled_cc_common: false,
+        });
+        let build = fixture.add_file_with_options(
+            &mut analysis.db,
+            "BUILD",
+            "_VALUE = 'bad'\nvalue = _VALUE\n",
+            Dialect::Bazel,
+            build_info,
+        );
+        let stub = fixture.add_file(&mut analysis.db, "BUILD.bzli", "_VALUE: int\n");
+        assert_eq!(
+            super::adjacent_pair(&analysis.db, build),
+            Some((build, stub))
+        );
+        assert!(analysis
+            .snapshot()
+            .diagnostics(build)
+            .unwrap()
+            .iter()
+            .any(|diagnostic| diagnostic.id().as_str() == "invalid-assignment"));
+        assert!(analysis.snapshot().diagnostics(stub).unwrap().is_empty());
+
+        let explicit = fixture.add_file(&mut analysis.db, "explicit.bzli", "_VALUE: str\n");
+        analysis.set_type_interfaces([(build, explicit)]).unwrap();
+        assert!(analysis.snapshot().diagnostics(build).unwrap().is_empty());
+        assert_eq!(super::adjacent_pair(&analysis.db, stub), None);
+        analysis.set_type_interfaces([]).unwrap();
+
+        let preferred = fixture.add_file_with_options(
+            &mut analysis.db,
+            "BUILD.bazel",
+            "_VALUE = 1\n",
+            Dialect::Bazel,
+            build_info,
+        );
+        assert_eq!(
+            super::adjacent_pair(&analysis.db, stub),
+            Some((preferred, stub))
+        );
+        assert_eq!(super::adjacent_pair(&analysis.db, build), None);
+        assert!(analysis.snapshot().diagnostics(build).unwrap().is_empty());
+
+        let module = fixture.add_file(&mut analysis.db, "BUILD.bzl", "_VALUE = 1\n");
+        assert_eq!(
+            super::adjacent_pair(&analysis.db, stub),
+            Some((module, stub))
+        );
+        assert_eq!(super::adjacent_pair(&analysis.db, preferred), None);
     }
 
     #[test]
@@ -3063,7 +3200,6 @@ number: int = identity(42)
         );
         let stub = fixture.add_file(&mut analysis.db, "BUILD.bzli", "_VALUE: int\n");
         loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
         for (text, expected) in [
             ("other = 1\n", "does not bind"),
             ("_VALUE = 1\n_VALUE = 2\n", "more than once"),

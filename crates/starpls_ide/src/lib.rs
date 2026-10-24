@@ -98,6 +98,20 @@ pub(crate) struct Database {
     storage: salsa::Storage<Self>,
 }
 
+impl Database {
+    fn file(
+        &self,
+        path: &std::path::Path,
+        dialect: Dialect,
+        info: Option<FileInfo>,
+    ) -> anyhow::Result<File> {
+        let system_path = starpls_common::system_path(path)?;
+        let path = SystemPath::absolute(system_path, self.system.current_directory());
+        let info = self.loader.file_info(path.as_std_path(), dialect, info)?;
+        File::from_path(self, path.as_std_path(), dialect, info)
+    }
+}
+
 #[salsa::db]
 impl salsa::Database for Database {}
 
@@ -353,10 +367,13 @@ impl Analysis {
         info: Option<FileInfo>,
     ) -> anyhow::Result<File> {
         let Self { db } = self;
-        let system_path = starpls_common::system_path(path)?;
-        let path = SystemPath::absolute(system_path, db.system.current_directory());
-        let info = db.loader.file_info(path.as_std_path(), dialect, info)?;
-        File::from_path(db, path.as_std_path(), dialect, info)
+        db.file(path, dialect, info)
+    }
+
+    /// Compute a candidate path without opening the interface.
+    pub fn adjacent_interface_path(&self, file: File) -> Option<PathBuf> {
+        let Self { db } = self;
+        ty::interface::adjacent_interface_path(db, file)
     }
 
     pub fn open_document(
@@ -745,12 +762,7 @@ impl AnalysisSnapshot {
         dialect: Dialect,
         info: Option<FileInfo>,
     ) -> Cancellable<anyhow::Result<File>> {
-        self.query(|db| {
-            let path_system = starpls_common::system_path(path)?;
-            let path = SystemPath::absolute(path_system, db.system.current_directory());
-            let info = db.loader.file_info(path.as_std_path(), dialect, info)?;
-            File::from_path(db, path.as_std_path(), dialect, info)
-        })
+        self.query(|db| db.file(path, dialect, info))
     }
 
     pub fn reference_files(&self) -> Cancellable<Vec<File>> {
@@ -887,6 +899,11 @@ pub struct FilePosition {
 
 /// A trait for loading a path and listing its exported symbols.
 pub trait FileLoader: Send + Sync + 'static {
+    /// Validate the logical path before using an implicit interface or its source.
+    fn prepare_adjacent_file(&self, _path: &std::path::Path) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     /// Establish host context before a file enters semantic analysis.
     fn file_info(
         &self,
