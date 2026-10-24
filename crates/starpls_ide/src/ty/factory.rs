@@ -7,6 +7,7 @@ use ruff_db::files::FileRange;
 use ruff_python_ast::find_node::covering_node;
 use ruff_python_ast::name::Name;
 use ruff_python_ast::AnyNodeRef;
+use ruff_python_ast::Arguments;
 use ruff_python_ast::Expr;
 use ruff_python_ast::HasNodeIndex;
 use ruff_python_ast::Stmt;
@@ -733,7 +734,28 @@ pub(super) fn declaration<'db>(
     })
 }
 
+fn preserves_argument_order(arguments: &Arguments) -> bool {
+    let (Some(first_keyword), Some(Expr::Starred(starred))) =
+        (arguments.keywords.first(), arguments.args.last())
+    else {
+        return true;
+    };
+    if starred.start() < first_keyword.start() {
+        return true;
+    }
+    // Bazel evaluates a trailing *args after keywords; Python evaluates it first.
+    // Moving an empty literal across the keywords cannot change their values.
+    match starred.value.as_ref() {
+        Expr::List(list) => list.elts.is_empty(),
+        Expr::Tuple(tuple) => tuple.elts.is_empty(),
+        _ => false,
+    }
+}
+
 pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<'db>> {
+    if !preserves_argument_order(&call.call().arguments) {
+        return None;
+    }
     match declaration(db, call.declaration()?)? {
         BuiltinFunction::Attribute(kind) => attribute(db, call, kind),
         BuiltinFunction::BuildSetting(mut kind) => {

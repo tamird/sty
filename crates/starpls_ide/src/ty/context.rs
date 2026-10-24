@@ -3481,6 +3481,43 @@ native.inventory(package_metadata=["//:metadata"], applicable_licenses=[Label("/
     }
 
     #[test]
+    fn rule_attributes_with_trailing_starred_arguments() {
+        let source = r#"def impl(ctx): return []
+attrs = {"flag": attr.int()}
+example = rule(implementation=impl, attrs=dict(attrs), *(attrs.clear() or ()))
+example(name="good", flag=42)
+def check_unproven(value: KeywordArgs[example]) -> None: pass
+safe = rule(implementation=impl, attrs={"flag": attr.int()}, *())
+safe(name="bad", flag="wrong")
+ordinary = rule(implementation=impl, attrs={"flag": attr.int()})
+ordinary(name="bad", flag="wrong")
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let mut errors = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let offset = usize::from(diagnostic.range().unwrap().start());
+                (source[..offset].lines().count(), diagnostic.id().as_str())
+            })
+            .collect::<Vec<_>>();
+        errors.sort_unstable();
+        assert_eq!(
+            errors,
+            [
+                (5, "invalid-type-form"),
+                (7, "invalid-argument-type"),
+                (9, "invalid-argument-type"),
+            ],
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
     fn executable_rule_attributes_do_not_leak_into_other_rule_kinds() {
         let source = r#"def implementation(ctx):
     args: list[str] = ctx.attr.args
