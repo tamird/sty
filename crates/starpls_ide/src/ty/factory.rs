@@ -124,7 +124,7 @@ pub(super) struct RuleData {
     pub(super) build_setting: Option<BuildSetting>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, get_size2::GetSize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, get_size2::GetSize, salsa::SalsaValue)]
 pub(super) struct Fragments {
     pub(super) names: Vec<Name>,
     pub(super) open: bool,
@@ -1009,6 +1009,16 @@ fn selector_literal_payload<'db>(
     (!values.is_empty()).then(|| UnionType::from_elements(db, environment, values))
 }
 
+pub(super) fn is_sequence_class<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    class: Type<'db>,
+) -> bool {
+    [KnownClass::List, KnownClass::Tuple]
+        .into_iter()
+        .any(|known| class == known.to_class_literal(db, environment))
+}
+
 fn selector_value_kind<'db>(
     db: &'db Database,
     environment: &ProgramEnvironment<'db>,
@@ -1038,10 +1048,7 @@ fn selector_value_kind<'db>(
         if is_exact_dictionary_class(db, environment, Type::from(class)) {
             return Some("dict");
         }
-        if [KnownClass::List, KnownClass::Tuple]
-            .into_iter()
-            .any(|known| Type::from(class) == known.to_class_literal(db, environment))
-        {
+        if is_sequence_class(db, environment, Type::from(class)) {
             return Some("list");
         }
     }
@@ -1567,8 +1574,10 @@ fn rule_with_inputs<'a, 'db>(
     });
     let fragments =
         if matches!(kind, RuleKind::Build) && db.environment().options(db).infer_ctx_attributes {
-            let mut fragments =
-                super::context::fragment_argument(db, call, inputs.argument("fragments"));
+            let mut fragments = match forwarded {
+                Some(bound) => bound.fragments(db, call),
+                None => super::context::fragment_argument(db, call, call.argument("fragments")),
+            };
             if parent.is_some() {
                 if let Some(parent) = parent_data {
                     fragments.names.extend_from_slice(&parent.fragments.names);
@@ -1918,7 +1927,10 @@ fn rule_with_inputs<'a, 'db>(
         kind: _,
     } in IntoIterator::into_iter(items).filter(DictionaryItem::is_required)
     {
-        let source = FileRange::new(call.file().file(db), source);
+        let owner = forwarded
+            .and_then(|bound| bound.attribute_owner(&name))
+            .unwrap_or(call.file());
+        let source = FileRange::new(owner.file(db), source);
         let name = name.as_str();
         if matches!(kind, RuleKind::Macro) && matches!(name, "name" | "visibility") {
             continue;

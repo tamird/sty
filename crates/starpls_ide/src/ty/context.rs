@@ -3571,8 +3571,9 @@ example(name="ok", args=["flag"], output_licenses=["notice"])
 
     #[test]
     fn forwarded_rule_checks_the_caller_and_registered_implementation() {
-        let factory = r#"def make(callback, attrs={}, **kwargs):
-    return rule(implementation=callback, attrs=attrs, **kwargs)
+        let factory = r#"EXTRA = {"_tool": attr.label(default="//:tool")}
+def make(callback, attrs={}, **kwargs):
+    return rule(implementation=callback, attrs=attrs | EXTRA, **kwargs)
 "#;
         let source = r#"load("facade.bzl", wrap="make")
 def text(value: str) -> None: pass
@@ -3616,6 +3617,7 @@ example_test(name="missing")
             locations,
             [
                 ("invalid-argument-type", "ctx.attr.message"),
+                ("invalid-argument-type", "ctx.attr._tool"),
                 ("invalid-argument-type", "message=42"),
                 ("unknown-argument", "mesage=\"yes\""),
                 ("missing-argument", "example_test(name=\"missing\")"),
@@ -3672,12 +3674,28 @@ output_rule = make(files_impl, {}, outputs={"out": "%{name}.txt"})
         let (mut analysis, fixture) = Analysis::from_single_file_fixture("");
         enable_context(&mut analysis);
         let file = fixture.main_file();
-        let (producer, call) = (
-            "def make(cb, attrs, **kwargs): return rule(implementation=cb, attrs=attrs, **kwargs)",
-            "make(impl, {}, fragments=['apple'])",
-        );
-        let source = format!("{producer}\ndef text(value: str) -> None: pass\ndef impl(ctx):\n    text(ctx.fragments.apple.single_arch_cpu)\n    ctx.fragments.apple.missing_member\nr = {call}\n");
-        analysis.update_file(file, source.clone());
+        for (producer, call) in [
+            ("def make(cb, attrs, **kwargs): return rule(implementation=cb, attrs=attrs, **kwargs)", "make(impl, {}, fragments=['apple'])"),
+            ("def make(cb, attrs): return rule(implementation=cb, attrs=attrs, fragments=['apple'])", "make(impl, {})"),
+            ("def make(cb, attrs, names=['apple']): return rule(implementation=cb, attrs=attrs, fragments=names)", "make(impl, {})"),
+        ] {
+            let source = format!("{producer}\ndef text(value: str) -> None: pass\ndef impl(ctx):\n    text(ctx.fragments.apple.single_arch_cpu)\n    ctx.fragments.apple.missing_member\nr = {call}\n");
+            analysis.update_file(file, source.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let result: Vec<_> = diagnostics.iter().map(|d| (d.id().as_str(), &source[d.primary_span().unwrap().range().unwrap()])).collect();
+            assert_eq!(result, [("unresolved-attribute", "ctx.fragments.apple.missing_member")], "{producer}");
+        }
+    }
+
+    #[test]
+    fn forwarded_rule_preserves_known_fragments_when_additions_are_unknown() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        fixture.add_file(&mut analysis.db, "factory.bzl", "EXTRA = ['cpp']\ndef make(cb, attrs, names=[], **kwargs): return rule(implementation=cb, attrs=attrs, fragments=names + EXTRA, **kwargs)\n");
+        let source = "load('factory.bzl', 'make')\ndef base_impl(ctx): return []\nbase = rule(implementation=base_impl, fragments=['apple'], extendable=True)\ndef impl(ctx):\n    ctx.fragments.cpp\n    ctx.fragments.apple.missing_member\nr = make(impl, {}, parent=base)\n";
+        let file = fixture.add_file(&mut analysis.db, "defs.bzl", source);
+        loader.add_files_from_fixture(&fixture);
+        enable_context(&mut analysis);
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         let result: Vec<_> = diagnostics
             .iter()
@@ -3690,9 +3708,68 @@ output_rule = make(files_impl, {}, outputs={"out": "%{name}.txt"})
             .collect();
         assert_eq!(
             result,
-            [("unresolved-attribute", "ctx.fragments.apple.missing_member")],
-            "{producer}"
+            [("unresolved-attribute", "ctx.fragments.apple.missing_member")]
         );
+    }
+
+    #[test]
+    fn forwarded_rule_declines_effects_in_fixed_options() {
+        let source = r#"def touch(attrs):
+    attrs.clear()
+    attrs['fresh'] = attr.string(mandatory=True)
+    return []
+def make(impl, attrs): return rule(toolchains=touch(attrs), implementation=impl, attrs=attrs)
+def impl(ctx): return []
+target = make(impl, {'old': attr.int(mandatory=True)})
+target(name="good", fresh="yes")
+def consume(args: KeywordArgs[target]) -> None: pass
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|d| d.id().as_str())
+                .collect::<Vec<_>>(),
+            ["invalid-type-form"]
+        );
+    }
+
+    #[test]
+    fn forwarded_rule_requires_a_proven_capture_at_the_call() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        let make = "def make(cb, attrs): return rule(implementation=cb, attrs=attrs | EXTRA)\n";
+        let consume = "def impl(ctx): return []\ntarget = make(impl, {})\ndef consume(row: KeywordArgs[target]) -> None: pass\n";
+        let mutated = format!("EXTRA = {{}}\nalias = EXTRA\nalias['value'] = attr.int()\n{make}");
+        fixture.add_file(&mut analysis.db, "factory.bzl", &mutated);
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "defs.bzl",
+            &format!("load('factory.bzl', 'make')\n{consume}"),
+        );
+        let premature = fixture.add_file(
+            &mut analysis.db,
+            "local.bzl",
+            &format!(
+                "EXTRA = {{'value': attr.string()}}\n{make}{consume}EXTRA['value'] = attr.int()\n"
+            ),
+        );
+        loader.add_files_from_fixture(&fixture);
+        enable_context(&mut analysis);
+        for file in [caller, premature] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|d| d.id().as_str() == "invalid-type-form"),
+                "{diagnostics:?}"
+            );
+        }
     }
 
     #[test]
@@ -3745,6 +3822,10 @@ second(name="bad", value=42)
             (
                 "def make(impl, attrs, **kwargs): return rule(implementation=impl, attrs=attrs, **kwargs)",
                 "exec_groups={'tool': 42}",
+            ),
+            (
+                "def make(impl, attrs, groups): return rule(implementation=impl, attrs=attrs, toolchains=groups + [])",
+                "groups=42",
             ),
             (
                 "def make(impl, attrs, **kwargs): return rule(implementation=impl, attrs=attrs, **kwargs)",
