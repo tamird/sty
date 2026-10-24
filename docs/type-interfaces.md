@@ -201,13 +201,17 @@ def wrapper(name: str, **kwargs: Unpack[KeywordArgs[_tool, "name"]]) -> None: ..
 
 A sidecar can import a public rule from its paired source file. The callable
 expression follows ordinary lexical binding, including aliases and shadowing.
-The supported contract is one nongeneric signature with fully known input
-kinds and types. Positional-only parameters, variadic or open keyword tails,
-overloads, and gradual inputs produce `invalid-type-form`. Excluded names
-must be unique string literals naming existing keyword parameters; additional
-exclusions can follow as more string arguments. Excluding a name describes the
-residual keyword row; the wrapper body must still supply any required argument.
-Wrapper-specific inputs belong in the wrapper's own signature.
+Each signature must be nongeneric with fully known input kinds and types.
+Positional-only parameters, variadic or open keyword tails, and gradual inputs
+produce `invalid-type-form`. Excluded names must be unique string literals
+naming keyword parameters present in every signature; additional exclusions
+can follow as more string arguments. Overloads must have identical remaining
+parameter names, types, kinds, and requiredness. Parameter order and return
+types may differ.
+
+Excluding a name describes the residual keyword row; the wrapper body must
+still supply any required argument. Wrapper-specific inputs belong in the
+wrapper's own signature.
 
 A callable `Protocol` class projects the signature of its instances. A stub
 can use this form to replace individual inputs while forwarding the remaining

@@ -1,5 +1,6 @@
 //! Finite keyword contracts projected from existing callable values.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use ruff_python_ast::Expr;
@@ -9,6 +10,7 @@ use ty_python_semantic::provided::TypeExpressionContext;
 use ty_python_semantic::types::keyword_arguments_type;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::ParameterKind;
+use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::ProgramEnvironment;
 
@@ -53,34 +55,41 @@ pub(super) fn type_application<'db>(
             return Some(capture);
         }
     }
-    let Some(signature) = value.single_callable_signature(db, &environment) else {
+    let Some((signature, overloads)) = value
+        .callable_overloads(db, &environment)
+        .and_then(|overloads| overloads.split_first())
+    else {
         context.report_invalid_type_form(
             callable.range(),
-            "KeywordArgs requires a callable with exactly one signature",
+            "KeywordArgs requires exactly one callable alternative",
         );
         return Some(Type::unknown());
     };
     // Preserve parameter-list completeness while inspecting only the input contract.
     // Default values and the callable's result are not fields of the keyword row.
-    let inputs = Type::function_like_callable(
-        db,
-        signature
-            .clone()
-            .with_return_type(KnownClass::Object.to_instance(db, &environment)),
-    );
-    if signature.is_generic()
-        || !inputs.is_fully_static(db, &environment)
-        || !signature.parameters().iter().all(|parameter| {
-            matches!(
-                parameter.kind(),
-                ParameterKind::PositionalOrKeyword {
-                    name: _,
-                    default_type: _,
-                } | ParameterKind::KeywordOnly {
-                    name: _,
-                    default_type: _,
-                }
-            )
+    if std::iter::once(signature)
+        .chain(overloads)
+        .any(|signature| {
+            let inputs = Type::function_like_callable(
+                db,
+                signature
+                    .clone()
+                    .with_return_type(KnownClass::Object.to_instance(db, &environment)),
+            );
+            signature.is_generic()
+                || !inputs.is_fully_static(db, &environment)
+                || !signature.parameters().iter().all(|parameter| {
+                    matches!(
+                        parameter.kind(),
+                        ParameterKind::PositionalOrKeyword {
+                            name: _,
+                            default_type: _,
+                        } | ParameterKind::KeywordOnly {
+                            name: _,
+                            default_type: _,
+                        }
+                    )
+                })
         })
     {
         context.report_invalid_type_form(
@@ -100,14 +109,18 @@ pub(super) fn type_application<'db>(
         };
         let name = name.value.to_str();
         context.store_expression_type(exclusion, Type::string_literal(db, name));
-        if !signature
-            .parameters()
-            .iter()
-            .any(|parameter| parameter.name().is_some_and(|parameter| parameter == name))
+        if std::iter::once(signature)
+            .chain(overloads)
+            .any(|signature| {
+                !signature
+                    .parameters()
+                    .iter()
+                    .any(|parameter| parameter.name().is_some_and(|parameter| parameter == name))
+            })
         {
             context.report_invalid_type_form(
                 exclusion.range(),
-                &format!("The callable has no keyword parameter named `{name}`"),
+                &format!("A callable signature has no keyword parameter named `{name}`"),
             );
             return Some(Type::unknown());
         }
@@ -115,6 +128,38 @@ pub(super) fn type_application<'db>(
             context.report_invalid_type_form(
                 exclusion.range(),
                 &format!("Keyword parameter `{name}` is excluded more than once"),
+            );
+            return Some(Type::unknown());
+        }
+    }
+    if !overloads.is_empty() {
+        let retained = |signature: &Signature<'db>| {
+            signature
+                .parameters()
+                .iter()
+                .filter_map(|parameter| {
+                    let name = parameter.name()?;
+                    (!excluded.contains(name.as_str())).then(|| {
+                        (
+                            name.clone(),
+                            (
+                                parameter.annotated_type(),
+                                parameter.has_default(),
+                                std::mem::discriminant(parameter.kind()),
+                            ),
+                        )
+                    })
+                })
+                .collect::<BTreeMap<_, _>>()
+        };
+        let parameters = retained(signature);
+        if overloads
+            .iter()
+            .any(|overload| retained(overload) != parameters)
+        {
+            context.report_invalid_type_form(
+                callable.range(),
+                "KeywordArgs requires identical keyword parameters in every overload after exclusions",
             );
             return Some(Type::unknown());
         }
@@ -142,6 +187,117 @@ mod tests {
     use starpls_hir::Fixture;
 
     use crate::Analysis;
+
+    #[test]
+    fn keyword_args_project_identical_overload_parameters() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source_text = r#"
+def target(*, value, name, optional="one"):
+    return value
+def wrapper(**kwargs):
+    return target(value=1, **kwargs)
+"#;
+        let source = fixture.add_file(&mut analysis.db, "api.bzl", source_text);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "api.bzli",
+            r#"
+@overload
+def target(*, value: int, name: str, optional: str = ...) -> int: ...
+@overload
+def target(*, optional: str = ..., name: str, value: str) -> str: ...
+def target(*, value: int | str, name: str, optional: str = ...) -> int | str: ...
+def wrapper(**kwargs: Unpack[KeywordArgs[target, "value"]]) -> int: ...
+"#,
+        );
+        let caller_text = r#"
+load("api.bzl", "wrapper")
+result: int = wrapper(name="ok")
+wrapper(name="ok", optional="set")
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "main.bzl", caller_text);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [interface, source, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{file:?}: {diagnostics:?}");
+        }
+        for (call, expected) in [
+            ("wrapper()", "missing-argument"),
+            ("wrapper(name=1)", "invalid-argument-type"),
+            (
+                "wrapper(name='ok', optional=False)",
+                "invalid-argument-type",
+            ),
+            ("wrapper(name='ok', value=1)", "unknown-argument"),
+        ] {
+            analysis.update_file(caller, format!("{caller_text}\n{call}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(ids, [expected], "{call}: {diagnostics:?}");
+        }
+        analysis.update_file(source, source_text.replace("value=1", "value=[]"));
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let ids: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        assert_eq!(ids, ["no-matching-overload"], "{diagnostics:?}");
+    }
+
+    #[test]
+    fn keyword_args_compare_every_retained_overload_parameter() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let file = fixture.add_file(&mut analysis.db, "main.bzli", "");
+        for (second, exclusions, valid) in [
+            ("*, choice: str, value: int = ...", "'choice'", true),
+            ("*, choice: str, value: str = ...", "'choice'", false),
+            ("*, choice: str, value: int", "'choice'", false),
+            ("value: int = ..., *, choice: str", "'choice'", false),
+            (
+                "*, choice: str, value: int = ..., extra: bool = ...",
+                "'choice'",
+                false,
+            ),
+            ("*, value: int = ...", "'choice'", false),
+            (
+                "*, choice: str, value: int = ...",
+                "'choice', 'value'",
+                true,
+            ),
+            ("*, value: int = ...", "'choice', 'value'", false),
+            ("*, choice: Unknown, value: int = ...", "'choice'", false),
+            (
+                "*, choice: str, value: int = ..., **rest: str",
+                "'choice'",
+                false,
+            ),
+        ] {
+            analysis.update_file(
+                file,
+                format!(
+                    "@overload\ndef target(*, choice: int, value: int = ...) -> int: ...\n\
+                     @overload\ndef target({second}) -> str: ...\n\
+                     type Row = KeywordArgs[target, {exclusions}]\n"
+                ),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            if valid {
+                assert!(diagnostics.is_empty(), "{second}: {diagnostics:?}");
+            } else {
+                assert_eq!(ids, ["invalid-type-form"], "{second}: {diagnostics:?}");
+            }
+        }
+    }
 
     #[test]
     fn keyword_args_check_paired_source_rule_forwarding() {
