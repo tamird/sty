@@ -97,7 +97,7 @@ class str:
         """Test whether the selected slice ends with one of the supplied suffixes."""
     def find(self, sub: str, start: int | None = 0, end: int | None = None, /) -> int:
         """Return the first matching index, or -1 when the substring is absent."""
-    def format(self, *args: object, **kwargs: object) -> str:
+    def format(self, /, *args: object, **kwargs: object) -> str:
         """Substitute positional and named values into replacement fields."""
     def index(self, sub: str, start: int | None = 0, end: int | None = None, /) -> int:
         """Return the first matching index, failing when the substring is absent."""

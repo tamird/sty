@@ -2605,6 +2605,7 @@ forward = "x" * 2 # type: string
 reverse = 2 * "x" # type: string
 repeated = 2 * [1] # type: list[int]
 "example".startswith(("e", "x"))
+"{self}: {ft}".format(self = "feature", ft = "missing")
 "#;
         let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
         let file = fixture.main_file();
