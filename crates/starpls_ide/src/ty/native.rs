@@ -9902,6 +9902,140 @@ cc_common.internal_DO_NOT_USE()
     }
 
     #[test]
+    fn toolchain_constructor_proves_its_keyword_fields() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        analysis
+            .set_builtin_defs(builtins, Default::default())
+            .unwrap();
+        let source = r#"make = platform_common.ToolchainInfo
+
+def direct():
+    return platform_common.ToolchainInfo(runner = struct(path = "cc"))
+
+def expanded():
+    return make(**{"runner": struct(path = "cc")})
+
+def nominal():
+    return make()
+
+def selected(target):
+    info = target[make]
+    info.arbitrary_field
+    return info
+
+def missing():
+    return make(other = struct(path = "cc"))
+
+def wrong_inner():
+    return make(runner = struct(path = 42))
+
+def wrong_expansion():
+    return make(**{"runner": 42})
+
+def missing_object():
+    return make()
+
+def partial(fields):
+    return make(**fields)
+
+def optional(flag):
+    fields = {"runner": struct(path = "cc")} if flag else {}
+    return make(**fields)
+
+def shadowed():
+    def ToolchainInfo(**kwargs):
+        return struct(**kwargs)
+    return ToolchainInfo(runner = struct(path = "cc"))
+"#;
+        let file = analysis
+            .open_document(
+                Path::new("/toolchain.bzl"),
+                Dialect::Bazel,
+                None,
+                source.into(),
+                1,
+            )
+            .unwrap();
+        let interface = analysis
+            .open_document(
+                Path::new("/toolchain.bzli"),
+                Dialect::Bazel,
+                None,
+                r#"type Runner = struct[{"path": str}, ...]
+class HasRunner(Protocol):
+    @property
+    def runner(self) -> Runner: ...
+class HasValue(Protocol):
+    @property
+    def value(self) -> object: ...
+type Configured = Intersection[ToolchainInfo, HasRunner]
+def direct() -> Configured: ...
+def expanded() -> Configured: ...
+def nominal() -> ToolchainInfo: ...
+def selected(target: Target) -> ToolchainInfo: ...
+def missing() -> Configured: ...
+def wrong_inner() -> Configured: ...
+def wrong_expansion() -> Configured: ...
+def missing_object() -> HasValue: ...
+def partial(fields: dict[str, Runner]) -> Configured: ...
+def optional(flag: bool) -> Configured: ...
+def shadowed() -> Configured: ...
+"#
+                .into(),
+                1,
+            )
+            .unwrap();
+        analysis.set_type_interfaces([(file, interface)]).unwrap();
+        for rules in [
+            crate::DiagnosticRules::default(),
+            crate::DiagnosticRules::from_settings(
+                &[("unsound-return-statement".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        ] {
+            analysis.set_rules(rules);
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let findings: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    let before = &source[..diagnostic.range().unwrap().start().to_usize()];
+                    let function = before
+                        .rsplit_once("\ndef ")
+                        .unwrap()
+                        .1
+                        .split_once('(')
+                        .unwrap()
+                        .0;
+                    assert!(
+                        matches!(
+                            diagnostic.id().as_str(),
+                            "invalid-return-type" | "unsound-return-statement"
+                        ),
+                        "{diagnostic:?}"
+                    );
+                    function
+                })
+                .collect();
+            assert_eq!(
+                findings,
+                [
+                    "missing",
+                    "wrong_inner",
+                    "wrong_expansion",
+                    "missing_object",
+                    "partial",
+                    "optional",
+                    "shadowed",
+                ]
+            );
+        }
+    }
+
+    #[test]
     fn native_toolchain_and_repository_protocols() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"

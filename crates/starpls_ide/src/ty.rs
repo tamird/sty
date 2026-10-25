@@ -695,7 +695,7 @@ impl ty_python_semantic::Db for Database {
     fn provided_keyword_field_factory(&self, definition: Definition<'_>) -> bool {
         matches!(
             factory::declaration(self, definition),
-            Some(factory::BuiltinFunction::Struct)
+            Some(factory::BuiltinFunction::KeywordRecord(_))
         )
     }
 

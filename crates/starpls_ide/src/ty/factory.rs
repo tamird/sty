@@ -628,6 +628,12 @@ fn doc_string(db: &Database, call: &CheckedCall<'_, '_>) -> Option<Box<str>> {
     ty.string_literal_value(db).map(Into::into)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum KeywordRecord {
+    Struct,
+    ToolchainInfo,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum BuiltinFunction {
     Attribute(AttributeKind),
@@ -640,8 +646,8 @@ pub(super) enum BuiltinFunction {
     ModuleExtension,
     UseExtension,
     UseRepositoryRule,
-    Struct,
-    StructGetattr,
+    KeywordRecord(KeywordRecord),
+    KeywordRecordGetattr(KeywordRecord),
     Getattr,
     Type,
     Provider,
@@ -678,11 +684,16 @@ pub(super) fn declaration<'db>(
     let owner = scope.node(db);
     if let NodeWithScopeKind::Class(class) = owner {
         let parent = scope.scope(db).parent()?.to_scope_id(db, file);
-        if matches!(parent.node(db), NodeWithScopeKind::Module)
-            && class.node(&parsed).name.as_str() == "_starpls_annotation_record"
-        {
-            return (function.name.as_str() == "__getattr__")
-                .then_some(BuiltinFunction::StructGetattr);
+        if matches!(parent.node(db), NodeWithScopeKind::Module) {
+            return match (class.node(&parsed).name.as_str(), function.name.as_str()) {
+                ("_starpls_annotation_record", "__getattr__") => {
+                    Some(BuiltinFunction::KeywordRecordGetattr(KeywordRecord::Struct))
+                }
+                ("_starpls_provider_platform_common_ToolchainInfo", "__call__") => {
+                    Some(BuiltinFunction::KeywordRecord(KeywordRecord::ToolchainInfo))
+                }
+                _ => None,
+            };
         }
         let NodeWithScopeKind::Class(namespace) = parent.node(db) else {
             return None;
@@ -701,9 +712,11 @@ pub(super) fn declaration<'db>(
                 _ => None,
             },
             // The legacy namespace is also a struct with optional fields.
-            "struct" | "_LegacyGlobals" => {
-                (function.name.as_str() == "__getattr__").then_some(BuiltinFunction::StructGetattr)
-            }
+            "struct" | "_LegacyGlobals" => (function.name.as_str() == "__getattr__")
+                .then_some(BuiltinFunction::KeywordRecordGetattr(KeywordRecord::Struct)),
+            "ToolchainInfo" => (function.name.as_str() == "__getattr__").then_some(
+                BuiltinFunction::KeywordRecordGetattr(KeywordRecord::ToolchainInfo),
+            ),
             "attr" => Some(BuiltinFunction::Attribute(attribute_kind(
                 function.name.as_str(),
             )?)),
@@ -737,7 +750,7 @@ pub(super) fn declaration<'db>(
         "use_extension" => BuiltinFunction::UseExtension,
         "use_repo_rule" => BuiltinFunction::UseRepositoryRule,
         "type" => BuiltinFunction::Type,
-        "struct" => BuiltinFunction::Struct,
+        "struct" => BuiltinFunction::KeywordRecord(KeywordRecord::Struct),
         "provider" => BuiltinFunction::Provider,
         "select" => BuiltinFunction::Select,
         _ => return None,
@@ -798,9 +811,9 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
         BuiltinFunction::ModuleExtension => super::module_extension::extension(db, call),
         BuiltinFunction::UseExtension => super::module_extension::proxy(db, call),
         BuiltinFunction::UseRepositoryRule => super::repository_rule::proxy(db, call),
-        BuiltinFunction::Struct => structure(db, call),
+        BuiltinFunction::KeywordRecord(record) => keyword_record(db, call, record),
         BuiltinFunction::Select => selector(db, call),
-        BuiltinFunction::StructGetattr => None,
+        BuiltinFunction::KeywordRecordGetattr(_) => None,
         BuiltinFunction::Getattr => super::shapes::getattr_call_result(db, call),
         BuiltinFunction::Type => {
             let CheckedArgument::Value { ty, expression: _ } = call.argument_at(0) else {
@@ -2852,7 +2865,11 @@ pub(super) fn attribute_value_type<'db>(
     })
 }
 
-fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<'db>> {
+fn keyword_record<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    record: KeywordRecord,
+) -> Option<Type<'db>> {
     if call.has_binding_errors() {
         return None;
     }
@@ -2931,24 +2948,28 @@ fn structure<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type
             }
         }
     }
-    let values = UnionType::from_elements(
-        db,
-        &environment,
-        extra_values
-            .into_iter()
-            .chain(shape.values().map(|field| field.declared_type())),
-    );
-    let shape = Type::TypedDict(TypedDictType::from_schema_items_with_openness(
-        db, shape, openness,
-    ));
-    let declaration = call.declaration()?;
-    let instance = specialized_native_class(
-        db,
-        declaration.program_file(db),
-        "struct",
-        vec![values, shape],
-    )?
-    .to_instance_approximation(db, &environment)?;
+    let instance = match record {
+        KeywordRecord::Struct => {
+            let values = UnionType::from_elements(
+                db,
+                &environment,
+                extra_values
+                    .into_iter()
+                    .chain(shape.values().map(|field| field.declared_type())),
+            );
+            let shape = Type::TypedDict(TypedDictType::from_schema_items_with_openness(
+                db, shape, openness,
+            ));
+            specialized_native_class(
+                db,
+                call.declaration()?.program_file(db),
+                "struct",
+                vec![values, shape],
+            )?
+            .to_instance_approximation(db, &environment)?
+        }
+        KeywordRecord::ToolchainInfo => call.return_type(),
+    };
     instance.with_provided_instance_fields(
         db,
         fields.into_boxed_slice(),

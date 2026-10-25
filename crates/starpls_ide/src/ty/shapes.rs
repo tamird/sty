@@ -30,6 +30,8 @@ use ty_python_semantic::types::UnionType;
 use ty_python_semantic::ProgramEnvironment;
 use ty_python_semantic::TypeQualifiers;
 
+use super::factory::BuiltinFunction;
+use super::factory::KeywordRecord;
 use crate::Database;
 
 pub(super) fn mapping_argument(expression: &Expr) -> Option<(&Expr, &ExprDict, bool)> {
@@ -141,11 +143,18 @@ pub(super) fn getattr_result<'db>(
     receiver: Type<'db>,
     attribute: &str,
 ) -> ProvidedGetattrResult<'db> {
-    if !matches!(
-        super::factory::declaration(db, definition),
-        Some(super::factory::BuiltinFunction::StructGetattr)
-    ) {
-        return ProvidedGetattrResult::default();
+    match super::factory::declaration(db, definition) {
+        Some(BuiltinFunction::KeywordRecordGetattr(KeywordRecord::Struct)) => {}
+        Some(BuiltinFunction::KeywordRecordGetattr(KeywordRecord::ToolchainInfo)) => {
+            // Required fields resolve from instance storage. It does not record
+            // whether the keyword tail was closed, so no other name is guaranteed.
+            return if receiver.provided_instance_fields(db).is_some() {
+                ProvidedGetattrPresence::PossiblyMissing.into()
+            } else {
+                ProvidedGetattrResult::default()
+            };
+        }
+        _ => return ProvidedGetattrResult::default(),
     }
     let environment = ProgramEnvironment::from_file(definition.program_file(db));
     if let Some(presence) =
