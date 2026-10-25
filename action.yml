@@ -8,6 +8,9 @@ inputs:
   advisory-files-from:
     description: Optional file listing workspace-relative files to check for an advisory report.
     default: ''
+  advisory-config:
+    description: Tracked TOML file of advisory rules and analysis overrides, relative to working-directory.
+    default: ''
   advisory-bazel-load-context:
     description: Bazel targets whose packages load required advisory files, one target per line.
     default: ''
@@ -80,6 +83,7 @@ runs:
         CHECK_FILES: ${{ inputs.files }}
         ADVISORY_ONLY: ${{ inputs.advisory-only }}
         ADVISORY_FILES_FROM: ${{ inputs.advisory-files-from }}
+        ADVISORY_CONFIG: ${{ inputs.advisory-config }}
         ADVISORY_LOAD_TARGETS: ${{ inputs.advisory-bazel-load-context }}
         ADVISORY_LOAD_FILES: ${{ inputs.advisory-require-bazel-load-context }}
         CHECK_BAZEL_VERSION: ${{ inputs.bazel-version }}
@@ -102,6 +106,10 @@ runs:
           false) ;;
           *) echo 'audit-loads must be true or false.' >&2; exit 1 ;;
         esac
+        if [[ -n "$ADVISORY_CONFIG" && -z "$ADVISORY_FILES_FROM" ]]; then
+          echo 'advisory-config requires advisory-files-from.' >&2
+          exit 1
+        fi
         if [[ -n "$ADVISORY_LOAD_TARGETS" || -n "$ADVISORY_LOAD_FILES" ]]; then
           if [[ -z "$ADVISORY_FILES_FROM" || -z "$ADVISORY_LOAD_TARGETS" || -z "$ADVISORY_LOAD_FILES" ]]; then
             echo 'Advisory load context requires targets, required files, and advisory-files-from.' >&2
@@ -129,6 +137,10 @@ runs:
           advisory="$REPORT_DIRECTORY/advisory"
           mkdir "$advisory"
           cp -- "$ADVISORY_FILES_FROM" "$advisory/files.txt"
+          if [[ -n "$ADVISORY_CONFIG" ]]; then
+            git cat-file blob ":./$ADVISORY_CONFIG" > "$advisory/config.toml"
+            options+=(--config "$(cat "$advisory/config.toml")")
+          fi
           if [[ -n "$ADVISORY_LOAD_TARGETS" ]]; then
             printf '%s\n' "$ADVISORY_LOAD_TARGETS" > "$advisory/load-targets.txt"
             printf '%s\n' "$ADVISORY_LOAD_FILES" > "$advisory/load-files.txt"

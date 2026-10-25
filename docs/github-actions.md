@@ -76,7 +76,7 @@ requires successful dependency resolution and complete selected-file coverage.
 To report findings outside the strict selection, supply `advisory-files-from`:
 a file containing one workspace-relative path per line.
 Generate that inventory from tracked source files in each Bazel workspace.
-The action runs the same checker and configuration for both selections.
+Both selections use the workspace configuration by default.
 The strict selection still fails on errors. The advisory check writes
 `advisory/diagnostics.jsonl`, `advisory/coverage.json`, and the requested
 `advisory/files.txt` into the artifact. The job summary counts findings across all
@@ -87,6 +87,12 @@ the job.
 For a workspace that has no strict selection, set `advisory-only: true`
 with `advisory-files-from`. This mode requires a nonempty advisory inventory
 and rejects the strict `files` input.
+
+Set `advisory-config` to a tracked TOML file to override rules or analysis
+settings for the advisory check, for example `../sty-advisory.toml` when checking
+a nested workspace. The path is relative to `working-directory`. The workspace's
+interface and stub package selections still apply. The artifact includes the
+settings as `advisory/config.toml`.
 
 For a tracked fixture installed in another Bazel repository, specify a target
 that loads the file and the inventory path that must occur in its load graph:
