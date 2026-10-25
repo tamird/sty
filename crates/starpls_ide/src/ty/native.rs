@@ -9474,6 +9474,8 @@ def existing_api(configuration: FeatureConfiguration) -> str:
     return cc_common.get_tool_for_action(feature_configuration=configuration, action_name='compile')
 def annotated_api(value: cc_common, configuration: FeatureConfiguration) -> bool:
     return value.is_enabled(feature_configuration=configuration, feature_name='feature')
+def execution_os(internal: CcInternal, rule_ctx: ctx[object, object]) -> str:
+    return internal.exec_os(rule_ctx)
 def borrowed(internal: CcInternal) -> HeaderInfo:
     return internal.create_header_info()
 def nullable_header(header: HeaderInfo) -> GeneratedFile | None:
@@ -9523,6 +9525,7 @@ def inspect(internal: CcInternal, action: actions, file: File) -> None:
             ("consume_namespace(cc_common)", "invalid-argument-type"),
             ("cc_common.is_enabled", "unresolved-attribute"),
             ("cc_common.CcToolchainInfo", "unresolved-attribute"),
+            ("internal.exec_os(42)", "invalid-argument-type"),
             ("internal.create_header_info(header_module=file)", "invalid-argument-type"),
             ("internal.create_header_info(pic_header_module=42)", "invalid-argument-type"),
             ("internal.create_header_info(modular_public_headers=[42])", "invalid-argument-type"),
