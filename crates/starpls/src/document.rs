@@ -1157,17 +1157,11 @@ impl FileLoader for DefaultFileLoader {
             return Ok(info);
         }
         let repository = self.repository_for_path(path)?;
+        // With the default (empty) autoload list the bundled members are
+        // visible in every repository. Bazel checks private calls separately.
         let bundled_cc_common = self.bundled_builtins
             && repository.as_ref().is_some_and(|repository| {
-                // AutoloadSymbols disables Bzl replacements for this canonical
-                // family. The settings gate excludes binding-removal overrides.
-                // This says nothing about private-call access.
-                let name = repository.name.as_str();
-                let family = name
-                    .split_once('~')
-                    .or_else(|| name.split_once('+'))
-                    .map_or(name, |(family, _)| family);
-                family == "rules_cc"
+                !repository.name.is_empty() || path.starts_with(&self.workspace)
             });
         Ok(info.map(
             |FileInfo::Bazel {
@@ -1796,7 +1790,7 @@ pub(crate) mod source_tests {
     }
 
     #[test]
-    fn bundled_cc_common_follows_installed_repository_provenance() {
+    fn bundled_cc_common_is_visible_in_known_repositories() {
         use starpls_ide::FileLoader;
 
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
@@ -1809,13 +1803,13 @@ pub(crate) mod source_tests {
         let loader = DefaultFileLoader::new(
             Arc::new(TestBazelClient::default()),
             workspace.clone(),
-            Some("rules_cc".to_owned()),
+            Some("_main".to_owned()),
             external.clone(),
             sender,
             true,
         )
         .with_bundled_builtins(true);
-        // Old metadata must not retain a grant when ownership is unproved.
+        // Previously indexed files may have different repository metadata.
         let info = Some(starpls_common::FileInfo::Bazel {
             api_context: starpls_bazel::APIContext::Bzl,
             is_external: false,
@@ -1827,18 +1821,10 @@ pub(crate) mod source_tests {
                 true,
                 true,
             ),
-            (external.join("rules_cc+0.2.25/cc/defs.bzl"), true, true),
-            (external.join("rules_cc~0.2.25/cc/defs.bzl"), true, true),
-            (external.join("rules_cc_extra+/cc/defs.bzl"), true, false),
-            (external.join("other+/rules_cc/defs.bzl"), true, false),
-            (
-                external.join("rules_cc+extension~owner/defs.bzl"),
-                true,
-                false,
-            ),
-            // workspace_name is not the actual root MODULE name.
-            (workspace.join("cc/private/cc_info.bzl"), false, false),
+            (external.join("other+/rules_cc/defs.bzl"), true, true),
+            (workspace.join("cc/private/cc_info.bzl"), false, true),
             (root.join("unknown/defs.bzl"), false, false),
+            (root.join("unknown/defs.bzli"), false, false),
         ] {
             let admitted = loader.file_info(&path, Dialect::Bazel, info).unwrap();
             assert_eq!(
@@ -1892,6 +1878,18 @@ pub(crate) mod source_tests {
                 bundled_cc_common: false,
             })
         );
+        let displaced = loader.fresh();
+        let local = workspace.join("cc/private/cc_info.bzl");
+        assert!(displaced
+            .restore_document_context(&loader, &local, Err(anyhow::anyhow!("changed module")))
+            .is_err());
+        assert!(matches!(
+            displaced.file_info(&local, Dialect::Bazel, info).unwrap(),
+            Some(starpls_common::FileInfo::Bazel {
+                bundled_cc_common: false,
+                ..
+            })
+        ));
         std::fs::remove_dir_all(root).unwrap();
     }
 
