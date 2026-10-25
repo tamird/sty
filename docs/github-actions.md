@@ -84,6 +84,10 @@ checked files, including paired implementations and interfaces. An empty
 inventory, missing requested file, incomplete coverage, or tool failure fails
 the job.
 
+For a workspace that has no strict selection, set `advisory-only: true`
+with `advisory-files-from`. This mode requires a nonempty advisory inventory
+and rejects the strict `files` input.
+
 The checked workspace uses its own `.bazelversion`. Set `bazel-version` to an
 exact version if the project selects Bazel through another mechanism. For a
 nested workspace, set `working-directory` to its path; `files` are relative to
