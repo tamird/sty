@@ -240,6 +240,7 @@ def use(repo: repository_ctx, module: module_ctx) -> None:
     module.copy("in", module.path("out"))
     only_module(repo.next())
     repo.copy(1, "out")
+    repo.copy(src="in", dst="out")
     module.copy("in", "out", "yes")
     only_module(repo)
 "#,
@@ -248,7 +249,7 @@ def use(repo: repository_ctx, module: module_ctx) -> None:
             &mut analysis.db,
             "host.bzli",
             r#"class _ExternalContext(Protocol):
-    def copy(self, src: str | Label | path, dst: str | Label | path, *, watch_src: Literal["yes", "no", "auto"] = ...) -> None: ...
+    def copy(self, src: str | Label | path, dst: str | Label | path, /, *, watch_src: Literal["yes", "no", "auto"] = ...) -> None: ...
 
 class _RepositoryContext(_ExternalContext, Protocol):
     def next(self) -> module_ctx: ...
@@ -265,13 +266,13 @@ builtins: dict[{"repository_ctx": _RepositoryContext, "module_ctx": _ExternalCon
             .set_builtin_defs(builtins, Default::default())
             .unwrap();
         let original = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(original.len(), 6, "{original:#?}");
+        assert_eq!(original.len(), 7, "{original:#?}");
         assert_eq!(
             original
                 .iter()
                 .filter(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute")
                 .count(),
-            5,
+            6,
             "{original:#?}"
         );
 
@@ -279,7 +280,17 @@ builtins: dict[{"repository_ctx": _RepositoryContext, "module_ctx": _ExternalCon
             .set_bazel_builtin_extension(Some(extension))
             .unwrap();
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 3, "{diagnostics:#?}");
+        assert_eq!(diagnostics.len(), 5, "{diagnostics:#?}");
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(
+                    |diagnostic| diagnostic.id().as_str() == "positional-only-parameter-as-kwarg"
+                )
+                .count(),
+            2,
+            "{diagnostics:#?}"
+        );
         assert_eq!(
             diagnostics
                 .iter()

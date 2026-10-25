@@ -192,6 +192,17 @@ impl Validator<'_> {
         self.error(range, "This syntax is not supported in Starlark");
     }
 
+    fn reject_positional_only(&mut self, parameters: &py::Parameters) -> bool {
+        if parameters.posonlyargs.is_empty() {
+            return false;
+        }
+        self.error(
+            parameters.range(),
+            "Positional-only parameters are not supported in Starlark",
+        );
+        true
+    }
+
     fn load(&mut self, call: &py::ExprCall) {
         let Self {
             tokens,
@@ -361,11 +372,13 @@ impl Validator<'_> {
                         },
                     );
                 }
+                let invalid_positional_only = self.annotation_mode != AnnotationMode::Interface
+                    && self.reject_positional_only(parameters);
                 if *is_async
                     || !supported_decorators
                     || (type_params.is_some() && self.annotation_mode != AnnotationMode::Interface)
                     || (self.annotation_mode == AnnotationMode::Disabled && returns.is_some())
-                    || !parameters.posonlyargs.is_empty()
+                    || invalid_positional_only
                     || (self.annotation_mode == AnnotationMode::Disabled
                         && parameters
                             .iter()
@@ -568,7 +581,7 @@ impl Validator<'_> {
             Expr::Lambda(lambda) => lambda
                 .parameters
                 .as_ref()
-                .is_some_and(|parameters| !parameters.posonlyargs.is_empty()),
+                .is_some_and(|parameters| self.reject_positional_only(parameters)),
             _ => false,
         };
         if unsupported_owner {
@@ -709,25 +722,6 @@ impl<'a> SourceOrderVisitor<'a> for Validator<'_> {
         stacker::maybe_grow(32 * 1024, 1024 * 1024, || self.expression(expr));
     }
 
-    fn visit_parameters(&mut self, parameters: &'a py::Parameters) {
-        let py::Parameters {
-            node_index: _,
-            range,
-            posonlyargs,
-            args: _,
-            vararg: _,
-            kwonlyargs: _,
-            kwarg: _,
-        } = parameters;
-        if !posonlyargs.is_empty() {
-            self.error(
-                *range,
-                "Positional-only parameters are not supported in Starlark",
-            );
-        }
-        source_order::walk_parameters(self, parameters);
-    }
-
     fn visit_parameter(&mut self, parameter: &'a py::Parameter) {
         let py::Parameter {
             node_index: _,
@@ -798,6 +792,8 @@ mod tests {
             ),
             ("def f(value: int = ...): pass", false),
             ("def f[T](value: T) -> T: pass", false),
+            ("def f(value: int, /): pass", false),
+            ("f = lambda value, /: value", false),
             ("value: int", false),
             ("obj.value: int = 1", false),
             ("items[0]: int = 1", false),
@@ -869,6 +865,8 @@ mod tests {
             ("value: int", true),
             ("value: int = ...", true),
             ("def f(value, other: int = ...) -> string: ...", true),
+            ("def f(value: int, /, *, flag: bool = ...) -> int: ...", true),
+            ("value: lambda arg, /: arg", false),
             ("def f[T](value: T) -> T: ...", true),
             ("@overload\ndef f(value: int) -> int: ...", true),
             ("@overload()\ndef f(value: int) -> int: ...", false),

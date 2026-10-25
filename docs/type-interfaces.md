@@ -19,6 +19,11 @@ consists of an optional docstring followed by `...` or `pass`. Public variables,
 functions, and classes declared in the stub define its exports; loaded names
 are available in annotation expressions.
 
+In a `.bzli` function or method, parameters before `/` must be passed by
+position. This preserves public parameter names for native APIs that accept
+positional arguments and named options, for example
+`def get(key: str, /, *, watch: bool = ...) -> str: ...`.
+
 Field-map annotations and type aliases use syntax from
 [starlark#362](https://github.com/bazelbuild/starlark/pull/362). The field-map,
 openness, and record semantics below are defined by sty. Existing Python-style
