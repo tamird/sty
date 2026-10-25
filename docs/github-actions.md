@@ -73,6 +73,17 @@ and a JSON coverage report as the `sty` artifact, including after a failed check
 Build failures appear in the build step and its log; a successful type check
 requires successful dependency resolution and complete selected-file coverage.
 
+To report findings outside the strict selection, supply `advisory-files-from`:
+a file containing one workspace-relative path per line.
+Generate that inventory from tracked source files in each Bazel workspace.
+The action runs the same checker and configuration for both selections.
+The strict selection still fails on errors. The advisory check writes
+`advisory/diagnostics.jsonl`, `advisory/coverage.json`, and the requested
+`advisory/files.txt` into the artifact. The job summary counts findings across all
+checked files, including paired implementations and interfaces. An empty
+inventory, missing requested file, incomplete coverage, or tool failure fails
+the job.
+
 The checked workspace uses its own `.bazelversion`. Set `bazel-version` to an
 exact version if the project selects Bazel through another mechanism. For a
 nested workspace, set `working-directory` to its path; `files` are relative to

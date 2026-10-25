@@ -5,6 +5,9 @@ inputs:
   files:
     description: Additional implementation files or directories, newline-separated and relative to working-directory.
     default: ''
+  advisory-files-from:
+    description: Optional file listing workspace-relative files to check for an advisory report.
+    default: ''
   working-directory:
     description: Bazel workspace containing sty.toml.
     default: .
@@ -66,6 +69,7 @@ runs:
       env:
         REPORT_DIRECTORY: ${{ steps.reports.outputs.directory }}
         CHECK_FILES: ${{ inputs.files }}
+        ADVISORY_FILES_FROM: ${{ inputs.advisory-files-from }}
         CHECK_BAZEL_VERSION: ${{ inputs.bazel-version }}
         CODE_FLOW_ANALYSIS: ${{ inputs.code-flow-analysis }}
         AUDIT_LOADS: ${{ inputs.audit-loads }}
@@ -87,10 +91,21 @@ runs:
           *) echo 'audit-loads must be true or false.' >&2; exit 1 ;;
         esac
         printf '%s\n' "$CHECK_FILES" > "$REPORT_DIRECTORY/files.txt"
+        strict_status=0
         "$REPORT_DIRECTORY/sty" check "${options[@]}" \
           --files-from "$REPORT_DIRECTORY/files.txt" \
           --progress --report "$REPORT_DIRECTORY/coverage.json" \
-          2>&1 | tee "$REPORT_DIRECTORY/diagnostics.log"
+          2>&1 | tee "$REPORT_DIRECTORY/diagnostics.log" || strict_status=$?
+        if [[ -n "$ADVISORY_FILES_FROM" ]]; then
+          advisory="$REPORT_DIRECTORY/advisory"
+          mkdir "$advisory"
+          cp -- "$ADVISORY_FILES_FROM" "$advisory/files.txt"
+          "$REPORT_DIRECTORY/sty" check "${options[@]}" --exit-zero \
+            --files-from "$advisory/files.txt" --output-format json-lines \
+            --report "$advisory/coverage.json" > "$advisory/diagnostics.jsonl"
+          python3 "$GITHUB_ACTION_PATH/action/advisory_summary.py" "$advisory" | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+        exit "$strict_status"
 
     - name: Upload sty reports
       if: ${{ always() && steps.reports.outputs.directory != '' }}
@@ -101,5 +116,6 @@ runs:
           ${{ steps.reports.outputs.directory }}/*.log
           ${{ steps.reports.outputs.directory }}/*.json
           ${{ steps.reports.outputs.directory }}/files.txt
+          ${{ steps.reports.outputs.directory }}/advisory/
         if-no-files-found: warn
         retention-days: 14
