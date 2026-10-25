@@ -95,6 +95,10 @@ pub(crate) struct CheckCommand {
     #[clap(long, value_name = "PATH")]
     report: Option<PathBuf>,
 
+    /// Exit successfully when there are diagnostics. Incomplete checks and tool errors still fail.
+    #[clap(long)]
+    exit_zero: bool,
+
     /// Diagnostic output format; json-lines writes status messages to stderr.
     #[clap(long, value_enum, default_value_t)]
     output_format: OutputFormat,
@@ -270,6 +274,41 @@ mod tests {
             .prepare_analysis(loader, &info, Default::default())
             .unwrap();
         Checker::new(analysis, info, paths, &[], loader, receiver, &options).unwrap()
+    }
+
+    #[test]
+    fn exit_zero_preserves_diagnostics_and_rejects_incomplete_checks() {
+        for (name, paths, expected) in [
+            (
+                "findings",
+                vec!["defs.bzl".to_owned()],
+                Some(ExitCode::SUCCESS),
+            ),
+            ("missing", vec!["missing.bzl".to_owned()], None),
+            ("empty", vec![], None),
+        ] {
+            let mut checker = local_checker_with_options(
+                &format!("checker-exit-zero-{name}"),
+                &[("defs.bzl", "def f() -> int:\n    return 'oops'\n")],
+                CheckCommand {
+                    paths,
+                    exit_zero: true,
+                    output_format: super::OutputFormat::JsonLines,
+                    ..Default::default()
+                },
+            );
+            let mut diagnostics = Vec::new();
+            let mut status = Vec::new();
+            let result = checker.report_diagnostics_to(None, &mut diagnostics, &mut status);
+            assert_eq!(result.ok(), expected);
+            if expected.is_some() {
+                let diagnostic: serde_json::Value = serde_json::from_slice(&diagnostics).unwrap();
+                assert_eq!(diagnostic["name"], "invalid-return-type");
+                assert!(String::from_utf8(status)
+                    .unwrap()
+                    .contains("Errors: 1, warnings: 0, infos: 0"));
+            }
+        }
     }
 
     #[test]
@@ -4132,6 +4171,7 @@ struct Checker {
     progress: bool,
     load_scope: LoadScope,
     output_format: OutputFormat,
+    exit_zero: bool,
 }
 
 /// CLI selection only: dependencies can still load excluded source paths.
@@ -4229,6 +4269,7 @@ impl Checker {
             fetch_repo_receiver,
             progress: options.progress,
             output_format: options.output_format,
+            exit_zero: options.exit_zero,
             load_scope: if options.audit_loads {
                 LoadScope::Transitive
             } else {
@@ -4824,6 +4865,7 @@ impl Checker {
                 progress,
                 load_scope: _,
                 output_format: _,
+                exit_zero: _,
             } = &*self;
             let files: Vec<_> = files.iter().copied().collect();
             let file_count = files.len();
@@ -4960,6 +5002,14 @@ impl Checker {
                 report.input_errors.len(),
                 report.unresolved_loads.len()
             );
+        }
+        if self.exit_zero {
+            writeln!(
+                status,
+                "Errors: {}, warnings: {}, infos: {}",
+                report.diagnostics.errors, report.diagnostics.warnings, report.diagnostics.infos
+            )?;
+            return Ok(ExitCode::SUCCESS);
         }
         if report.diagnostics.errors > 0 {
             if report_path.is_none() || matches!(self.output_format, OutputFormat::Full) {
