@@ -93,11 +93,12 @@ pub fn has_aspect_toolchains(builtins: &Builtins) -> bool {
     })
 }
 
-/// The major and minor components reported by `bazel info release`.
+/// The numeric version reported by `bazel info release`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BazelVersion {
     major: u32,
     minor: u32,
+    patch: u32,
 }
 
 impl BazelVersion {
@@ -106,20 +107,71 @@ impl BazelVersion {
         Some(Self {
             major: parts.next()?.parse().ok()?,
             minor: parts.next()?.parse().ok()?,
+            patch: parts
+                .next()
+                .and_then(|part| {
+                    part.split(|c: char| !c.is_ascii_digit())
+                        .next()?
+                        .parse()
+                        .ok()
+                })
+                .unwrap_or_default(),
         })
     }
 
     pub fn at_least(self, major: u32, minor: u32) -> bool {
         (self.major, self.minor) >= (major, minor)
     }
+
+    // A feature backported to Bazel 9 can be absent from earlier 10.0 rolling builds.
+    fn includes_backport(
+        self,
+        release: &str,
+        stable: (u32, u32, u32),
+        rolling: (u32, u32),
+    ) -> bool {
+        if let Some(snapshot) = release.strip_prefix("release 10.0.0-pre.") {
+            snapshot.split_once('.').is_some_and(|(date, build)| {
+                match (date.parse::<u32>(), build.parse::<u32>()) {
+                    (Ok(date), Ok(build)) => (date, build) >= rolling,
+                    _ => false,
+                }
+            })
+        } else {
+            (self.major, self.minor, self.patch) >= stable
+        }
+    }
 }
 
 /// Complete version-dependent API metadata using `bazel info release`.
 pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
-    let Some(BazelVersion { major, minor }) = BazelVersion::parse_release(release) else {
+    let Some(parsed) = BazelVersion::parse_release(release) else {
         return;
     };
+    let BazelVersion {
+        major,
+        minor,
+        patch: _,
+    } = parsed;
     let version = (major, minor);
+    // https://github.com/bazelbuild/bazel/commit/09d0ada6fe2f92207f08e81dc21ba39a1fcea7db
+    if let Some(callable) = builtins
+        .global
+        .iter_mut()
+        .find(|value| value.name == "fail")
+        .and_then(|value| value.callable.as_mut())
+        .filter(|callable| {
+            parsed.includes_backport(release, (9, 0, 1), (20251203, 1))
+                && !callable.param.iter().any(|param| param.name == "stack_trace")
+        })
+    {
+        callable.param.push(Param {
+            name: "stack_trace".to_owned(),
+            r#type: "Boolean".to_owned(),
+            default_value: "True".to_owned(),
+            ..Default::default()
+        });
+    }
     // Bazel 8 exposes provider lookup on this value; Bazel 9 also exposes label.
     // https://github.com/bazelbuild/bazel/commit/419fdac42b
     if version >= (9, 0)
@@ -278,16 +330,7 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     // The method shipped in 9.2 and in the 10.0 prereleases starting with
     // 20260621.2. Earlier 10.0 snapshots predate the 9.2 backport.
     let transition_composition_available =
-        if let Some(snapshot) = release.strip_prefix("release 10.0.0-pre.") {
-            snapshot.split_once('.').is_some_and(|(date, build)| {
-                match (date.parse::<u32>(), build.parse::<u32>()) {
-                    (Ok(date), Ok(build)) => (date, build) >= (20260621, 2),
-                    _ => false,
-                }
-            })
-        } else {
-            version >= (9, 2)
-        };
+        parsed.includes_backport(release, (9, 2, 0), (20260621, 2));
     for class in &mut builtins.r#type {
         // ConfigurationTransitionApi.andThen is inherited by both native types.
         // https://github.com/bazelbuild/bazel/blob/9.2.0/src/main/java/com/google/devtools/build/lib/starlarkbuildapi/config/ConfigurationTransitionApi.java

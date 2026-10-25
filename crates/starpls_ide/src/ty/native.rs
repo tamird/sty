@@ -2198,6 +2198,24 @@ class _LegacyProviderInstance(_starpls_types.ProviderInstance):
     }
     output.push('\n');
     output.push_str(include_str!("starlark.pyi"));
+    let stack_trace = if dialect == Dialect::Bazel
+        && builtins.global.iter().any(|value| {
+            value.name == "fail"
+                && value.callable.as_ref().is_some_and(|callable| {
+                    callable
+                        .param
+                        .iter()
+                        .any(|param| param.name == "stack_trace")
+                })
+        }) {
+        ", stack_trace: _builtins.bool = True"
+    } else {
+        ""
+    };
+    writeln!(
+        output,
+        "def fail(*args: _builtins.object, msg: _builtins.object = None, attr: _builtins.str | None = None, sep: _builtins.str = ' '{stack_trace}) -> _typing.Never: ..."
+    )?;
     write_type_overloads(&mut output, &declared_classes)?;
     Ok(output)
 }
@@ -6580,6 +6598,51 @@ def names(directory: path) -> list[str]:
                     .all(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type"),
                 "{host}: {diagnostics:?}"
             );
+        }
+    }
+
+    #[test]
+    fn fail_stack_trace_follows_the_bazel_release() {
+        let source = r#"def require(value):
+    # type: (str | None) -> str
+    if value == None:
+        fail("missing", stack_trace=False)
+    return value
+def wrong_type():
+    fail("missing", stack_trace="false")
+def wrong_name():
+    fail("missing", strack_trace=False)
+"#;
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for (dialect, release, supports_keyword) in [
+            (Dialect::Bazel, "release 9.0.0", false),
+            (Dialect::Bazel, "release 9.0.1rc1", true),
+            (Dialect::Bazel, "release 9.0.1", true),
+            (Dialect::Bazel, "release 9.1.0", true),
+            (Dialect::Bazel, "release 10.0.0-pre.20251116.2", false),
+            (Dialect::Bazel, "release 10.0.0-pre.20251203.1", true),
+            (Dialect::Standard, "release 9.1.0", false),
+        ] {
+            let mut builtins = builtins.clone();
+            env::apply_versioned_signatures(&mut builtins, release);
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .db
+                .set_builtin_defs(dialect, builtins, Default::default())
+                .unwrap();
+            let file = analysis
+                .open_document(Path::new("/fail.bzl"), dialect, None, source.to_owned(), 1)
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics.iter().map(|diag| diag.id().as_str()).collect();
+            if supports_keyword {
+                assert_eq!(ids, ["invalid-argument-type", "unknown-argument"]);
+            } else {
+                assert_eq!(ids, ["unknown-argument"; 3]);
+            }
         }
     }
 

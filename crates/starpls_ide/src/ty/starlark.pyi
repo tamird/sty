@@ -15,13 +15,6 @@ _V = _typing.TypeVar("_V")
 _W = _typing.TypeVar("_W")
 _X = _typing.TypeVar("_X")
 
-def fail(
-    *args: _builtins.object,
-    msg: _builtins.object = None,
-    attr: _builtins.str | None = None,
-    sep: _builtins.str = " ",
-) -> _typing.Never: ...
-
 def print(*args: _builtins.object, sep: _builtins.str = " ") -> None: ...
 
 def enumerate(
