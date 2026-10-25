@@ -454,6 +454,123 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn bazel_load_context_selects_locally_overridden_sources() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("checker-local-override");
+        let workspace = root.join("workspace");
+        let external = workspace.join("output/external");
+        let dependency = workspace.join("vendor");
+        let source = dependency.join("defs.bzl");
+        let caller = workspace.join("caller.bzl");
+        let defs = "load('//:dep.bzl', 'value')\nexported = value\n";
+        for (path, text) in [
+            (&source, defs),
+            (&dependency.join("BUILD"), ""),
+            (&dependency.join("dep.bzl"), "value = 1\n"),
+            (&workspace.join("BUILD"), ""),
+            (&workspace.join("dep.bzl"), "value = 'wrong'\n"),
+            (
+                &caller,
+                "load('@@dep+//:defs.bzl', 'exported')\nresult = exported  # type: int\n",
+            ),
+            (&external.join("lookalike+/defs.bzl"), defs),
+        ] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        for name in ["dep+", "twin+"] {
+            std::os::unix::fs::symlink(&dependency, external.join(name)).unwrap();
+        }
+        let installed = external.join("dep+/defs.bzl");
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        let required = std::slice::from_ref(&source);
+        let loader = |labels: &[&str], sources: &[std::path::PathBuf]| {
+            DefaultFileLoader::new(
+                Arc::new(TestBazelClient::default()),
+                workspace.clone(),
+                None,
+                external.clone(),
+                sender.clone(),
+                false,
+            )
+            .with_bazel_load_context(labels.iter().copied().map(str::to_owned).collect(), sources)
+        };
+        let missing = loader(&["@@lookalike+//:defs.bzl"], required)
+            .err()
+            .unwrap();
+        assert!(missing.to_string().contains("was not loaded"));
+        let ambiguous = loader(&["@@dep+//:defs.bzl", "@@twin+//:defs.bzl"], required)
+            .err()
+            .unwrap();
+        assert!(ambiguous.to_string().contains("ambiguous"));
+
+        let info = || starpls_bazel::client::BazelInfo {
+            output_base: workspace.join("output"),
+            workspace: workspace.clone(),
+            ..Default::default()
+        };
+        let options = CheckCommand {
+            audit_loads: true,
+            ..Default::default()
+        };
+        let twins = [installed.clone(), external.join("twin+/defs.bzl")];
+        let explicit = loader(&["@@dep+//:defs.bzl", "@@twin+//:defs.bzl"], &twins).unwrap();
+        let (analysis, explicit) = options
+            .prepare_analysis(explicit, &info(), Default::default())
+            .unwrap();
+        let paths = twins
+            .iter()
+            .map(|path| path.to_str().unwrap().to_owned())
+            .collect();
+        let checked = Checker::new(
+            analysis,
+            info(),
+            paths,
+            &[],
+            explicit,
+            receiver.clone(),
+            &options,
+        )
+        .unwrap();
+        assert_eq!(checked.files.len(), 2);
+        let snapshot = checked.analysis.snapshot();
+        for file in checked.files {
+            assert!(twins.contains(&snapshot.path(file).to_owned()));
+        }
+        let (analysis, loader) = options
+            .prepare_analysis(
+                loader(&["@@dep+//:defs.bzl"], required).unwrap(),
+                &info(),
+                Default::default(),
+            )
+            .unwrap();
+        let paths = [&caller, &source, &installed, &twins[1]]
+            .map(|path| path.to_str().unwrap().to_owned())
+            .into();
+        let mut checker =
+            Checker::new(analysis, info(), paths, &[], loader, receiver, &options).unwrap();
+        assert_eq!(checker.files.len(), 3);
+        let report = root.join("coverage.json");
+        let mut diagnostics = Vec::new();
+        assert_eq!(
+            checker
+                .report_diagnostics_to(Some(&report), &mut diagnostics, &mut Vec::new())
+                .unwrap(),
+            ExitCode::SUCCESS,
+            "{}",
+            String::from_utf8_lossy(&diagnostics)
+        );
+        let coverage: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(report).unwrap()).unwrap();
+        assert_eq!(
+            coverage["bazel_load_context"],
+            serde_json::json!({(source.to_str().unwrap()): installed})
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn bazel_load_context_requires_both_inputs() {
         let command = <CheckCommand as clap::Args>::augment_args(clap::Command::new("check"));
@@ -4010,6 +4127,7 @@ impl CheckCommand {
         } in &self.source_overlay
         {
             let logical = starpls_common::absolute_path(logical)?;
+            let logical = loader.selected_bazel_path(&logical).to_owned();
             anyhow::ensure!(
                 overlays.insert(logical.clone()),
                 "duplicate source overlay for {}",
@@ -4048,6 +4166,7 @@ impl CheckCommand {
         )?;
         for SourceOverlay { logical, physical } in &self.source_overlay {
             let logical = starpls_common::absolute_path(logical)?;
+            let logical = loader.selected_bazel_path(&logical).to_owned();
             let Some((Dialect::Bazel, context)) =
                 document::source_kind(&info.workspace, &logical, &[])
             else {
@@ -4148,6 +4267,8 @@ struct CoverageReport<'a> {
     bazel_release: &'a str,
     selected_files: Vec<ReportFile>,
     checked_files: Vec<ReportFile>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    bazel_load_context: BTreeMap<&'a Path, &'a Path>,
     #[serde(skip_serializing_if = "Option::is_none")]
     checked_interface_sources: Option<InterfaceSources<ReportFile>>,
     loaded_dependencies: Vec<ReportFile>,
@@ -4323,7 +4444,7 @@ impl Checker {
                 .iter()
                 .filter(|path| !checker.ignored_paths.contains(path))
                 .chain(overlay_interfaces.iter())
-                .map(PathBuf::as_path),
+                .map(|path| checker.loader.selected_bazel_path(path)),
             |message| {
                 if checker.progress {
                     eprintln!("{message}");
@@ -4613,24 +4734,26 @@ impl Checker {
         bazel_only: bool,
     ) -> anyhow::Result<Option<File>> {
         let path = starpls_common::absolute_path(path)?;
+        let path = self.loader.selected_bazel_path(&path);
 
         let Some((dialect, api_context)) =
-            document::source_kind(&self.bazel_info.workspace, &path, extensions)
+            document::source_kind(&self.bazel_info.workspace, path, extensions)
         else {
             if is_explicit {
                 if !bazel_only {
                     anyhow::bail!("unsupported Starlark source file {}", path.display());
                 }
-                self.exclusions.insert(path, Exclusion::UnsupportedFile);
+                self.exclusions
+                    .insert(path.to_owned(), Exclusion::UnsupportedFile);
             }
             return Ok(None);
         };
 
         if bazel_only && dialect != Dialect::Bazel {
-            self.exclusions.insert(path, Exclusion::NotBazel);
+            self.exclusions.insert(path.to_owned(), Exclusion::NotBazel);
             return Ok(None);
         }
-        self.loader.ensure_repository_for_path(&path)?;
+        self.loader.ensure_repository_for_path(path)?;
 
         let info = api_context.map(|api_context| FileInfo::Bazel {
             api_context,
@@ -4638,7 +4761,7 @@ impl Checker {
             bundled_cc_common: false,
         });
 
-        self.analysis.file(&path, dialect, info).map(Some)
+        self.analysis.file(path, dialect, info).map(Some)
     }
 
     fn report_diagnostics_for_file(
@@ -5103,6 +5226,7 @@ impl Checker {
                 .iter()
                 .map(|file| self.report_file(snapshot, *file))
                 .collect::<anyhow::Result<_>>()?,
+            bazel_load_context: self.loader.remapped_bazel_paths().collect(),
             checked_interface_sources,
             loaded_dependencies: graph
                 .files

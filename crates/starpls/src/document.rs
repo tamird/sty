@@ -182,6 +182,7 @@ enum RepositoryContext {
 #[derive(Default)]
 struct BazelLoadContext {
     packages: HashMap<PathBuf, BazelPackage>,
+    selected_paths: HashMap<PathBuf, PathBuf>,
 }
 
 struct BazelPackage {
@@ -196,6 +197,7 @@ impl BazelLoadContext {
         sources: &[PathBuf],
     ) -> anyhow::Result<Self> {
         let mut required = HashMap::<String, HashMap<PathBuf, PathBuf>>::new();
+        let mut authored = HashMap::<PathBuf, Vec<PathBuf>>::new();
         for source in sources {
             let source = starpls_common::absolute_path(source)?;
             let repository = loader.repository_for_path(&source)?.with_context(|| {
@@ -208,6 +210,11 @@ impl BazelLoadContext {
                     repository.root.display()
                 )
             })?;
+            if repository.name.is_empty() {
+                if let Ok(physical) = source.canonicalize() {
+                    authored.entry(physical).or_default().push(source.clone());
+                }
+            }
             required
                 .entry(repository.name)
                 .or_default()
@@ -242,30 +249,35 @@ impl BazelLoadContext {
                     && (target.ends_with(".bzl") || target.ends_with(".scl")),
                 "invalid Bazel loadfiles label {spelling:?}"
             );
-            let Some(source) = required
+            let relative = Path::new(package).join(target);
+            if let Some(source) = required
                 .get(label.repo())
-                .and_then(|sources| sources.get(&Path::new(package).join(target)))
-            else {
+                .and_then(|sources| sources.get(&relative))
+            {
+                context.insert(source, source, label.repo(), package)?;
+            }
+            // A local_path_override can install a tracked source under a different
+            // repository. Only Bazel's loaded label can establish its identity.
+            if authored.is_empty() || label.repo().is_empty() {
+                continue;
+            }
+            let Some(external) = &loader.external_output_base else {
                 continue;
             };
-            let observed = context
-                .packages
-                .entry(source.clone())
-                .or_insert_with(|| BazelPackage {
-                    repository: label.repo().to_owned(),
-                    name: package.to_owned(),
-                });
-            anyhow::ensure!(
-                observed.repository == label.repo() && observed.name == package,
-                "conflicting Bazel loadfiles packages for {}: {:?} and {package:?}",
-                source.display(),
-                observed.name
-            );
+            let installed = external.join(label.repo()).join(relative);
+            let Ok(physical) = installed.canonicalize() else {
+                continue;
+            };
+            if let Some(sources) = authored.get(&physical) {
+                for source in sources {
+                    context.insert(source, &installed, label.repo(), package)?;
+                }
+            }
         }
         if let Some(source) = required
             .values()
             .flat_map(HashMap::values)
-            .filter(|source| !context.packages.contains_key(*source))
+            .filter(|source| !context.selected_paths.contains_key(*source))
             .min()
         {
             anyhow::bail!(
@@ -274,6 +286,40 @@ impl BazelLoadContext {
             );
         }
         Ok(context)
+    }
+
+    fn insert(
+        &mut self,
+        requested: &Path,
+        installed: &Path,
+        repository: &str,
+        package: &str,
+    ) -> anyhow::Result<()> {
+        let selected = self
+            .selected_paths
+            .entry(requested.to_path_buf())
+            .or_insert_with(|| installed.to_path_buf());
+        anyhow::ensure!(
+            selected.as_path() == installed,
+            "ambiguous Bazel load-context source {}: both {} and {} were loaded",
+            requested.display(),
+            selected.display(),
+            installed.display()
+        );
+        let observed = self
+            .packages
+            .entry(installed.to_path_buf())
+            .or_insert_with(|| BazelPackage {
+                repository: repository.to_owned(),
+                name: package.to_owned(),
+            });
+        anyhow::ensure!(
+            observed.repository == repository && observed.name == package,
+            "conflicting Bazel loadfiles packages for {}: {:?} and {package:?}",
+            installed.display(),
+            observed.name
+        );
+        Ok(())
     }
 
     fn package<'a>(&'a self, repository: &Repository, path: &Path) -> Option<&'a str> {
@@ -350,6 +396,22 @@ impl DefaultFileLoader {
     ) -> anyhow::Result<Self> {
         self.bazel_load_context = BazelLoadContext::from_labels(&self, labels, sources)?;
         Ok(self)
+    }
+
+    pub(crate) fn selected_bazel_path<'a>(&'a self, path: &'a Path) -> &'a Path {
+        self.bazel_load_context
+            .selected_paths
+            .get(path)
+            .map_or(path, PathBuf::as_path)
+    }
+
+    pub(crate) fn remapped_bazel_paths(&self) -> impl Iterator<Item = (&Path, &Path)> {
+        self.bazel_load_context
+            .selected_paths
+            .iter()
+            .filter_map(|(requested, selected)| {
+                (requested != selected).then_some((requested.as_path(), selected.as_path()))
+            })
     }
 
     pub(crate) fn bazel_load_context_paths(&self) -> impl Iterator<Item = &Path> {
