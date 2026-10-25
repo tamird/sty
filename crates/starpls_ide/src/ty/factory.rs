@@ -2987,7 +2987,14 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
     let name = provider_name(db, call, initializer.is_some());
     let key_base = declared_class(db, call, "Provider")?;
     if let Some(class) = db.provider_interface(call.file(), call.call().node_index().load()) {
-        let key = super::providers::key_value(db, call.file(), class, key_base, &environment)?;
+        let key = super::providers::key_value(
+            db,
+            call.file(),
+            class,
+            key_base,
+            initializer,
+            &environment,
+        )?;
         if initializer.is_none() {
             return Some(key);
         }
@@ -3020,7 +3027,7 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
                 signature.with_parameters(parameters)
             }
             _ => {
-                let instance = super::providers::constructor_instance(db, class, &environment)?;
+                let instance = super::providers::constructor_instance(db, class, call.file())?;
                 Signature::new(parameters, instance)
             }
         };
@@ -3177,7 +3184,8 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
             .into(),
         },
     );
-    let key = super::providers::key_value(db, call.file(), class, key_base, &environment)?;
+    let key =
+        super::providers::key_value(db, call.file(), class, key_base, initializer, &environment)?;
     if initializer.is_some() {
         let instance = class.to_instance_approximation(db, &environment)?;
         let raw = Type::single_callable(

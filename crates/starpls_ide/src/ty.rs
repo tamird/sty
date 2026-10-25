@@ -589,13 +589,7 @@ impl ty_python_semantic::Db for Database {
         self.starlark_file(file)?;
         factory::common_rule_attrs(self, file, value_type)
             .or_else(|| context::target_type_reference(self, file, value_type))
-            .or_else(|| {
-                providers::constructor_instance(
-                    self,
-                    value_type,
-                    &ProgramEnvironment::from_file(file),
-                )
-            })
+            .or_else(|| providers::constructor_instance(self, value_type, file))
     }
 
     fn provided_instance_fields<'db>(
