@@ -166,11 +166,26 @@ pub(super) fn resolve<'db>(
             diagnostics: vec![diagnostic],
         }
     };
-    if name.starts_with('_') {
-        return error(format!("Cannot load private symbol \"{name}\""));
+    let private = name.starts_with('_');
+    let private_error = || error(format!("Cannot load private symbol \"{name}\""));
+    if private && !source_file.is_type_interface(db) {
+        return private_error();
     }
+    let unresolved = || {
+        if private {
+            private_error()
+        } else {
+            ProvidedBindingValue::Value(Type::unknown()).into()
+        }
+    };
     match db.load_file(&module_name, source_file.dialect, source_file) {
         Ok(Some(loaded)) => {
+            if private
+                && (!loaded.allows_native_annotations(db)
+                    || super::interface::pair_for_source(db, loaded) != Some((loaded, source_file)))
+            {
+                return private_error();
+            }
             if loaded.source == source_file.source {
                 return ProvidedBindingValue::Value(Type::unknown()).into();
             }
@@ -188,8 +203,8 @@ pub(super) fn resolve<'db>(
             .into()
         }
         // File diagnostics own module-resolution errors, including loads without bindings.
-        Ok(None) => ProvidedBindingValue::Value(Type::unknown()).into(),
-        Err(_) => ProvidedBindingValue::Value(Type::unknown()).into(),
+        Ok(None) => unresolved(),
+        Err(_) => unresolved(),
     }
 }
 

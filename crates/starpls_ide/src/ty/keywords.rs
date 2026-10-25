@@ -550,26 +550,71 @@ def wrapper(**kwargs: Unpack[KeywordArgs[_Wrapper]]) -> None: ...
     }
 
     #[test]
-    fn keyword_args_preserve_private_load_errors() {
+    fn keyword_args_load_private_values_only_from_the_paired_source() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
-        fixture.add_file(
-            &mut analysis.db,
-            "source.bzl",
-            "def _private(*, value: int) -> None: pass\n",
-        );
-        let file = fixture.add_file(
+        let source_text = "def _private(*, value: int) -> None: pass\ndef wrapper(**kwargs): _private(**kwargs)\n";
+        let source = fixture.add_file(&mut analysis.db, "source.bzl", source_text);
+        let interface = fixture.add_file(
             &mut analysis.db,
             "interface.bzli",
-            "load('source.bzl', _target='_private')\ntype Row = KeywordArgs[_target]\n",
+            "load('source.bzl', _target='_private')\ndef wrapper(**kwargs: Unpack[KeywordArgs[_target]]) -> None: ...\n",
         );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            "load('source.bzl', 'wrapper')\nwrapper(value=1)\n",
+        );
+        let unrelated = fixture.add_file(
+            &mut analysis.db,
+            "unrelated.bzl",
+            "load('source.bzl', _target='_private')\n",
+        );
+        let second = fixture.add_file(
+            &mut analysis.db,
+            "second.bzl",
+            "def wrapper(**kwargs): pass\n",
+        );
+        let second_caller = fixture.add_file(
+            &mut analysis.db,
+            "second_caller.bzl",
+            "load('second.bzl', 'wrapper')\nwrapper(value='wrong')\n",
+        );
+        let bridge = fixture.add_file(
+            &mut analysis.db,
+            "bridge.bzl",
+            "load('source.bzl', _alias='wrapper')\ndef _own(*, value: str) -> None: pass\npublic = _own\n",
+        );
+        let adjacent_text =
+            "load('bridge.bzl', _target='_own')\ntype Args = KeywordArgs[_target]\n";
+        let adjacent = fixture.add_file(&mut analysis.db, "bridge.bzli", adjacent_text);
         loader.add_files_from_fixture(&fixture);
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        let ids: Vec<_> = diagnostics
-            .iter()
-            .map(|diagnostic| diagnostic.id().as_str())
-            .collect();
-        assert_eq!(ids, ["load-error", "invalid-type-form"], "{diagnostics:?}");
+        let check = |analysis: &Analysis, file, expected: &[&str]| {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+            assert_eq!(ids, expected, "{file:?}: {diagnostics:?}");
+        };
+        check(&analysis, interface, &["load-error", "invalid-type-form"]);
+        analysis
+            .set_type_interfaces([(source, interface), (second, interface)])
+            .unwrap();
+        for file in [source, interface, caller, second, bridge, adjacent] {
+            check(&analysis, file, &[]);
+        }
+        check(&analysis, second_caller, &["invalid-argument-type"]);
+        check(&analysis, unrelated, &["load-error"]);
+        analysis.update_file(adjacent, format!("{adjacent_text}load('bridge.bzl', _indirect='_alias')\nload('source.bzl', _foreign='_private')\n"));
+        check(&analysis, adjacent, &["load-error", "load-error"]);
+        analysis.update_file(source, source_text.replace("value: int", "value: str"));
+        check(&analysis, caller, &["invalid-argument-type"]);
+        check(&analysis, second_caller, &[]);
+        analysis.update_file(
+            source,
+            "def wrapper(**kwargs): pass\n_private = wrapper\n".into(),
+        );
+        check(&analysis, interface, &["invalid-type-form"]);
+        analysis.set_type_interfaces([(second, interface)]).unwrap();
+        check(&analysis, interface, &["load-error", "invalid-type-form"]);
     }
 
     #[test]

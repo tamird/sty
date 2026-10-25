@@ -194,13 +194,15 @@ parameters of an existing callable into a closed dictionary schema. It
 preserves parameter types and whether each keyword is required:
 
 ```starlark
-load(":tool.bzl", _tool = "tool")
+load(":tool.bzl", "_tool")
 
 def wrapper(name: str, **kwargs: Unpack[KeywordArgs[_tool, "name"]]) -> None: ...
 ```
 
-A sidecar can import a public rule from its paired source file. The callable
-expression follows ordinary lexical binding, including aliases and shadowing.
+A stub can load public rules from other modules and private definitions from its
+paired `.bzl` implementation. A load from that implementation reads its source
+declaration. The callable expression follows ordinary lexical binding, including
+aliases and shadowing.
 Each signature must be nongeneric with fully known input kinds and types.
 Positional-only parameters, variadic or open keyword tails, and gradual inputs
 produce `invalid-type-form`. Excluded names must be unique string literals
