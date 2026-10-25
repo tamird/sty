@@ -120,6 +120,7 @@ pub(super) fn key_value<'db>(
     origin_file: ProgramFile<'db>,
     constructor: Type<'db>,
     base: Type<'db>,
+    initializer: Option<Type<'db>>,
     environment: &ProgramEnvironment<'db>,
 ) -> Option<Type<'db>> {
     let data = constructor.provided_data(db, environment);
@@ -159,6 +160,17 @@ pub(super) fn key_value<'db>(
         let provider = data?.downcast_ref::<super::factory::ProviderData>()?;
         (provider.name.clone(), None)
     };
+    let never_returns = initializer
+        .and_then(|value| value.callable_overloads(db, environment))
+        .is_some_and(|overloads| {
+            !overloads.is_empty()
+                && overloads.iter().all(|signature| {
+                    signature
+                        .upper_specialized_return_type(db, environment)
+                        .expand_top_level_aliases(db, environment)
+                        == Type::Never
+                })
+        });
     let mut results = Vec::new();
     let callable = constructor.map_callable_signatures(
         db,
@@ -173,7 +185,12 @@ pub(super) fn key_value<'db>(
             let parameters = std::iter::once(Parameter::positional_only(Some(Name::new("self"))))
                 .chain(signature.parameters().iter().cloned());
             let parameters = Parameters::from_annotation(db, parameters);
-            signature.with_parameters(parameters)
+            let signature = signature.with_parameters(parameters);
+            if never_returns {
+                signature.with_return_type(Type::Never)
+            } else {
+                signature
+            }
         },
     )?;
     // A runtime key identifies all constructor specializations. Its lookup view closes
@@ -233,18 +250,66 @@ pub(super) fn key_export<'db>(
     .resolve_type(db)?;
     let environment = ProgramEnvironment::from_file(file);
     let declaration = constructor.definition(db, &environment)?;
-    let is_provider = match declaration {
-        TypeDefinition::Function(definition) => is_declaration(db, definition),
+    let definition = match declaration {
+        TypeDefinition::Function(definition) if is_declaration(db, definition) => definition,
         TypeDefinition::StaticClass(_) => {
-            super::interface::provider_definition(db, constructor, &environment).is_some()
+            super::interface::provider_definition(db, constructor, &environment)?
         }
-        _ => false,
+        _ => return None,
     };
-    if !is_provider {
-        return None;
+    if let Some(key) = source_key(db, definition, name, &environment) {
+        return Some(key);
     }
     let base = db.annotation_builtin(source, "Provider")?;
-    key_value(db, file, constructor, base, &environment)
+    key_value(db, file, constructor, base, None, &environment)
+}
+
+/// The source registration already bound the initializer and built its callable key.
+/// Reuse that value only when it belongs to the declaration being exported.
+fn source_key<'db>(
+    db: &'db Database,
+    definition: Definition<'db>,
+    name: &str,
+    environment: &ProgramEnvironment<'db>,
+) -> Option<Type<'db>> {
+    let origins = super::interface::provider_origins(db, definition);
+    let &[(owner, node)] = origins.as_slice() else {
+        return None;
+    };
+    let parsed = ruff_db::parsed::parsed_module(db, owner.python_file(db)).load(db);
+    let AnyRootNodeRef::Expr(Expr::Call(call)) = parsed.get_by_index(NodeIndex::from(node)) else {
+        return None;
+    };
+    // Named arguments without an initializer cannot change the public return.
+    // Let the native binder decide when a positional or unpacked argument is present.
+    if call.arguments.args.is_empty()
+        && !call.arguments.keywords.iter().any(|keyword| {
+            keyword.arg.as_ref().is_none_or(|name| {
+                name.as_str() == "init" && !matches!(keyword.value, Expr::NoneLiteral(_))
+            })
+        })
+    {
+        return None;
+    }
+    if !is_provider_call(db, owner, call) {
+        return None;
+    }
+    let key = ProvidedBindingValue::Export {
+        file: owner,
+        name: Name::new(name),
+        value: None,
+    }
+    .resolve_type(db)?;
+    key.provided_data(db, environment)?
+        .downcast_ref::<ProviderKeyData>()?;
+    match constructor_definition(db, key, environment)? {
+        TypeDefinition::Function(original) | TypeDefinition::StaticClass(original)
+            if original == definition =>
+        {
+            Some(key)
+        }
+        _ => None,
+    }
 }
 
 /// Selecting a provider declaration must not infer its signature: fields can refer to itself.
@@ -346,8 +411,9 @@ pub(super) fn type_application<'db>(
 pub(super) fn constructor_instance<'db>(
     db: &'db Database,
     constructor: Type<'db>,
-    environment: &ProgramEnvironment<'db>,
+    file: ProgramFile<'db>,
 ) -> Option<Type<'db>> {
+    let environment = &ProgramEnvironment::from_file(file);
     if let Some(instance) = constructor.to_instance_approximation(db, environment) {
         if let Some(instance) = legacy_instance(db, instance, environment) {
             return Some(instance);
@@ -362,17 +428,15 @@ pub(super) fn constructor_instance<'db>(
     }
     let data = constructor.provided_data(db, environment)?;
     data.downcast_ref::<ProviderKeyData>()?;
-    let mut returns = Vec::new();
-    constructor.map_callable_signatures(
-        db,
-        environment,
-        CallableTypeKind::Regular,
-        |signature| {
-            returns.push(signature.default_specialized_return_type(db));
-            signature
-        },
-    )?;
-    Some(UnionType::from_elements(db, environment, returns))
+    let base = db.annotation_builtin(db.starlark_file(file)?, "Provider")?;
+    let (class, _) = base
+        .to_instance_approximation(db, environment)?
+        .class_specialization(db, environment)?;
+    let specialization = constructor.base_class_specialization(db, environment, class)?;
+    let [instance] = specialization.types(db) else {
+        return None;
+    };
+    Some(*instance)
 }
 
 /// Legacy class declarations retain ty's class identity and field ownership.
@@ -1228,6 +1292,14 @@ pub(super) fn is_provider_origin<'db>(
     let AnyRootNodeRef::Expr(Expr::Call(call)) = parsed.get_by_index(NodeIndex::from(node)) else {
         return false;
     };
+    is_provider_call(db, file, call)
+}
+
+fn is_provider_call<'db>(
+    db: &'db dyn super::interface::Db,
+    file: ProgramFile<'db>,
+    call: &ruff_python_ast::ExprCall,
+) -> bool {
     resolve_function(db, file, &call.func, &mut FxHashSet::default()).is_some_and(|definition| {
         matches!(
             super::factory::declaration(db, definition),
@@ -1394,6 +1466,143 @@ def contains(action: Action, extra: Extra, opaque: Hashable, keys: dict[Action, 
                     .iter()
                     .any(|diagnostic| diagnostic.id().as_str() == expected),
                 "{lookup}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn nonreturning_provider_initializer_preserves_the_key_and_raw_instance() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source_text = r#"
+def _deny(reason):
+    # type: (str) -> Never
+    fail(reason)
+def allow(reason):
+    return {"value": reason}
+Info, raw = provider(fields=["value"], init=_deny)
+Alias = Info
+"#;
+        let source = fixture.add_file(&mut analysis.db, "info.bzl", source_text);
+        let interface = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            r#"def Info(reason: str) -> record[{"value": str}]: ..."#,
+        );
+        let valid = r#"
+load("info.bzl", "Info", "Alias", Raw="raw")
+def disabled(reason: str) -> Never:
+    return Info(reason)
+def disabled_alias(reason: str) -> Never:
+    return Alias(reason)
+def public_callable() -> Callable[[str], Never]:
+    return Alias
+def stored() -> Info:
+    return Raw(value="kept")
+def indexed(target: Target) -> Info:
+    return target[Alias]
+def text(target: Target) -> str:
+    return target[Info].value + Raw(value="kept").value
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "caller.bzl", valid);
+        let native_source = r#"
+def deny(reason: str) -> Never:
+    fail(reason)
+
+Bare, make = provider(fields=["value"], init=deny)
+def stop(reason: str) -> Never:
+    return Bare(reason)
+def read(target: Target) -> Bare:
+    return target[Bare]
+def made() -> Bare:
+    return make(value="kept")
+"#;
+        let unpaired = fixture.add_file(&mut analysis.db, "unpaired.bzl", native_source);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, interface)]).unwrap();
+        for file in [source, interface, caller, unpaired] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (bad, expected) in [
+            ("Info(42)", "invalid-argument-type"),
+            ("Raw(value=42)", "invalid-argument-type"),
+            ("Raw(typo='x')", "unknown-argument"),
+            (
+                "def bad(target: Target) -> int: return target[Info].value",
+                "invalid-return-type",
+            ),
+        ] {
+            analysis.update_file(caller, format!("{valid}\n{bad}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert!(
+                diagnostics.iter().any(|d| d.id().as_str() == expected),
+                "{bad}: {diagnostics:?}"
+            );
+        }
+        analysis.update_file(
+            unpaired,
+            format!("{native_source}\ndef bad(value: Bare) -> int: return value\n"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(unpaired).unwrap();
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+
+        analysis.update_file(caller, valid.to_owned());
+        analysis.update_file(
+            source,
+            source_text.replace("fail(reason)", "return {'value': reason}"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+
+        analysis.update_file(source, source_text.replace("init=_deny", "init=allow"));
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|d| d.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+        analysis.update_file(
+            interface,
+            "def Info(*, value: str) -> record[{'value': str}]: ...\n".to_owned(),
+        );
+        analysis.update_file(
+            caller,
+            r#"load("info.bzl", "Info")
+def normal() -> Info: return Info(value="ok")
+def bottom() -> Never: return Info(value="ok")
+"#
+            .to_owned(),
+        );
+        for registration in [
+            "Info = provider(fields=['value'])",
+            "Info = provider(fields=['value'], init=None)",
+            "unrelated = 1",
+        ] {
+            analysis.update_file(source, registration.to_owned());
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            assert_eq!(diagnostics.len(), 1, "{registration}: {diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].id().as_str(),
+                "invalid-return-type",
+                "{registration}: {diagnostics:?}"
             );
         }
     }
