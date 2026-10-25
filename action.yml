@@ -8,6 +8,12 @@ inputs:
   advisory-files-from:
     description: Optional file listing workspace-relative files to check for an advisory report.
     default: ''
+  advisory-bazel-load-context:
+    description: Bazel targets whose packages load required advisory files, one target per line.
+    default: ''
+  advisory-require-bazel-load-context:
+    description: Advisory inventory paths requiring a unique identity in those Bazel packages, one file per line.
+    default: ''
   advisory-only:
     description: Run only the advisory inventory in a workspace without a strict selection.
     default: 'false'
@@ -74,6 +80,8 @@ runs:
         CHECK_FILES: ${{ inputs.files }}
         ADVISORY_ONLY: ${{ inputs.advisory-only }}
         ADVISORY_FILES_FROM: ${{ inputs.advisory-files-from }}
+        ADVISORY_LOAD_TARGETS: ${{ inputs.advisory-bazel-load-context }}
+        ADVISORY_LOAD_FILES: ${{ inputs.advisory-require-bazel-load-context }}
         CHECK_BAZEL_VERSION: ${{ inputs.bazel-version }}
         CODE_FLOW_ANALYSIS: ${{ inputs.code-flow-analysis }}
         AUDIT_LOADS: ${{ inputs.audit-loads }}
@@ -94,6 +102,12 @@ runs:
           false) ;;
           *) echo 'audit-loads must be true or false.' >&2; exit 1 ;;
         esac
+        if [[ -n "$ADVISORY_LOAD_TARGETS" || -n "$ADVISORY_LOAD_FILES" ]]; then
+          if [[ -z "$ADVISORY_FILES_FROM" || -z "$ADVISORY_LOAD_TARGETS" || -z "$ADVISORY_LOAD_FILES" ]]; then
+            echo 'Advisory load context requires targets, required files, and advisory-files-from.' >&2
+            exit 1
+          fi
+        fi
         strict_status=0
         case "$ADVISORY_ONLY" in
           true)
@@ -115,6 +129,16 @@ runs:
           advisory="$REPORT_DIRECTORY/advisory"
           mkdir "$advisory"
           cp -- "$ADVISORY_FILES_FROM" "$advisory/files.txt"
+          if [[ -n "$ADVISORY_LOAD_TARGETS" ]]; then
+            printf '%s\n' "$ADVISORY_LOAD_TARGETS" > "$advisory/load-targets.txt"
+            printf '%s\n' "$ADVISORY_LOAD_FILES" > "$advisory/load-files.txt"
+            while IFS= read -r target; do
+              [[ -z "$target" ]] || options+=("--bazel-load-context=$target")
+            done < "$advisory/load-targets.txt"
+            while IFS= read -r path; do
+              [[ -z "$path" ]] || options+=("--require-bazel-load-context=$path")
+            done < "$advisory/load-files.txt"
+          fi
           "$REPORT_DIRECTORY/sty" check "${options[@]}" --exit-zero \
             --files-from "$advisory/files.txt" --output-format json-lines \
             --report "$advisory/coverage.json" > "$advisory/diagnostics.jsonl"

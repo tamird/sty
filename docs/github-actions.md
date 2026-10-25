@@ -88,6 +88,22 @@ For a workspace that has no strict selection, set `advisory-only: true`
 with `advisory-files-from`. This mode requires a nonempty advisory inventory
 and rejects the strict `files` input.
 
+For a tracked fixture installed in another Bazel repository, specify a target
+that loads the file and the inventory path that must occur in its load graph:
+
+```yaml
+with:
+  advisory-files-from: authored-bzl.txt
+  advisory-bazel-load-context: '@example//:binary'
+  advisory-require-bazel-load-context: fixtures/example/defs.bzl
+```
+
+Both inputs accept one entry per line. The checker uses the installed
+repository to resolve the fixture's imports. The `bazel_load_context` object
+in `advisory/coverage.json` maps requested paths to installed paths when they
+differ. A target that does not load the file or loads it under two repository
+identities fails the check.
+
 The checked workspace uses its own `.bazelversion`. Set `bazel-version` to an
 exact version if the project selects Bazel through another mechanism. For a
 nested workspace, set `working-directory` to its path; `files` are relative to

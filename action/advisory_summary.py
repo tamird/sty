@@ -16,9 +16,22 @@ def summarize(directory: Path) -> str:
         raise ValueError("incomplete advisory check")
     workspace = Path(report["workspace"])
     checked = {Path(file["path"]) for file in report["checked_files"]}
-    missing = sorted(path for path in requested if workspace / path not in checked)
+    required: set[str] = set()
+    context_file = directory / "load-files.txt"
+    if context_file.exists():
+        required = set(context_file.read_text().splitlines()) - {""}
+        if not required <= requested:
+            outside = sorted(required - requested)
+            raise ValueError(f"load-context files outside the advisory inventory: {outside}")
+    remapped = report.get("bazel_load_context", {})
+    missing = []
+    for path in requested:
+        source = workspace / path
+        selected = Path(remapped.get(str(source), source)) if path in required else source
+        if selected not in checked:
+            missing.append(path)
     if missing:
-        raise ValueError(f"advisory files were not checked: {missing}")
+        raise ValueError(f"advisory files were not checked: {sorted(missing)}")
     counts = report["diagnostics"]
     return (
         f"Advisory: checked all {len(requested)} requested files. "
