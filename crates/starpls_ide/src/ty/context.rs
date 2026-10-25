@@ -1238,10 +1238,16 @@ fn context_type<'db>(
                 .map(|field| field.ty)
                 .chain((!complete).then_some(object)),
         );
+        // Outputs and RepoDefinition are Structure objects. Bazel builds the other
+        // context views with StructProvider.STRUCT.
         let base = factory::specialized_native_class(
             db,
             declarations,
-            "struct",
+            if view == View::Outputs || context_kind == ContextKind::Repository {
+                "struct"
+            } else {
+                "_StructInfo"
+            },
             vec![values, Type::TypedDict(schema)],
         )?;
         let ty = make_class(
@@ -5794,6 +5800,66 @@ repository = repository_rule(implementation=_repo_impl, attrs={"repo_inputs": at
         ] {
             check_field(&snapshot, file, source, expression, expected, key);
         }
+    }
+
+    #[test]
+    fn output_views_are_structured_but_cannot_be_rule_providers() {
+        let source = r#"Info = provider(fields=["value"])
+
+def check_struct(value: struct) -> None: pass
+def check_provider(value: ProviderInstance) -> None: pass
+def check_output(value: File | None) -> None: pass
+
+def helper(generic_ctx: ctx[object, object]) -> None:
+    check_struct(generic_ctx.outputs)
+    check_provider(generic_ctx.outputs)
+
+def attrs(ctx: ctx) -> None:
+    check_provider(ctx.attr)
+    check_provider(ctx.rule.attr)
+    check_provider(ctx.rule)
+
+def repository(repo_ctx):
+    check_struct(repo_ctx.attr)
+    check_provider(repo_ctx.attr)
+
+example_repo = repository_rule(implementation=repository)
+
+def implementation(ctx) -> list[ProviderInstance]:
+    check_output(ctx.outputs.out)
+    check_struct(ctx.outputs)
+    check_provider(ctx.outputs)
+    check_provider(ctx.files)
+    check_provider(struct(value=1))
+    check_provider(Info(value=1))
+    return []
+
+example = rule(implementation=implementation, attrs={"out": attr.output()})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let actual: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic.id().as_str(),
+                    &source[diagnostic.range().unwrap()],
+                )
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            [
+                ("invalid-argument-type", "generic_ctx.outputs"),
+                ("invalid-argument-type", "ctx.rule"),
+                ("invalid-argument-type", "repo_ctx.attr"),
+                ("invalid-argument-type", "ctx.outputs"),
+            ]
+        );
     }
 
     #[test]

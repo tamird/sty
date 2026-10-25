@@ -502,8 +502,10 @@ a key with a declared lookup result `T`. Source provider values retain their exa
 constructor signatures; ordinary functions and raw constructors are not keys.
 
 `ProviderInstance` is the common type of Bazel provider values. It includes
-builtin providers, source providers, and `struct` values, which Bazel accepts
-in a rule implementation's provider list. Auxiliary values such as
+instances of builtin and source providers and values returned by `struct(...)`.
+Bazel accepts all three in a rule implementation's provider list. The host's
+`ctx.outputs` object has type `struct`; returning it in the provider list is
+an error. Auxiliary values such as
 `FilesToRunProvider` have their own types. An opaque `ProviderInstance` exposes
 no provider-specific fields.
 

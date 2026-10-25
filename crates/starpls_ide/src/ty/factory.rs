@@ -2963,7 +2963,7 @@ fn keyword_record<'db>(
             specialized_native_class(
                 db,
                 call.declaration()?.program_file(db),
-                "struct",
+                "_StructInfo",
                 vec![values, shape],
             )?
             .to_instance_approximation(db, &environment)?
