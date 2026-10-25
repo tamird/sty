@@ -3504,6 +3504,56 @@ native.inventory(package_metadata=["//:metadata"], applicable_licenses=[Label("/
     }
 
     #[test]
+    fn rule_outputs_with_union_attributes_and_nested_calls() {
+        for option in [
+            "fragments = ['apple']",
+            "toolchains = [config_common.toolchain_type('//:tool', mandatory=False)]",
+            "exec_groups = {'mac': exec_group()}",
+        ] {
+            let source = format!(
+                r#"def impl(ctx):
+    print(ctx.outputs.outs)
+    print(ctx.outputs.missing)
+    return []
+
+common = {{"name_hint": attr.string()}}
+extra = {{"enabled": attr.bool()}}
+target = rule(
+    implementation = impl,
+    attrs = common | extra | {{"outs": attr.output_list()}},
+    {option},
+)
+target(name="bad", outs=42)
+"#
+            );
+            let (mut analysis, fixture) = Analysis::from_single_file_fixture(&source);
+            enable_context(&mut analysis);
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            let mut errors: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    (
+                        diagnostic.id().as_str(),
+                        &source[diagnostic.range().unwrap()],
+                    )
+                })
+                .collect();
+            errors.sort_unstable();
+            assert_eq!(
+                errors,
+                [
+                    ("invalid-argument-type", "outs=42"),
+                    ("unresolved-attribute", "ctx.outputs.missing"),
+                ],
+                "{option}: {diagnostics:?}",
+            );
+        }
+    }
+
+    #[test]
     fn rule_attributes_with_trailing_starred_arguments() {
         let source = r#"def impl(ctx): return []
 attrs = {"flag": attr.int()}
