@@ -279,6 +279,63 @@ pub(super) fn bundled_cc_common<'db>(
     )
 }
 
+/// Use only the configured namespace and original builtin callable: BUILD preludes and
+/// lexical bindings may replace either name, while an alias of the native value still works.
+pub(super) fn configured_hasattr<'db>(
+    db: &'db crate::Database,
+    call: &ty_python_semantic::types::CheckedCall<'_, 'db>,
+) -> Option<SemanticType<'db>> {
+    use starpls_hir::Db as _;
+    use ty_python_semantic::provided::BuiltinUsage;
+    use ty_python_semantic::types::CheckedArgument;
+    use ty_python_semantic::SemanticModel;
+    let CheckedArgument::Value {
+        ty: name,
+        expression: _,
+    } = call.argument_at(1)
+    else {
+        return None;
+    };
+    let name = name.string_literal_value(db)?;
+    let file = db.starlark_file(call.file())?;
+    let defs = db.get_builtin_defs(&file.dialect);
+    let member = defs
+        .configured_members(db)
+        .iter()
+        .find(|member| member.name == name)?;
+    if call.has_binding_errors()
+        || defs
+            .extension(db)
+            .is_some_and(|extension| extension.classes.contains(member.namespace))
+    {
+        return None;
+    }
+    let CheckedArgument::Value {
+        ty: receiver,
+        expression: _,
+    } = call.argument_at(0)
+    else {
+        return None;
+    };
+    let namespace = db
+        .language_builtin(call.file(), member.namespace, BuiltinUsage::Runtime)?
+        .resolve_type(db)?;
+    if matches!(namespace, SemanticType::Dynamic(_)) || receiver != namespace {
+        return None;
+    }
+    let native_file = db.files.try_virtual_file(&path(file.dialect))?;
+    let model = SemanticModel::new(
+        db,
+        ty_python_semantic::Db::program_file(db, native_file.file()),
+    );
+    if call.expression_type(&call.call().func)?
+        != model.builtin_type("hasattr", BuiltinUsage::Runtime)?
+    {
+        return None;
+    }
+    Some(SemanticType::bool_literal(member.present))
+}
+
 pub(super) fn generate(
     dialect: Dialect,
     builtins: &Builtins,
@@ -2626,7 +2683,9 @@ fn write_function(
         separator = ", ";
     }
     let mut optional = false;
-    let mut keyword_only = matches!(kind, CallableKind::Rule(_)) && !callable.param.is_empty();
+    let mut keyword_only = !callable.param.is_empty()
+        && (matches!(kind, CallableKind::Rule(_))
+            || matches!(kind, CallableKind::Method("attr")) && value.name == "license");
     let legacy_prefix = matches!(kind, CallableKind::Method("repository_ctx" | "module_ctx"))
         && matches!(value.name.as_str(), "download_and_extract" | "extract");
     if keyword_only {
@@ -3357,6 +3416,154 @@ mod tests {
     use super::*;
     use crate::Analysis;
     use crate::FilePosition;
+
+    #[test]
+    fn attr_license_uses_the_effective_bazel_api() {
+        let source = "\
+def guarded():
+    return attr.license() if hasattr(attr, 'license') else attr.string_list()
+def aliased():
+    ns = attr
+    predicate = hasattr
+    return ns.license() if predicate(ns, 'license') else ns.string_list()
+def naked():
+    return attr.license()
+def bad_keyword():
+    return attr.license(typo = True) if hasattr(attr, 'license') else None
+def bad_positional():
+    return attr.license([]) if hasattr(attr, 'license') else None
+def shadowed():
+    def hasattr(_, __): return True
+    return attr.license() if hasattr(attr, 'license') else None
+def typo():
+    return attr.licens()
+def is_disabled() -> Literal[False]:
+    return hasattr(attr, 'license')
+def defaults():
+    if hasattr(attr, 'license'):
+        attr.license(default = ['notice'])
+        attr.license(default = ('notice',))
+        attr.license(default = {'notice': 0})
+        attr.license(default = set(['notice']))
+        attr.license(default = depset(['notice']))
+        attr.license(default = lambda: None)
+        attr.license(default = 'notice')
+        attr.license(default = {1: 'notice'})
+        attr.license(default = depset([1]))
+";
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        let (mut analysis, _) = Analysis::new_for_test();
+        let file = analysis
+            .open_document(
+                Path::new("/guard.bzl"),
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Bzl,
+                    is_external: false,
+                    bundled_cc_common: false,
+                }),
+                source.to_owned(),
+                1,
+            )
+            .unwrap();
+        for (semantics, expected) in [
+            ("StarlarkSemantics{}", &[8, 15, 17][..]),
+            (
+                "StarlarkSemantics{incompatible_no_attr_license=false}",
+                &[10, 12, 17, 19, 28, 29, 30][..],
+            ),
+        ] {
+            analysis
+                .set_builtin_defs_with_info(
+                    builtins.clone(),
+                    Default::default(),
+                    &starpls_bazel::client::BazelInfo {
+                        release: "release 9.3.0".to_owned(),
+                        starlark_semantics: semantics.to_owned(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let mut actual: Vec<_> = diagnostics
+                .iter()
+                .map(|d| {
+                    source[..usize::from(d.range().unwrap().start())]
+                        .bytes()
+                        .filter(|&c| c == b'\n')
+                        .count()
+                        + 1
+                })
+                .collect();
+            actual.sort_unstable();
+            assert_eq!(actual, expected, "{semantics}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
+    fn attr_license_does_not_fold_a_build_prelude_replacement() {
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        for (flags, replacement, unavailable) in [
+            ("", "attr = struct(license = 0)", true),
+            (
+                "incompatible_no_attr_license=false",
+                "attr = struct()",
+                false,
+            ),
+            ("", "def hasattr(_, __): return True", true),
+            (
+                "incompatible_no_attr_license=false",
+                "def hasattr(_, __): return False",
+                false,
+            ),
+        ] {
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs_with_info(
+                    builtins.clone(),
+                    Default::default(),
+                    &starpls_bazel::client::BazelInfo {
+                        release: "release 9.3.0".to_owned(),
+                        starlark_semantics: format!("StarlarkSemantics{{{flags}}}"),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+            fixture.add_prelude_file(&mut analysis.db, &format!("{replacement}\n"));
+            let file = fixture.add_file_with_options(
+                &mut analysis.db,
+                "BUILD",
+                "actual = hasattr(attr, 'license')\n",
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Build,
+                    is_external: false,
+                    bundled_cc_common: false,
+                }),
+            );
+            let db = &analysis.db;
+            let program = db.starlark_program_file(file);
+            let model = SemanticModel::new(db, program);
+            let definitions = crate::ty::interface::export_definitions(db, program, "actual");
+            let [definition] = definitions.as_slice() else {
+                panic!("missing BUILD assignment")
+            };
+            let observed = model.definition_type(*definition);
+            let boolean = ty_python_semantic::types::KnownClass::Bool
+                .to_instance(db, &model.program_environment());
+            assert!(
+                observed == boolean || observed == TyType::bool_literal(unavailable),
+                "{replacement}: {observed:?}"
+            );
+        }
+    }
 
     #[test]
     fn annotation_names_follow_starlark_collections() {

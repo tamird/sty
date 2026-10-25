@@ -34,12 +34,15 @@ pub struct BuiltinDefs {
     #[returns(clone)]
     pub extension: Option<BuiltinExtension>,
     pub bazel_version: Option<starpls_bazel::env::BazelVersion>,
+    #[returns(ref)]
+    pub configured_members: Vec<starpls_bazel::env::ConfiguredMember>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BuiltinExtension {
     pub file: File,
     pub contents: ruff_db::source::SourceText,
+    pub classes: Arc<std::collections::BTreeSet<String>>,
 }
 
 #[salsa::db]
@@ -86,8 +89,22 @@ pub struct Environment {
 
 impl Environment {
     pub fn initialize(db: &dyn Db, options: InferenceOptions) -> Self {
-        let standard = BuiltinDefs::new(db, Builtins::default(), Default::default(), None, None);
-        let bazel = BuiltinDefs::new(db, Builtins::default(), Default::default(), None, None);
+        let standard = BuiltinDefs::new(
+            db,
+            Builtins::default(),
+            Default::default(),
+            None,
+            None,
+            Vec::new(),
+        );
+        let bazel = BuiltinDefs::new(
+            db,
+            Builtins::default(),
+            Default::default(),
+            None,
+            None,
+            Vec::new(),
+        );
         Self::new(
             db,
             options,

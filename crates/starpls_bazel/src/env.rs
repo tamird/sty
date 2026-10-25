@@ -143,6 +143,92 @@ impl BazelVersion {
     }
 }
 
+/// Bazel prints only non-default semantics. Its documented +incompatible_no_attr_license
+/// key defaults to true. Only identify a stock release and a simple boolean inventory;
+/// Bazel renders other option values without escaping embedded separators.
+fn attr_license(release: &str, semantics: &str) -> Option<bool> {
+    let version = BazelVersion::parse_release(release)?;
+    let BazelVersion {
+        major,
+        minor,
+        patch,
+    } = version;
+    if release != format!("release {major}.{minor}.{patch}")
+        || !(6..=9).contains(&major)
+        || (major, minor) > (9, 3)
+    {
+        return None;
+    }
+    let fields = semantics
+        .strip_prefix("StarlarkSemantics{")?
+        .strip_suffix('}')?;
+    // Other option values may contain unescaped commas or equals signs. Only
+    // recognize an inventory made up entirely of these known boolean entries.
+    match fields {
+        "" | "internal_bazel_only_utf_8_byte_strings=true" => Some(false),
+        "incompatible_no_attr_license=false"
+        | "incompatible_no_attr_license=false, internal_bazel_only_utf_8_byte_strings=true" => {
+            Some(true)
+        }
+        _ => None,
+    }
+}
+
+/// A member whose presence is known for this invocation at the named host namespace.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConfiguredMember {
+    pub namespace: &'static str,
+    pub name: &'static str,
+    pub present: bool,
+}
+
+/// StarlarkAttrModuleApi.licenseAttribute is exported only with its disabling flag off.
+pub fn configure_attr_license(
+    builtins: &mut Builtins,
+    info: &crate::client::BazelInfo,
+) -> Option<ConfiguredMember> {
+    let present = attr_license(&info.release, &info.starlark_semantics)?;
+    let member = ConfiguredMember {
+        namespace: "attr",
+        name: "license",
+        present,
+    };
+    let attr = builtins
+        .r#type
+        .iter_mut()
+        .find(|class| class.name == "attr")?;
+    if attr.field.iter().any(|member| member.name == "license") {
+        return present.then_some(member);
+    }
+    if present {
+        attr.field.push(Value {
+            name: "license".to_owned(),
+            callable: Some(Callable {
+                return_type: "Attribute".to_owned(),
+                param: [
+                    (
+                        "default",
+                        "iterable of strings; or depset of strings; or function; or NoneType",
+                        "None",
+                    ),
+                    ("doc", "string; or NoneType", "None"),
+                    ("mandatory", "boolean", "False"),
+                ]
+                .into_iter()
+                .map(|(name, ty, default)| Param {
+                    name: name.to_owned(),
+                    r#type: ty.to_owned(),
+                    default_value: default.to_owned(),
+                    ..Default::default()
+                })
+                .collect(),
+            }),
+            ..Default::default()
+        });
+    }
+    Some(member)
+}
+
 /// Complete version-dependent API metadata using `bazel info release`.
 pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     let Some(parsed) = BazelVersion::parse_release(release) else {
@@ -739,6 +825,55 @@ pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attr_license_requires_known_semantics() {
+        let known = "release 9.3.0";
+        for (release, flags, expected) in [
+            (known, "StarlarkSemantics{internal_bazel_only_utf_8_byte_strings=true}", Some(false)),
+            (known, "StarlarkSemantics{incompatible_no_attr_license=false, internal_bazel_only_utf_8_byte_strings=true}", Some(true)),
+            ("release 9.3.0-fork", "StarlarkSemantics{}", None),
+            ("development version", "StarlarkSemantics{}", None),
+            (known, "", None),
+            (known, "StarlarkSemantics{incompatible_no_attr_license=possibly}", None),
+            (known, "StarlarkSemantics{experimental_builtins_bzl_path=true}", None),
+            (known, "StarlarkSemantics{fork_string=false, incompatible_no_attr_license=false}", None),
+        ] {
+            assert_eq!(super::attr_license(release, flags), expected, "{release}: {flags}");
+        }
+    }
+
+    #[test]
+    fn attr_license_preserves_an_explicit_inventory() {
+        let mut builtins = Builtins {
+            r#type: vec![Type {
+                name: "attr".into(),
+                field: vec![Value {
+                    name: "license".into(),
+                    r#type: "int".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let original = builtins.clone();
+        for (flags, present) in [
+            ("", None),
+            ("incompatible_no_attr_license=false", Some(true)),
+        ] {
+            let info = crate::client::BazelInfo {
+                release: "release 9.3.0".into(),
+                starlark_semantics: format!("StarlarkSemantics{{{flags}}}"),
+                ..Default::default()
+            };
+            assert_eq!(
+                configure_attr_license(&mut builtins, &info).map(|m| m.present),
+                present
+            );
+            assert_eq!(builtins, original);
+        }
+    }
 
     #[test]
     fn shareable_artifact_follows_audited_releases_and_preserves_metadata() {

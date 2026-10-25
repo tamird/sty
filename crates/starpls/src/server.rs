@@ -131,7 +131,11 @@ pub(crate) struct ConfigurationReady {
 
 pub(crate) struct PreparedConfiguration {
     loader: Box<DefaultFileLoader>,
-    native: Option<(Builtins, starpls_bazel::build::BuildLanguage, String)>,
+    native: Option<(
+        Builtins,
+        starpls_bazel::build::BuildLanguage,
+        starpls_bazel::client::BazelInfo,
+    )>,
     interfaces: anyhow::Result<crate::commands::type_interface::PreparedInterfaces>,
     interface_files: HashMap<PathBuf, Option<PathBuf>>,
 }
@@ -660,17 +664,14 @@ impl Server {
                     }
                     let loader = template
                         .with_context(
-                            context.info.workspace_name,
+                            context.info.workspace_name.clone(),
                             context.info.output_base.join("external"),
                             context.bzlmod_enabled,
                         )
                         .with_bundled_builtins(bundled_builtins);
                     loader.finish_mapping(String::new(), Ok(context.main_repo_mapping));
                     let builtins = load_bazel_builtins(Some(&context.info.release));
-                    (
-                        loader,
-                        Some((builtins, context.rules, context.info.release)),
-                    )
+                    (loader, Some((builtins, context.rules, context.info)))
                 };
                 let mut loader = loader.with_interface_file_tracking();
                 let interfaces = options.prepare(&loader, &workspace);
@@ -742,9 +743,9 @@ impl Server {
         self.loader = loader;
         let replacement = self.analysis.replace_loader(self.loader.clone());
         let native = match native {
-            Some((builtins, rules, release)) => self
+            Some((builtins, rules, info)) => self
                 .analysis
-                .set_builtin_defs_with_release(builtins, rules, &release),
+                .set_builtin_defs_with_info(builtins, rules, &info),
             None => Ok(()),
         };
         let result = admission

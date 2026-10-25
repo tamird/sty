@@ -60,9 +60,11 @@ impl Analysis {
         )?;
         db.install_native_source(source);
         let contents = file.contents(db);
-        definitions
-            .set_extension(db)
-            .to(Some(BuiltinExtension { file, contents }));
+        definitions.set_extension(db).to(Some(BuiltinExtension {
+            file,
+            contents,
+            classes: names.into(),
+        }));
         Ok(())
     }
 
@@ -304,6 +306,41 @@ builtins: dict[{"repository_ctx": _RepositoryContext, "module_ctx": _ExternalCon
         analysis.set_bazel_builtin_extension(None).unwrap();
         let reset = analysis.snapshot().diagnostics(source).unwrap();
         assert_eq!(reset.len(), original.len(), "{reset:#?}");
+    }
+
+    #[test]
+    fn attr_license_defers_to_a_workspace_extension() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = fixture.add_file(&mut analysis.db, "main.bzl", "def expect(value: Literal[False]): pass\ndef check():\n    expect(hasattr(attr, 'license'))\n    attr.license('yes')\n    attr.license(1)\n");
+        let extension = fixture.add_file(&mut analysis.db, "host.bzli", "class _Attr(Protocol):\n    def license(self, value: str) -> int: ...\nbuiltins: dict[{\"attr\": _Attr}]\n");
+        loader.add_files_from_fixture(&fixture);
+        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+            "../../../starpls/src/builtin/builtin.pb"
+        ))
+        .unwrap();
+        analysis
+            .set_builtin_defs_with_info(
+                builtins,
+                Default::default(),
+                &starpls_bazel::client::BazelInfo {
+                    release: "release 9.3.0".into(),
+                    starlark_semantics: "StarlarkSemantics{}".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        analysis
+            .set_bazel_builtin_extension(Some(extension))
+            .unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:#?}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|d| d.id().as_str() == "invalid-argument-type"),
+            "{diagnostics:#?}"
+        );
     }
 
     #[test]

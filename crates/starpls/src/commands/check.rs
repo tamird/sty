@@ -4159,10 +4159,10 @@ impl CheckCommand {
                 ..Default::default()
             },
         )?;
-        analysis.set_builtin_defs_with_release(
+        analysis.set_builtin_defs_with_info(
             load_bazel_builtins(Some(&info.release)),
             rules,
-            &info.release,
+            info,
         )?;
         for SourceOverlay { logical, physical } in &self.source_overlay {
             let logical = starpls_common::absolute_path(logical)?;

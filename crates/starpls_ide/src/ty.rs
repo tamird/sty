@@ -654,7 +654,9 @@ impl ty_python_semantic::Db for Database {
         call: &ty_python_semantic::types::CheckedCall<'_, 'db>,
     ) -> ty_python_semantic::provided::ProvidedCallResult<'db> {
         ty_python_semantic::provided::ProvidedCallResult {
-            return_type: factory::result(self, call).or_else(|| providers::call_result(self, call)),
+            return_type: factory::result(self, call)
+                .or_else(|| providers::call_result(self, call))
+                .or_else(|| native::configured_hasattr(self, call)),
             diagnostics: providers::call_diagnostics(self, call)
                 .into_iter()
                 .chain(context::call_diagnostics(self, call))

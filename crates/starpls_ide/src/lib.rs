@@ -240,6 +240,7 @@ impl starpls_hir::Db for Database {
         defs.set_rules(self).to(rules);
         defs.set_extension(self).to(None);
         defs.set_bazel_version(self).to(None);
+        defs.set_configured_members(self).to(Vec::new());
         Ok(())
     }
 
@@ -565,6 +566,20 @@ impl Analysis {
         let defs = self.db.get_builtin_defs(&Dialect::Bazel);
         defs.set_bazel_version(&mut self.db)
             .to(starpls_bazel::env::BazelVersion::parse_release(release));
+        Ok(())
+    }
+
+    pub fn set_builtin_defs_with_info(
+        &mut self,
+        mut builtins: Builtins,
+        rules: starpls_bazel::build::BuildLanguage,
+        info: &starpls_bazel::client::BazelInfo,
+    ) -> anyhow::Result<()> {
+        let member = starpls_bazel::env::configure_attr_license(&mut builtins, info);
+        self.set_builtin_defs_with_release(builtins, rules, &info.release)?;
+        let defs = self.db.get_builtin_defs(&Dialect::Bazel);
+        defs.set_configured_members(&mut self.db)
+            .to(member.into_iter().collect());
         Ok(())
     }
 
