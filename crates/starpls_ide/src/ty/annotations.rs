@@ -135,7 +135,8 @@ impl AnnotationChecks<'_> {
             // require annotations of their own.
             if method
                 && position == 0
-                && !function.parameters.args.is_empty()
+                && (!function.parameters.posonlyargs.is_empty()
+                    || !function.parameters.args.is_empty())
                 && !matches!(
                     self.model.definition_type(*definition),
                     ty_python_semantic::types::Type::Dynamic(_)
@@ -438,7 +439,21 @@ consume(items[0]["name"])
                 .collect();
             assert_eq!(missing, [expected], "{diagnostics:?}");
         }
-        analysis.update_file(stub, "class Visitor[T](Protocol):\n    def visit(self, value: T) -> T: ...\nclass Callback[T](Protocol):\n    def __call__(self, *args: Unknown, data: T, **kwargs: Unknown) -> None: ...\nclass Variadic(Protocol):\n    def __call__(*args) -> None: ...\ndef convert(self) -> int: ...\n".into());
+        analysis.update_file(
+            stub,
+            "class Visitor[T](Protocol):
+    def visit(self, value: T) -> T: ...
+class Callback[T](Protocol):
+    def __call__(self, *args: Unknown, data: T, **kwargs: Unknown) -> None: ...
+class Variadic(Protocol):
+    def __call__(*args) -> None: ...
+class ExternalContext(Protocol):
+    def copy(receiver, src, dst: str, /, *, watch: bool = ...) -> None: ...
+def convert(self) -> int: ...
+def free(first, /) -> int: ...
+"
+            .into(),
+        );
         let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
         assert!(
             diagnostics
@@ -451,8 +466,8 @@ consume(items[0]["name"])
             .filter(|d| d.id().as_str() == "missing-parameter-annotation")
             .map(|d| d.headline_message())
             .collect();
-        assert_eq!(missing.len(), 2, "{diagnostics:?}");
-        for name in ["self", "args"] {
+        assert_eq!(missing.len(), 4, "{diagnostics:?}");
+        for name in ["self", "args", "src", "first"] {
             assert!(
                 missing
                     .iter()
