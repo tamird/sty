@@ -806,7 +806,8 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
             },
         ),
         BuiltinFunction::Macro => rule(db, call, RuleKind::Macro),
-        BuiltinFunction::Aspect | BuiltinFunction::Subrule | BuiltinFunction::ArgsMapEach => None,
+        BuiltinFunction::Subrule => subrule(db, call),
+        BuiltinFunction::Aspect | BuiltinFunction::ArgsMapEach => None,
         BuiltinFunction::TagClass => super::module_extension::tag_class(db, call),
         BuiltinFunction::ModuleExtension => super::module_extension::extension(db, call),
         BuiltinFunction::UseExtension => super::module_extension::proxy(db, call),
@@ -1520,6 +1521,38 @@ fn rule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>, kind: RuleKind) -> 
     rule_with_inputs(db, call, kind, None)
 }
 
+/// This subrule and its dependencies add no mandatory attributes to a hosting rule.
+#[derive(Debug, PartialEq, Eq, Hash, get_size2::GetSize)]
+struct OptionalSubrule;
+
+fn subrule<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<'db>> {
+    if call.has_binding_errors() {
+        return None;
+    }
+    let environment = ProgramEnvironment::from_file(call.file());
+    let base = declared_class(db, call, "Subrule")?;
+    if base.to_instance_approximation(db, &environment) != Some(call.return_type()) {
+        return None;
+    }
+    let inputs = RuleInputs {
+        site: call,
+        forwarded: None,
+    };
+    if !inputs.omitted_or("attrs", |_, _| {
+        call.dictionary_argument(db, "attrs").is_some_and(|attrs| {
+            attrs
+                .items
+                .iter()
+                .all(|item| is_optional_descriptor(db, &environment, item.ty))
+                && extra_attributes_are_optional(db, &environment, attrs.extra_items)
+        })
+    }) || !inputs.subrules_are_optional(db, &environment)
+    {
+        return None;
+    }
+    descriptor(db, call, "Subrule", ProvidedData::new(OptionalSubrule))
+}
+
 struct RuleInputs<'call, 'a, 'db> {
     site: &'call CheckedCall<'a, 'db>,
     forwarded: Option<&'call BoundRule<'a, 'db>>,
@@ -1535,6 +1568,25 @@ impl<'a, 'db> RuleInputs<'_, 'a, 'db> {
 
     fn flag(&self, name: &str) -> Option<bool> {
         argument_bool(self.argument(name))
+    }
+
+    fn subrules_are_optional(
+        &self,
+        db: &'db Database,
+        environment: &ProgramEnvironment<'db>,
+    ) -> bool {
+        self.omitted_or("subrules", |_, expression| {
+            expression
+                .and_then(literal_sequence_elements)
+                .is_some_and(|elements| {
+                    elements.iter().all(|element| {
+                        self.site
+                            .expression_type(element)
+                            .and_then(|ty| ty.provided_data(db, environment))
+                            .is_some_and(|data| data.downcast_ref::<OptionalSubrule>().is_some())
+                    })
+                })
+        })
     }
 
     fn omitted_or(
@@ -1887,23 +1939,12 @@ fn rule_with_inputs<'a, 'db>(
                         ty.as_bool_literal() == Some(false)
                     })
                     && (!may_have_initializer || initializer_preserves_call_shape)
-                    && inputs.omitted_or("subrules", |_, expression| {
-                        expression
-                            .and_then(literal_sequence_elements)
-                            .is_some_and(<[Expr]>::is_empty)
-                    })
+                    && inputs.subrules_are_optional(db, &environment)
                     && items
                         .iter()
                         .filter(|item| !item.is_required())
                         .all(|item| is_optional_descriptor(db, &environment, item.ty))
-                    && match extra_items {
-                        DictionaryExtraItems::Closed => true,
-                        DictionaryExtraItems::Value(value) => {
-                            is_optional_descriptor(db, &environment, value)
-                        }
-                        DictionaryExtraItems::ParamSpec(_)
-                        | DictionaryExtraItems::KeywordTail(_) => false,
-                    }
+                    && extra_attributes_are_optional(db, &environment, extra_items)
             }
             RuleKind::Repository | RuleKind::Macro => is_complete,
         };
@@ -2252,6 +2293,18 @@ fn initializer_accepts_rule_attributes<'db>(
         ),
     );
     initializer.is_assignable_to(db, environment, domain)
+}
+
+fn extra_attributes_are_optional<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    extra_items: DictionaryExtraItems<'db>,
+) -> bool {
+    match extra_items {
+        DictionaryExtraItems::Closed => true,
+        DictionaryExtraItems::Value(value) => is_optional_descriptor(db, environment, value),
+        DictionaryExtraItems::ParamSpec(_) | DictionaryExtraItems::KeywordTail(_) => false,
+    }
 }
 
 fn is_optional_descriptor<'db>(
@@ -3766,6 +3819,17 @@ example = rule(implementation=implementation, extendable=True, attrs={
 stable = rule(implementation=implementation, attrs={"_direct": attr.label(default=Label("//:default"))})
 lifted = subrule(implementation=lambda ctx, _dep: None, attrs={"_dep": attr.label(default="//:dep", mandatory=True)})
 with_subrule = rule(implementation=implementation, subrules=[lifted])
+optional = subrule(implementation=lambda ctx, _dep: None, attrs={"_dep": attr.label(default=configuration_field(fragment="cpp", name="compiler"))})
+nested_optional = subrule(implementation=lambda ctx: None, subrules=[optional])
+nested_required = subrule(implementation=lambda ctx: None, subrules=[optional, lifted])
+opaque = subrule(implementation=lambda ctx: None, attrs=json.decode("{}"))
+unpacked_attrs = subrule(implementation=lambda ctx: None, subrules=[], **json.decode("{}"))
+unpacked_children = subrule(implementation=lambda ctx: None, attrs={}, **json.decode("{}"))
+optional_rule = rule(implementation=implementation, subrules=[nested_optional])
+nested_required_rule = rule(implementation=implementation, subrules=[nested_required])
+opaque_rule = rule(implementation=implementation, subrules=[opaque])
+unpacked_attrs_rule = rule(implementation=implementation, subrules=[unpacked_attrs])
+unpacked_children_rule = rule(implementation=implementation, subrules=[unpacked_children])
 alternate = rule(implementation=implementation, dependency_resolution_rule=True)
 initialized = rule(implementation=implementation, initializer=lambda name, extra: {}, attrs={"extra": attr.string()})
 child = rule(parent=example, implementation=implementation)
@@ -3920,6 +3984,11 @@ mandatory_wrapped(name="wrapped")
             ("mandatory_uncertain(name='uncertain', **{'$secret': '//:value'})", Some("mandatory_uncertain(")),
             ("mandatory_uncertain(name='omitted')", Some("mandatory_uncertain(")),
             ("with_subrule(name='omitted')", Some("with_subrule(")),
+            ("optional_rule(name='omitted')", None),
+            ("nested_required_rule(name='omitted')", Some("nested_required_rule(")),
+            ("opaque_rule(name='omitted')", Some("opaque_rule(")),
+            ("unpacked_attrs_rule(name='omitted')", Some("unpacked_attrs_rule(")),
+            ("unpacked_children_rule(name='omitted')", Some("unpacked_children_rule(")),
             ("alternate(name='alternate', toolchains=['//:toolchain'])", Some("alternate(")),
             ("initialized(name='initialized')", Some("initialized(")),
             ("def invoke_union(flag: bool) -> None:\n    chosen = example if flag else stable\n    chosen(name='union')", Some("chosen(")),
