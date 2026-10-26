@@ -638,6 +638,34 @@ def invalid(**kwargs: Unpack[_Fields]) -> None: ...
     }
 
     #[test]
+    fn popped_keyword_arguments_keep_their_remaining_fields() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = r#"
+def target(*, src: str = "", tags: list[str] = []): pass
+
+def forward(**kwargs):
+    kwargs.pop("visibility", default = None)
+    target(**(kwargs | {"src": ":source"}))
+"#;
+        let file = fixture.add_file(&mut analysis.db, "main.bzl", source);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for (key, error) in [
+            ("tags", "invalid-argument-type"),
+            ("typo", "unknown-argument"),
+        ] {
+            analysis.update_file(file, source.replace(r#""src":"#, &format!(r#""{key}":"#)));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                matches!(diagnostics.as_slice(), [diagnostic] if diagnostic.id().as_str() == error),
+                "{diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
     fn dictionary_shapes_check_union_assignments() {
         let (mut analysis, _) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
