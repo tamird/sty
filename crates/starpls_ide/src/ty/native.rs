@@ -10917,6 +10917,71 @@ def check(args: Args, file: File) -> None:
     }
 
     #[test]
+    fn repository_patch_directory_checks_calls() {
+        let source = r#"def patch(ctx: repository_ctx, patchfile: str | Label | path, strip: int, patch_directory: str | Label | path | None) -> None:
+    ctx.patch(patchfile)
+    ctx.patch(patchfile, strip)
+    ctx.patch(patchfile, strip=strip, watch_patch="no")
+    ctx.patch(patchfile, strip, directory = patch_directory or "")
+    # Invalid calls.
+    ctx.patch(patchfile, strip, directory=None)
+    ctx.patch(patchfile, strip, directory=42)
+    ctx.patch(patchfile, strip, '')
+    ctx.patch(patchfile, strip, directory='', watch_patch=1)
+    ctx.patch(patchfile, strip, unknown='')
+    wrong: str = ctx.patch(patchfile, strip, directory=''); wrong
+"#;
+        let valid = &source[..source.find("    # Invalid calls.").unwrap()];
+        for (release, source, expected) in [
+            ("release 9.2.0", valid, vec![(4, "unknown-argument")]),
+            (
+                "release 9.3.0",
+                source,
+                vec![
+                    (6, "invalid-argument-type"),
+                    (7, "invalid-argument-type"),
+                    (8, "too-many-positional-arguments"),
+                    (9, "invalid-argument-type"),
+                    (10, "unknown-argument"),
+                    (11, "invalid-assignment"),
+                ],
+            ),
+        ] {
+            let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
+                "../../../starpls/src/builtin/builtin.pb"
+            ))
+            .unwrap();
+            env::apply_versioned_signatures(&mut builtins, release);
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(builtins, Default::default())
+                .unwrap();
+            let file = analysis
+                .open_document(
+                    Path::new("/patch.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source.to_owned(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let actual: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    let start = usize::from(diagnostic.range().unwrap().start());
+                    let line = source[..start]
+                        .bytes()
+                        .filter(|byte| *byte == b'\n')
+                        .count();
+                    (line, diagnostic.id().as_str())
+                })
+                .collect();
+            assert_eq!(actual, expected, "{release}: {diagnostics:?}");
+        }
+    }
+
+    #[test]
     fn bazel_action_api_write_follows_release() {
         let source = r#"def check(context: ctx[object, object], output: File) -> None:
     context.actions.write(output, "content", mnemonic="CppModuleMap")

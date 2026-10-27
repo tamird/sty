@@ -248,7 +248,10 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         .and_then(|value| value.callable.as_mut())
         .filter(|callable| {
             parsed.includes_backport(release, (9, 0, 1), (20251203, 1))
-                && !callable.param.iter().any(|param| param.name == "stack_trace")
+                && !callable
+                    .param
+                    .iter()
+                    .any(|param| param.name == "stack_trace")
         })
     {
         callable.param.push(Param {
@@ -417,6 +420,7 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     // 20260621.2. Earlier 10.0 snapshots predate the 9.2 backport.
     let transition_composition_available =
         parsed.includes_backport(release, (9, 2, 0), (20260621, 2));
+    let patch_directory_available = patch_directory_available(parsed, release);
     for class in &mut builtins.r#type {
         // ConfigurationTransitionApi.andThen is inherited by both native types.
         // https://github.com/bazelbuild/bazel/blob/9.2.0/src/main/java/com/google/devtools/build/lib/starlarkbuildapi/config/ConfigurationTransitionApi.java
@@ -450,6 +454,9 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         }
         if matches!(class.name.as_str(), "repository_ctx" | "module_ctx") {
             refine_execute_environment(class, version >= (8, 0));
+            if class.name == "repository_ctx" && patch_directory_available {
+                add_patch_directory(class);
+            }
             continue;
         }
         if class.name == "cpp" && version >= (8, 0) {
@@ -503,6 +510,79 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             }
         }
     }
+}
+
+// Bazel 9.3 backported patch(directory) from the September 8 rolling release.
+// https://github.com/bazelbuild/bazel/pull/31016
+// dzbarsky/bazel first includes it in dzbarsky26 (7ca3ccca34e7).
+fn patch_directory_available(version: BazelVersion, release: &str) -> bool {
+    if let Some(revision) = release.strip_prefix("release 9.3.0-dzbarsky") {
+        return revision.bytes().all(|byte| byte.is_ascii_digit())
+            && revision.parse::<u32>().is_ok_and(|revision| revision >= 26);
+    }
+    let stable = format!(
+        "release {}.{}.{}",
+        version.major, version.minor, version.patch
+    );
+    let upstream = release == stable
+        || release
+            .strip_prefix(&stable)
+            .and_then(|suffix| suffix.strip_prefix("rc"))
+            .is_some_and(|candidate| {
+                candidate.bytes().all(|byte| byte.is_ascii_digit())
+                    && candidate.parse::<u32>().is_ok()
+            })
+        || release.starts_with("release 10.0.0-pre.");
+    upstream && version.includes_backport(release, (9, 3, 0), (20260908, 2))
+}
+
+fn add_patch_directory(class: &mut Type) {
+    let Some(callable) = class
+        .field
+        .iter_mut()
+        .find(|field| field.name == "patch")
+        .and_then(|field| field.callable.as_mut())
+    else {
+        return;
+    };
+    let shape: Vec<_> = callable
+        .param
+        .iter()
+        .map(|param| {
+            (
+                param.name.as_str(),
+                param.is_star_arg,
+                param.is_star_star_arg,
+            )
+        })
+        .collect();
+    let needs_separator = match shape.as_slice() {
+        [("patch_file", false, false), ("strip", false, false), ("watch_patch", false, false)] => {
+            true
+        }
+        [("patch_file", false, false), ("strip", false, false), ("", true, false), ("watch_patch", false, false)] => {
+            false
+        }
+        _ => return,
+    };
+    if needs_separator {
+        callable.param.insert(
+            2,
+            Param {
+                is_star_arg: true,
+                ..Default::default()
+            },
+        );
+    }
+    callable.param.insert(
+        3,
+        Param {
+            name: "directory".to_owned(),
+            r#type: "string; or Label; or path".to_owned(),
+            default_value: "''".to_owned(),
+            ..Default::default()
+        },
+    );
 }
 
 fn add_shareable_artifact(class: &mut Type) {
@@ -825,6 +905,52 @@ pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repository_patch_directory_release_boundaries() {
+        for (release, available) in [
+            ("release 9.2.0", false),
+            ("release 9.3.0rc1", true),
+            ("release 9.3.0", true),
+            ("release 9.3.0-dzbarsky25", false),
+            ("release 9.3.0-dzbarsky26", true),
+            ("release 9.3.0-other", false),
+            ("release 10.0.0-pre.20260902.1", false),
+            ("release 10.0.0-pre.20260908.2", true),
+            ("release 10.0.0-pre.20261021.1", true),
+        ] {
+            let version = BazelVersion::parse_release(release).unwrap();
+            assert_eq!(
+                patch_directory_available(version, release),
+                available,
+                "{release}"
+            );
+        }
+    }
+
+    #[test]
+    fn repository_patch_directory_preserves_custom_callables() {
+        let mut class = Type {
+            field: vec![Value {
+                name: "patch".to_owned(),
+                callable: Some(Callable {
+                    param: ["source", "watch_patch"]
+                        .into_iter()
+                        .map(|name| Param {
+                            name: name.to_owned(),
+                            ..Default::default()
+                        })
+                        .collect(),
+                    return_type: "NoneType".to_owned(),
+                }),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let original = class.clone();
+        add_patch_directory(&mut class);
+        assert_eq!(class, original);
+    }
 
     #[test]
     fn attr_license_requires_known_semantics() {
