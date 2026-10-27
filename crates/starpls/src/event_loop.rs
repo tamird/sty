@@ -70,7 +70,7 @@ pub(crate) enum Task {
         request: lsp_server::Request,
         response: lsp_server::Response,
     },
-    ConfigurationReady(crate::server::ConfigurationReady),
+    ConfigurationReady(Box<crate::server::ConfigurationReady>),
     /// Wake the event loop to batch pending mappings after draining its tasks.
     ResolveRepoMappings,
     RepoMappingsReady {
@@ -342,7 +342,7 @@ impl Server {
                     self.handle_request(request);
                 }
             }
-            Task::ConfigurationReady(ready) => self.finish_configuration_refresh(ready),
+            Task::ConfigurationReady(ready) => self.finish_configuration_refresh(*ready),
             Task::ResolveRepoMappings => {}
             Task::RepoMappingsReady {
                 repositories,

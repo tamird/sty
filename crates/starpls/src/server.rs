@@ -683,7 +683,7 @@ impl Server {
                     interface_files,
                 })
             })();
-            Task::ConfigurationReady(ConfigurationReady { revision, result })
+            Task::ConfigurationReady(Box::new(ConfigurationReady { revision, result }))
         });
     }
 
