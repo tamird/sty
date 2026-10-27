@@ -15,7 +15,6 @@ use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 use ruff_text_size::TextSize;
 use rustc_hash::FxHashMap;
-use salsa::Accumulator;
 use starpls_common::Db;
 use starpls_hir::Db as _;
 use starpls_syntax::source::decode_string_value;
@@ -350,32 +349,6 @@ pub enum LoadResolution {
     Resolved(starpls_common::File),
     Pending,
     Failed(String),
-}
-
-#[salsa::accumulator]
-#[derive(Debug)]
-pub(crate) struct ObservedLoad {
-    pub(crate) from: starpls_common::File,
-    pub(crate) dependency: LoadDependency,
-}
-
-pub(super) fn observe_dependency(
-    db: &dyn Db,
-    from: starpls_common::File,
-    module: &str,
-    range: TextRange,
-) -> LoadResolution {
-    let resolution = resolve_dependency(db, from, module);
-    ObservedLoad {
-        from,
-        dependency: LoadDependency {
-            module: module.into(),
-            range,
-            resolution: resolution.clone(),
-        },
-    }
-    .accumulate(db);
-    resolution
 }
 
 pub(crate) fn dependencies(db: &dyn Db, file: starpls_common::File) -> &[LoadDependency] {

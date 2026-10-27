@@ -16,7 +16,7 @@ ruff_python_parser = { git = "https://github.com/tamird/ruff", rev = "3827ae5ac5
 ruff_text_size = { git = "https://github.com/tamird/ruff", rev = "3827ae5ac5cb509c2f443f0d6191b85574e7c431" }
 ruff_source_file = { git = "https://github.com/tamird/ruff", rev = "3827ae5ac5cb509c2f443f0d6191b85574e7c431" }
 stacker = "0.1.25"
-salsa = { version = "=0.28.5", default-features = false, features = ["macros", "inventory", "accumulator"] }
+salsa = { version = "=0.28.5", default-features = false, features = ["macros", "inventory"] }
 ruff_db = { git = "https://github.com/tamird/ruff", rev = "3827ae5ac5cb509c2f443f0d6191b85574e7c431", features = ["os"] }
 ruff_notebook = { git = "https://github.com/tamird/ruff", rev = "3827ae5ac5cb509c2f443f0d6191b85574e7c431" }
 ty_module_resolver = { git = "https://github.com/tamird/ruff", rev = "3827ae5ac5cb509c2f443f0d6191b85574e7c431" }

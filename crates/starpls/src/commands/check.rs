@@ -3557,11 +3557,17 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
     #[test]
     fn repository_proxy_report_preserves_distinct_missing_selector_sites() {
         let source = concat!(
+            "choose = use_repo_rule\n",
             "first = use_repo_rule('//:missing.bzl', 'first')\n",
             "first(name='first')\n",
             "first(name='repeated')\n",
-            "second = use_repo_rule('//:missing.bzl', 'second')\n",
-            "second(name='second')\n",
+            "second = choose('//:missing.bzl', 'second')\n",
+            "alias = second\n",
+            "alias(name='second')\n",
+            "inactive = choose('//:missing.bzl', 'inactive')\n",
+            "inactive(name='dev', dev_dependency=True)\n",
+            "if False:\n    inactive(name='unreachable')\n",
+            "value = inactive(name='skipped') if False else None\n",
         );
         let mut checker = local_checker_with_options(
             "checker-repository-proxy-distinct-sites",
@@ -3571,20 +3577,22 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
                 ..Default::default()
             },
         );
-        let checked = checker.check_files().unwrap();
-        let [(module, _)] = checked.diagnostics.as_slice() else {
-            panic!("expected one selected MODULE file");
-        };
-        assert_eq!(
-            checked.loads.unresolved[module]
-                .iter()
-                .map(|edge| &source[edge.range])
-                .collect::<Vec<_>>(),
-            [
-                "use_repo_rule('//:missing.bzl', 'first')",
-                "use_repo_rule('//:missing.bzl', 'second')",
-            ]
-        );
+        for _ in 0..2 {
+            let checked = checker.check_files().unwrap();
+            let [(module, _)] = checked.diagnostics.as_slice() else {
+                panic!("expected one selected MODULE file");
+            };
+            assert_eq!(
+                checked.loads.unresolved[module]
+                    .iter()
+                    .map(|edge| &source[edge.range])
+                    .collect::<Vec<_>>(),
+                [
+                    "use_repo_rule('//:missing.bzl', 'first')",
+                    "choose('//:missing.bzl', 'second')",
+                ]
+            );
+        }
         std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
     }
 

@@ -8,6 +8,8 @@ use ruff_db::diagnostic::DiagnosticId;
 use ruff_db::diagnostic::Severity;
 use ruff_db::diagnostic::Span;
 use ruff_python_ast::name::Name;
+use ruff_python_ast::visitor;
+use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::Expr;
 use ruff_python_ast::ExprCall;
 use ruff_python_ast::ExprRef;
@@ -23,6 +25,7 @@ use ty_python_semantic::provided::ProvidedBindingValue;
 use ty_python_semantic::provided::ProvidedClass;
 use ty_python_semantic::provided::ProvidedData;
 use ty_python_semantic::provided::ProvidedInstanceFields;
+use ty_python_semantic::types::ide_support::unreachable_ranges;
 use ty_python_semantic::types::CheckedArgument;
 use ty_python_semantic::types::CheckedCall;
 use ty_python_semantic::types::KnownClass;
@@ -30,7 +33,9 @@ use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::ParameterKind;
 use ty_python_semantic::types::Parameters;
 use ty_python_semantic::types::Type;
+use ty_python_semantic::HasType;
 use ty_python_semantic::ProgramEnvironment;
+use ty_python_semantic::SemanticModel;
 
 use super::factory;
 use super::load;
@@ -172,7 +177,11 @@ pub(super) fn call_target<'db>(
             Name::new_static("__call__"),
             Type::function_like_callable(db, signature),
         )]),
-        instance_fields: ProvidedInstanceFields::default().into(),
+        instance_fields: ProvidedInstanceFields {
+            data: Some(data.clone()),
+            ..ProvidedInstanceFields::default()
+        }
+        .into(),
     })
     .into_type_at_expression(db, file, ExprRef::Call(call)) else {
         return Ok(None);
@@ -181,6 +190,26 @@ pub(super) fn call_target<'db>(
 }
 
 impl Selection {
+    fn is_visible(&self, db: &Database) -> Option<bool> {
+        if !self.name.starts_with('_') {
+            return Some(true);
+        }
+        // Bazel 7 and 8 admitted private globals. Bazel 9 rejected them after
+        // c538f4e6f305, but the tracked major/minor version cannot distinguish
+        // early 9.0 prereleases from versions containing that fix.
+        let version = db
+            .get_builtin_defs(&self.source.dialect)
+            .bazel_version(db)
+            .as_ref()?;
+        if version.at_least(9, 1) {
+            Some(false)
+        } else if version.at_least(9, 0) {
+            None
+        } else {
+            Some(true)
+        }
+    }
+
     fn export<'db>(
         &self,
         db: &'db Database,
@@ -195,25 +224,12 @@ impl Selection {
                 format!("Selected source does not export `{}`", self.name),
             )
         };
-        if self.name.starts_with('_') {
-            let Some(version) = db
-                .get_builtin_defs(&self.source.dialect)
-                .bazel_version(db)
-                .as_ref()
-            else {
-                return Ok(None);
-            };
-            // Bazel 7 and 8 admitted private globals. Bazel 9 rejected them after
-            // c538f4e6f305, but the tracked major/minor version cannot distinguish
-            // early 9.0 prereleases from versions containing that fix.
-            if version.at_least(9, 1) {
-                return Err(missing_export());
-            }
-            if version.at_least(9, 0) {
-                return Ok(None);
-            }
+        match self.is_visible(db) {
+            Some(true) => {}
+            Some(false) => return Err(missing_export()),
+            None => return Ok(None),
         }
-        let loaded = match load::observe_dependency(db, self.source, &self.label, self.range) {
+        let loaded = match load::resolve_dependency(db, self.source, &self.label) {
             load::LoadResolution::Resolved(file) => file,
             load::LoadResolution::Pending => return Ok(None),
             load::LoadResolution::Failed(cause) => {
@@ -279,6 +295,72 @@ impl Selection {
     }
 }
 
+/// Read the selected repository rule from each active call's inferred callee. Recording
+/// edges while checking its arguments would accumulate values inside ty's inference cycles.
+pub(crate) fn dependencies(db: &Database, file: File) -> Vec<(File, load::LoadDependency)> {
+    if file.api_context() != Some(APIContext::Module) {
+        return Vec::new();
+    }
+    let program = db.starlark_program_file(file);
+    let mut calls = RepositoryRuleCalls {
+        db,
+        model: SemanticModel::new(db, program),
+        seen: HashSet::new(),
+        dependencies: Vec::new(),
+    };
+    calls.visit_body(starpls_common::parsed_module(db, file).load(db).suite());
+    calls.dependencies
+}
+
+struct RepositoryRuleCalls<'db> {
+    db: &'db Database,
+    model: SemanticModel<'db>,
+    seen: HashSet<(File, TextRange)>,
+    dependencies: Vec<(File, load::LoadDependency)>,
+}
+
+impl RepositoryRuleCalls<'_> {
+    fn dependency(&mut self, call: &ExprCall) -> Option<(File, load::LoadDependency)> {
+        if !definitely_active(call) {
+            return None;
+        }
+        let callee @ Type::NominalInstance(_) = call.func.inferred_type(&self.model)? else {
+            return None;
+        };
+        let program = self.model.program_file();
+        let selection = callee
+            .provided_data(self.db, &ProgramEnvironment::from_file(program))?
+            .downcast_ref::<Selection>()?;
+        if selection.is_visible(self.db) != Some(true)
+            || unreachable_ranges(self.db, program)
+                .iter()
+                .any(|entry| entry.range.contains_range(call.range()))
+            || !self.seen.insert((selection.source, selection.range))
+        {
+            return None;
+        }
+        Some((
+            selection.source,
+            load::LoadDependency {
+                module: selection.label.clone(),
+                range: selection.range,
+                resolution: load::resolve_dependency(self.db, selection.source, &selection.label),
+            },
+        ))
+    }
+}
+
+impl<'ast> Visitor<'ast> for RepositoryRuleCalls<'_> {
+    fn visit_expr(&mut self, expression: &'ast Expr) {
+        if let Expr::Call(call) = expression {
+            if let Some(dependency) = self.dependency(call) {
+                self.dependencies.push(dependency);
+            }
+        }
+        visitor::walk_expr(self, expression);
+    }
+}
+
 fn definitely_active(call: &ExprCall) -> bool {
     if !call.arguments.args.is_empty() {
         return false;
@@ -334,7 +416,7 @@ mod tests {
             &mut analysis.db,
             "good.bzl",
             r#"def _impl(ctx): pass
-repository = repository_rule(implementation=_impl, attrs={'value': attr.string(mandatory=True)})
+repository = repository_rule(implementation=_impl, attrs={'value': attr.string(mandatory=True), 'platforms': attr.string_list()})
 optional_dev = repository_rule(implementation=_impl, attrs={'dev_dependency': attr.string(default='fallback')})
 required_dev = repository_rule(implementation=_impl, attrs={'dev_dependency': attr.string(mandatory=True)})
 "#,
@@ -360,6 +442,9 @@ required_dev = repository_rule(implementation=_impl, attrs={'dev_dependency': at
 repository = choose('good.bzl', 'repository')
 repository(name='ok', value='value')
 repository(name='wrong', value=42)
+platforms = ['linux/amd64']
+repository(name='images', value='ok', platforms=platforms)
+repository(name='wrong_platforms', value='ok', platforms=42)
 optional_dev = choose('good.bzl', 'optional_dev')
 optional_dev(name='optional', dev_dependency=False)
 optional_dev(name='invalid_host', dev_dependency='wrong')
@@ -438,6 +523,7 @@ unavailable(name='suppressed')  # ty: ignore[load-error]
             actual,
             [
                 ("invalid-argument-type", "value=42"),
+                ("invalid-argument-type", "platforms=42"),
                 ("invalid-argument-type", "dev_dependency='wrong'"),
                 ("invalid-argument-type", "required_dev"),
                 ("invalid-argument-type", "copied"),

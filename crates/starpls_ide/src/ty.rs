@@ -51,6 +51,7 @@ pub(crate) use diagnostics::check;
 pub(crate) use diagnostics::CheckSettings;
 pub use diagnostics::DiagnosticRules;
 pub(crate) use factory::Documentation;
+pub(crate) use repository_rule::dependencies as repository_rule_dependencies;
 pub(crate) use support::file_system;
 
 pub(crate) struct SemanticSettings {

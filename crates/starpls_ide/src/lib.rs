@@ -701,9 +701,9 @@ impl AnalysisSnapshot {
         self.query(|db| diagnostics::diagnostics(db, file_id))
     }
 
-    /// Source dependencies observed while checking this file.
+    /// Sources selected by active repository rule calls in this MODULE file.
     pub fn diagnostic_loads(&self, file: File) -> Cancellable<Vec<(File, LoadDependency)>> {
-        self.query(|db| diagnostics::observed_loads(db, file))
+        self.query(|db| ty::repository_rule_dependencies(db, file))
     }
 
     pub fn load_dependencies(&self, file: File) -> Cancellable<Vec<LoadDependency>> {
