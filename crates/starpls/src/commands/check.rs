@@ -892,6 +892,24 @@ mod tests {
                 vec![("defs.bzl", "invalid-return-type")],
             ),
             (
+                "module",
+                vec!["MODULE.bazel"],
+                "",
+                vec![("MODULE.bazel", "invalid-assignment")],
+            ),
+            (
+                "module-fragment",
+                vec!["deps.MODULE.bazel"],
+                "",
+                vec![("deps.MODULE.bazel", "invalid-assignment")],
+            ),
+            (
+                "module-override",
+                vec!["MODULE.bazel", "deps.MODULE.bazel"],
+                "[type-interfaces]\n'MODULE.bazel'='binding.bzli'\n'deps.MODULE.bazel'='binding.bzli'\n",
+                vec![],
+            ),
+            (
                 "override",
                 vec!["caller.bzl", "defs.bzl"],
                 "[type-interfaces]\n'defs.bzl'='override.bzli'\n",
@@ -902,6 +920,11 @@ mod tests {
                 &format!("adjacent-interface-{name}"),
                 &[
                     ("sty.toml", config),
+                    ("MODULE.bazel", "_VERSION = 42\nversion = _VERSION\n"),
+                    ("MODULE.bzli", "_VERSION: str\n"),
+                    ("deps.MODULE.bazel", "_VERSION = 42\nversion = _VERSION\n"),
+                    ("deps.MODULE.bzli", "_VERSION: str\n"),
+                    ("binding.bzli", "_VERSION: int\n"),
                     ("defs.bzl", "def f(x): return 'string'\ndef typed(value):\n    # type: (_Item) -> _Item\n    return value\n"),
                     ("defs.bzli", "type _Item = int\ndef f(x: int) -> int: ...\n"),
                     ("override.bzli", "type _Item = str\ndef f(x: string) -> string: ...\n"),
@@ -978,6 +1001,14 @@ mod tests {
     #[test]
     fn adjacent_interface_local_batch_selects_only_owned_pairs() {
         let sources = [
+            ("MODULE.bazel", "_REPOS = [42]\nrepos = _REPOS\n"),
+            ("MODULE.bzli", "_REPOS: list[str]\n"),
+            (
+                "pkg/deps.MODULE.bazel",
+                "_VERSION = 42\nversion = _VERSION\n",
+            ),
+            ("pkg/deps.MODULE.bzli", "_VERSION: str\n"),
+            ("orphan.MODULE.bzli", "_VALUE: int\n"),
             ("only.bzl", "value = True\n"),
             ("pkg/unreferenced.bzl", "def f(): return 'bad'\n"),
             ("pkg/unreferenced.bzli", "def f() -> int: ...\n"),
@@ -1001,8 +1032,12 @@ mod tests {
                 true,
                 false,
                 vec![
+                    "MODULE.bazel",
+                    "MODULE.bzli",
                     "pkg/BUILD.bazel",
                     "pkg/BUILD.bzli",
+                    "pkg/deps.MODULE.bazel",
+                    "pkg/deps.MODULE.bzli",
                     "pkg/unreferenced.bzl",
                     "pkg/unreferenced.bzli",
                 ],
@@ -1012,9 +1047,13 @@ mod tests {
                 true,
                 true,
                 vec![
+                    "MODULE.bazel",
+                    "MODULE.bzli",
                     "only.bzl",
                     "pkg/BUILD.bazel",
                     "pkg/BUILD.bzli",
+                    "pkg/deps.MODULE.bazel",
+                    "pkg/deps.MODULE.bzli",
                     "pkg/unreferenced.bzl",
                     "pkg/unreferenced.bzli",
                 ],
@@ -1080,7 +1119,9 @@ mod tests {
                 assert_eq!(
                     paired,
                     [
+                        std::path::Path::new("MODULE.bazel"),
                         std::path::Path::new("pkg/BUILD.bazel"),
+                        std::path::Path::new("pkg/deps.MODULE.bazel"),
                         std::path::Path::new("pkg/unreferenced.bzl")
                     ]
                 );
@@ -4727,7 +4768,9 @@ impl Checker {
         {
             return false;
         }
+        let bzlmod = path.with_extension("bazel");
         path.with_extension("bzl").is_file()
+            || starpls_common::is_bazel_module_file(&bzlmod) && bzlmod.is_file()
             || path.file_name().is_some_and(|name| name == "BUILD.bzli")
                 && starpls_common::BAZEL_BUILD_FILE_NAMES
                     .iter()

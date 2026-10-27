@@ -271,7 +271,10 @@ pub(crate) fn adjacent_interface_path(db: &dyn Db, file: File) -> Option<PathBuf
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| starpls_common::BAZEL_BUILD_FILE_NAMES.contains(&name));
-    (module || build).then(|| path.with_extension("bzli"))
+    let bzlmod = file.dialect == Dialect::Bazel
+        && file.api_context() == Some(APIContext::Module)
+        && starpls_common::is_bazel_module_file(path);
+    (module || build || bzlmod).then(|| path.with_extension("bzli"))
 }
 
 /// A companion belongs to the installed Bazel source. The underlying source text
@@ -284,7 +287,7 @@ pub(crate) fn adjacent_pair(db: &dyn Db, file: File) -> Option<(File, File)> {
         (adjacent_source(db, file)?, file)
     } else {
         let path = adjacent_interface_path(db, file)?;
-        if file.api_context() == Some(APIContext::Build) {
+        if BindingSource::from_file(file).is_some() {
             let interface = bazel_sibling(db, file, &path, APIContext::Bzl)?;
             let source = adjacent_source(db, interface)?;
             if source != file {
@@ -303,7 +306,9 @@ fn adjacent_source(db: &dyn Db, interface: File) -> Option<File> {
     if let Some(source) = db.adjacent_file(&module, interface.dialect, interface.info) {
         return Some(source);
     }
-    if interface.path(db).file_name()? != "BUILD.bzli" {
+    let is_build = interface.path(db).file_name()? == "BUILD.bzli";
+    let bzlmod = interface.path(db).with_extension("bazel");
+    if !is_build && !starpls_common::is_bazel_module_file(&bzlmod) {
         return None;
     }
     // A regular source that cannot be read still owns its companion.
@@ -322,8 +327,12 @@ fn adjacent_source(db: &dyn Db, interface: File) -> Option<File> {
             }
         }
     }
-    let path = starpls_common::bazel_build_file(db, interface.path(db).parent()?).ok()??;
-    bazel_sibling(db, interface, &path, APIContext::Build)
+    if is_build {
+        let path = starpls_common::bazel_build_file(db, interface.path(db).parent()?).ok()??;
+        bazel_sibling(db, interface, &path, APIContext::Build)
+    } else {
+        bazel_sibling(db, interface, &bzlmod, APIContext::Module)
+    }
 }
 
 fn bazel_sibling(
@@ -3046,6 +3055,70 @@ number: int = identity(42)
             Some((module, stub))
         );
         assert_eq!(super::adjacent_pair(&analysis.db, preferred), None);
+    }
+
+    #[test]
+    fn adjacent_module_annotations_select_the_owner() {
+        for name in ["MODULE.bazel", "deps.MODULE.bazel", "BUILD.MODULE.bazel"] {
+            let (mut analysis, _) = Analysis::new_for_test();
+            let mut fixture = Fixture::new(&mut analysis.db);
+            let source = fixture.add_file_with_options(
+                &mut analysis.db,
+                name,
+                "_VALUE = 1\nvalue = _VALUE\n",
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Module,
+                    is_external: false,
+                    bundled_cc_common: false,
+                }),
+            );
+            assert_eq!(super::adjacent_pair(&analysis.db, source), None);
+            let stub_name = std::path::Path::new(name).with_extension("bzli");
+            let stub = fixture.add_file(
+                &mut analysis.db,
+                stub_name.to_str().unwrap(),
+                "_VALUE: int\n",
+            );
+            assert_eq!(
+                super::adjacent_pair(&analysis.db, source),
+                Some((source, stub))
+            );
+            assert_eq!(
+                super::adjacent_pair(&analysis.db, stub),
+                Some((source, stub))
+            );
+            assert!(analysis.snapshot().diagnostics(source).unwrap().is_empty());
+            analysis.update_file(source, "_VALUE = 'bad'\nvalue = _VALUE\n".into());
+            assert!(analysis
+                .snapshot()
+                .diagnostics(source)
+                .unwrap()
+                .iter()
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-assignment"));
+
+            let explicit = fixture.add_file(&mut analysis.db, "override.bzli", "_VALUE: str\n");
+            analysis.set_type_interfaces([(source, explicit)]).unwrap();
+            assert!(analysis.snapshot().diagnostics(source).unwrap().is_empty());
+            assert_eq!(super::adjacent_pair(&analysis.db, stub), None);
+            analysis.set_type_interfaces([]).unwrap();
+
+            let module_name = std::path::Path::new(name).with_extension("bzl");
+            let module = fixture.add_file(
+                &mut analysis.db,
+                module_name.to_str().unwrap(),
+                "_VALUE = 1\n",
+            );
+            assert_eq!(
+                super::adjacent_pair(&analysis.db, stub),
+                Some((module, stub))
+            );
+            assert_eq!(super::adjacent_pair(&analysis.db, source), None);
+            assert!(analysis.snapshot().diagnostics(source).unwrap().is_empty());
+
+            let orphan = fixture.add_file(&mut analysis.db, "orphan.MODULE.bzli", "_VALUE: int\n");
+            assert_eq!(super::adjacent_pair(&analysis.db, orphan), None);
+        }
     }
 
     #[test]

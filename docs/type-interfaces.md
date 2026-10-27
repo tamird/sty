@@ -278,8 +278,7 @@ same Bazel repository. Ship both files at those paths. Multiple repositories can
 install symlinks to the same implementation and supply different interfaces.
 
 An explicit mapping overrides the companion. Use `sty.toml` at the Bazel
-workspace root to associate sources with stubs in other locations or to annotate
-MODULE.bazel bindings:
+workspace root to associate sources with stubs in other locations:
 
 ```toml
 [type-interfaces]
@@ -427,8 +426,12 @@ An adjacent `BUILD.bzli` applies variable annotations to top-level assignments
 in the package's active BUILD file, including private names. Bazel chooses
 `BUILD.bazel` ahead of `BUILD`. If a `BUILD.bzl` file is present,
 `BUILD.bzli` belongs to that module and the BUILD file requires an explicit
-mapping. Explicit mappings also support `MODULE.bazel`, `.MODULE.bazel`
-fragments, and stubs stored elsewhere.
+mapping.
+
+`MODULE.bzli` likewise annotates `MODULE.bazel`, and `deps.MODULE.bzli`
+annotates `deps.MODULE.bazel`. A same-stem `.bzl` file takes precedence:
+for example, `MODULE.bzl` owns `MODULE.bzli` if both source names exist.
+Explicit mappings support other filenames and stubs stored elsewhere.
 
 ```starlark
 type _Case = dict[{"name": str, "enabled": bool}]

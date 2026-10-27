@@ -279,6 +279,13 @@ pub fn system_path(path: &std::path::Path) -> anyhow::Result<&ruff_db::system::S
 /// Bazel's package definition filenames, in precedence order.
 pub const BAZEL_BUILD_FILE_NAMES: [&str; 2] = ["BUILD.bazel", "BUILD"];
 
+/// Whether the path names a MODULE file or a conventionally named include fragment.
+pub fn is_bazel_module_file(path: &std::path::Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "MODULE.bazel" || name.ends_with(".MODULE.bazel"))
+}
+
 /// Locate the active BUILD file in a Bazel package.
 pub fn bazel_build_file(
     db: &dyn Db,

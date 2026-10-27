@@ -1661,12 +1661,13 @@ pub(crate) fn dialect_and_api_context_for_workspace_path(
 ) -> Option<(Dialect, Option<APIContext>)> {
     let path = path.as_ref();
     let basename = path.file_name().and_then(|name| name.to_str())?;
+    if starpls_common::is_bazel_module_file(path) {
+        return Some((Dialect::Bazel, Some(APIContext::Module)));
+    }
     Some(match basename {
         "BUILD" | "BUILD.bazel" => (Dialect::Bazel, Some(APIContext::Build)),
         "REPO.bazel" => (Dialect::Bazel, Some(APIContext::Repo)),
         "VENDOR.bazel" => (Dialect::Bazel, Some(APIContext::Vendor)),
-        "MODULE.bazel" => (Dialect::Bazel, Some(APIContext::Module)),
-        path if path.ends_with(".MODULE.bazel") => (Dialect::Bazel, Some(APIContext::Module)),
         "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod" => {
             (Dialect::Bazel, Some(APIContext::Workspace))
         }
@@ -1698,6 +1699,7 @@ pub(crate) mod source_tests {
     use ruff_db::system::SystemPath;
     use ruff_db::system::WritableSystem;
     use starpls_bazel::client::BazelCLI;
+    use starpls_bazel::APIContext;
     use starpls_common::Dialect;
     use starpls_ide::Analysis;
     use starpls_ide::FilePosition;
@@ -1784,15 +1786,24 @@ pub(crate) mod source_tests {
             "def f(x: bool) -> None: ...\n",
         )
         .unwrap();
-        let build = checkout.join("BUILD.bazel");
-        std::fs::write(&build, "_VALUE = 'bad'\nvalue = _VALUE\n").unwrap();
-        std::fs::write(checkout.join("BUILD.bzli"), "_VALUE: int\n").unwrap();
-        for package in ["published", "untyped"] {
-            let directory = installed.join(package);
-            std::fs::create_dir(&directory).unwrap();
-            std::os::unix::fs::symlink(&build, directory.join("BUILD.bazel")).unwrap();
+        for name in ["BUILD.bazel", "MODULE.bazel", "deps.MODULE.bazel"] {
+            let source = checkout.join(name);
+            std::fs::write(&source, "_VALUE = 'bad'\nvalue = _VALUE\n").unwrap();
+            std::fs::write(source.with_extension("bzli"), "_VALUE: int\n").unwrap();
+            for package in ["published", "untyped"] {
+                let directory = installed.join(package);
+                std::fs::create_dir_all(&directory).unwrap();
+                std::os::unix::fs::symlink(&source, directory.join(name)).unwrap();
+            }
+            std::fs::write(
+                installed
+                    .join("published")
+                    .join(name)
+                    .with_extension("bzli"),
+                "_VALUE: int\n",
+            )
+            .unwrap();
         }
-        std::fs::write(installed.join("published/BUILD.bzli"), "_VALUE: int\n").unwrap();
         let (sender, _) = crossbeam_channel::unbounded();
         let loader = Arc::new(DefaultFileLoader::new(
             Arc::new(TestBazelClient::default()),
@@ -1803,7 +1814,7 @@ pub(crate) mod source_tests {
             false,
         ));
         let mut analysis = Analysis::new(loader, Default::default()).unwrap();
-        for (filename, expected_module, expected_build) in [
+        for (filename, expected_module, expected_binding) in [
             (
                 "published",
                 vec!["invalid-argument-type"],
@@ -1828,25 +1839,31 @@ pub(crate) mod source_tests {
                 .map(|diag| diag.id().as_str().to_owned())
                 .collect();
             assert_eq!(diagnostics, expected_module, "{filename}");
-            let build = analysis
-                .file(
-                    &installed.join(filename).join("BUILD.bazel"),
-                    Dialect::Bazel,
-                    Some(starpls_common::FileInfo::Bazel {
-                        api_context: starpls_bazel::APIContext::Build,
-                        is_external: true,
-                        bundled_cc_common: false,
-                    }),
-                )
-                .unwrap();
-            let diagnostics: Vec<_> = analysis
-                .snapshot()
-                .diagnostics(build)
-                .unwrap()
-                .iter()
-                .map(|diagnostic| diagnostic.id().as_str().to_owned())
-                .collect();
-            assert_eq!(diagnostics, expected_build, "{filename}");
+            for (name, api_context) in [
+                ("BUILD.bazel", APIContext::Build),
+                ("MODULE.bazel", APIContext::Module),
+                ("deps.MODULE.bazel", APIContext::Module),
+            ] {
+                let source = analysis
+                    .file(
+                        &installed.join(filename).join(name),
+                        Dialect::Bazel,
+                        Some(starpls_common::FileInfo::Bazel {
+                            api_context,
+                            is_external: true,
+                            bundled_cc_common: false,
+                        }),
+                    )
+                    .unwrap();
+                let diagnostics: Vec<_> = analysis
+                    .snapshot()
+                    .diagnostics(source)
+                    .unwrap()
+                    .iter()
+                    .map(|diagnostic| diagnostic.id().as_str().to_owned())
+                    .collect();
+                assert_eq!(diagnostics, expected_binding, "{filename}/{name}");
+            }
         }
         std::fs::remove_dir_all(root).unwrap();
     }

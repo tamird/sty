@@ -2882,38 +2882,68 @@ mod tests {
     }
 
     #[test]
-    fn adjacent_interface_follows_unsaved_build_edits() {
-        let TestServer { mut server, .. } = server();
-        let source = std::path::Path::new("/workspace/BUILD.bazel");
-        server
-            .open_document(source, "_VALUE = 42\nvalue = _VALUE\n".into(), 1)
-            .unwrap();
-        let source = server
-            .analysis
-            .snapshot()
-            .open_file(source)
-            .unwrap()
-            .unwrap();
-        let diagnostics = |server: &Server| {
+    fn adjacent_interfaces_follow_binding_file_edits() {
+        for name in ["BUILD.bazel", "MODULE.bazel", "deps.MODULE.bazel"] {
+            let TestServer {
+                mut server,
+                client: _,
+                disk,
+                tasks: _,
+                debounced: _,
+            } = server();
+            let path = std::path::Path::new("/workspace").join(name);
             server
+                .open_document(&path, "_VALUE = 42\nvalue = _VALUE\n".into(), 1)
+                .unwrap();
+            let source = server
                 .analysis
                 .snapshot()
-                .diagnostics(source)
+                .open_file(&path)
                 .unwrap()
-                .iter()
-                .map(|diagnostic| diagnostic.id().as_str().to_owned())
-                .collect::<Vec<_>>()
-        };
-        assert!(diagnostics(&server).is_empty());
-        let interface = std::path::Path::new("/workspace/BUILD.bzli");
-        server
-            .open_document(interface, "_VALUE: str\n".into(), 1)
-            .unwrap();
-        assert_eq!(diagnostics(&server), ["invalid-assignment"]);
-        server
-            .open_document(interface, "_VALUE: int\n".into(), 2)
-            .unwrap();
-        assert!(diagnostics(&server).is_empty());
+                .unwrap();
+            let revision = server.configuration.revision;
+            let diagnostics = |server: &Server| {
+                server
+                    .analysis
+                    .snapshot()
+                    .diagnostics(source)
+                    .unwrap()
+                    .iter()
+                    .map(|diagnostic| diagnostic.id().as_str().to_owned())
+                    .collect::<Vec<_>>()
+            };
+            assert!(diagnostics(&server).is_empty());
+            let interface = path.with_extension("bzli");
+            server
+                .open_document(&interface, "_VALUE: str\n".into(), 1)
+                .unwrap();
+            assert_eq!(diagnostics(&server), ["invalid-assignment"], "{name}");
+            server
+                .open_document(&interface, "_VALUE: int\n".into(), 2)
+                .unwrap();
+            assert!(diagnostics(&server).is_empty());
+            server.analysis.close_document(&interface).unwrap();
+            let disk_path = SystemPath::new(interface.to_str().unwrap());
+            disk.write_file(disk_path, "_VALUE: str\n").unwrap();
+            let changed = |server: &mut Server, typ| {
+                crate::handlers::notifications::did_change_watched_files(
+                    server,
+                    lsp_types::DidChangeWatchedFilesParams {
+                        changes: vec![lsp_types::FileEvent {
+                            uri: lsp_types::Url::from_file_path(&interface).unwrap(),
+                            typ,
+                        }],
+                    },
+                )
+                .unwrap();
+            };
+            changed(&mut server, lsp_types::FileChangeType::CREATED);
+            assert_eq!(diagnostics(&server), ["invalid-assignment"], "{name}");
+            disk.remove_file(disk_path).unwrap();
+            changed(&mut server, lsp_types::FileChangeType::DELETED);
+            assert!(diagnostics(&server).is_empty());
+            assert_eq!(server.configuration.revision, revision);
+        }
     }
 
     #[test]
