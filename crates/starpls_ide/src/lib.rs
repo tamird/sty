@@ -234,14 +234,7 @@ impl starpls_hir::Db for Database {
         builtins: Builtins,
         rules: starpls_bazel::build::BuildLanguage,
     ) -> anyhow::Result<()> {
-        self.set_native_metadata(dialect, &builtins, &rules)?;
-        let defs = self.environment().builtin_defs(self, dialect);
-        defs.set_builtins(self).to(builtins);
-        defs.set_rules(self).to(rules);
-        defs.set_extension(self).to(None);
-        defs.set_bazel_version(self).to(None);
-        defs.set_configured_members(self).to(Vec::new());
-        Ok(())
+        self.set_builtin_defs_with_version(dialect, builtins, rules, None)
     }
 
     fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs {
@@ -264,6 +257,25 @@ impl starpls_hir::Db for Database {
 
     fn get_all_workspace_targets(&self) -> Arc<Vec<String>> {
         self.environment().all_workspace_targets(self)
+    }
+}
+
+impl Database {
+    fn set_builtin_defs_with_version(
+        &mut self,
+        dialect: Dialect,
+        builtins: Builtins,
+        rules: starpls_bazel::build::BuildLanguage,
+        version: Option<starpls_bazel::env::BazelVersion>,
+    ) -> anyhow::Result<()> {
+        self.set_native_metadata(dialect, &builtins, &rules, version)?;
+        let defs = self.environment().builtin_defs(self, dialect);
+        defs.set_builtins(self).to(builtins);
+        defs.set_rules(self).to(rules);
+        defs.set_extension(self).to(None);
+        defs.set_bazel_version(self).to(version);
+        defs.set_configured_members(self).to(Vec::new());
+        Ok(())
     }
 }
 
@@ -562,11 +574,12 @@ impl Analysis {
         rules: starpls_bazel::build::BuildLanguage,
         release: &str,
     ) -> anyhow::Result<()> {
-        self.set_builtin_defs(builtins, rules)?;
-        let defs = self.db.get_builtin_defs(&Dialect::Bazel);
-        defs.set_bazel_version(&mut self.db)
-            .to(starpls_bazel::env::BazelVersion::parse_release(release));
-        Ok(())
+        self.db.set_builtin_defs_with_version(
+            Dialect::Bazel,
+            builtins,
+            rules,
+            starpls_bazel::env::BazelVersion::parse_release(release),
+        )
     }
 
     pub fn set_builtin_defs_with_info(

@@ -44,6 +44,7 @@ impl Analysis {
                 Dialect::Bazel,
                 definitions.builtins(db),
                 definitions.rules(db),
+                *definitions.bazel_version(db),
             )?;
             db.install_native_source(source);
             definitions.set_extension(db).to(None);
@@ -57,6 +58,7 @@ impl Analysis {
             definitions.builtins(db),
             definitions.rules(db),
             &names,
+            *definitions.bazel_version(db),
         )?;
         db.install_native_source(source);
         let contents = file.contents(db);

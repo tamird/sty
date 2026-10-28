@@ -99,12 +99,13 @@ pub struct BazelVersion {
     major: u32,
     minor: u32,
     patch: u32,
+    dictionary_selectors: bool,
 }
 
 impl BazelVersion {
     pub fn parse_release(release: &str) -> Option<Self> {
         let mut parts = release.strip_prefix("release ")?.split('.');
-        Some(Self {
+        let mut version = Self {
             major: parts.next()?.parse().ok()?,
             minor: parts.next()?.parse().ok()?,
             patch: parts
@@ -116,11 +117,21 @@ impl BazelVersion {
                         .ok()
                 })
                 .unwrap_or_default(),
-        })
+            dictionary_selectors: false,
+        };
+        // ffeda605099d unifies Map implementations for selector concatenation.
+        // It first shipped in this rolling release.
+        version.dictionary_selectors =
+            version.includes_backport(release, (10, 0, 0), (20260516, 1));
+        Some(version)
     }
 
     pub fn at_least(self, major: u32, minor: u32) -> bool {
         (self.major, self.minor) >= (major, minor)
+    }
+
+    pub fn supports_dictionary_selectors(self) -> bool {
+        self.dictionary_selectors
     }
 
     // A feature backported to Bazel 9 can be absent from earlier 10.0 rolling builds.
@@ -152,6 +163,7 @@ fn attr_license(release: &str, semantics: &str) -> Option<bool> {
         major,
         minor,
         patch,
+        ..
     } = version;
     if release != format!("release {major}.{minor}.{patch}")
         || !(6..=9).contains(&major)
@@ -234,11 +246,7 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     let Some(parsed) = BazelVersion::parse_release(release) else {
         return;
     };
-    let BazelVersion {
-        major,
-        minor,
-        patch: _,
-    } = parsed;
+    let BazelVersion { major, minor, .. } = parsed;
     let version = (major, minor);
     // https://github.com/bazelbuild/bazel/commit/09d0ada6fe2f92207f08e81dc21ba39a1fcea7db
     if let Some(callable) = builtins

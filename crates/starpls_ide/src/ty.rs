@@ -175,8 +175,9 @@ impl Database {
         dialect: Dialect,
         builtins: &starpls_bazel::Builtins,
         rules: &starpls_bazel::build::BuildLanguage,
+        version: Option<starpls_bazel::env::BazelVersion>,
     ) -> anyhow::Result<()> {
-        let source = native::generate(dialect, builtins, rules)?;
+        let source = native::generate(dialect, builtins, rules, version)?;
         self.install_native_source(source);
         Ok(())
     }

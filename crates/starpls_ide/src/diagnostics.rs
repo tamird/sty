@@ -632,6 +632,129 @@ forward(select({"//:condition": ["selected"]}))
     }
 
     #[test]
+    fn selector_dictionary_payloads_follow_bazel_compatibility() {
+        let source = r#"
+def merge(values: select[dict[str, str]], other: dict[str, int]) -> select[dict[str, str | int], Literal["dict"]]:
+    return values | other
+def prepend(values: select[dict[str, str]], other: dict[str, int]) -> select[dict[str, str | int], Literal["dict"]]:
+    return other | values
+def combine(left: select[Mapping[str, str]], right: select[dict[str, int]]) -> select[dict[str, str | int], Literal["dict"]]:
+    return left | right
+def construct(values: dict[str, str]) -> select[dict[str, str | int], Literal["dict"]]:
+    return select({"//conditions:default": values}) | {"extra": 1}
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        // Changing the detected version must replace generated operators as well
+        // as constructor inference, including after a newer catalog was installed.
+        for (release, supported) in [
+            ("release 9.3.0rc2", false),
+            ("release 10.0.0-pre.20260516.1", true),
+            ("release 10.0.0-pre.20260501.1", false),
+            ("release 10.0.0-pre.20261027.5", true),
+        ] {
+            analysis
+                .set_builtin_defs_with_release(
+                    starpls_bazel::decode_builtins(include_bytes!(
+                        "../../starpls/src/builtin/builtin.pb"
+                    ))
+                    .unwrap(),
+                    Default::default(),
+                    release,
+                )
+                .unwrap();
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            if supported {
+                assert!(diagnostics.is_empty(), "{release}: {diagnostics:?}");
+            } else {
+                assert_eq!(
+                    diagnostics
+                        .iter()
+                        .filter(|diagnostic| diagnostic.id().as_str() == "unsupported-operator")
+                        .map(|diagnostic| &source[diagnostic.range().unwrap()])
+                        .collect::<Vec<_>>(),
+                    [
+                        "values | other",
+                        "other | values",
+                        "left | right",
+                        r#"select({"//conditions:default": values}) | {"extra": 1}"#,
+                    ],
+                    "{release}: {diagnostics:?}"
+                );
+            }
+        }
+        analysis.update_file(
+            fixture.main_file(),
+            source.replace("dict[str, str | int]", "dict[str, str]"),
+        );
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn selector_dictionary_payloads_reject_incompatible_alternatives() {
+        let source = r#"
+def consume(value: select[dict[str, str]]) -> None:
+    pass
+consume(select({"//conditions:default": {"wrong": 42}}))
+def nullable(value: select[dict[str, str] | None]) -> object:
+    return value | {"key": "value"}
+def mixed(value: select[dict[str, str] | int]) -> object:
+    return value | {"key": "value"}
+select({"//conditions:default": None, "//:enabled": {"key": "value"}}) | {"key": "value"}
+"#;
+        let (mut analysis, fixture) = native_analysis(source);
+        analysis
+            .set_builtin_defs_with_release(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+                "release 10.0.0-pre.20261027.5",
+            )
+            .unwrap();
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.id().as_str() == "invalid-argument-type")
+                .count(),
+            1,
+            "{diagnostics:?}"
+        );
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.id().as_str() == "unsupported-operator")
+                .count(),
+            3,
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn selector_sequence_payloads_prove_concatenation() {
         let source = r#"
 def append(values: select[list[str]]) -> select[list[str | int], Literal["list"]]:

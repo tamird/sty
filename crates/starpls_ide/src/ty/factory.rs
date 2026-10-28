@@ -1065,6 +1065,16 @@ fn selector_value_kind<'db>(
         if is_exact_dictionary_class(db, environment, Type::from(class)) {
             return Some("dict");
         }
+        if db
+            .get_builtin_defs(&starpls_common::Dialect::Bazel)
+            .bazel_version(db)
+            .is_some_and(starpls_bazel::env::BazelVersion::supports_dictionary_selectors)
+            && [KnownClass::Dict, KnownClass::Mapping]
+                .into_iter()
+                .any(|known| Type::from(class) == known.to_class_literal(db, environment))
+        {
+            return Some("dict");
+        }
         if is_sequence_class(db, environment, Type::from(class)) {
             return Some("list");
         }

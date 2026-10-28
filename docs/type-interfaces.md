@@ -689,8 +689,12 @@ string-list attribute accepts both lists of strings and dictionaries with string
 keys; a string-dictionary attribute rejects the list branches.
 
 `select[T]` defaults the kind to `object`, accepting every runtime kind while
-preserving the branch-value contract. An operation requiring a particular kind
-uses an explicit annotation, such as `select[list[str], Literal["list"]]`.
+preserving the branch-value contract. Nonnullable sequence payloads prove the
+`"list"` kind, so `select[list[str]]` supports list concatenation without a marker.
+For Bazel 10.0.0-pre.20260516.1 and later, nonnullable dictionary payloads likewise
+prove the `"dict"` kind: `select[dict[str, str]]` supports dictionary union.
+Nullable payloads can require an explicit kind, such as
+`select[list[str] | None, Literal["list"]]`, to exclude a `None` first branch.
 A mapping with a finite set of known value categories retains the possible
 selector types. For example, `dict[str, list[str] | None]` produces
 `select[list[str] | None, Literal["list"]] | select[list[str] | None, Literal["none"]]`.
@@ -700,7 +704,7 @@ with several known kinds require proof of compatible kinds before combining.
 permits composition through untyped helpers. A gradual alternative does not
 permit operations that are invalid for a known alternative in the same union.
 Unclassified static value categories retain an opaque kind, as do dictionary
-value types with several native representations.
+value types with several native representations on older Bazel versions.
 Integer values retain the `"int"` category, and literal dictionary branches
 retain the `"dict"` kind. Bazel can reject integer concatenation when operands
 use different internal representations, which depend on numeric range.
@@ -717,9 +721,10 @@ A predicate testing for any selector uses `TypeIs[select[object, object]]`.
 The second `object` covers every kind, so both outcomes of the predicate can
 narrow its argument. A gradual kind describes an unspecified subset instead.
 
-Bazel 9.2 distinguishes dictionary implementations that share Starlark's
-`dict` type. An `ExactDict` branch establishes the `"dict"` selector kind, and
-an `ExactDict` operand supports `|` with selectors of that kind. Operations
+Upstream Bazel versions before 10.0.0-pre.20260516.1 distinguish dictionary
+implementations that share Starlark's `dict` type. An `ExactDict` branch establishes
+the `"dict"` selector kind, and an `ExactDict` operand supports `|` with selectors
+of that kind. Operations
 on a broadly annotated dictionary retain their ordinary inferred result.
 
 ## Rule contexts

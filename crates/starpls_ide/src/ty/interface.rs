@@ -2848,6 +2848,7 @@ number: int = identity(42)
                 Dialect::Bazel,
                 &Default::default(),
                 &Default::default(),
+                None,
             )
             .unwrap();
         contents.push_str(

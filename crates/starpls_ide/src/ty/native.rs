@@ -340,8 +340,9 @@ pub(super) fn generate(
     dialect: Dialect,
     builtins: &Builtins,
     rules: &BuildLanguage,
+    version: Option<env::BazelVersion>,
 ) -> anyhow::Result<DeclarationSource> {
-    generate_with_extensions(dialect, builtins, rules, &BTreeSet::new())
+    generate_with_extensions(dialect, builtins, rules, &BTreeSet::new(), version)
 }
 
 pub(super) fn generate_with_extensions(
@@ -349,8 +350,9 @@ pub(super) fn generate_with_extensions(
     builtins: &Builtins,
     rules: &BuildLanguage,
     extensions: &BTreeSet<String>,
+    version: Option<env::BazelVersion>,
 ) -> anyhow::Result<DeclarationSource> {
-    let contents = declarations(dialect, builtins, rules, extensions)?;
+    let contents = declarations(dialect, builtins, rules, extensions, version)?;
     ruff_python_parser::parse_module(&contents).map_err(|error| {
         let offset = usize::from(error.location.start());
         let start = contents[..offset].rfind('\n').map_or(0, |index| index + 1);
@@ -536,6 +538,7 @@ fn declarations(
     builtins: &Builtins,
     rules: &BuildLanguage,
     extensions: &BTreeSet<String>,
+    version: Option<env::BazelVersion>,
 ) -> anyhow::Result<String> {
     let decoded_json = format!(
         "_starpls_ty_extensions.Intersection[_starpls_typing.Any, {}]",
@@ -1298,7 +1301,11 @@ fn declarations(
         }
         if class.name == "select" {
             names.extend(["__add__", "__radd__", "__or__", "__ror__"]);
-            write_select_operators(&mut body, declared_classes.contains("Label"))?;
+            write_select_operators(
+                &mut body,
+                declared_classes.contains("Label"),
+                version.is_some_and(env::BazelVersion::supports_dictionary_selectors),
+            )?;
         }
         if class.name == "Target" {
             names.extend(["label", "files", "__getitem__", "__contains__"]);
@@ -2361,16 +2368,19 @@ fn write_type_overloads(
 fn select_plain_operands<'a>(
     kind: &str,
     operand: &'a str,
+    dictionary_selectors: bool,
 ) -> impl Iterator<Item = (&'a str, &'a str)> {
     let (exact, plain, fragment) = match kind {
-        // Bazel requires the same Java implementation class. The general dict
-        // type also covers implementations such as ctx.var's tracked dictionary.
+        // Older Bazel versions require the same Java implementation class.
+        // The general dict type also covers implementations such as ctx.var's
+        // tracked dictionary.
         // Unknown preserves content inference without proving that requirement.
-        "dict" => (
+        "dict" if !dictionary_selectors => (
             Some("_starpls_allocations.dict[_SelectKeyRight, _SelectRight]"),
             "_starpls_ty_extensions.Intersection[_starpls_builtins.dict[_SelectKeyRight, _SelectRight], _starpls_unknown]",
             "_starpls_builtins.dict[_SelectKeyRight, _SelectRight]",
         ),
+        "dict" => (None, operand, "_starpls_builtins.dict[_SelectKeyRight, _SelectRight]"),
         "list" => (None, operand, "_starpls_builtins.list[_SelectRight]"),
         _ => (None, operand, operand),
     };
@@ -2381,9 +2391,13 @@ fn select_plain_operands<'a>(
 }
 
 // Bazel accepts concatenation only when first-branch runtime classes agree
-// (with one shared category for Java lists). Payload types describe the later
-// attribute conversion independently of that runtime-kind requirement.
-fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Result<()> {
+// (with shared categories for lists and, in newer versions, maps). Payloads
+// describe attribute conversion independently of that runtime-kind requirement.
+fn write_select_operators(
+    output: &mut String,
+    has_label: bool,
+    dictionary_selectors: bool,
+) -> anyhow::Result<()> {
     let domains = [
         (
             "bool",
@@ -2439,33 +2453,36 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
             }
             for (kind, receiver, operand, result, native_operation) in domains.clone() {
                 let required_kind = format!("_starpls_typing.Literal[\"{kind}\"]");
+                let payload_proves_kind = kind == "list" || kind == "dict" && dictionary_selectors;
                 if operation == native_operation {
                     let precise_selector = |payload| {
                         let selector =
                             format!("_starpls_types.select[{payload} | None, {required_kind}]");
-                        if kind == "list" {
-                            // Every native Starlark sequence is a Java List, so a
-                            // nonnullable sequence payload also proves compatibility.
+                        if payload_proves_kind {
+                            // A nonnullable payload proves membership in a shared
+                            // runtime category, independently of its implementation class.
                             format!("_starpls_types.select[{payload}] | {selector}")
                         } else {
                             selector
                         }
                     };
                     let selected_receiver = precise_selector(receiver);
-                    let result_kind = if kind == "list" {
-                        // Preserve a generic receiver kind while recording list compatibility.
-                        "_starpls_ty_extensions.Intersection[_SelectKind, _starpls_typing.Literal[\"list\"]]"
+                    let result_kind = if payload_proves_kind {
+                        // Preserve a generic receiver kind while recording compatibility.
+                        format!("_starpls_ty_extensions.Intersection[_SelectKind, {required_kind}]")
                     } else {
-                        "_SelectKind"
+                        "_SelectKind".to_owned()
                     };
                     // Project the receiver's None contribution independently of merged elements.
-                    for (plain_operand, _fragment) in select_plain_operands(kind, operand) {
+                    for (plain_operand, _fragment) in
+                        select_plain_operands(kind, operand, dictionary_selectors)
+                    {
                         writeln!(output, "        @_starpls_typing.overload")?;
                         writeln!(output, "        @_starpls_typing.type_check_only")?;
                         writeln!(output, "        def __{reflected}{operation}__(self: {selected_receiver}, other: {plain_operand}, /) -> _starpls_types.select[{result} | _starpls_ty_extensions.Intersection[_SelectValue, None], {result_kind}]: ...")?;
                     }
                     // The peer supplies both the element shape and its whole nullable payload.
-                    let peer_kind = if kind == "list" {
+                    let peer_kind = if payload_proves_kind {
                         "_starpls_builtins.object"
                     } else {
                         &required_kind
@@ -2496,7 +2513,9 @@ fn write_select_operators(output: &mut String, has_label: bool) -> anyhow::Resul
                     continue;
                 }
                 let required_kind = format!("_starpls_typing.Literal[\"{kind}\"]");
-                for (plain_operand, fragment) in select_plain_operands(kind, operand) {
+                for (plain_operand, fragment) in
+                    select_plain_operands(kind, operand, dictionary_selectors)
+                {
                     writeln!(output, "        @_starpls_typing.overload")?;
                     writeln!(output, "        @_starpls_typing.type_check_only")?;
                     writeln!(output, "        def __{reflected}{operation}__(self: _starpls_types.select[_SelectValue, {required_kind}], other: {plain_operand}, /) -> _starpls_types.select[_SelectValue | {fragment}, _SelectKind]: ...")?;
@@ -4095,7 +4114,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
                 builtins.r#type.retain(|class| class.name != "Label");
             }
             let declarations =
-                super::generate(Dialect::Bazel, &builtins, &Default::default()).unwrap();
+                super::generate(Dialect::Bazel, &builtins, &Default::default(), None).unwrap();
             assert_eq!(
                 declarations.contents.lines().any(|line| {
                     line.contains("def __add__(self: _starpls_types.select[_starpls_types.Label")
@@ -4723,7 +4742,7 @@ def narrow(context: ctx[object, object, struct[{"weight": object}]]) -> ctx[obje
             .set_builtin_defs(builtins.clone(), Default::default())
             .unwrap();
         let DeclarationSource { path, mut contents } =
-            generate(Dialect::Bazel, &builtins, &BuildLanguage::default()).unwrap();
+            generate(Dialect::Bazel, &builtins, &BuildLanguage::default(), None).unwrap();
         contents.push_str(
             r#"
 def check_literal_keys(attrs: dict[_starpls_typing.Literal["dep"], _starpls_types.Attribute]):
@@ -6021,7 +6040,7 @@ def use_keys(target: Target, files: depset[File]) -> str:
 
         // Optional getter results cannot establish a required property.
         let DeclarationSource { path, mut contents } =
-            generate(Dialect::Bazel, &builtins, &BuildLanguage::default()).unwrap();
+            generate(Dialect::Bazel, &builtins, &BuildLanguage::default(), None).unwrap();
         contents.push_str(
             r#"
 class _RequiredPy(_starpls_typing.Protocol):
@@ -7395,6 +7414,7 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
                 &incomplete,
                 &BuildLanguage::default(),
                 &BTreeSet::default(),
+                None,
             )
             .unwrap();
             assert!(!source.contains("    class AnalysisFailure:"), "{missing}");
@@ -7416,6 +7436,7 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
             &builtins,
             &BuildLanguage::default(),
             &BTreeSet::default(),
+            None,
         )
         .unwrap();
         assert!(!standard.contains("    class AnalysisFailure:"));
@@ -7441,6 +7462,7 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
                 &builtins,
                 &BuildLanguage::default(),
                 &BTreeSet::default(),
+                None,
             )
             .unwrap();
             let field_type = if dialect == Dialect::Bazel {
@@ -9169,7 +9191,8 @@ def typed(ctx, auth):
             default_value: "''".to_owned(),
             ..Default::default()
         });
-        let declarations = generate(Dialect::Bazel, &builtins, &BuildLanguage::default()).unwrap();
+        let declarations =
+            generate(Dialect::Bazel, &builtins, &BuildLanguage::default(), None).unwrap();
         let parsed = ruff_python_parser::parse_module(&declarations.contents).unwrap();
         let types = parsed
             .syntax()
@@ -11214,6 +11237,7 @@ def check(ctx: ctx):
             Dialect::Bazel,
             &Builtins::default(),
             &BuildLanguage::default(),
+            None,
         )
         .unwrap();
         assert!(!empty.contents.contains("_starpls_types.propagation_ctx"));
