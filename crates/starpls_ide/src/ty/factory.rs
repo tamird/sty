@@ -941,11 +941,7 @@ fn selector<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
             Type::Dynamic(_) => ty,
             _ => {
                 let (class, specialization) = ty.class_specialization(db, &environment)?;
-                if ![KnownClass::Dict, KnownClass::Mapping]
-                    .into_iter()
-                    .any(|known| Type::from(class) == known.to_class_literal(db, &environment))
-                    && !is_exact_dictionary_class(db, &environment, Type::from(class))
-                {
+                if !is_dictionary_class(db, &environment, Type::from(class)) {
                     return None;
                 }
                 let [_key, value] = specialization.types(db) else {
@@ -1062,17 +1058,7 @@ fn selector_value_kind<'db>(
         }
     }
     if let Some((class, _specialization)) = value.class_specialization(db, environment) {
-        if is_exact_dictionary_class(db, environment, Type::from(class)) {
-            return Some("dict");
-        }
-        if db
-            .get_builtin_defs(&starpls_common::Dialect::Bazel)
-            .bazel_version(db)
-            .is_some_and(starpls_bazel::env::BazelVersion::supports_dictionary_selectors)
-            && [KnownClass::Dict, KnownClass::Mapping]
-                .into_iter()
-                .any(|known| Type::from(class) == known.to_class_literal(db, environment))
-        {
+        if is_dictionary_class(db, environment, Type::from(class)) {
             return Some("dict");
         }
         if is_sequence_class(db, environment, Type::from(class)) {
@@ -1088,15 +1074,18 @@ fn selector_value_kind<'db>(
     (value == label).then_some("label")
 }
 
-fn is_exact_dictionary_class<'db>(
+fn is_dictionary_class<'db>(
     db: &'db Database,
     environment: &ProgramEnvironment<'db>,
     class: Type<'db>,
 ) -> bool {
-    KnownClass::Dict
-        .provided_allocation_class(db, environment)
-        .map(Type::from)
-        == Some(class)
+    [KnownClass::Dict, KnownClass::Mapping]
+        .into_iter()
+        .any(|known| class == known.to_class_literal(db, environment))
+        || KnownClass::Dict
+            .provided_allocation_class(db, environment)
+            .map(Type::from)
+            == Some(class)
 }
 
 pub(super) fn descriptor<'db>(

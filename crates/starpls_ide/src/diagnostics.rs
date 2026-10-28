@@ -120,7 +120,6 @@ mod tests {
             ("value + value", "value: select[str]", true),
             ("value + value", "value: select[str, Literal['str']]", false),
             ("value + 1", "value: select[int]", true),
-            ("value | {'x': 1}", "value: select[Mapping[str, int]]", true),
             ("select(value) + ['suffix']", "value: Unknown", false),
             ("{'prefix': 1} | select(value)", "value: Any", false),
             ("select(value) + ['suffix']", "value: object", true),
@@ -632,7 +631,7 @@ forward(select({"//:condition": ["selected"]}))
     }
 
     #[test]
-    fn selector_dictionary_payloads_follow_bazel_compatibility() {
+    fn selector_dictionary_payloads_type_union() {
         let source = r#"
 def merge(values: select[dict[str, str]], other: dict[str, int]) -> select[dict[str, str | int], Literal["dict"]]:
     return values | other
@@ -650,14 +649,9 @@ def construct(values: dict[str, str]) -> select[dict[str, str | int], Literal["d
             )
             .unwrap(),
         );
-        // Changing the detected version must replace generated operators as well
-        // as constructor inference, including after a newer catalog was installed.
-        for (release, supported) in [
-            ("release 9.3.0rc2", false),
-            ("release 10.0.0-pre.20260516.1", true),
-            ("release 10.0.0-pre.20260501.1", false),
-            ("release 10.0.0-pre.20261027.5", true),
-        ] {
+        // Only the second binary accepts distinct Java Map implementations.
+        // Both workspaces have the same Starlark dictionary type.
+        for release in ["release 9.3.0", "release 9.3.0-dzbarsky24"] {
             analysis
                 .set_builtin_defs_with_release(
                     starpls_bazel::decode_builtins(include_bytes!(
@@ -672,24 +666,7 @@ def construct(values: dict[str, str]) -> select[dict[str, str | int], Literal["d
                 .snapshot()
                 .diagnostics(fixture.main_file())
                 .unwrap();
-            if supported {
-                assert!(diagnostics.is_empty(), "{release}: {diagnostics:?}");
-            } else {
-                assert_eq!(
-                    diagnostics
-                        .iter()
-                        .filter(|diagnostic| diagnostic.id().as_str() == "unsupported-operator")
-                        .map(|diagnostic| &source[diagnostic.range().unwrap()])
-                        .collect::<Vec<_>>(),
-                    [
-                        "values | other",
-                        "other | values",
-                        "left | right",
-                        r#"select({"//conditions:default": values}) | {"extra": 1}"#,
-                    ],
-                    "{release}: {diagnostics:?}"
-                );
-            }
+            assert!(diagnostics.is_empty(), "{release}: {diagnostics:?}");
         }
         analysis.update_file(
             fixture.main_file(),
@@ -718,24 +695,17 @@ def nullable(value: select[dict[str, str] | None]) -> object:
     return value | {"key": "value"}
 def mixed(value: select[dict[str, str] | int]) -> object:
     return value | {"key": "value"}
+def wrong_operands(value: select[dict[str, str]]) -> None:
+    value | ["not a dictionary"]
+    ["not a dictionary"] | value
 select({"//conditions:default": None, "//:enabled": {"key": "value"}}) | {"key": "value"}
 "#;
-        let (mut analysis, fixture) = native_analysis(source);
-        analysis
-            .set_builtin_defs_with_release(
-                starpls_bazel::decode_builtins(include_bytes!(
-                    "../../starpls/src/builtin/builtin.pb"
-                ))
-                .unwrap(),
-                Default::default(),
-                "release 10.0.0-pre.20261027.5",
-            )
-            .unwrap();
+        let (analysis, fixture) = native_analysis(source);
         let diagnostics = analysis
             .snapshot()
             .diagnostics(fixture.main_file())
             .unwrap();
-        assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+        assert_eq!(diagnostics.len(), 6, "{diagnostics:?}");
         assert_eq!(
             diagnostics
                 .iter()
@@ -749,7 +719,7 @@ select({"//conditions:default": None, "//:enabled": {"key": "value"}}) | {"key":
                 .iter()
                 .filter(|diagnostic| diagnostic.id().as_str() == "unsupported-operator")
                 .count(),
-            3,
+            5,
             "{diagnostics:?}"
         );
     }
