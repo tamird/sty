@@ -57,10 +57,10 @@ pub fn validate(
         range: _,
         body,
     } = parsed.syntax();
+    validator.visit_body(body);
     if annotation_mode == AnnotationMode::Interface {
         validator.reject_duplicate_functions(body);
     }
-    validator.visit_body(body);
     for error in parsed.unsupported_syntax_errors() {
         // Other entries concern Python versions, not the Starlark grammar.
         if error.kind == UnsupportedSyntaxErrorKind::ParenthesizedKeywordArgumentName {
@@ -202,12 +202,13 @@ impl Validator<'_> {
             let Stmt::FunctionDef(function) = statement else {
                 continue;
             };
-            if function.decorator_list.is_empty() && !names.insert(&function.name.id) {
+            let owner = function.node_index().load();
+            if !self.excluded.contains(&owner) && !names.insert(&function.name.id) {
                 self.error(
                     function.name.range(),
                     format!("Function `{}` is already declared", function.name.id),
                 );
-                self.excluded.push(function.node_index().load());
+                self.excluded.push(owner);
             }
         }
     }
@@ -348,8 +349,8 @@ impl Validator<'_> {
                         .arguments
                         .as_ref()
                         .is_some_and(|arguments| !arguments.args.is_empty());
-                    self.reject_duplicate_functions(&class.body);
                     self.visit_body(&class.body);
+                    self.reject_duplicate_functions(&class.body);
                     self.in_interface_class = previous;
                 } else {
                     self.excluded.push(stmt.node_index().load());
@@ -903,6 +904,8 @@ mod tests {
             ("@overload()\ndef f(value: int) -> int: ...", false),
             ("def f(x: int) -> int: ...\ndef f(x: str) -> str: ...", false),
             ("class P(Protocol):\n    def f(self) -> int: ...\n    def f(self) -> str: ...", false),
+            ("class P(Protocol):\n    @property\n    def x(self) -> int: ...\n    @property\n    def x(self) -> str: ...", false),
+            ("class P(Protocol):\n    @type_check_only\n    def f(self) -> int: ...\n    @type_check_only\n    def f(self) -> str: ...", false),
             ("def f():\n    \"Documentation\"\n    pass", true),
             (
                 "class Info:\n    value: str\n    def __init__(self, *, value: str) -> None: ...",

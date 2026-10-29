@@ -411,7 +411,11 @@ fn implementation_annotations_query(
         value_declarations: Vec::new(),
         errors: Vec::new(),
     };
+    let excluded = starpls_common::syntax_exclusions(db, interface);
     for statement in stub.suite() {
+        if excluded.contains(&statement.node_index().load()) {
+            continue;
+        }
         if let Stmt::AnnAssign(declaration) = statement {
             let Expr::Name(name) = declaration.target.as_ref() else {
                 continue;
@@ -964,7 +968,12 @@ fn module_bindings(db: &dyn Db, file: File) -> FxHashMap<Name, usize> {
     }
     let mut bindings = Bindings::default();
     let parsed = starpls_common::parsed_module(db, file).load(db);
-    bindings.visit_body(parsed.suite());
+    let excluded = starpls_common::syntax_exclusions(db, file);
+    for statement in parsed.suite() {
+        if !excluded.contains(&statement.node_index().load()) {
+            bindings.visit_stmt(statement);
+        }
+    }
     for statement in super::load::statements(db, file) {
         for binding in statement.bindings {
             bindings.name(&binding.name);
@@ -2023,7 +2032,7 @@ mod tests {
     }
 
     #[test]
-    fn interfaces_exclude_overload_arms_from_callers() {
+    fn interfaces_exclude_overload_arms_from_callers_and_implementations() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
         let stub = fixture.add_file(
@@ -2031,13 +2040,25 @@ mod tests {
             "api.bzli",
             "@overload\ndef convert(value: int) -> int: ...\ndef convert(value: str) -> str: ...\n",
         );
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "api.bzl",
+            "def convert(value): return 42\n",
+        );
         let caller = fixture.add_file(
             &mut analysis.db,
             "caller.bzl",
             "load('api.bzli', 'convert')\ngood: str = convert('ok')\nbad = convert(1)\n",
         );
         loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
         let snapshot = analysis.snapshot();
+        let diagnostics = snapshot.diagnostics(source).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+
         let diagnostics = snapshot.diagnostics(stub).unwrap();
         assert!(
             diagnostics
@@ -2065,10 +2086,6 @@ mod tests {
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(source, stub)]).unwrap();
         for (text, contract) in [
-            (
-                "def identity(value): return value\n",
-                "def identity(value: int) -> int: ...\ndef identity(value: str) -> str: ...\n",
-            ),
             (
                 "def identity(value, other): return value + other\n",
                 "def identity(value: int) -> int: ...\n",
