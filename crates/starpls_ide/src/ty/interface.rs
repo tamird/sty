@@ -39,7 +39,6 @@ use ty_python_semantic::provided::ProvidedField;
 use ty_python_semantic::types::ide_support::definitions_for_name;
 use ty_python_semantic::types::list_members::all_end_of_scope_members;
 use ty_python_semantic::types::CallableTypeKind;
-use ty_python_semantic::types::OverloadBodyAnalysis;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypeDefinition;
 use ty_python_semantic::ImportAliasResolution;
@@ -121,13 +120,7 @@ pub(super) fn is_operation_declaration<'db>(db: &'db dyn Db, definition: Definit
             .is_some_and(|arguments| !arguments.args.is_empty())
 }
 
-#[derive(Default)]
-pub(super) struct InterfaceDiagnostics<'db> {
-    pub diagnostics: Vec<ruff_db::diagnostic::Diagnostic>,
-    pub overload_bodies: Vec<OverloadBodyAnalysis<'db>>,
-}
-
-pub(super) fn diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
+pub(super) fn diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::Diagnostic> {
     use ruff_db::diagnostic::Annotation;
     use ruff_db::diagnostic::Diagnostic;
     use ruff_db::diagnostic::DiagnosticId;
@@ -237,10 +230,7 @@ pub(super) fn diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_>
     diagnostics.extend(pairing_diagnostics(db, file));
     diagnostics.extend(super::providers::declaration_diagnostics(db, file));
 
-    InterfaceDiagnostics {
-        diagnostics,
-        overload_bodies: Vec::new(),
-    }
+    diagnostics
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -248,7 +238,6 @@ struct ImplementationAnnotations {
     interface: File,
     owners: FxHashMap<NodeIndex, NodeIndex>,
     value_declarations: Vec<NodeIndex>,
-    overload_counts: FxHashMap<NodeIndex, usize>,
     errors: Vec<(TextRange, TextRange, String)>,
 }
 
@@ -420,18 +409,8 @@ fn implementation_annotations_query(
         interface,
         owners: FxHashMap::default(),
         value_declarations: Vec::new(),
-        overload_counts: FxHashMap::default(),
         errors: Vec::new(),
     };
-    let mut declarations = FxHashMap::<_, Vec<_>>::default();
-    for statement in stub.suite() {
-        if let Stmt::FunctionDef(declaration) = statement {
-            declarations
-                .entry(&declaration.name.id)
-                .or_default()
-                .push(declaration);
-        }
-    }
     for statement in stub.suite() {
         if let Stmt::AnnAssign(declaration) = statement {
             let Expr::Name(name) = declaration.target.as_ref() else {
@@ -451,13 +430,7 @@ fn implementation_annotations_query(
             }
             continue;
         }
-        let Stmt::FunctionDef(first) = statement else {
-            continue;
-        };
-        let Some(family) = declarations.remove(&first.name.id) else {
-            continue;
-        };
-        let Some((declaration, overloads)) = family.split_last() else {
+        let Stmt::FunctionDef(declaration) = statement else {
             continue;
         };
         // Provider constructors have their own correspondence and field checking.
@@ -465,29 +438,8 @@ fn implementation_annotations_query(
             continue;
         }
         let source = source_functions.get(&declaration.name.id).copied();
-        let error = if stub_names.get(&declaration.name.id) != Some(&family.len()) {
-            Some("the stub must bind this name only through its function declarations")
-        } else if !overloads.is_empty()
-            && (!declaration.decorator_list.is_empty()
-                || overloads.iter().any(|overload| {
-                    let [decorator] = overload.decorator_list.as_slice() else {
-                        return true;
-                    };
-                    !decorator
-                        .expression
-                        .as_name_expr()
-                        .is_some_and(|name| name.id == "overload")
-                }))
-        {
-            Some("overloads require a final ordinary implementation declaration")
-        } else if !overloads.is_empty()
-            && (declaration.returns.is_none()
-                || declaration
-                    .parameters
-                    .iter()
-                    .any(|parameter| parameter.annotation().is_none()))
-        {
-            Some("overload implementations require complete parameter and return annotations")
+        let error = if stub_names.get(&declaration.name.id) != Some(&1) {
+            Some("the stub must bind this name exactly once")
         } else if source_names.get(&declaration.name.id) != Some(&1) {
             Some("the source must bind this name exactly once")
         } else if let Some(source) = source {
@@ -548,11 +500,6 @@ fn implementation_annotations_query(
                 .push(declaration.node_index().load());
             None
         };
-        if error.is_none() && !overloads.is_empty() {
-            result
-                .overload_counts
-                .insert(declaration.node_index().load(), family.len());
-        }
         if let Some(error) = error {
             result.errors.push((
                 source.map_or(TextRange::default(), |source| source.name.range()),
@@ -576,7 +523,6 @@ pub(super) fn implementation_annotation<'db>(
         interface,
         owners,
         value_declarations: _,
-        overload_counts: _,
         errors: _,
     } = implementation_annotations(db, file)?;
     let &owner = owners.get(&owner)?;
@@ -630,7 +576,7 @@ pub(super) fn source_parameter<'db>(
     Some(*definition)
 }
 
-fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
+fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::Diagnostic> {
     use ruff_db::diagnostic::Annotation;
     use ruff_db::diagnostic::Diagnostic;
     use ruff_db::diagnostic::DiagnosticId;
@@ -640,16 +586,18 @@ fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
         interface,
         owners,
         value_declarations,
-        overload_counts,
         errors,
     }) = implementation_annotations(db, file)
     else {
-        return InterfaceDiagnostics::default();
+        return Vec::new();
     };
     let mut diagnostics = Vec::new();
-    let mut overload_bodies = Vec::new();
-    let diagnostic = |id, source_range, stub_range, message: String| {
-        let mut diagnostic = Diagnostic::new(id, Severity::Error, message);
+    let invalid = |source_range, stub_range, message: String| {
+        let mut diagnostic = Diagnostic::new(
+            DiagnosticId::Lint(super::diagnostics::INVALID_FUNCTION_INTERFACE.name()),
+            Severity::Error,
+            message,
+        );
         diagnostic.annotate(Annotation::primary(
             Span::from(file.source).with_range(source_range),
         ));
@@ -658,14 +606,6 @@ fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
                 .message("Function declared here"),
         );
         diagnostic
-    };
-    let invalid = |source_range, stub_range, message| {
-        diagnostic(
-            DiagnosticId::Lint(super::diagnostics::INVALID_FUNCTION_INTERFACE.name()),
-            source_range,
-            stub_range,
-            message,
-        )
     };
     for (source, stub, message) in errors {
         diagnostics.push(invalid(*source, *stub, message.clone()));
@@ -732,72 +672,8 @@ fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
             ));
             continue;
         };
-        let mut actual = model.definition_type(definition);
-        let mut expected = stub_model.definition_type(*stub_definition);
-        let mut incomplete_overload = false;
-        let mut value_overload = None;
-        if let Some(&count) = overload_counts.get(&declaration.node_index().load()) {
-            let Type::FunctionLiteral(function) = expected else {
-                diagnostics.push(invalid(
-                    source_range,
-                    declaration.name.range(),
-                    "Cannot resolve the overloaded implementation".into(),
-                ));
-                continue;
-            };
-            let mut family = function.iter_overloads_and_implementation(db);
-            let Some(implementation) = family.next_back() else {
-                diagnostics.push(invalid(
-                    source_range,
-                    declaration.name.range(),
-                    "Cannot resolve the overloaded implementation".into(),
-                ));
-                continue;
-            };
-            let mut actual_count = 1;
-            let signature = implementation.signature(db);
-            let mut supported = true;
-            for overload in family {
-                actual_count += 1;
-                supported &= signature.supports_overload_implementation_consistency_with(
-                    db,
-                    &environment,
-                    &overload.signature(db),
-                );
-            }
-            if implementation.definition(db) != *stub_definition
-                || actual_count != count
-                || !supported
-            {
-                diagnostics.push(invalid(source_range, declaration.name.range(), "The overload family requires an ordinary implementation whose consistency can be checked".into()));
-                continue;
-            }
-            match (definition.kind(db), actual) {
-                (DefinitionKind::Function(_), Type::FunctionLiteral(source)) => {
-                    let Some(implementation) =
-                        source.iter_overloads_and_implementation(db).next_back()
-                    else {
-                        diagnostics.push(invalid(
-                            source_range,
-                            declaration.name.range(),
-                            "Cannot resolve the source implementation".into(),
-                        ));
-                        continue;
-                    };
-                    actual = Type::single_callable(db, implementation.signature(db));
-                    let analysis = OverloadBodyAnalysis::new(db, source);
-                    incomplete_overload = !analysis.is_complete();
-                    overload_bodies.push(analysis);
-                }
-                (_, Type::FunctionLiteral(_)) => {
-                    // The alias's declaration does not supply the target body's annotations.
-                    incomplete_overload = true;
-                }
-                _ => value_overload = Some(expected),
-            }
-            // Compare implementation signatures; callers use the overloads.
-            expected = Type::single_callable(db, signature);
-        }
+        let actual = model.definition_type(definition);
+        let expected = stub_model.definition_type(*stub_definition);
         // Function literals identify declarations; compare their callable signatures.
         let (Some(actual), Some(expected)) = (
             actual.map_callable_signatures(
@@ -834,34 +710,9 @@ fn function_diagnostics(db: &Database, file: File) -> InterfaceDiagnostics<'_> {
                     expected.display(db, &environment),
                 ),
             ));
-        } else if incomplete_overload
-            || value_overload.is_some_and(|family| {
-                !actual.is_fully_static(db, &environment)
-                    || !family
-                        .map_callable_signatures(
-                            db,
-                            &environment,
-                            CallableTypeKind::FunctionLike,
-                            |signature| signature,
-                        )
-                        .is_some_and(|family| actual.is_assignable_to(db, &environment, family))
-            })
-        {
-            diagnostics.push(diagnostic(
-                DiagnosticId::Lint(super::diagnostics::UNVERIFIED_OVERLOAD.name()),
-                source_range,
-                declaration.name.range(),
-                format!(
-                    "Could not verify every overload of `{}` against the implementation",
-                    declaration.name.id
-                ),
-            ));
         }
     }
-    InterfaceDiagnostics {
-        diagnostics,
-        overload_bodies,
-    }
+    diagnostics
 }
 
 pub(super) fn pairing_diagnostics(
@@ -2172,6 +2023,40 @@ mod tests {
     }
 
     #[test]
+    fn interfaces_exclude_overload_arms_from_callers() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "api.bzli",
+            "@overload\ndef convert(value: int) -> int: ...\ndef convert(value: str) -> str: ...\n",
+        );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "caller.bzl",
+            "load('api.bzli', 'convert')\ngood: str = convert('ok')\nbad = convert(1)\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        let snapshot = analysis.snapshot();
+        let diagnostics = snapshot.diagnostics(stub).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.headline_message().contains("do not support @overload")),
+            "{diagnostics:?}"
+        );
+        let diagnostics = snapshot.diagnostics(caller).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-argument-type");
+        assert_eq!(
+            diagnostic.range().unwrap().start().to_usize(),
+            "load('api.bzli', 'convert')\ngood: str = convert('ok')\nbad = convert(".len()
+        );
+    }
+
+    #[test]
     fn function_stubs_report_unsupported_correspondence() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
@@ -2180,453 +2065,37 @@ mod tests {
         loader.add_files_from_fixture(&fixture);
         analysis.set_type_interfaces([(source, stub)]).unwrap();
         for (text, contract) in [
-            ("def identity(value): return value\n", "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\n"),
-            ("def identity(value, other): return value + other\n", "def identity(value: int) -> int: ...\n"),
-            ("def identity(other): return other\n", "def identity(value: int) -> int: ...\n"),
-            ("def identity(value: int): return value\n", "def identity[T](value: T) -> T: ...\n"),
-            ("def identity(value): return value\n", "def identity[T](value) -> T: ...\n"),
+            (
+                "def identity(value): return value\n",
+                "def identity(value: int) -> int: ...\ndef identity(value: str) -> str: ...\n",
+            ),
+            (
+                "def identity(value, other): return value + other\n",
+                "def identity(value: int) -> int: ...\n",
+            ),
+            (
+                "def identity(other): return other\n",
+                "def identity(value: int) -> int: ...\n",
+            ),
+            (
+                "def identity(value: int): return value\n",
+                "def identity[T](value: T) -> T: ...\n",
+            ),
+            (
+                "def identity(value): return value\n",
+                "def identity[T](value) -> T: ...\n",
+            ),
         ] {
             analysis.update_file(source, text.into());
             analysis.update_file(stub, contract.into());
             let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-            assert!(diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"), "{text} {contract}: {diagnostics:?}");
-        }
-    }
-
-    #[test]
-    fn function_stubs_check_overload_implementations() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let body = "def rewrite(value, rewrite_label):\n    return value\nlocal: str = rewrite('value', lambda label: label)\n";
-        let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
-        let overloads = r#"
-type Value = str | list[str] | dict[str, str] | tuple[str, ...]
-@overload
-def rewrite(value: str, rewrite_label: Callable[[str], str]) -> str: ...
-@overload
-def rewrite(value: list[str], rewrite_label: Callable[[str], str]) -> list[str]: ...
-@overload
-def rewrite(value: dict[str, str], rewrite_label: Callable[[str], str]) -> dict[str, str]: ...
-"#;
-        let implementation =
-            "def rewrite(value: Value, rewrite_label: Callable[[str], str]) -> Value: ...\n";
-        let contract = format!("{overloads}{implementation}");
-        let stub = fixture.add_file(&mut analysis.db, "source.bzli", &contract);
-        let calls = r#"load("source.bzl", "rewrite")
-text: str = rewrite("value", lambda label: label)
-items: list[str] = rewrite(["value"], lambda label: label)
-fields: dict[str, str] = rewrite({"key": "value"}, lambda label: label)
-"#;
-        let caller = fixture.add_file(&mut analysis.db, "caller.bzl", calls);
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
-        for file in [source, stub, caller] {
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        }
-        // The broader implementation accepts tuples, but it is not a public overload.
-        analysis.update_file(
-            caller,
-            format!("{calls}rewrite(('value',), lambda label: label)\n"),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "no-matching-overload");
-        analysis.update_file(
-            source,
-            format!("{body}rewrite(('value',), lambda label: label)\n"),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "no-matching-overload");
-
-        analysis.update_file(
-            source,
-            "def rewrite(value, rewrite_label):\n    return 42\n".into(),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
-
-        for body in [
-            "def rewrite(value: int, rewrite_label: Callable[[str], str]) -> int:\n    return value\n",
-            "def rewrite(value, rewrite_label):\n    # type: (int, object) -> int\n    return value\n",
-            "def rewrite(other, rewrite_label):\n    return other\n",
-        ] {
-            analysis.update_file(source, body.into());
-            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-            assert_eq!(diagnostics[0].id().as_str(), "invalid-function-interface");
-        }
-        analysis.update_file(source, body.into());
-        analysis.update_file(
-            stub,
-            format!("{overloads}def rewrite(value: Value, rewrite_label: Callable[[str], str] = ...) -> Value: ...\n"),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-function-interface");
-        // Ty owns both parameter coverage and return compatibility for the donor family.
-        for implementation in [
-            "def rewrite(value: str, rewrite_label: Callable[[str], str]) -> Value: ...\n",
-            "def rewrite(value: Value, rewrite_label: Callable[[str], str]) -> str: ...\n",
-        ] {
-            analysis.update_file(stub, format!("{overloads}{implementation}"));
-            let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
-            assert!(!diagnostics.is_empty());
             assert!(
                 diagnostics
                     .iter()
-                    .all(|diagnostic| diagnostic.id().as_str() == "invalid-overload"),
-                "{diagnostics:?}"
+                    .any(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"),
+                "{text} {contract}: {diagnostics:?}"
             );
         }
-    }
-
-    #[test]
-    fn function_stubs_check_overload_return_branches() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let body = "def choose(*, text: bool) -> str | int:\n    if text:\n        return 'value'\n    return 42\n";
-        let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
-        let stub = fixture.add_file(
-            &mut analysis.db,
-            "source.bzli",
-            r#"
-@overload
-def choose(*, text: Literal[True]) -> str: ...
-@overload
-def choose(*, text: Literal[False]) -> int: ...
-def choose(*, text: bool) -> str | int: ...
-"#,
-        );
-        let caller = fixture.add_file(
-            &mut analysis.db,
-            "caller.bzl",
-            "load('source.bzl', 'choose')\ntext: str = choose(text=True)\nnumber: int = choose(text=False)\n",
-        );
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
-        for file in [source, stub, caller] {
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        }
-
-        // Both results satisfy the broad signature, but only one satisfies this branch.
-        let incorrect = body.replace("return 'value'", "return 42");
-        analysis.update_file(source, incorrect.clone());
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
-        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
-
-        analysis.update_file(
-            source,
-            incorrect.replacen(
-                "return 42",
-                "return 42  # ty: ignore[invalid-return-type]",
-                1,
-            ),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
-
-        analysis.update_file(
-            source,
-            body.replace(
-                "return 'value'",
-                "return 'value'  # ty: ignore[invalid-return-type]",
-            ),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "unused-ignore-comment");
-    }
-
-    #[test]
-    fn function_stubs_check_overloads_using_native_glob() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
-            "../../../starpls/src/builtin/builtin.pb"
-        ))
-        .unwrap();
-        analysis
-            .set_builtin_defs(builtins.clone(), Default::default())
-            .unwrap();
-        let body = "def choose(files):\n    if files:\n        return native.glob(['*.py'])\n    return 42\n";
-        let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
-        let stub = fixture.add_file(
-            &mut analysis.db,
-            "source.bzli",
-            "@overload\ndef choose(files: Literal[True]) -> list[str]: ...\n@overload\ndef choose(files: Literal[False]) -> int: ...\ndef choose(files: bool) -> list[str] | int: ...\n",
-        );
-        let inherited = fixture.add_file(
-            &mut analysis.db,
-            "other.bzl",
-            "def package(value: native) -> str:\n    return value.package_name()\npackage(native)\n",
-        );
-        let module = fixture.add_file_with_options(
-            &mut analysis.db,
-            "MODULE.bazel",
-            "native.glob(['*.py'])",
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Module,
-                is_external: false,
-                bundled_cc_common: false,
-            }),
-        );
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
-        for file in [source, inherited] {
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        }
-        let diagnostics = analysis.snapshot().diagnostics(module).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "unresolved-reference");
-        let hover = analysis
-            .snapshot()
-            .hover(FilePosition {
-                file_id: source,
-                pos: u32::try_from(body.find("glob").unwrap()).unwrap().into(),
-            })
-            .unwrap()
-            .unwrap();
-        assert!(
-            hover.contents.value.contains("allow_empty"),
-            "{}",
-            hover.contents.value
-        );
-
-        analysis.update_file(
-            source,
-            body.replace("    if files:", "    bazel = native\n    if files:")
-                .replace("native.glob", "bazel.glob"),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
-
-        analysis.update_file(
-            source,
-            body.replace(
-                "return native.glob(['*.py'])",
-                "native.glob(['*.py'])\n        return 42",
-            ),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
-
-        analysis.update_file(source, body.replace("['*.py']", "['*.py'], allow_empty=42"));
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
-
-        let include = builtins
-            .r#type
-            .iter_mut()
-            .find(|class| class.name == "native")
-            .unwrap()
-            .field
-            .iter_mut()
-            .find(|field| field.name == "glob")
-            .unwrap()
-            .callable
-            .as_mut()
-            .unwrap()
-            .param
-            .iter_mut()
-            .find(|parameter| parameter.name == "include")
-            .unwrap();
-        include.r#type = "int".into();
-        analysis
-            .set_builtin_defs(builtins, Default::default())
-            .unwrap();
-        analysis.update_file(source, body.replace("['*.py']", "42"));
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "unverified-overload");
-    }
-
-    #[test]
-    fn function_stubs_report_unverified_overloads() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let source = fixture.add_file(
-            &mut analysis.db,
-            "source.bzl",
-            "def choose(value):\n    for _item in [value]:\n        return _item\n    return value\n",
-        );
-        let stub = fixture.add_file(
-            &mut analysis.db,
-            "source.bzli",
-            "@overload\ndef choose(value: int) -> int: ...\n@overload\ndef choose(value: str) -> str: ...\ndef choose(value: int | str) -> int | str: ...\n",
-        );
-        let caller = fixture.add_file(
-            &mut analysis.db,
-            "caller.bzl",
-            "load('source.bzl', 'choose')\ntext: str = choose('value')\n",
-        );
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
-        for file in [stub, caller] {
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        }
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "unverified-overload");
-
-        analysis.update_file(
-            source,
-            "def choose(value):\n    for _item in [value]:\n        return None\n    return value\n"
-                .into(),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
-        assert!(diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
-        assert!(diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.id().as_str() == "unverified-overload"));
-
-        analysis.update_file(source, "def choose(value): return value\n".into());
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
-    }
-
-    #[test]
-    fn function_stubs_do_not_reuse_another_functions_overload_analysis() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let source = fixture.add_file(
-            &mut analysis.db,
-            "source.bzl",
-            "def original(value): return value\nchoose = original\n",
-        );
-        let family = "@overload\ndef NAME(value: int) -> int: ...\n@overload\ndef NAME(value: str) -> str: ...\ndef NAME(value: int | str) -> int | str: ...\n";
-        let stub = fixture.add_file(
-            &mut analysis.db,
-            "source.bzli",
-            &format!(
-                "{}{}",
-                family.replace("NAME", "original"),
-                family.replace("NAME", "choose")
-            ),
-        );
-        fixture.add_file(
-            &mut analysis.db,
-            "foreign.bzl",
-            "def foreign(value: int | str) -> int | str: return 42\n",
-        );
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
-        for body in [
-            "def original(value): return value\nchoose = original\n",
-            "load('foreign.bzl', 'foreign')\ndef original(value): return value\nchoose = foreign\n",
-        ] {
-            analysis.update_file(source, body.into());
-            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-            assert_eq!(diagnostics[0].id().as_str(), "unverified-overload");
-        }
-    }
-
-    #[test]
-    fn function_stubs_check_generic_overload_implementations() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let body = "def identity(value): return value\n";
-        let source = fixture.add_file(&mut analysis.db, "source.bzl", body);
-        let contract = r#"
-@overload
-def identity(value: str) -> str: ...
-@overload
-def identity(value: list[str]) -> list[str]: ...
-@overload
-def identity[T](value: T) -> T: ...
-def identity[U](value: U) -> U: ...
-"#;
-        let stub = fixture.add_file(&mut analysis.db, "source.bzli", contract);
-        let calls = r#"load("source.bzl", "identity")
-text: str = identity("value")
-items: list[str] = identity(["value"])
-number: int = identity(42)
-"#;
-        let caller = fixture.add_file(&mut analysis.db, "caller.bzl", calls);
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
-        for file in [source, stub, caller] {
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        }
-        analysis.update_file(caller, format!("{calls}bad: int = identity('value')\n"));
-        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-assignment");
-
-        analysis.update_file(source, "def identity(value): return 42\n".into());
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
-
-        analysis.update_file(source, body.into());
-        // An invalid interface also leaves the source relationship unverified.
-        analysis.update_file(
-            stub,
-            contract.replace("value: str) -> str", "value: str) -> int"),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(stub).unwrap();
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-overload"),
-            "{diagnostics:?}"
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "unverified-overload");
-    }
-
-    #[test]
-    fn function_stubs_reject_unsupported_overload_families() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let source = fixture.add_file(
-            &mut analysis.db,
-            "source.bzl",
-            "def identity(value): return value\n",
-        );
-        let stub = fixture.add_file(&mut analysis.db, "source.bzli", "");
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
-        for contract in [
-            "def identity(value: int | str) -> int | str: ...\n@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\n",
-            "@overload\ndef identity(value: int) -> int: ...\ndef identity(value: str) -> str: ...\ndef identity(value: int | str) -> int | str: ...\n",
-            "@overload\ndef identity[T](value: T) -> T: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity[U](value: U | None) -> U | None: ...\n",
-            "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity(value) -> int | str: ...\n",
-            "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity(value: int | str): ...\n",
-        ] {
-            analysis.update_file(stub, contract.into());
-            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-            assert!(diagnostics.iter().any(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"), "{contract}: {diagnostics:?}");
-        }
-        analysis.update_file(stub, "@overload\ndef identity(value: int) -> int: ...\n@overload\ndef identity(value: str) -> str: ...\ndef identity(value: int | str) -> int | str: ...\n".into());
-        analysis.update_file(
-            source,
-            "def helper(value: int) -> int: return value\nidentity = helper\n".into(),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-function-interface"),
-            "{diagnostics:?}"
-        );
     }
 
     #[test]
@@ -2689,45 +2158,6 @@ number: int = identity(42)
                 );
             }
         }
-    }
-
-    #[test]
-    fn function_stubs_check_generated_callable_overloads() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let source = fixture.add_file(
-            &mut analysis.db,
-            "source.bzl",
-            "def _impl(ctx) -> None: return None\ntarget = rule(implementation=_impl, attrs={'exports': attr.label(mandatory=True)})\n",
-        );
-        let contract = "@overload\ndef target(*, name: str, exports: str) -> None: ...\n@overload\ndef target(*, name: str, exports: Label) -> None: ...\ndef target(*, name: str, exports: str | Label) -> None: ...\n";
-        let stub = fixture.add_file(&mut analysis.db, "source.bzli", contract);
-        loader.add_files_from_fixture(&fixture);
-        analysis
-            .set_builtin_defs(
-                starpls_bazel::decode_builtins(include_bytes!(
-                    "../../../starpls/src/builtin/builtin.pb"
-                ))
-                .unwrap(),
-                Default::default(),
-            )
-            .unwrap();
-        analysis.set_type_interfaces([(source, stub)]).unwrap();
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
-
-        analysis.update_file(
-            stub,
-            contract
-                .replace("exports: str) -> None", "exports: str) -> str")
-                .replace(
-                    "exports: str | Label) -> None",
-                    "exports: str | Label) -> str | None",
-                ),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "unverified-overload");
     }
 
     #[test]
@@ -3285,7 +2715,7 @@ number: int = identity(42)
             ("load('dep.bzl', '_VALUE')\n_VALUE = 1\n", "more than once"),
         ] {
             analysis.update_file(source, text.into());
-            let diagnostics = super::diagnostics(&analysis.db, stub).diagnostics;
+            let diagnostics = super::diagnostics(&analysis.db, stub);
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{text}: {diagnostics:?}");
             };
@@ -3297,13 +2727,13 @@ number: int = identity(42)
         }
         analysis.update_file(source, "_VALUE = 1\n".into());
         analysis.update_file(stub, "_VALUE: int\n_VALUE: str\n".into());
-        let diagnostics = super::diagnostics(&analysis.db, stub).diagnostics;
+        let diagnostics = super::diagnostics(&analysis.db, stub);
         assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
         assert!(diagnostics.iter().all(|d| d
             .headline_message()
             .contains("stub binds this name more than once")));
         analysis.update_file(stub, "def macro() -> None: ...\n".into());
-        let diagnostics = super::diagnostics(&analysis.db, stub).diagnostics;
+        let diagnostics = super::diagnostics(&analysis.db, stub);
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };

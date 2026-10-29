@@ -35,7 +35,7 @@ use ty_python_semantic::lint::LintSource;
 use ty_python_semantic::lint::LintStatus;
 use ty_python_semantic::lint::RuleSelection;
 use ty_python_semantic::provided::BuiltinUsage;
-use ty_python_semantic::types::check_types_with_overload_analysis;
+use ty_python_semantic::types::check_types_with_diagnostics;
 use ty_python_semantic::types::ide_support::resolved_call_signature;
 use ty_python_semantic::types::ide_support::unreachable_ranges;
 use ty_python_semantic::types::ide_support::unused_definitions;
@@ -86,13 +86,6 @@ pub(super) static INVALID_FUNCTION_INTERFACE: LintMetadata = lint(
     "invalid-function-interface",
     "Reports function implementations that cannot satisfy their stub declarations.",
 );
-pub(super) static UNVERIFIED_OVERLOAD: LintMetadata = LintMetadata {
-    default_level: Level::Error,
-    ..lint(
-        "unverified-overload",
-        "Reports overload promises that could not be checked against a paired implementation.",
-    )
-};
 pub(super) static MISSING_PARAMETER_ANNOTATION: LintMetadata = LintMetadata {
     default_level: Level::Ignore,
     ..lint(
@@ -149,7 +142,6 @@ pub(super) fn registry() -> &'static LintRegistry {
             &INVALID_BUILD_ANNOTATION,
             &INVALID_MODULE_ANNOTATION,
             &INVALID_FUNCTION_INTERFACE,
-            &UNVERIFIED_OVERLOAD,
         ]
         .into_iter()
         .chain(STY_STRICT_LINTS)
@@ -303,14 +295,10 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
     let options = db.environment().options(db);
     let model = SemanticModel::new(db, program_file);
     diagnostics.extend(load::diagnostics(db, program_file));
-    let super::interface::InterfaceDiagnostics {
-        diagnostics: interface_diagnostics,
-        overload_bodies,
-    } = super::interface::diagnostics(db, file);
-    diagnostics.extend(interface_diagnostics);
+    diagnostics.extend(super::interface::diagnostics(db, file));
     diagnostics.extend(super::annotations::diagnostics(db, file));
     diagnostics.extend(super::context::diagnostics(db, file));
-    diagnostics.extend(super::strictness::diagnostics(db, file, &overload_bodies));
+    diagnostics.extend(super::strictness::diagnostics(db, file));
     if !options.allow_unused_definitions {
         let index = semantic_index(db, program_file);
         let environment = model.program_environment();
@@ -449,7 +437,7 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
             visitor.visit_stmt(statement);
         }
     }
-    check_types_with_overload_analysis(db, program_file, diagnostics, overload_bodies)
+    check_types_with_diagnostics(db, program_file, diagnostics)
 }
 
 fn has_non_underscore_binding(target: &Expr) -> bool {

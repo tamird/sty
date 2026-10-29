@@ -27,8 +27,6 @@ use ty_python_semantic::types::ide_support::unreachable_ranges;
 use ty_python_semantic::types::ide_support::CallInputError;
 use ty_python_semantic::types::ide_support::UnreachableRange;
 use ty_python_semantic::types::CallableTypeKind;
-use ty_python_semantic::types::OverloadBodyAnalysis;
-use ty_python_semantic::types::OverloadBodyView;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::Db as _;
 use ty_python_semantic::HasType;
@@ -51,11 +49,7 @@ pub(super) fn is_fully_static<'db>(
         && ty.is_equivalent_to(db, environment, ty.top_materialization(db, environment))
 }
 
-pub(super) fn diagnostics<'db>(
-    db: &'db Database,
-    file: File,
-    overload_bodies: &[OverloadBodyAnalysis<'db>],
-) -> Vec<Diagnostic> {
+pub(super) fn diagnostics(db: &Database, file: File) -> Vec<Diagnostic> {
     let rules = db.rule_selection(file.source);
     let enabled = |name| rules.enabled().any(|lint| lint.name() == name);
     let explicit_any = enabled(EXPLICIT_ANY.name());
@@ -77,8 +71,6 @@ pub(super) fn diagnostics<'db>(
         } else {
             &[]
         },
-        overload_bodies,
-        domain: None,
         diagnostics: Vec::new(),
     };
     checks.visit_body(parsed.suite());
@@ -92,17 +84,11 @@ struct Checks<'a, 'db> {
     explicit_any: bool,
     non_static: bool,
     unreachable: &'a [UnreachableRange],
-    overload_bodies: &'a [OverloadBodyAnalysis<'db>],
-    domain: Option<OverloadBodyView<'db>>,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl<'db> Checks<'_, 'db> {
     fn is_unreachable(&self, range: TextRange) -> bool {
-        if self.domain.is_some() {
-            // Overload bodies have their own domain-specific reachability.
-            return false;
-        }
         let end = self
             .unreachable
             .partition_point(|unreachable| unreachable.range.start() <= range.start());
@@ -126,11 +112,7 @@ impl<'db> Checks<'_, 'db> {
         diagnostic.annotate(Annotation::primary(
             Span::from(self.file.source).with_range(range),
         ));
-        // Different domains can reach the same gradual operation. Report identical evidence
-        // once, while retaining distinct type explanations from different domains.
-        if self.domain.is_none() || !self.diagnostics.contains(&diagnostic) {
-            self.diagnostics.push(diagnostic);
-        }
+        self.diagnostics.push(diagnostic);
     }
 
     fn check_type(&mut self, range: TextRange, ty: Type<'_>, subject: &str) {
@@ -197,27 +179,12 @@ impl<'db> Checks<'_, 'db> {
         self.is_fully_static(callee)
     }
 
-    fn expression_type(&self, expression: &Expr) -> Option<Type<'db>> {
-        match self.domain {
-            Some(domain) => domain.expression_type(expression),
-            None => expression.inferred_type(self.model),
-        }
-    }
-
     fn check_expression(&mut self, expression: &Expr, subject: &str) {
         if !self.non_static || self.is_unreachable(expression.range()) {
             return;
         }
-        if let Some(ty) = self.expression_type(expression) {
+        if let Some(ty) = expression.inferred_type(self.model) {
             self.check_type(expression.range(), ty, subject);
-        } else if self.domain.is_some() {
-            self.report(
-                expression.range(),
-                &NON_STATIC_TYPE,
-                format!(
-                    "Cannot establish a fully static type for {subject}: type information is unavailable"
-                ),
-            );
         }
     }
 
@@ -246,14 +213,11 @@ impl<'db> Checks<'_, 'db> {
             return FxHashSet::default();
         }
         let env = self.model.program_environment();
-        let inputs = match self.domain {
-            Some(domain) => domain.call_input_types(call),
-            None => call_input_types_with_context(self.model, call, |expression| {
-                callback
-                    .filter(|callback| callback.argument.range() == expression.range())
-                    .map(|callback| callback.ty)
-            }),
-        };
+        let inputs = call_input_types_with_context(self.model, call, |expression| {
+            callback
+                .filter(|callback| callback.argument.range() == expression.range())
+                .map(|callback| callback.ty)
+        });
         match inputs {
             Ok(arguments) => {
                 // A checked invocation need only satisfy the selected contracts for supplied
@@ -290,7 +254,7 @@ impl<'db> Checks<'_, 'db> {
                         if !matches!(expression, Expr::Call(_)) || inputs.is_empty() {
                             return None;
                         }
-                        let result = self.expression_type(expression)?;
+                        let result = expression.inferred_type(self.model)?;
                         if self.is_fully_static(result) {
                             return None;
                         }
@@ -315,7 +279,7 @@ impl<'db> Checks<'_, 'db> {
             Err(CallInputError::Incomplete) => {
                 // Some valid calls, including overload expansion, do not retain all matched
                 // inputs. A fully static whole callable is a stronger proof for those calls.
-                if let Some(callee) = self.expression_type(&call.func) {
+                if let Some(callee) = call.func.inferred_type(self.model) {
                     if self.non_static && !self.is_fully_static_invocation(callee) {
                         self.report_non_static_type(call.func.range(), callee, "called function");
                     }
@@ -332,12 +296,6 @@ impl<'db> Checks<'_, 'db> {
     }
 
     fn visit_checked_expr(&mut self, expression: &Expr, consumed: bool) {
-        if self
-            .domain
-            .is_some_and(|domain| !domain.is_reachable(expression.range()))
-        {
-            return;
-        }
         if let Expr::Name(name) = expression {
             if name.ctx == ExprContext::Store {
                 self.check_provided_annotation(name.node_index().load());
@@ -349,13 +307,7 @@ impl<'db> Checks<'_, 'db> {
             && !self.file.is_type_interface(self.db)
         {
             if let Expr::Call(call) = expression {
-                let callback = if self.domain.is_none() {
-                    super::context::callback_contract(self.db, self.model, call)
-                } else {
-                    // Registration-specific callback views apply only at module scope.
-                    // Domain views own function-body calls and their existing inferred arguments.
-                    None
-                };
+                let callback = super::context::callback_contract(self.db, self.model, call);
                 let checked = self.check_call_inputs(call, callback.as_ref());
                 if !consumed {
                     self.check_expression(expression, "call result");
@@ -377,66 +329,6 @@ impl<'db> Checks<'_, 'db> {
             }
         }
         visitor::walk_expr(self, expression);
-    }
-
-    fn check_overload_body<'ast>(
-        &mut self,
-        function: &'ast ruff_python_ast::StmtFunctionDef,
-        analysis: &OverloadBodyAnalysis<'db>,
-    ) {
-        // Defaults and annotations belong to the ordinary declaration, not to a call domain.
-        for decorator in &function.decorator_list {
-            self.visit_decorator(decorator);
-        }
-        if let Some(parameters) = &function.type_params {
-            self.visit_type_params(parameters);
-        }
-        for default in function
-            .parameters
-            .iter_non_variadic_params()
-            .filter_map(|parameter| parameter.default.as_deref())
-        {
-            self.visit_expr(default);
-        }
-        for parameter in function
-            .parameters
-            .iter()
-            .map(|parameter| parameter.as_parameter())
-        {
-            self.check_provided_annotation(parameter.node_index().load());
-            visitor::walk_parameter(self, parameter);
-        }
-        if let Some(returns) = &function.returns {
-            self.visit_annotation(returns);
-        }
-        if self.explicit_any {
-            // Annotation policy is source-owned even in branches absent from every domain.
-            let non_static = std::mem::replace(&mut self.non_static, false);
-            self.visit_body(&function.body);
-            self.non_static = non_static;
-        }
-        if !self.non_static {
-            return;
-        }
-        let explicit_any = std::mem::replace(&mut self.explicit_any, false);
-        for domain in analysis.domains(self.db) {
-            self.domain = Some(domain);
-            for parameter in function
-                .parameters
-                .iter()
-                .map(|parameter| parameter.as_parameter())
-            {
-                if let Some(definition) = self.definition(parameter.into()) {
-                    let ty = domain
-                        .definition_type(definition)
-                        .unwrap_or_else(Type::unknown);
-                    self.check_type(parameter.name.range(), ty, "parameter");
-                }
-            }
-            self.visit_body(&function.body);
-        }
-        self.domain = None;
-        self.explicit_any = explicit_any;
     }
 
     fn check_provided_annotation(&mut self, owner: NodeIndex) {
@@ -466,12 +358,6 @@ impl<'db> Checks<'_, 'db> {
 
 impl<'ast> Visitor<'ast> for Checks<'_, '_> {
     fn visit_stmt(&mut self, statement: &'ast Stmt) {
-        if self
-            .domain
-            .is_some_and(|domain| !domain.is_reachable(statement.range()))
-        {
-            return;
-        }
         let index = ty_python_core::semantic_index(self.db, self.model.program_file());
         if index.provided_statement_definitions(statement).is_some() {
             // The frontend supplies bindings for imports; their source expressions are not calls.
@@ -503,14 +389,6 @@ impl<'ast> Visitor<'ast> for Checks<'_, '_> {
                                 }
                             }
                         }
-                    }
-                }
-                if let Some(definition) = self.definition(function.into()) {
-                    if let Some(analysis) = self.overload_bodies.iter().find(|analysis| {
-                        analysis.is_complete() && analysis.definition(self.db) == definition
-                    }) {
-                        self.check_overload_body(function, analysis);
-                        return;
                     }
                 }
             }
@@ -907,25 +785,7 @@ def unknown_result() -> list:
     return []
 "#,
         );
-        fixture.add_file(
-            &mut analysis.db,
-            "overloads.bzli",
-            r#"
-@overload
-def complete(value: int) -> int: ...
-@overload
-def complete(value: str) -> str: ...
-def complete(value): ...
-@overload
-def gradual(value: int) -> int: ...
-@overload
-def gradual(value: str, extra: Any = ...) -> str: ...
-def gradual(value, extra=None): ...
-choice: int | str
-"#,
-        );
         let source = r#"load("library.bzl", "consume", "mixed", "optional", "key", "gradual_result", "unknown_result")
-load("overloads.bzli", "complete", "gradual", "choice")
 selected = select({"//:enabled": ["known"]})
 combined = selected + ["more"]
 sorted(["known"])
@@ -935,7 +795,6 @@ values: dict[str, int] = {"known": 1}
 values.update({"more": 2})
 optional()
 mixed(1)
-complete(choice)
 "#;
         let file = fixture.add_file(&mut analysis.db, "caller.bzl", source);
         loader.add_files_from_fixture(&fixture);
@@ -945,7 +804,6 @@ complete(choice)
         for (extra, subject) in [
             ("consume(1)", "called function"),
             ("mixed('wrong')", "called function"),
-            ("gradual(choice)", "called function"),
             ("saved = consume", "variable"),
             ("saved = gradual_result", "variable"),
             ("gradual_result()", "call result"),
@@ -1401,7 +1259,7 @@ def accept(callback: Callback) -> None: ...
     }
 
     #[test]
-    fn higher_order_callbacks_and_public_overloads() {
+    fn higher_order_callbacks() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
         let library = fixture.add_file(
@@ -1413,11 +1271,6 @@ def accept(callback: Callback) -> None: ...
             &mut analysis.db,
             "source.bzl",
             "load('library.bzl', 'factory')\ncallbacks = [factory]\n",
-        );
-        fixture.add_file(
-            &mut analysis.db,
-            "overloads.bzli",
-            "@overload\ndef consume(value: int) -> int: ...\n@overload\ndef consume(value: str) -> str: ...\ndef consume(value): ...\n",
         );
         loader.add_files_from_fixture(&fixture);
         analysis.set_rules(rules(&["non-static-type"]));
@@ -1431,159 +1284,6 @@ def accept(callback: Callback) -> None: ...
         );
         let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        analysis.update_file(
-            source,
-            "load('overloads.bzli', 'consume')\ncallbacks = [consume]\ntext: str = consume('ok')\nnumber: int = consume(1)\n".into(),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
-    }
-
-    #[test]
-    fn paired_overload_domains_own_complete_body_facts() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let source_text = "def use(value):\n    return value\ndef setting(ctx, override = None):\n    if override == None:\n        override = ctx.value\n    return use(override)\n";
-        let source = fixture.add_file(&mut analysis.db, "source.bzl", source_text);
-        let interface_text = r#"
-class Context(Protocol):
-    @property
-    def value(self) -> str: ...
-def use(value: str) -> str: ...
-@overload
-def setting(ctx: Context, override: str | None = ...) -> str: ...
-@overload
-def setting(ctx: object, override: str) -> str: ...
-def setting(ctx: object, override: str | None = ...) -> str: ...
-def calls(context: Context, other: object) -> tuple[str, str, str, str]: ...
-"#;
-        let interface = fixture.add_file(&mut analysis.db, "source.bzli", interface_text);
-        let calls = "def calls(context, other):\n    return (setting(context), setting(context, None), setting(other, 'off'), setting(ctx=other, override='off'))\n";
-        analysis.update_file(source, format!("{source_text}{calls}"));
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, interface)]).unwrap();
-        analysis.set_rules(rules(&["non-static-type", "explicit-any"]));
-        for file in [source, interface] {
-            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-            assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        }
-        for (from, to, expected) in [
-            (
-                "override == None",
-                "override != None",
-                "unresolved-attribute",
-            ),
-            ("ctx.value", "ctx.missing", "unresolved-attribute"),
-            (
-                "    if override == None:\n        override = ctx.value",
-                "    override = ctx.value",
-                "unresolved-attribute",
-            ),
-            (
-                "return use(override)",
-                "return use(42)",
-                "invalid-argument-type",
-            ),
-            ("return use(override)", "return 42", "invalid-return-type"),
-            (
-                "override = ctx.value",
-                "override = ctx.value  # ty: ignore[unresolved-attribute]",
-                "unused-ignore-comment",
-            ),
-            (
-                "    if override == None:",
-                "    for item in [ctx]:\n        item.value\n    if override == None:",
-                "unresolved-attribute",
-            ),
-        ] {
-            analysis.update_file(source, format!("{}{calls}", source_text.replace(from, to)));
-            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-            assert!(
-                diagnostics
-                    .iter()
-                    .any(|diagnostic| diagnostic.id().as_str() == expected),
-                "{to}: {diagnostics:?}"
-            );
-        }
-        analysis.update_file(
-            source,
-            source_text.replace(
-                "ctx.value",
-                "ctx.missing  # ty: ignore[unresolved-attribute]",
-            ),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert!(
-            !diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "unused-ignore-comment"),
-            "{diagnostics:?}"
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
-            "{diagnostics:?}"
-        );
-        analysis.update_file(source, format!("{source_text}{calls}"));
-        analysis.update_file(
-            interface,
-            interface_text.replace("def value(self) -> str", "def value(self) -> Any"),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "non-static-type"),
-            "{diagnostics:?}"
-        );
-        analysis.update_file(interface, interface_text.to_owned());
-        assert!(analysis.snapshot().diagnostics(source).unwrap().is_empty());
-        analysis.update_file(source, source_text.replace("    return use(override)", "    if False:\n        value = 42  # type: Any\n        return value\n    return use(override)"));
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(
-            diagnostics
-                .iter()
-                .filter(|diagnostic| diagnostic.id().as_str() == "explicit-any")
-                .count(),
-            1,
-            "{diagnostics:?}"
-        );
-        analysis.update_file(source, format!("{source_text}{calls}unrelated = use(42)\n"));
-        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
-    }
-
-    #[test]
-    fn gradual_callback_result_in_one_overload_domain_is_reported() {
-        let (mut analysis, loader) = Analysis::new_for_test();
-        let mut fixture = Fixture::new(&mut analysis.db);
-        let source = fixture.add_file(
-            &mut analysis.db,
-            "source.bzl",
-            "def invoke(callback, flag):\n    return callback()\n",
-        );
-        let interface_text = "@overload\ndef invoke(callback: Callable[[], object], flag: Literal[True]) -> object: ...\n@overload\ndef invoke(callback: Callable[[], Any], flag: Literal[False]) -> object: ...\ndef invoke(callback: IMPLEMENTATION, flag: bool) -> object: ...\n";
-        let interface = fixture.add_file(&mut analysis.db, "source.bzli", "");
-        loader.add_files_from_fixture(&fixture);
-        analysis.set_type_interfaces([(source, interface)]).unwrap();
-        analysis.set_rules(rules(&["non-static-type"]));
-        for implementation in ["object", "Callable[[], object]"] {
-            analysis.update_file(
-                interface,
-                interface_text.replace("IMPLEMENTATION", implementation),
-            );
-            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-            assert!(
-                diagnostics.iter().any(|diagnostic| {
-                    diagnostic.id().as_str() == "non-static-type"
-                        && diagnostic.headline_message().contains("call result")
-                        && diagnostic.headline_message().contains("Any")
-                }),
-                "{implementation}: {diagnostics:?}"
-            );
-        }
     }
 
     #[test]

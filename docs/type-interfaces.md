@@ -99,68 +99,8 @@ def is_list(value: object) -> TypeIs[Top[list[Unknown]]]: ...
 Elements of an otherwise unknown list can be read as `object`; adding an element
 requires knowing that the list's element type accepts it.
 
-### Overloaded functions
-
-Use `@overload` on consecutive declarations with the same name to describe
-multiple call signatures. `overload` is available in the annotation namespace:
-
-```starlark
-@overload
-def identity(value: int) -> int: ...
-
-@overload
-def identity(value: str) -> str: ...
-```
-
-Calls use the complete overload family. Each declaration has its own parameter
-and result annotations and may declare type parameters. Overload families must
-contain at least two declarations. ty checks the declarations and resolves calls
-using its ordinary overload rules.
-
-To check a mapped source implementation, follow the overload family
-with an ordinary declaration that has complete parameter and return annotations:
-
-```starlark
-@overload
-def identity(value: int) -> int: ...
-
-@overload
-def identity(value: str) -> str: ...
-
-def identity(value: int | str) -> int | str: ...
-```
-
-ty checks the overloads against the ordinary implementation signature. Source
-annotations still take precedence, and callers see only the overloads. Generic
-implementation variables are inferred from each overload's inputs. A generic
-implementation requires a fully static specialization. Unresolved inference,
-generic variadics, and receiver-dependent generics produce
-`invalid-function-interface` when checking mapped source. Families without an
-explicit implementation produce the same diagnostic.
-
-When the source adopts its entire signature from the stub, ty checks supported
-bodies under each overload's parameter and result types. Supported bodies include
-assignments, conditionals, callback calls, builtin list and dictionary
-construction, supported collection methods, and typed `**kwargs`. Generic inputs
-must yield a complete static implementation specialization. Optional parameters
-retain the actual source default wherever the overload permits omission.
-
-If every overload is supported, these separate views own body type diagnostics
-and `non-static-type` checks, preserving relationships between parameters.
-Declarations, default expressions, and condition warnings keep their shared
-source interpretation.
-
-For example, an overload promising `str` when a flag is `True` rejects `return 42`
-in that branch even when the shared implementation permits `int | str`. Captures,
-loops, comprehensions, and unsupported mutation or escape paths retain checking
-under the shared implementation signature. Checking the paired source reports
-`unverified-overload` when ty cannot check every overload against that body.
-Function aliases also receive this diagnostic because the paired overloads do
-not apply to the target body. Other callable values require a static signature
-that satisfies every overload. Ordinary checks and supported overload checks
-still run. The original `**kwargs` dictionary supports reads,
-copies, and keyword expansion. Direct mutation, storage in another variable or
-container, and returning that dictionary require the shared-signature check.
+A function has one signature. A generic signature can relate a parameter to
+the result, for example `def first[T](items: list[T]) -> T: ...`.
 
 ### Shared declarations
 
