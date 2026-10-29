@@ -23,3 +23,37 @@ def use_netrc(
 ) -> _Auth: ...
 def read_user_netrc[A](ctx: repository_ctx[A]) -> _Netrc: ...
 def get_auth(ctx: repository_ctx[_AuthAttrs], urls: Collection[str]) -> _Auth: ...
+
+type _PatchAttrs = struct[{
+    "canonical_id": NotRequired[str],
+    "netrc": NotRequired[_NetrcPath | None],
+    "auth_patterns": NotRequired[dict[str, str] | None],
+    "patches": NotRequired[list[Label]],
+    "patch_args": NotRequired[list[str]],
+    "patch_cmds": NotRequired[list[str]],
+    "patch_cmds_win": NotRequired[list[str]],
+    "patch_strip": NotRequired[int],
+    "patch_tool": NotRequired[str],
+    "remote_patches": NotRequired[dict[str, str]],
+    "remote_patch_strip": NotRequired[int],
+    "remote_module_file_urls": NotRequired[list[str]],
+    "remote_module_file_integrity": NotRequired[str],
+}, ...]
+
+# Bazel 7 returns None. Later releases return the successful downloads by URL.
+def patch[P: str | Label | path = Label](
+    ctx: repository_ctx[_PatchAttrs],
+    patches: list[P] | None = ...,
+    patch_cmds: list[str] | None = ...,
+    patch_cmds_win: list[str] | None = ...,
+    patch_tool: str | None = ...,
+    patch_args: list[str] | None = ...,
+    auth: _Auth | None = ...,
+) -> dict[str, struct[{"sha256": str, "integrity": str}, ...]] | None: ...
+
+# The keys select attributes by name; different attributes have different types.
+def update_attrs[K: str, V](
+    orig: struct[{"name": str}, ...],
+    keys: Collection[str],
+    override: dict[K, V],
+) -> dict[str, object]: ...
