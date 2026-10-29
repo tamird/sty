@@ -31,7 +31,17 @@ Ship a companion next to the implementation, for example `foo/defs.bzli` next
 to `foo/defs.bzl`. The action checks each companion against its implementation
 in the current Bazel repository, including pairs that no caller loads. It also
 checks registered interfaces and their locally owned sources. The optional
-`files` input adds implementations or directories, including dependency sources.
+`files` input adds implementations or directories. To check a dependency
+against a stub, name its source file by its Bazel label:
+
+```yaml
+with:
+  files: |
+    rules/defs.bzl
+    @bazel_skylib//lib:shell.bzl
+```
+
+The action asks the checked workspace's Bazel for the installed file.
 
 The check follows loads and enables inference of `ctx.attr` fields from Bazel rule
 declarations, and reports possibly unbound names and unreachable code. Run the
