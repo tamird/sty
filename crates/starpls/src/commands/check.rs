@@ -99,7 +99,7 @@ pub(crate) struct CheckCommand {
     #[clap(long)]
     exit_zero: bool,
 
-    /// Diagnostic output format; json-lines writes status messages to stderr.
+    /// Diagnostic output format. Machine-readable formats write status messages to stderr.
     #[clap(long, value_enum, default_value_t)]
     output_format: OutputFormat,
 
@@ -130,6 +130,7 @@ enum OutputFormat {
     #[default]
     Full,
     JsonLines,
+    Junit,
 }
 
 impl OutputFormat {
@@ -139,6 +140,7 @@ impl OutputFormat {
             Self::Full => config.color(true),
             // The canonical renderer otherwise reports every severity as error.
             Self::JsonLines => config.format(DiagnosticFormat::JsonLines).preview(true),
+            Self::Junit => config.format(DiagnosticFormat::Junit).preview(true),
         }
     }
 }
@@ -307,6 +309,59 @@ mod tests {
                 assert!(String::from_utf8(status)
                     .unwrap()
                     .contains("Errors: 1, warnings: 0, infos: 0"));
+            }
+        }
+    }
+
+    #[test]
+    fn junit_reports_the_complete_check() {
+        let sources = [
+            ("first.bzl", "def f() -> int:\n    return 'first'\n"),
+            ("second.bzl", "def g() -> int:\n    return 'second'\n"),
+            ("notice.bzl", "_unused = 1\n"),
+            ("clean.bzl", "value = 1\n"),
+        ];
+        for (name, paths, expected) in [
+            ("clean", vec!["clean.bzl"], Some(ExitCode::SUCCESS)),
+            ("warning", vec!["notice.bzl"], Some(ExitCode::SUCCESS)),
+            (
+                "errors",
+                vec!["first.bzl", "notice.bzl", "second.bzl"],
+                Some(ExitCode::FAILURE),
+            ),
+            ("incomplete", vec!["first.bzl", "missing.bzl"], None),
+        ] {
+            let mut checker = local_checker_with_options(
+                &format!("junit-{name}"),
+                &sources,
+                CheckCommand {
+                    paths: paths.into_iter().map(str::to_owned).collect(),
+                    output_format: super::OutputFormat::Junit,
+                    ..Default::default()
+                },
+            );
+            let mut output = Vec::new();
+            let mut status = Vec::new();
+            let result = checker.report_diagnostics_to(None, &mut output, &mut status);
+            assert_eq!(result.ok(), expected);
+            let xml = String::from_utf8(output).unwrap();
+            let status = String::from_utf8(status).unwrap();
+            if expected.is_none() {
+                assert!(xml.is_empty());
+                assert!(status.contains("missing.bzl"));
+                continue;
+            }
+            assert_eq!(xml.matches("<testsuites").count(), 1);
+            assert!(xml.trim_end().ends_with("</testsuites>"));
+            if expected == Some(ExitCode::FAILURE) {
+                assert_eq!(xml.matches("<failure ").count(), 2, "{xml}");
+                assert!(xml.contains("first.bzl"));
+                assert!(xml.contains("second.bzl"));
+            } else {
+                assert!(xml.contains("No errors found"));
+            }
+            if name == "warning" {
+                assert!(status.contains("unused"), "{status}");
             }
         }
     }
@@ -4815,29 +4870,6 @@ impl Checker {
         self.analysis.file(path, dialect, info).map(Some)
     }
 
-    fn report_diagnostics_for_file(
-        snapshot: &AnalysisSnapshot,
-        diagnostics: &[Diagnostic],
-        counts: &mut DiagnosticCounts,
-        config: &DisplayDiagnosticConfig,
-        output: &mut dyn Write,
-    ) -> anyhow::Result<()> {
-        for diagnostic in diagnostics {
-            match diagnostic.severity() {
-                Severity::Info => counts.infos += 1,
-                Severity::Warning => counts.warnings += 1,
-                Severity::Error => counts.errors += 1,
-                Severity::Fatal => counts.errors += 1,
-            }
-        }
-        write!(
-            output,
-            "{}",
-            snapshot.render_diagnostics(diagnostics, config)?
-        )?;
-        Ok(())
-    }
-
     fn load_graph(&mut self, checked: impl IntoIterator<Item = File>) -> anyhow::Result<LoadGraph> {
         let mut graph = LoadGraph {
             files: self.files.clone(),
@@ -5119,18 +5151,39 @@ impl Checker {
         let mut counts = DiagnosticCounts::default();
         let mut checked = indexmap::IndexSet::new();
         let config = self.output_format.diagnostic_config();
+        let mut junit_failures = Vec::new();
         for InputError { path, message } in &self.input_errors {
             writeln!(stderr, "Cannot select {}: {message}", path.display())?;
         }
         for (file, diagnostics) in diagnostics {
-            Self::report_diagnostics_for_file(
-                &snapshot,
-                &diagnostics,
-                &mut counts,
-                &config,
-                output,
-            )?;
             checked.insert(file);
+            for diagnostic in &diagnostics {
+                match diagnostic.severity() {
+                    Severity::Info => counts.infos += 1,
+                    Severity::Warning => counts.warnings += 1,
+                    Severity::Error => counts.errors += 1,
+                    Severity::Fatal => counts.errors += 1,
+                }
+            }
+            match self.output_format {
+                OutputFormat::Full | OutputFormat::JsonLines => {
+                    let rendered = snapshot.render_diagnostics(&diagnostics, &config)?;
+                    write!(output, "{rendered}")?;
+                }
+                OutputFormat::Junit => {
+                    // Ruff represents each diagnostic as a failed test. Warnings and
+                    // informational diagnostics do not fail a sty check.
+                    let (failures, notices): (Vec<_>, Vec<_>) = diagnostics
+                        .into_iter()
+                        .partition(|d| matches!(d.severity(), Severity::Error | Severity::Fatal));
+                    junit_failures.extend(failures);
+                    if !notices.is_empty() {
+                        let rendered = snapshot
+                            .render_diagnostics(&notices, &DisplayDiagnosticConfig::new("sty"))?;
+                        write!(stderr, "{rendered}")?;
+                    }
+                }
+            }
         }
         output.flush()?;
 
@@ -5152,9 +5205,14 @@ impl Checker {
             writeln!(writer)?;
             writer.flush()?;
         }
+        if report.complete && matches!(self.output_format, OutputFormat::Junit) {
+            let rendered = snapshot.render_diagnostics(&junit_failures, &config)?;
+            write!(output, "{rendered}")?;
+            output.flush()?;
+        }
         let status: &mut dyn Write = match self.output_format {
             OutputFormat::Full => &mut *output,
-            OutputFormat::JsonLines => &mut *stderr,
+            OutputFormat::JsonLines | OutputFormat::Junit => &mut *stderr,
         };
         writeln!(
             status,

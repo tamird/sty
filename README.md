@@ -139,6 +139,11 @@ separate `--report` coverage summary retains its version 2 format and
 counts fatal diagnostics as errors. Errors or incomplete coverage still
 fail the command; warnings alone do not.
 
+Use `sty check --output-format junit <paths> > junit.xml` to produce a
+single JUnit report. Type errors appear as failed test cases; warnings
+and informational diagnostics go to stderr. An incomplete check exits
+with an error and emits no JUnit report.
+
 Set `RUST_LOG=sty::timing=debug` to log phase timings, Bazel subprocess
 durations, and file synchronization counts to stderr when investigating
 slow checks.
