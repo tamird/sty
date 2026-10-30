@@ -4368,6 +4368,7 @@ struct CoverageReport<'a> {
     version: u32,
     load_scope: LoadScope,
     workspace: &'a Path,
+    output_base: &'a Path,
     bazel_release: &'a str,
     selected_files: Vec<ReportFile>,
     checked_files: Vec<ReportFile>,
@@ -5325,6 +5326,7 @@ impl Checker {
             version: 2,
             load_scope: self.load_scope,
             workspace: &self.bazel_info.workspace,
+            output_base: &self.bazel_info.output_base,
             bazel_release: &self.bazel_info.release,
             selected_files: self
                 .files
