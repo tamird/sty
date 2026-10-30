@@ -139,6 +139,11 @@ Pass a fragment or BUILD template explicitly to check it as source.
 Explicit directories use their existing repository context, including Bazel's
 installed external repositories; nested directory symlinks are not followed.
 
+Use a Bazel file label to check an installed source, or `...` to check a
+directory recursively. For example, `sty check @rules_foo//tools:defs.bzl`
+checks the installed file with that repository's load mappings;
+`sty check @rules_foo//tools/...` checks the Bazel sources under `tools`.
+
 Use `--output-format json-lines` to write one diagnostic JSON object per
 line to stdout. Each object includes `name`, its actual `severity`,
 `filename`, `message`, and 1-indexed `location` and `end_location` positions

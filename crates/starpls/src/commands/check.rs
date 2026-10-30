@@ -25,6 +25,7 @@ use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::Serialize;
 use starpls_bazel::client::BazelCLI;
 use starpls_bazel::client::BazelInfo;
+use starpls_bazel::label::Label;
 use starpls_common::Dialect;
 use starpls_common::File;
 use starpls_common::FileInfo;
@@ -46,7 +47,7 @@ use crate::server::load_bazel_builtins;
 
 #[derive(Args, Default)]
 pub(crate) struct CheckCommand {
-    /// Paths to typecheck.
+    /// Paths, Bazel source labels (@repo//pkg:file.bzl), or directories (@repo//pkg/...).
     pub(crate) paths: Vec<String>,
 
     /// Read newline-delimited paths from a file, or '-' for standard input.
@@ -2993,12 +2994,19 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             let external = root.join("external");
             let repository = external.join("rules+");
             std::fs::create_dir_all(&external).unwrap();
-            let source = repository.join("defs.bzl");
+            let source = repository.join("BUILD.bazel");
             if !missing {
                 std::fs::create_dir_all(&repository).unwrap();
-                std::fs::write(&source, "value: str = 'stale'\n").unwrap();
+                std::fs::write(&source, "value = 'stale'  # type: str\n").unwrap();
             }
-            let client = Arc::new(TestBazelClient::default());
+            let client = Arc::new(TestBazelClient {
+                repository_mappings: [(
+                    String::new(),
+                    Arc::new([("rules".to_owned(), "rules+".to_owned())].into()),
+                )]
+                .into(),
+                ..Default::default()
+            });
             if failed {
                 client
                     .fetch_failures
@@ -3008,7 +3016,7 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             } else {
                 client.fetch_files.lock().unwrap().insert(
                     "rules+".to_owned(),
-                    (source.clone(), "value: str = 42\n".to_owned()),
+                    (source.clone(), "value = 42  # type: str\n".to_owned()),
                 );
             }
             let (sender, receiver) = crossbeam_channel::unbounded();
@@ -3022,17 +3030,23 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             let (analysis, loader) = options
                 .prepare_analysis(loader, &info, Default::default())
                 .unwrap();
-            let selected = if directory { &repository } else { &source };
+            let selected = if directory {
+                "@rules//..."
+            } else {
+                "@rules//:BUILD.bazel"
+            };
             let mut checker = Checker::new(
                 analysis,
                 info,
-                vec![selected.to_str().unwrap().to_owned()],
+                vec![selected.to_owned()],
                 &[],
                 loader,
                 receiver,
                 &options,
             )
             .unwrap();
+            assert!(checker.input_path("@absent//:defs.bzl").is_err());
+            assert!(checker.input_path("@rules//other:../defs.bzl").is_err());
             if failed {
                 let [error] = checker.input_errors.as_slice() else {
                     panic!("expected one failed input")
@@ -3055,6 +3069,56 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
             assert_eq!(*client.fetch_requests.lock().unwrap(), ["rules+"]);
         }
+    }
+
+    #[test]
+    fn bazel_input_labels_require_the_named_package_and_kind() {
+        let (checker, _, _) = fetch_checker("checker-input-labels", true);
+        let root = checker.bazel_info.workspace.clone();
+        std::fs::create_dir_all(root.join("tools/lib")).unwrap();
+        std::fs::create_dir(root.join("unowned")).unwrap();
+        std::fs::write(root.join("tools/BUILD"), "").unwrap();
+        std::fs::write(root.join("tools/lib/defs.bzl"), "value: str = 42\n").unwrap();
+        std::fs::write(root.join("unowned/defs.bzl"), "").unwrap();
+        let mut checker = Checker::new(
+            checker.analysis,
+            checker.bazel_info,
+            [
+                "//:tools",
+                "//tools/lib/defs.bzl/...",
+                "//:tools/lib/defs.bzl",
+                "//unowned:defs.bzl",
+                "//tools:lib/defs.bzl",
+            ]
+            .map(String::from)
+            .to_vec(),
+            &[],
+            checker.loader,
+            checker.fetch_repo_receiver,
+            &CheckCommand::default(),
+        )
+        .unwrap();
+        assert_eq!(checker.input_errors.len(), 4);
+        for (error, expected) in checker.input_errors.iter().zip([
+            "expected a source file",
+            "expected a directory",
+            "belongs to Bazel package",
+            "has no BUILD file",
+        ]) {
+            assert!(error.message.contains(expected), "{}", error.message);
+        }
+        let result = checker.check_files().unwrap();
+        let [(file, diagnostics)] = result.diagnostics.as_slice() else {
+            panic!("expected only the valid file: {:?}", result.diagnostics);
+        };
+        assert_eq!(
+            checker.analysis.snapshot().path(*file),
+            root.join("tools/lib/defs.bzl")
+        );
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("expected an error from the valid label: {diagnostics:?}");
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
     }
 
     #[test]
@@ -4700,7 +4764,97 @@ struct LoadGraph {
     unresolved: indexmap::IndexMap<File, Vec<LoadDependency>>,
 }
 
+enum BazelInput {
+    Directory,
+    File { package: PathBuf },
+}
+
+impl BazelInput {
+    fn validate(&self, path: &Path, analysis: &Analysis) -> anyhow::Result<()> {
+        let metadata =
+            std::fs::metadata(path).with_context(|| format!("reading {}", path.display()))?;
+        match self {
+            Self::Directory => {
+                anyhow::ensure!(
+                    metadata.is_dir(),
+                    "expected a directory: {}",
+                    path.display()
+                );
+                Ok(())
+            }
+            Self::File { package } => {
+                anyhow::ensure!(
+                    metadata.is_file(),
+                    "expected a source file: {}",
+                    path.display()
+                );
+                for directory in path
+                    .ancestors()
+                    .skip(1)
+                    .take_while(|dir| dir.starts_with(package))
+                {
+                    if analysis.bazel_build_file(directory)?.is_some() {
+                        anyhow::ensure!(
+                            directory == package,
+                            "{} belongs to Bazel package {}, not {}",
+                            path.display(),
+                            directory.display(),
+                            package.display()
+                        );
+                        return Ok(());
+                    }
+                }
+                anyhow::bail!("Bazel package {} has no BUILD file", package.display())
+            }
+        }
+    }
+}
+
 impl Checker {
+    fn input_path(&self, value: &str) -> anyhow::Result<(PathBuf, Option<BazelInput>)> {
+        let Some((_, relative)) = value
+            .split_once("//")
+            .filter(|(repo, _)| repo.is_empty() || repo.starts_with('@'))
+        else {
+            let path = starpls_common::absolute_path(Path::new(value))?;
+            return Ok((path, None));
+        };
+        let label = Label::parse(value)
+            .map_err(|error| error.err)
+            .with_context(|| format!("invalid Bazel source label {value}"))?;
+        anyhow::ensure!(
+            !matches!(label.repo(), "." | "..")
+                && relative
+                    .split(['/', ':'])
+                    .all(|part| !matches!(part, "." | ".."))
+                && !relative.starts_with('/')
+                && !relative.contains("//")
+                && !label.target().starts_with('/'),
+            "invalid Bazel source label {value}"
+        );
+        let repository = self
+            .loader
+            .resolve_repository(&label, &self.loader.main_repository())?;
+        if relative == "..." {
+            return Ok((repository.root, Some(BazelInput::Directory)));
+        }
+        if let Some(directory) = relative
+            .strip_suffix("/...")
+            .filter(|_| !relative.contains(':'))
+        {
+            return Ok((repository.root.join(directory), Some(BazelInput::Directory)));
+        }
+        anyhow::ensure!(
+            relative.contains(':'),
+            "expected a source file label or directory pattern, got {value}"
+        );
+        let package = repository.root.join(label.package());
+        Ok((
+            package.join(label.target()),
+            Some(BazelInput::File { package }),
+        ))
+    }
+
     fn new(
         analysis: Analysis,
         bazel_info: BazelInfo,
@@ -4752,10 +4906,18 @@ impl Checker {
                 message: "no input paths or configured interfaces were selected".to_owned(),
             });
         }
-        let paths = paths
+        if paths
             .iter()
-            .map(|path| starpls_common::absolute_path(Path::new(path)))
-            .collect::<anyhow::Result<indexmap::IndexSet<_>>>()?;
+            .any(|path| path.starts_with('@') && !path.starts_with("@@") && path.contains("//"))
+        {
+            // Resolve command-line labels before walking inputs. Lookups discovered
+            // later, by inference, are batched by the checker's load loop.
+            checker.loader.prepare_repository_mappings(&[String::new()]);
+        }
+        let inputs = paths
+            .iter()
+            .map(|path| checker.input_path(path))
+            .collect::<anyhow::Result<Vec<_>>>()?;
         let mut overlay_interfaces = indexmap::IndexSet::new();
         for SourceOverlay {
             logical,
@@ -4783,8 +4945,9 @@ impl Checker {
         // source is already trusted, but its physical interface still belongs to
         // the installed repository.
         let fetches = checker.loader.fetch_source_repositories(
-            paths
+            inputs
                 .iter()
+                .map(|(path, _)| path)
                 .filter(|path| !checker.ignored_paths.contains(path))
                 .chain(overlay_interfaces.iter())
                 .map(|path| checker.loader.selected_bazel_path(path)),
@@ -4796,6 +4959,25 @@ impl Checker {
         )?;
         if !fetches.is_empty() {
             checker.analysis.invalidate_loads();
+        }
+        let mut paths = indexmap::IndexSet::new();
+        for (path, expected) in inputs {
+            if let Some(expected) = expected {
+                if !checker.ignored_paths.contains(&path) {
+                    let result = checker
+                        .loader
+                        .ensure_repository_for_path(&path)
+                        .and_then(|()| expected.validate(&path, &checker.analysis));
+                    if let Err(error) = result {
+                        checker.input_errors.push(InputError {
+                            path,
+                            message: format!("{error:#}"),
+                        });
+                        continue;
+                    }
+                }
+            }
+            paths.insert(path);
         }
         for path in overlay_interfaces {
             if let Err(error) = checker.loader.ensure_repository_for_path(&path) {
