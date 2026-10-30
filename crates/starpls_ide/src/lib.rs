@@ -377,6 +377,10 @@ impl Analysis {
         ty::interface::adjacent_interface_path(db, file)
     }
 
+    pub fn bazel_build_file(&self, directory: &std::path::Path) -> anyhow::Result<Option<PathBuf>> {
+        starpls_common::bazel_build_file(&self.db, directory)
+    }
+
     pub fn open_document(
         &mut self,
         path: &std::path::Path,

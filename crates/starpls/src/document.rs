@@ -59,6 +59,10 @@ pub(crate) fn is_repository_root(path: &Path) -> bool {
         .any(|name| path.join(name).is_file())
 }
 
+pub(crate) fn is_build_template(name: &str) -> bool {
+    name.ends_with(".BUILD") || name.ends_with(".BUILD.bazel")
+}
+
 pub(crate) fn is_ignored_name(name: &std::ffi::OsStr, patterns: &[String]) -> bool {
     patterns.iter().any(|pattern| name == pattern.as_str())
 }
@@ -1671,9 +1675,7 @@ pub(crate) fn dialect_and_api_context_for_workspace_path(
         "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod" => {
             (Dialect::Bazel, Some(APIContext::Workspace))
         }
-        path if path.ends_with(".BUILD.bazel") || path.ends_with(".BUILD") => {
-            (Dialect::Bazel, Some(APIContext::Build))
-        }
+        name if is_build_template(name) => (Dialect::Bazel, Some(APIContext::Build)),
         path if path.ends_with(".cquery") || path.ends_with(".query.bzl") => {
             (Dialect::Bazel, Some(APIContext::Cquery))
         }

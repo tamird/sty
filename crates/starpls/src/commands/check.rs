@@ -3850,6 +3850,76 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
     }
 
     #[test]
+    fn recursive_bazel_inputs_follow_package_boundaries() {
+        let discovered = [
+            "BUILD.bazel",
+            "BUILD.bzli",
+            "pkg/BUILD",
+            "vendor/cache2/kept.bzl",
+            "other/vendor/cache/kept.bzl",
+            "parts/deps.MODULE.bazel",
+        ];
+        let named = [
+            "BUILD",
+            "vendor/cache/ignored.bzl",
+            "archive/pkg.BUILD",
+            "archive/pkg.BUILD.bazel",
+        ];
+        let sources: Vec<_> = discovered
+            .iter()
+            .map(|path| (*path, ""))
+            .chain(named.iter().map(|path| (*path, "undefined_name\n")))
+            .chain([(".bazelignore", "# generated sources\r\nvendor/cache\r\n")])
+            .collect();
+        for (case, paths, expected) in [
+            ("recursive", vec!["."], discovered.to_vec()),
+            ("explicit", named.to_vec(), named.to_vec()),
+            (
+                "mixed",
+                [&["."][..], &named].concat(),
+                [&discovered[..], &named].concat(),
+            ),
+        ] {
+            let mut checker = local_checker_with_options(
+                &format!("bazel-package-inputs-{case}"),
+                &sources,
+                CheckCommand {
+                    bazel_only: true,
+                    paths: paths.iter().map(|path| (*path).to_owned()).collect(),
+                    ..Default::default()
+                },
+            );
+            let checked = checker.check_files().unwrap();
+            let snapshot = checker.analysis.snapshot();
+            let root = &checker.bazel_info.workspace;
+            let mut actual = std::collections::BTreeSet::new();
+            for (file, diagnostics) in checked.diagnostics {
+                let path = snapshot
+                    .path(file)
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+                assert_eq!(
+                    diagnostics.is_empty(),
+                    discovered.contains(&path),
+                    "{path}: {diagnostics:?}"
+                );
+                assert!(
+                    !checker.exclusions.contains_key(&root.join(path)),
+                    "{path} was checked"
+                );
+                actual.insert(path.to_owned());
+            }
+            assert_eq!(
+                actual,
+                expected.into_iter().map(str::to_owned).collect(),
+                "{case}"
+            );
+        }
+    }
+
+    #[test]
     fn recursive_selection_records_nested_repository_boundaries() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("checker-selection");
@@ -3894,6 +3964,51 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
 
     #[cfg(unix)]
     #[test]
+    fn recursive_bazel_inputs_check_file_symlinks() {
+        let name = "recursive-source-symlinks";
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap()).join(name);
+        std::fs::create_dir_all(root.join(".inputs")).unwrap();
+        for (target, link) in [
+            (".inputs/build", "BUILD.bazel"),
+            (".inputs/implementation", "defs.bzl"),
+            (".inputs", "linked-directory"),
+        ] {
+            std::os::unix::fs::symlink(target, root.join(link)).unwrap();
+        }
+        let mut checker = local_checker_with_options(
+            name,
+            &[
+                (".inputs/build", ""),
+                (
+                    ".inputs/implementation",
+                    "def f() -> int:\n    return 'wrong'\n",
+                ),
+                (".inputs/not_selected.bzl", "undefined_name\n"),
+                ("BUILD", "undefined_name\n"),
+            ],
+            CheckCommand {
+                paths: vec![".".to_owned()],
+                bazel_only: true,
+                check_interface_sources: true,
+                ..Default::default()
+            },
+        );
+        let checked = checker.check_files().unwrap();
+        let snapshot = checker.analysis.snapshot();
+        let files: std::collections::BTreeMap<_, _> = checked
+            .diagnostics
+            .into_iter()
+            .map(|(file, diagnostics)| (snapshot.path(file).to_path_buf(), diagnostics))
+            .collect();
+        assert_eq!(files.len(), 2, "{files:?}");
+        assert!(files[&root.join("BUILD.bazel")].is_empty());
+        assert!(files[&root.join("defs.bzl")]
+            .iter()
+            .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn explicit_source_symlinks_are_checked_and_unsupported_paths_fail() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("checker-explicit-paths");
@@ -3901,6 +4016,7 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
         std::fs::write(root.join("overlay.txt"), "value = 1\n").unwrap();
         std::fs::write(root.join("unsupported.py"), "value = 1\n").unwrap();
         std::os::unix::fs::symlink(root.join("overlay.txt"), root.join("BUILD.bazel")).unwrap();
+        std::os::unix::fs::symlink("missing", root.join("broken.bzl")).unwrap();
         let (sender, receiver) = crossbeam_channel::unbounded();
         let loader = DefaultFileLoader::new(
             Arc::new(TestBazelClient::default()),
@@ -3918,7 +4034,7 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
         let (analysis, loader) = options
             .prepare_analysis(loader, &info, Default::default())
             .unwrap();
-        let paths = ["BUILD.bazel", "unsupported.py"]
+        let paths = ["BUILD.bazel", "unsupported.py", "broken.bzl"]
             .map(|name| root.join(name).to_str().unwrap().to_owned())
             .to_vec();
         let mut checker =
@@ -3928,7 +4044,11 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             checker.files.iter().next().unwrap().api_context(),
             Some(starpls_bazel::APIContext::Build)
         );
-        assert_eq!(checker.input_errors.len(), 1);
+        assert_eq!(checker.input_errors.len(), 2);
+        assert!(checker
+            .input_errors
+            .iter()
+            .any(|error| error.path == root.join("broken.bzl")));
         checker.load_scope = super::LoadScope::Transitive;
         let graph = checker.check_files().unwrap().loads;
         let snapshot = checker.analysis.snapshot();
@@ -4313,6 +4433,32 @@ fn read_file_list(reader: impl BufRead, paths: &mut Vec<String>) -> anyhow::Resu
     Ok(())
 }
 
+/// Bazel interprets .bazelignore entries as repository-relative directory prefixes.
+fn bazel_ignored_directories(workspace: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let path = workspace.join(".bazelignore");
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
+    };
+    let mut directories = Vec::new();
+    for entry in contents
+        .lines()
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+    {
+        anyhow::ensure!(
+            !Path::new(entry).is_absolute() && !entry.contains('\0'),
+            "invalid path in {}: {entry:?}",
+            path.display()
+        );
+        let directory = starpls_common::absolute_path(&workspace.join(entry))?;
+        if directory.starts_with(workspace) {
+            directories.push(directory);
+        }
+    }
+    Ok(directories)
+}
+
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum Exclusion {
@@ -4320,6 +4466,7 @@ enum Exclusion {
     NotBazel,
     Ignored,
     NestedRepository,
+    InactiveBuild,
 }
 
 #[derive(Serialize)]
@@ -4517,7 +4664,7 @@ impl Checker {
         let paths = paths
             .iter()
             .map(|path| starpls_common::absolute_path(Path::new(path)))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<anyhow::Result<indexmap::IndexSet<_>>>()?;
         let mut overlay_interfaces = indexmap::IndexSet::new();
         for SourceOverlay {
             logical,
@@ -4572,8 +4719,14 @@ impl Checker {
         let workspace = checker.bazel_info.workspace.clone();
         let directories: HashSet<_> = paths.iter().filter(|path| path.is_dir()).cloned().collect();
         let census = options.check_local_interface_sources && !directories.contains(&workspace);
+        let bazel_ignores = if options.bazel_only && (census || !directories.is_empty()) {
+            bazel_ignored_directories(&workspace)?
+        } else {
+            Vec::new()
+        };
         let selections = paths
-            .into_iter()
+            .iter()
+            .cloned()
             .map(|path| (path, false))
             .chain(census.then_some((workspace, true)));
         for (path, companions_only) in selections {
@@ -4606,6 +4759,10 @@ impl Checker {
                 };
                 if !document::visit_source_entry(&entry, &[])
                     || checker.ignored_paths.contains(entry.path())
+                    || entry.file_type().is_dir()
+                        && bazel_ignores
+                            .iter()
+                            .any(|prefix| entry.path().starts_with(prefix))
                 {
                     checker
                         .exclusions
@@ -4632,13 +4789,30 @@ impl Checker {
                     walk.skip_current_dir();
                     continue;
                 }
-                if entry.file_type().is_file()
-                    || ((options.check_local_interface_sources && entry.path_is_symlink())
-                        || entry.depth() == 0)
-                        && entry.path().is_file()
+                let name = entry.file_name().to_str();
+                if entry.file_type().is_file() || entry.path_is_symlink() && entry.path().is_file()
                 {
                     if companions_only && !Self::has_adjacent_source_candidate(entry.path()) {
                         continue;
+                    }
+                    if options.bazel_only && entry.depth() > 0 {
+                        // Only BUILD.bazel or BUILD can define this package. A differently
+                        // named BUILD template is checked at its installed or explicit path.
+                        let inactive = match name {
+                            Some("BUILD") => {
+                                let directory = entry.path().parent().unwrap();
+                                checker.analysis.bazel_build_file(directory)?.as_deref()
+                                    != Some(entry.path())
+                            }
+                            Some(name) => document::is_build_template(name),
+                            None => false,
+                        };
+                        if inactive && !paths.contains(entry.path()) {
+                            checker
+                                .exclusions
+                                .insert(entry.path().to_owned(), Exclusion::InactiveBuild);
+                            continue;
+                        }
                     }
                     match checker.input_file(
                         entry.path(),
