@@ -112,7 +112,7 @@ pub(crate) struct CheckCommand {
     #[clap(long = "output_base")]
     pub(crate) output_base: Option<String>,
 
-    /// Exclude a basename anywhere, or a workspace-relative file/directory path.
+    /// Exclude a basename, a workspace-relative path, or a Bazel file or directory operand.
     #[clap(long = "ignore_pattern")]
     pub(crate) ignore_patterns: Vec<String>,
 
@@ -3045,8 +3045,8 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
                 &options,
             )
             .unwrap();
-            assert!(checker.input_path("@absent//:defs.bzl").is_err());
-            assert!(checker.input_path("@rules//other:../defs.bzl").is_err());
+            assert!(checker.bazel_input("@absent//:defs.bzl").is_err());
+            assert!(checker.bazel_input("@rules//other:../defs.bzl").is_err());
             if failed {
                 let [error] = checker.input_errors.as_slice() else {
                     panic!("expected one failed input")
@@ -3119,6 +3119,149 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             panic!("expected an error from the valid label: {diagnostics:?}");
         };
         assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
+    }
+
+    #[test]
+    fn excluded_bazel_labels_are_local_to_the_named_repository() {
+        let (checker, client, external) = fetch_checker("checker-ignore-label", true);
+        let installed = external.join("rules+");
+        std::fs::create_dir(&installed).unwrap();
+        std::fs::write(installed.join("BUILD"), "").unwrap();
+        let source = installed.join("defs.bzl");
+        std::fs::write(&source, "value: str = 42\n").unwrap();
+        let ignored = ["@@staging+//:defs.bzl", "@@staging+//old/..."].map(String::from);
+        let options = CheckCommand {
+            ignore_patterns: ignored.to_vec(),
+            ..Default::default()
+        };
+        let mut inputs = ignored.to_vec();
+        inputs.push("@@rules+//:defs.bzl".to_owned());
+        let mut checker = Checker::new(
+            checker.analysis,
+            checker.bazel_info,
+            inputs,
+            &[],
+            checker.loader,
+            checker.fetch_repo_receiver,
+            &options,
+        )
+        .unwrap();
+        assert!(checker.input_errors.is_empty());
+        assert_eq!(*client.fetch_requests.lock().unwrap(), ["rules+"]);
+        for ignored in ["staging+/defs.bzl", "staging+/old"] {
+            assert!(matches!(
+                checker.exclusions.get(&external.join(ignored)),
+                Some(super::Exclusion::Ignored)
+            ));
+        }
+        let result = checker.check_files().unwrap();
+        let [(file, diagnostics)] = result.diagnostics.as_slice() else {
+            panic!(
+                "expected only the installed source: {:?}",
+                result.diagnostics
+            )
+        };
+        assert_eq!(checker.analysis.snapshot().path(*file), source);
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-assignment");
+    }
+
+    #[test]
+    fn file_label_exclusions_respect_package_boundaries() {
+        let (checker, _, _) = fetch_checker("checker-ignore-label-package", true);
+        let tools = checker.bazel_info.workspace.join("tools");
+        std::fs::create_dir(&tools).unwrap();
+        std::fs::write(tools.join("BUILD"), "").unwrap();
+        let source = tools.join("defs.bzl");
+        std::fs::write(&source, "value: str = 42\n").unwrap();
+        let options = CheckCommand {
+            ignore_patterns: ["//:tools", "//:tools/defs.bzl", "//tools/defs.bzl/..."]
+                .map(String::from)
+                .to_vec(),
+            ..Default::default()
+        };
+        let mut checker = Checker::new(
+            checker.analysis,
+            checker.bazel_info,
+            vec!["//tools/...".into()],
+            &[],
+            checker.loader,
+            checker.fetch_repo_receiver,
+            &options,
+        )
+        .unwrap();
+        assert!(checker.input_errors.is_empty());
+        let result = checker.check_files().unwrap();
+        let mut diagnostics = result
+            .diagnostics
+            .iter()
+            .flat_map(|(file, errors)| errors.iter().map(|error| (*file, error)));
+        let (file, error) = diagnostics
+            .next()
+            .expect("the bad assignment must still be checked");
+        assert_eq!(checker.analysis.snapshot().path(file), source);
+        assert_eq!(error.id().as_str(), "invalid-assignment");
+        assert!(diagnostics.next().is_none());
+    }
+
+    #[test]
+    fn label_exclusion_checks_literal_paths_in_the_refreshed_repository() {
+        for overlay in [false, true] {
+            let name = format!("checker-exclude-refreshed-{overlay}");
+            let (checker, client, external) = if overlay {
+                let (checker, client) = overlay_checker(
+                    &name,
+                    &[("rules+/p/defs.bzl", "body.txt", "value: str = 42\n")],
+                );
+                let external = checker.bazel_info.workspace.join("external");
+                (checker, client, external)
+            } else {
+                fetch_checker(&name, true)
+            };
+            let repo = external.join("rules+");
+            std::fs::create_dir_all(repo.join("p")).unwrap();
+            std::fs::write(repo.join("BUILD"), "").unwrap();
+            let source = repo.join("p/defs.bzl");
+            std::fs::write(&source, "value: str = 42\n").unwrap();
+            client
+                .fetch_files
+                .lock()
+                .unwrap()
+                .insert("rules+".to_owned(), (repo.join("p/BUILD"), String::new()));
+            let mut options = CheckCommand {
+                ignore_patterns: vec!["@@rules+//:p/defs.bzl".to_owned()],
+                ..Default::default()
+            };
+            let paths = if overlay {
+                options.source_overlay.push(super::SourceOverlay {
+                    logical: source.clone(),
+                    physical: checker.bazel_info.workspace.join("body.txt"),
+                });
+                vec![]
+            } else {
+                vec![source.to_string_lossy().into_owned()]
+            };
+            let mut checker = Checker::new(
+                checker.analysis,
+                checker.bazel_info,
+                paths,
+                &[],
+                checker.loader,
+                checker.fetch_repo_receiver,
+                &options,
+            )
+            .unwrap();
+            assert!(checker.input_errors.is_empty());
+            assert_eq!(*client.fetch_requests.lock().unwrap(), ["rules+"]);
+            let result = checker.check_files().unwrap();
+            let [(file, diagnostics)] = result.diagnostics.as_slice() else {
+                panic!(
+                    "expected the source in its new package: {:?}",
+                    result.diagnostics
+                )
+            };
+            assert_eq!(checker.analysis.snapshot().path(*file), source);
+            assert_eq!(diagnostics[0].id().as_str(), "invalid-assignment");
+        }
     }
 
     #[test]
@@ -3803,7 +3946,9 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             workspace.to_str().unwrap(),
         ] {
             assert!(
-                super::IgnoredPaths::new(&workspace, &[pattern.to_owned()]).is_err(),
+                super::IgnoredPaths::default()
+                    .add_workspace_path(&workspace, pattern)
+                    .is_err(),
                 "{pattern}"
             );
         }
@@ -4707,42 +4852,50 @@ struct Checker {
 struct IgnoredPaths {
     names: Vec<String>,
     paths: Vec<PathBuf>,
+    labels: Vec<(PathBuf, BazelInput)>,
 }
 
 impl IgnoredPaths {
-    fn new(workspace: &Path, patterns: &[String]) -> anyhow::Result<Self> {
-        let workspace = starpls_common::absolute_path(workspace)?;
-        let mut ignored = Self::default();
-        for pattern in patterns {
-            let path = Path::new(pattern);
-            if path
-                .file_name()
-                .is_some_and(|name| name == pattern.as_str())
-            {
-                ignored.names.push(pattern.clone());
-                continue;
-            }
-            anyhow::ensure!(
-                !pattern.is_empty() && path.is_relative(),
-                "ignore pattern {pattern:?} must be a basename or a workspace-relative path"
-            );
-            let path = starpls_common::absolute_path(&workspace.join(path))?;
-            anyhow::ensure!(
-                path.starts_with(&workspace),
-                "ignore pattern {pattern:?} resolves outside workspace {}",
-                workspace.display()
-            );
-            ignored.paths.push(path);
+    fn add_workspace_path(&mut self, workspace: &Path, pattern: &str) -> anyhow::Result<()> {
+        let path = Path::new(pattern);
+        if path.file_name().is_some_and(|name| name == pattern) {
+            self.names.push(pattern.to_owned());
+            return Ok(());
         }
-        Ok(ignored)
+        anyhow::ensure!(
+            !pattern.is_empty() && path.is_relative(),
+            "ignore pattern {pattern:?} must be a basename or a workspace-relative path"
+        );
+        let workspace = starpls_common::absolute_path(workspace)?;
+        let path = starpls_common::absolute_path(&workspace.join(path))?;
+        anyhow::ensure!(
+            path.starts_with(&workspace),
+            "ignore pattern {pattern:?} resolves outside workspace {}",
+            workspace.display()
+        );
+        self.paths.push(path);
+        Ok(())
     }
 
-    /// Paths come from normalized CLI roots or the analysis file interner.
-    fn contains(&self, path: &Path) -> bool {
-        let Self { names, paths } = self;
+    fn matches_operand(&self, path: &Path, operand: Option<&BazelInput>) -> bool {
+        self.matches(path, |label| Some(label) == operand)
+    }
+
+    fn contains(&self, path: &Path, analysis: &Analysis) -> bool {
+        self.matches(path, |label| label.validate(path, analysis).is_ok())
+    }
+
+    fn matches(&self, path: &Path, exact: impl Fn(&BazelInput) -> bool) -> bool {
         path.components()
-            .any(|component| is_ignored_name(component.as_os_str(), names))
-            || paths.iter().any(|ignored| path.starts_with(ignored))
+            .any(|component| is_ignored_name(component.as_os_str(), &self.names))
+            || self.paths.iter().any(|ignored| path.starts_with(ignored))
+            || self.labels.iter().any(|(ignored, label)| {
+                if path == ignored {
+                    exact(label)
+                } else {
+                    matches!(label, BazelInput::Directory) && path.starts_with(ignored)
+                }
+            })
     }
 }
 
@@ -4764,6 +4917,7 @@ struct LoadGraph {
     unresolved: indexmap::IndexMap<File, Vec<LoadDependency>>,
 }
 
+#[derive(PartialEq, Eq)]
 enum BazelInput {
     Directory,
     File { package: PathBuf },
@@ -4811,13 +4965,12 @@ impl BazelInput {
 }
 
 impl Checker {
-    fn input_path(&self, value: &str) -> anyhow::Result<(PathBuf, Option<BazelInput>)> {
+    fn bazel_input(&self, value: &str) -> anyhow::Result<Option<(PathBuf, BazelInput)>> {
         let Some((_, relative)) = value
             .split_once("//")
             .filter(|(repo, _)| repo.is_empty() || repo.starts_with('@'))
         else {
-            let path = starpls_common::absolute_path(Path::new(value))?;
-            return Ok((path, None));
+            return Ok(None);
         };
         let label = Label::parse(value)
             .map_err(|error| error.err)
@@ -4836,23 +4989,26 @@ impl Checker {
             .loader
             .resolve_repository(&label, &self.loader.main_repository())?;
         if relative == "..." {
-            return Ok((repository.root, Some(BazelInput::Directory)));
+            return Ok(Some((repository.root, BazelInput::Directory)));
         }
         if let Some(directory) = relative
             .strip_suffix("/...")
             .filter(|_| !relative.contains(':'))
         {
-            return Ok((repository.root.join(directory), Some(BazelInput::Directory)));
+            return Ok(Some((
+                repository.root.join(directory),
+                BazelInput::Directory,
+            )));
         }
         anyhow::ensure!(
             relative.contains(':'),
             "expected a source file label or directory pattern, got {value}"
         );
         let package = repository.root.join(label.package());
-        Ok((
+        Ok(Some((
             package.join(label.target()),
-            Some(BazelInput::File { package }),
-        ))
+            BazelInput::File { package },
+        )))
     }
 
     fn new(
@@ -4864,7 +5020,6 @@ impl Checker {
         fetch_repo_receiver: crossbeam_channel::Receiver<Task>,
         options: &CheckCommand,
     ) -> anyhow::Result<Self> {
-        let ignored_paths = IgnoredPaths::new(&bazel_info.workspace, &options.ignore_patterns)?;
         let interface_source_mode = if options.check_interface_sources {
             Some(InterfaceSourceMode::All)
         } else if options.check_local_interface_sources {
@@ -4882,7 +5037,7 @@ impl Checker {
             }),
             exclusions: Default::default(),
             input_errors: Vec::new(),
-            ignored_paths,
+            ignored_paths: IgnoredPaths::default(),
             loader,
             fetch_repo_receiver,
             progress: options.progress,
@@ -4908,25 +5063,49 @@ impl Checker {
         }
         if paths
             .iter()
+            .chain(&options.ignore_patterns)
             .any(|path| path.starts_with('@') && !path.starts_with("@@") && path.contains("//"))
         {
             // Resolve command-line labels before walking inputs. Lookups discovered
             // later, by inference, are batched by the checker's load loop.
             checker.loader.prepare_repository_mappings(&[String::new()]);
         }
-        let inputs = paths
+        for pattern in &options.ignore_patterns {
+            if let Some(label) = checker.bazel_input(pattern)? {
+                checker.ignored_paths.labels.push(label);
+            } else {
+                checker
+                    .ignored_paths
+                    .add_workspace_path(&checker.bazel_info.workspace, pattern)?;
+            }
+        }
+        let mut inputs = paths
             .iter()
-            .map(|path| checker.input_path(path))
+            .map(|path| match checker.bazel_input(path)? {
+                Some((path, input)) => Ok((path, Some(input))),
+                None => Ok((starpls_common::absolute_path(Path::new(path))?, None)),
+            })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        let mut overlay_interfaces = indexmap::IndexSet::new();
+        let mut overlay_repository_inputs = indexmap::IndexSet::new();
         for SourceOverlay {
             logical,
             physical: _,
         } in &options.source_overlay
         {
             let logical = starpls_common::absolute_path(logical)?;
-            if checker.ignored_paths.contains(&logical) {
+            if checker.ignored_paths.matches_operand(&logical, None) {
                 checker.exclusions.insert(logical, Exclusion::Ignored);
+            } else if checker
+                .ignored_paths
+                .labels
+                .iter()
+                .any(|(path, _)| *path == logical)
+            {
+                // Overlaid files need no fetch, but their package boundaries do.
+                if let Some(parent) = logical.parent() {
+                    overlay_repository_inputs.insert(parent.to_owned());
+                }
+                inputs.push((logical, None));
             } else if let Some(file) =
                 checker.input_file(&logical, true, extensions, options.bazel_only)?
             {
@@ -4935,7 +5114,7 @@ impl Checker {
                     .adjacent_interface_path(file)
                     .filter(|path| path.is_file())
                 {
-                    overlay_interfaces.insert(interface);
+                    overlay_repository_inputs.insert(interface);
                 }
                 checker.files.insert(file);
             }
@@ -4947,9 +5126,13 @@ impl Checker {
         let fetches = checker.loader.fetch_source_repositories(
             inputs
                 .iter()
+                .filter(|(path, operand)| {
+                    !checker
+                        .ignored_paths
+                        .matches_operand(path, operand.as_ref())
+                })
                 .map(|(path, _)| path)
-                .filter(|path| !checker.ignored_paths.contains(path))
-                .chain(overlay_interfaces.iter())
+                .chain(overlay_repository_inputs.iter())
                 .map(|path| checker.loader.selected_bazel_path(path)),
             |message| {
                 if checker.progress {
@@ -4962,24 +5145,29 @@ impl Checker {
         }
         let mut paths = indexmap::IndexSet::new();
         for (path, expected) in inputs {
+            if checker
+                .ignored_paths
+                .matches_operand(&path, expected.as_ref())
+            {
+                checker.exclusions.insert(path, Exclusion::Ignored);
+                continue;
+            }
             if let Some(expected) = expected {
-                if !checker.ignored_paths.contains(&path) {
-                    let result = checker
-                        .loader
-                        .ensure_repository_for_path(&path)
-                        .and_then(|()| expected.validate(&path, &checker.analysis));
-                    if let Err(error) = result {
-                        checker.input_errors.push(InputError {
-                            path,
-                            message: format!("{error:#}"),
-                        });
-                        continue;
-                    }
+                let result = checker
+                    .loader
+                    .ensure_repository_for_path(&path)
+                    .and_then(|()| expected.validate(&path, &checker.analysis));
+                if let Err(error) = result {
+                    checker.input_errors.push(InputError {
+                        path,
+                        message: format!("{error:#}"),
+                    });
+                    continue;
                 }
             }
             paths.insert(path);
         }
-        for path in overlay_interfaces {
+        for path in overlay_repository_inputs {
             if let Err(error) = checker.loader.ensure_repository_for_path(&path) {
                 checker.input_errors.push(InputError {
                     path,
@@ -4999,15 +5187,15 @@ impl Checker {
             .map(|path| (path, false))
             .chain(census.then_some((workspace, true)));
         for (path, companions_only) in selections {
-            if checker.ignored_paths.contains(&path) {
-                checker.exclusions.insert(path, Exclusion::Ignored);
-                continue;
-            }
             if let Err(error) = checker.loader.ensure_repository_for_path(&path) {
                 checker.input_errors.push(InputError {
                     path,
                     message: format!("{error:#}"),
                 });
+                continue;
+            }
+            if checker.ignored_paths.contains(&path, &checker.analysis) {
+                checker.exclusions.insert(path, Exclusion::Ignored);
                 continue;
             }
             if checker.analysis.document(&path).is_some() {
@@ -5075,7 +5263,9 @@ impl Checker {
                     !document::visit_source_entry(&entry, &[])
                 };
                 if skip_entry
-                    || checker.ignored_paths.contains(entry.path())
+                    || checker
+                        .ignored_paths
+                        .contains(entry.path(), &checker.analysis)
                     || entry.file_type().is_dir()
                         && bazel_ignores
                             .iter()
@@ -5201,7 +5391,7 @@ impl Checker {
         );
         for file in interfaces {
             let path = snapshot.path(file);
-            if checker.ignored_paths.contains(path) {
+            if checker.ignored_paths.contains(path, &checker.analysis) {
                 checker
                     .exclusions
                     .insert(path.to_path_buf(), Exclusion::Ignored);
@@ -5248,7 +5438,7 @@ impl Checker {
                 } else if matches!(mode, InterfaceSourceMode::Local) {
                     continue;
                 }
-                if checker.ignored_paths.contains(path) {
+                if checker.ignored_paths.contains(path, &checker.analysis) {
                     checker
                         .exclusions
                         .insert(path.to_path_buf(), Exclusion::Ignored);
@@ -5408,7 +5598,7 @@ impl Checker {
         for (source, interface) in self.analysis.type_interface_pairs() {
             if self.load_scope == LoadScope::Transitive {
                 let path = snapshot.path(source);
-                if self.ignored_paths.contains(path) {
+                if self.ignored_paths.contains(path, &self.analysis) {
                     self.exclusions
                         .insert(path.to_path_buf(), Exclusion::Ignored);
                 } else {

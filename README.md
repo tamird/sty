@@ -204,8 +204,10 @@ For `sty check`, repeat `--ignore_pattern` to exclude inputs. A bare name
 such as `vendor` matches that file or directory name anywhere in a path.
 A path such as `project/tools/vendor` uses exact components to exclude that
 workspace-relative file or subtree. Use `./vendor` to limit a single name to
-the workspace root. Patterns are literal names and paths; paths use lexical
-normalization and must stay within the workspace. These CLI exclusions
+the workspace root. To exclude an installed source or directory, use its
+Bazel label, such as `@archives//templates:defs.bzl` or
+`@archives//templates/...`. Filesystem paths are literal, use lexical
+normalization, and must stay within the workspace. These CLI exclusions
 apply to recursive discovery, explicit paths, `--files-from`, configured
 interface roots, and appear in `excluded_inputs`. Excluded files can still
 be loaded as dependencies of selected files. Installed stub declarations
