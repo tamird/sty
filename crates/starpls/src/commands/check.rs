@@ -3854,7 +3854,14 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
         let discovered = [
             "BUILD.bazel",
             "BUILD.bzli",
+            "MODULE.bazel",
             "pkg/BUILD",
+            ".github/rules/BUILD",
+            ".buildkite/rules.bzl",
+            "embedded/BUILD.bazel",
+            "embedded/rules.bzl",
+            "loose/defs.bzl",
+            "loose/tools/BUILD",
             "vendor/cache2/kept.bzl",
             "other/vendor/cache/kept.bzl",
             "parts/deps.MODULE.bazel",
@@ -3865,11 +3872,33 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             "archive/pkg.BUILD",
             "archive/pkg.BUILD.bazel",
         ];
+        let invalid = [
+            ".buildkite/rules.bzl",
+            "embedded/rules.bzl",
+            "loose/defs.bzl",
+        ];
         let sources: Vec<_> = discovered
             .iter()
-            .map(|path| (*path, ""))
+            .map(|path| {
+                (
+                    *path,
+                    if invalid.contains(path) {
+                        "def f() -> int:\n    return 'wrong'\n"
+                    } else {
+                        ""
+                    },
+                )
+            })
             .chain(named.iter().map(|path| (*path, "undefined_name\n")))
             .chain([(".bazelignore", "# generated sources\r\nvendor/cache\r\n")])
+            .chain([
+                ("embedded/REPO.bazel", ""),
+                ("embedded/MODULE.bazel", ""),
+                ("loose/MODULE.bazel", ""),
+                (".cache/downloaded.bzl", "undefined_name\n"),
+                ("vendor/cache/MODULE.bazel", ""),
+                ("vendor/cache/BUILD.bazel", ""),
+            ])
             .collect();
         for (case, paths, expected) in [
             ("recursive", vec!["."], discovered.to_vec()),
@@ -3902,7 +3931,7 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
                     .unwrap();
                 assert_eq!(
                     diagnostics.is_empty(),
-                    discovered.contains(&path),
+                    discovered.contains(&path) && !invalid.contains(&path),
                     "{path}: {diagnostics:?}"
                 );
                 assert!(
@@ -3964,26 +3993,87 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
 
     #[cfg(unix)]
     #[test]
+    fn recursive_bazel_inputs_check_an_installed_directory_symlink() {
+        let (checker, _, external) = fetch_checker("installed-directory-symlink", true);
+        let root = checker.bazel_info.workspace.clone();
+        std::fs::write(root.join("MODULE.bazel"), "").unwrap();
+        let source = root.join("archive");
+        std::fs::create_dir_all(source.join("shared")).unwrap();
+        std::fs::write(source.join("BUILD.bazel"), "").unwrap();
+        std::fs::write(
+            source.join("defs.bzl"),
+            "def f() -> int:\n    return 'wrong'\n",
+        )
+        .unwrap();
+        std::fs::write(source.join("shared/rust.MODULE.bazel"), "undefined_name\n").unwrap();
+        std::fs::write(source.join("named.MODULE.bazel"), "undefined_name\n").unwrap();
+        std::fs::write(source.join(".bazelignore"), "generated\n").unwrap();
+        std::fs::create_dir(source.join("generated")).unwrap();
+        std::fs::write(source.join("generated/defs.bzl"), "undefined_name\n").unwrap();
+        let link = external.join("rules+");
+        std::os::unix::fs::symlink(&source, &link).unwrap();
+        std::os::unix::fs::symlink(&source, source.join("loop")).unwrap();
+        let options = CheckCommand {
+            bazel_only: true,
+            ..Default::default()
+        };
+        let mut checker = Checker::new(
+            checker.analysis,
+            checker.bazel_info,
+            vec![
+                link.to_str().unwrap().to_owned(),
+                link.join("named.MODULE.bazel").to_str().unwrap().to_owned(),
+            ],
+            &[],
+            checker.loader,
+            checker.fetch_repo_receiver,
+            &options,
+        )
+        .unwrap();
+        assert!(checker.input_errors.is_empty());
+        assert!(matches!(
+            checker
+                .exclusions
+                .get(&link.join("shared/rust.MODULE.bazel")),
+            Some(super::Exclusion::InactiveRepositoryFile)
+        ));
+        let checked = checker.check_files().unwrap();
+        let snapshot = checker.analysis.snapshot();
+        let files: std::collections::BTreeMap<_, _> = checked
+            .diagnostics
+            .into_iter()
+            .map(|(file, diagnostics)| (snapshot.path(file).to_path_buf(), diagnostics))
+            .collect();
+        assert_eq!(files.len(), 3, "{files:?}");
+        assert!(!files[&link.join("named.MODULE.bazel")].is_empty());
+        assert!(files[&link.join("defs.bzl")]
+            .iter()
+            .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn recursive_bazel_inputs_check_file_symlinks() {
         let name = "recursive-source-symlinks";
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap()).join(name);
-        std::fs::create_dir_all(root.join(".inputs")).unwrap();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
         for (target, link) in [
-            (".inputs/build", "BUILD.bazel"),
-            (".inputs/implementation", "defs.bzl"),
-            (".inputs", "linked-directory"),
+            (".git/build", "BUILD.bazel"),
+            (".git/implementation", "defs.bzl"),
+            (".git", "linked-directory"),
         ] {
             std::os::unix::fs::symlink(target, root.join(link)).unwrap();
         }
         let mut checker = local_checker_with_options(
             name,
             &[
-                (".inputs/build", ""),
+                (".git/build", ""),
                 (
-                    ".inputs/implementation",
+                    ".git/implementation",
                     "def f() -> int:\n    return 'wrong'\n",
                 ),
-                (".inputs/not_selected.bzl", "undefined_name\n"),
+                (".git/not_selected.bzl", "undefined_name\n"),
                 ("BUILD", "undefined_name\n"),
             ],
             CheckCommand {
@@ -4467,6 +4557,7 @@ enum Exclusion {
     Ignored,
     NestedRepository,
     InactiveBuild,
+    InactiveRepositoryFile,
 }
 
 #[derive(Serialize)]
@@ -4719,11 +4810,7 @@ impl Checker {
         let workspace = checker.bazel_info.workspace.clone();
         let directories: HashSet<_> = paths.iter().filter(|path| path.is_dir()).cloned().collect();
         let census = options.check_local_interface_sources && !directories.contains(&workspace);
-        let bazel_ignores = if options.bazel_only && (census || !directories.is_empty()) {
-            bazel_ignored_directories(&workspace)?
-        } else {
-            Vec::new()
-        };
+        let mut ignores_by_repository = HashMap::new();
         let selections = paths
             .iter()
             .cloned()
@@ -4745,6 +4832,29 @@ impl Checker {
                 checker.load_file(&path, true, extensions, options.bazel_only)?;
                 continue;
             }
+            let repository = if options.bazel_only && path.is_dir() {
+                checker
+                    .loader
+                    .repository_for_path(&path)?
+                    .map(|repository| repository.root)
+            } else {
+                None
+            };
+            let (has_module, bazel_ignores) = if let Some(root) = &repository {
+                let ignores = match ignores_by_repository.entry(root.clone()) {
+                    std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        entry.insert(bazel_ignored_directories(root)?)
+                    }
+                };
+                let module = root.join("MODULE.bazel");
+                let has_module = module
+                    .try_exists()
+                    .with_context(|| format!("checking {}", module.display()))?;
+                (Some(has_module), ignores.as_slice())
+            } else {
+                (None, [].as_slice())
+            };
             let mut walk = WalkDir::new(&path).into_iter();
             while let Some(entry) = walk.next() {
                 let entry = match entry {
@@ -4757,7 +4867,32 @@ impl Checker {
                         continue;
                     }
                 };
-                if !document::visit_source_entry(&entry, &[])
+                let skip_entry = if options.bazel_only {
+                    entry.file_type().is_dir()
+                        && (matches!(
+                            entry.file_name().to_str(),
+                            Some(
+                                ".git"
+                                    | ".hg"
+                                    | ".svn"
+                                    | ".cache"
+                                    | ".mypy_cache"
+                                    | ".pytest_cache"
+                                    | ".ruff_cache"
+                                    | ".venv"
+                                    | ".tox"
+                                    | ".nox"
+                            )
+                        ) || entry.path() == checker.bazel_info.output_base
+                            || entry
+                                .file_name()
+                                .to_str()
+                                .is_some_and(|name| name.starts_with('.'))
+                                && entry.path().join("DO_NOT_BUILD_HERE").is_file())
+                } else {
+                    !document::visit_source_entry(&entry, &[])
+                };
+                if skip_entry
                     || checker.ignored_paths.contains(entry.path())
                     || entry.file_type().is_dir()
                         && bazel_ignores
@@ -4779,7 +4914,8 @@ impl Checker {
                     walk.skip_current_dir();
                     continue;
                 }
-                if entry.depth() > 0
+                if !options.bazel_only
+                    && entry.depth() > 0
                     && entry.file_type().is_dir()
                     && document::is_repository_root(entry.path())
                 {
@@ -4796,6 +4932,23 @@ impl Checker {
                         continue;
                     }
                     if options.bazel_only && entry.depth() > 0 {
+                        let inactive_repository_file = match name {
+                            Some(
+                                "MODULE.bazel" | "REPO.bazel" | "WORKSPACE" | "WORKSPACE.bazel",
+                            ) => repository
+                                .as_deref()
+                                .is_some_and(|root| entry.path().parent() != Some(root)),
+                            Some(name) if name.ends_with(".MODULE.bazel") => {
+                                has_module == Some(false)
+                            }
+                            _ => false,
+                        };
+                        if inactive_repository_file && !paths.contains(entry.path()) {
+                            checker
+                                .exclusions
+                                .insert(entry.path().to_owned(), Exclusion::InactiveRepositoryFile);
+                            continue;
+                        }
                         // Only BUILD.bazel or BUILD can define this package. A differently
                         // named BUILD template is checked at its installed or explicit path.
                         let inactive = match name {
@@ -4837,7 +4990,7 @@ impl Checker {
                             message: format!("{error:#}"),
                         }),
                     }
-                } else if entry.depth() == 0 && !entry.file_type().is_dir() {
+                } else if entry.depth() == 0 && !entry.path().is_dir() {
                     checker.input_errors.push(InputError {
                         path: entry.path().to_path_buf(),
                         message: "input is not a regular source file or directory".to_owned(),

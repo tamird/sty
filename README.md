@@ -127,11 +127,17 @@ sty check --bazel-only --files-from files.txt --progress --report coverage.json
 `--files-from` reads one path per line; `-` reads standard input. Relative
 paths use the current directory. `--bazel-only` selects recognized Bazel
 sources and `.bzli` interfaces and records other inputs as exclusions.
-Recursive discovery stops at nested repository roots. With `--bazel-only`,
-it skips directories listed in the workspace's `.bazelignore` and checks
-each package's active `BUILD.bazel` or `BUILD`. To check a BUILD template,
-pass its filename explicitly. Explicit paths use their existing repository
-context, including Bazel's external directory.
+With `--bazel-only`, recursive discovery includes packages in hidden
+directories such as `.github`, skips version control and tool caches, and
+checks each package's active `BUILD.bazel` or `BUILD`. An enclosing Bazel
+package can load source files below an embedded `MODULE.bazel` or
+`REPO.bazel`. Use `.bazelignore` or sty's path exclusions for separately
+checked repositories and directories excluded by `REPO.bazel`. Only the
+selected repository's root supplies its repository
+declarations, and `*.MODULE.bazel` fragments require a root `MODULE.bazel`.
+Pass a fragment or BUILD template explicitly to check it as source.
+Explicit directories use their existing repository context, including Bazel's
+installed external repositories; nested directory symlinks are not followed.
 
 Use `--output-format json-lines` to write one diagnostic JSON object per
 line to stdout. Each object includes `name`, its actual `severity`,
