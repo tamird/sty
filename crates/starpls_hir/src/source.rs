@@ -38,6 +38,32 @@ impl<'db> Source<'db> {
         source_info(self.db, file).annotations.get(&owner).copied()
     }
 
+    /// Literal field names with a type comment after their value and optional comma.
+    pub fn field_type_comments<'a>(
+        &'a self,
+        file: File,
+        fields: &'a py::ExprDict,
+    ) -> impl Iterator<Item = (&'a py::Expr, TextRange)> + 'a {
+        let comments = starpls_common::syntax_info(self.db, file);
+        let source = ruff_db::source::source_text(self.db, file.source);
+        fields.items.iter().filter_map(move |item| {
+            let key = item
+                .key
+                .as_ref()
+                .filter(|key| key.is_string_literal_expr())?;
+            let end = item.value.end();
+            let comment = comments.get(comments.partition_point(|c| c.range.start() < end))?;
+            let between = &source[TextRange::new(end, comment.range.start())];
+            if !matches!(between.trim_matches([' ', '\t']), "" | ",") {
+                return None;
+            }
+            Some((
+                key,
+                comment_type_range(comment, &comment.parsed.tree().type_()?),
+            ))
+        })
+    }
+
     pub fn type_comment_owner(&self, file: File, offset: TextSize) -> Option<NodeIndex> {
         source_info(self.db, file)
             .annotations

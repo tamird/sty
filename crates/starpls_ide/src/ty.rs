@@ -654,14 +654,15 @@ impl ty_python_semantic::Db for Database {
         &'db self,
         call: &ty_python_semantic::types::CheckedCall<'_, 'db>,
     ) -> ty_python_semantic::provided::ProvidedCallResult<'db> {
+        let mut diagnostics = Vec::new();
+        let return_type = factory::result(self, call, &mut diagnostics)
+            .or_else(|| providers::call_result(self, call))
+            .or_else(|| native::configured_hasattr(self, call));
+        diagnostics.extend(providers::call_diagnostics(self, call));
+        diagnostics.extend(context::call_diagnostics(self, call));
         ty_python_semantic::provided::ProvidedCallResult {
-            return_type: factory::result(self, call)
-                .or_else(|| providers::call_result(self, call))
-                .or_else(|| native::configured_hasattr(self, call)),
-            diagnostics: providers::call_diagnostics(self, call)
-                .into_iter()
-                .chain(context::call_diagnostics(self, call))
-                .collect(),
+            return_type,
+            diagnostics,
         }
     }
 

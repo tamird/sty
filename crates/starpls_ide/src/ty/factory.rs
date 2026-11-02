@@ -2,6 +2,11 @@
 
 use std::collections::btree_map::Entry;
 
+use ruff_db::diagnostic::Annotation;
+use ruff_db::diagnostic::Diagnostic;
+use ruff_db::diagnostic::DiagnosticId;
+use ruff_db::diagnostic::Severity;
+use ruff_db::diagnostic::Span;
 use ruff_db::files::FilePath;
 use ruff_db::files::FileRange;
 use ruff_python_ast::find_node::covering_node;
@@ -12,6 +17,8 @@ use ruff_python_ast::Expr;
 use ruff_python_ast::HasNodeIndex;
 use ruff_python_ast::Stmt;
 use ruff_text_size::Ranged;
+use ruff_text_size::TextRange;
+use rustc_hash::FxHashMap;
 use starpls_bazel::attr::AttributeKind;
 use starpls_hir::Db as _;
 use ty_python_core::definition::Definition;
@@ -775,7 +782,11 @@ fn preserves_argument_order(arguments: &Arguments) -> bool {
     }
 }
 
-pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<'db>> {
+pub(super) fn result<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<Type<'db>> {
     if !preserves_argument_order(&call.call().arguments) {
         return None;
     }
@@ -824,7 +835,7 @@ pub(super) fn result<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Opt
                 KnownClass::Str.to_instance(db, &ProgramEnvironment::from_file(call.file()))
             })
         }
-        BuiltinFunction::Provider => provider(db, call),
+        BuiltinFunction::Provider => provider(db, call, diagnostics),
         BuiltinFunction::Download { always_blocking } => download(db, call, always_blocking),
     }
 }
@@ -3030,7 +3041,11 @@ fn keyword_record<'db>(
     )
 }
 
-fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<'db>> {
+fn provider<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<Type<'db>> {
     let environment = ProgramEnvironment::from_file(call.file());
     let initializer = match call.argument("init") {
         CheckedArgument::Omitted => None,
@@ -3039,7 +3054,16 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
     };
     let name = provider_name(db, call, initializer.is_some());
     let key_base = declared_class(db, call, "Provider")?;
-    if let Some(class) = db.provider_interface(call.file(), call.call().node_index().load()) {
+    let interface = db.provider_interface(call.file(), call.call().node_index().load());
+    let conflict = if interface.is_some() {
+        Some("Provider field types are declared both here and in a companion")
+    } else if initializer.is_some() {
+        Some("A provider with an initializer needs a constructor declaration to check its stored fields")
+    } else {
+        None
+    };
+    let annotations = provider_field_annotations(db, call, conflict, diagnostics);
+    if let Some(class) = interface {
         let key = super::providers::key_value(
             db,
             call.file(),
@@ -3151,27 +3175,28 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
             }
         }
     }
-    // Untyped providers accept arbitrary field values; field reads remain unknown.
     let value_type = KnownClass::Object.to_instance(db, &environment);
-    let mut parameters: Vec<_> = fields
-        .iter()
-        .map(
-            |ProvidedField {
-                 name,
-                 ty: _,
-                 is_required: _,
-                 source,
-             }| {
-                let parameter = Parameter::keyword_only(name.clone())
-                    .with_annotated_type(value_type)
-                    .with_default_type(Type::unknown());
-                match source {
-                    Some(source) => parameter.with_source_range(*source),
-                    None => parameter,
-                }
-            },
-        )
-        .collect();
+    let mut parameters = Vec::with_capacity(fields.len());
+    for field in &mut fields {
+        let parameter = Parameter::keyword_only(field.name.clone());
+        let parameter = match field
+            .source
+            .and_then(|source| annotations.get(&source.range()))
+        {
+            Some(&ty) => {
+                field.ty = ty;
+                parameter.with_annotated_type(ty)
+            }
+            // Bazel permits omitting a field or supplying any value for it.
+            None => parameter
+                .with_annotated_type(value_type)
+                .with_default_type(Type::unknown()),
+        };
+        parameters.push(match field.source {
+            Some(source) => parameter.with_source_range(source),
+            None => parameter,
+        });
+    }
     if open {
         parameters
             .push(Parameter::keyword_variadic(Name::new("kwargs")).with_annotated_type(value_type));
@@ -3250,6 +3275,44 @@ fn provider<'db>(db: &'db Database, call: &CheckedCall<'_, 'db>) -> Option<Type<
     } else {
         Some(key)
     }
+}
+
+fn provider_field_annotations<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    conflict: Option<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> FxHashMap<TextRange, Type<'db>> {
+    let mut annotations = FxHashMap::default();
+    let (
+        Some(file),
+        CheckedArgument::Value {
+            expression: Some(Expr::Dict(fields)),
+            ty: _,
+        },
+    ) = (db.starlark_file(call.file()), call.argument("fields"))
+    else {
+        return annotations;
+    };
+    let source = starpls_hir::Source::new(db);
+    for (key, range) in source.field_type_comments(file, fields) {
+        if let Some(message) = conflict {
+            let mut diagnostic = Diagnostic::new(
+                DiagnosticId::Lint(super::diagnostics::INVALID_PROVIDER_INTERFACE.name()),
+                Severity::Error,
+                message,
+            );
+            diagnostic.annotate(Annotation::primary(
+                Span::from(file.source).with_range(range),
+            ));
+            diagnostics.push(diagnostic);
+            break;
+        }
+        if let Some(ty) = call.infer_annotation_at(key, range) {
+            annotations.insert(key.range(), ty);
+        }
+    }
+    annotations
 }
 
 fn provider_name(db: &Database, call: &CheckedCall<'_, '_>, initialized: bool) -> Option<Name> {
