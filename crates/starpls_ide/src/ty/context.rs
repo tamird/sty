@@ -200,7 +200,8 @@ fn registration_invocation<'db>(
         Registration {
             file: call.file(),
             declaration,
-            result: factory::result(db, call).unwrap_or_else(|| call.return_type()),
+            result: factory::result(db, call, &mut Vec::new())
+                .unwrap_or_else(|| call.return_type()),
             kind,
             aspect_fragments: if kind == ContextKind::Aspect {
                 fragments_for_call(db, call)

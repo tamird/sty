@@ -1377,6 +1377,113 @@ mod tests {
     use crate::FilePosition;
 
     #[test]
+    fn source_field_comments_type_provider_construction_and_target_lookup() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let declaration = r#"# type Names = list[str]
+Info = provider(fields={
+    "version": "SDK version.",  # type: str
+    "names": "Tool names.",  # type: Names
+    "untyped": "Optional user data.",
+    # type: Unresolved
+})
+Other = provider(fields={"version": "SDK version."})
+"#;
+        let source = fixture.add_file(&mut analysis.db, "info.bzl", declaration);
+        let valid = r#"load("info.bzl", SDK="Info", Another="Other")
+sdk = SDK(version="7", names=[])
+def version(target: Target) -> str:
+    return target[SDK].version
+def names(target: Target) -> list[str]:
+    return target[SDK].names
+def provider(fields):
+    return fields
+user = provider(fields={
+    "version": "SDK version.",  # type: Unresolved
+})
+"#;
+        let caller = fixture.add_file(&mut analysis.db, "caller.bzl", valid);
+        loader.add_files_from_fixture(&fixture);
+        for file in [source, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        for (bad, expected) in [
+            ("SDK(version=42, names=[])", "invalid-argument-type"),
+            ("SDK(names=[])", "missing-argument"),
+            ("SDK(version='7', names=[1])", "invalid-argument-type"),
+            ("SDK(version='7', names=[], typo=0)", "unknown-argument"),
+            (
+                "def bad(t: Target) -> int: return t[SDK].version",
+                "invalid-return-type",
+            ),
+            (
+                "def bad(t: Target) -> Another: return t[SDK]",
+                "invalid-return-type",
+            ),
+        ] {
+            analysis.update_file(caller, format!("{valid}\n{bad}\n"));
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            let [diagnostic] = diagnostics.as_slice() else {
+                panic!("{bad}: {diagnostics:?}")
+            };
+            assert_eq!(diagnostic.id().as_str(), expected, "{bad}: {diagnostic:?}");
+        }
+        let bad = declaration.replace("# type: str", "# type: Unresolved");
+        analysis.update_file(source, bad.clone());
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}")
+        };
+        assert_eq!(diagnostic.id().as_str(), "unresolved-reference");
+        assert_eq!(&bad[diagnostic.range().unwrap()], "Unresolved");
+        analysis.update_file(
+            source,
+            bad.replacen(
+                "# type: Unresolved",
+                "# type: Unresolved  # ty: ignore[unresolved-reference]",
+                1,
+            ),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let initialized = declaration.replace(
+            "Info = provider(",
+            "def initialize(**kwargs): return kwargs\nInfo, raw = provider(init=initialize, ",
+        );
+        analysis.update_file(source, initialized);
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}")
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-provider-interface");
+
+        analysis.update_file(source, declaration.to_owned());
+        let companion = fixture.add_file(
+            &mut analysis.db,
+            "info.bzli",
+            "def Info(*, version: int) -> record[{'version': int}]: ...\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, companion)]).unwrap();
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}")
+        };
+        assert_eq!(diagnostic.id().as_str(), "invalid-provider-interface");
+    }
+
+    #[test]
     fn dictionary_membership_uses_provider_fields() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

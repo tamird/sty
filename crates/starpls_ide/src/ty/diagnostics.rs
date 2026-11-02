@@ -80,7 +80,7 @@ pub(super) static INVALID_MODULE_ANNOTATION: LintMetadata = lint(
 );
 pub(super) static INVALID_PROVIDER_INTERFACE: LintMetadata = lint(
     "invalid-provider-interface",
-    "Reports invalid or conflicting provider declarations in stubs.",
+    "Reports invalid or conflicting provider contracts.",
 );
 pub(super) static INVALID_FUNCTION_INTERFACE: LintMetadata = lint(
     "invalid-function-interface",

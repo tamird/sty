@@ -435,6 +435,24 @@ in the source file's host context.
 
 ## Providers
 
+For a provider without an initializer, annotate literal field names in the
+dictionary passed directly to `provider(fields=...)`:
+
+```starlark
+SdkInfo = provider(fields={
+    "version": "SDK release.",  # type: str
+    "compiler": "Compiler executable.",  # type: File
+})
+```
+
+Each annotated field becomes a required keyword argument. For example,
+`SdkInfo(version=42, compiler=tool)` fails at construction, and
+`target[SdkInfo].version` has type `str`. Fields without annotations remain
+optional and accept any value. For providers with initializers, declare the
+constructor and its stored fields in a companion file instead.
+[Bazel #32207](https://github.com/bazelbuild/bazel/issues/32207) tracks native
+field types.
+
 A provider constructor declaration describes its arguments and the fields of
 its instances:
 
