@@ -67,6 +67,20 @@ and `type Names[T] = list[T]` when type syntax is enabled. sty resolves these
 names in type expressions. In Bazel's default syntax-only mode, an alias is
 separate from runtime bindings and module exports.
 
+In a BUILD file or a ruleset that supports older Bazel versions, put the
+declaration in a comment. Start it at column one between top-level statements.
+An expression inside brackets can continue across consecutive comment lines.
+sty resolves the alias in this file's type comments:
+
+```starlark
+# type Profile = dict[{
+#     "name": str,
+#     "args": list[str],
+# }]
+
+PROFILES = [{"name": "client", "args": []}]  # type: list[Profile]
+```
+
 This body correspondence requires a unique top-level source function with the
 same parameter layout. Decorated functions and partially mixed source and stub
 generic annotations produce an `invalid-function-interface` diagnostic when

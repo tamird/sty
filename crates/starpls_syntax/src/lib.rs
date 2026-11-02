@@ -2,6 +2,7 @@ pub use rowan::TextRange;
 pub use rowan::TextSize;
 pub use rowan::TokenAtOffset;
 
+pub use crate::comment_alias::parse_module;
 pub use crate::parser::parse_type_comments;
 pub use crate::parser::ParseTree;
 pub use crate::parser::SyntaxError;
@@ -13,6 +14,7 @@ pub use crate::validation::validate;
 pub use crate::validation::AnnotationMode;
 
 pub mod ast;
+mod comment_alias;
 mod lexical;
 mod parser;
 pub mod source;
