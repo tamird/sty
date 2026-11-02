@@ -172,6 +172,10 @@ impl ruff_db::Db for Database {
     fn module_parser(&self, namespace: &'static str) -> Option<ruff_db::ModuleParser> {
         starpls_common::module_parser(namespace)
     }
+
+    fn annotation_parser(&self, namespace: &'static str) -> Option<ruff_db::AnnotationParser> {
+        starpls_common::annotation_parser(namespace)
+    }
 }
 #[salsa::db]
 impl starpls_common::Db for Database {

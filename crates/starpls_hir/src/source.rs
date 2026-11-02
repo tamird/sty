@@ -134,6 +134,7 @@ fn source_info_impl(db: &dyn Db, file: ruff_db::files::File, mode: SourceMode) -
     let parsed = starpls_common::parsed_module_for_mode(db, file, mode).load(db);
     let syntax = starpls_common::syntax_info_for_mode(db, file, mode);
     let mut visitor = SourceVisitor {
+        file,
         source: &source,
         string_mode: mode.string_mode(),
         tokens: parsed.tokens(),
@@ -170,6 +171,7 @@ fn source_info_impl(db: &dyn Db, file: ruff_db::files::File, mode: SourceMode) -
 }
 
 struct SourceVisitor<'a> {
+    file: ruff_db::files::File,
     source: &'a str,
     string_mode: starpls_syntax::StringMode,
     tokens: &'a Tokens,
@@ -193,6 +195,37 @@ impl<'a> SourceVisitor<'a> {
             .partition_point(|comment| comment.range.start() < range.start())..]
             .first()
             .filter(|comment| range.contains_range(comment.range))
+    }
+
+    fn leading_type(&self, start: TextSize) -> Option<(&'a TypeComment, TextRange)> {
+        let indent = starpls_syntax::indentation(self.source, start.to_usize())?;
+        let previous = self
+            .comments
+            .partition_point(|comment| comment.range.end() <= start);
+        let comment = self.comments.get(previous.checked_sub(1)?)?;
+        let between = &self.source[TextRange::new(comment.range.end(), start)];
+        if !matches!(between.strip_suffix(indent), Some("\n" | "\r" | "\r\n"))
+            || starpls_syntax::indentation(self.source, comment.range.start().to_usize())
+                != Some(indent)
+        {
+            return None;
+        }
+        let ty = comment.parsed.tree().type_()?;
+        Some((comment, comment_type_range(comment, &ty)))
+    }
+
+    fn duplicate_annotation(&mut self, range: TextRange) {
+        self.info.diagnostics.push(starpls_common::diagnostic(
+            self.file,
+            starpls_common::DiagnosticId::InvalidSyntax,
+            starpls_common::Severity::Error,
+            starpls_syntax::TextRange::new(
+                u32::from(range.start()).into(),
+                u32::from(range.end()).into(),
+            ),
+            "This assignment already has a type annotation",
+            [],
+        ));
     }
 
     fn parameters(&mut self, syntax: &py::Parameters, specification: &[Option<TextRange>]) {
@@ -284,17 +317,33 @@ impl<'a> SourceVisitor<'a> {
                     .iter()
                     .find(|token| matches!(token.kind(), TokenKind::Newline | TokenKind::Semi))
                     .map_or(TextSize::of(self.source), Ranged::start);
-                if let Some(py::Expr::Name(target)) = assignment.targets.first() {
-                    if let Some(comment) =
-                        self.comment_in(TextRange::new(assignment.end(), end.max(assignment.end())))
-                    {
-                        if let Some(ty) = comment.parsed.tree().type_() {
-                            self.info.annotations.insert(
-                                target.node_index().load(),
-                                comment_type_range(comment, &ty),
-                            );
+                if let [py::Expr::Name(target)] = assignment.targets.as_slice() {
+                    let trailing = self
+                        .comment_in(TextRange::new(assignment.end(), end.max(assignment.end())))
+                        .and_then(|comment| {
+                            comment
+                                .parsed
+                                .tree()
+                                .type_()
+                                .map(|ty| comment_type_range(comment, &ty))
+                        });
+                    let leading = self.leading_type(assignment.start());
+                    if let Some((comment, range)) = leading {
+                        if trailing.is_some() || self.leading_type(comment.range.start()).is_some()
+                        {
+                            self.duplicate_annotation(range);
                         }
                     }
+                    if let Some(range) = trailing.or(leading.map(|(_, range)| range)) {
+                        self.info
+                            .annotations
+                            .insert(target.node_index().load(), range);
+                    }
+                }
+            }
+            py::Stmt::AnnAssign(assignment) => {
+                if let Some((_, range)) = self.leading_type(assignment.start()) {
+                    self.duplicate_annotation(range);
                 }
             }
             py::Stmt::Expr(statement) => {
@@ -354,6 +403,23 @@ mod tests {
         )
         .unwrap();
         for (source, expected) in [
+            (
+                r#"# type: int
+# intervening comment
+a = 'x'
+# type: int
+
+b = 'y'
+# type: str
+c = 'z'
+def f():
+    # type: list[
+    #   int,
+    # ]
+    d = []
+"#,
+                vec![("c", "str"), ("d", "list[\n    #   int,\n    # ]")],
+            ),
             (
                 r#"a = 1; b = 2 # type: string
 def f(

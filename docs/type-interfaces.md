@@ -81,6 +81,18 @@ sty resolves the alias in this file's type comments:
 PROFILES = [{"name": "client", "args": []}]  # type: list[Profile]
 ```
 
+A type used by one assignment can go immediately above the variable at the same
+indentation. A blank line or another comment separates it from the assignment.
+Use one annotation per assignment.
+
+```starlark
+# type: list[dict[{
+#     "name": str,
+#     "args": list[str],
+# }]]
+PROFILES = [{"name": "client", "args": []}]
+```
+
 This body correspondence requires a unique top-level source function with the
 same parameter layout. Decorated functions and partially mixed source and stub
 generic annotations produce an `invalid-function-interface` diagnostic when

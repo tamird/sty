@@ -1593,6 +1593,61 @@ rows = [{'name': 'one', 'retry': 3}]  # type: Rows
     }
 
     #[test]
+    fn leading_comment_checks_assignment_fields_at_their_source_offsets() {
+        let source = "\
+# type Count = int
+# type: dict[str, dict[{
+#     'shard_index': Count,
+# }]]
+LANES = {'java': {'shard_index': 0}}
+";
+        let (mut analysis, fixture) = native_analysis(source);
+        let file = fixture.main_file();
+        for (text, expected) in [
+            (source.to_owned(), None),
+            (
+                source.replace("'shard_index': 0", "'shard_index': 'bad'"),
+                Some(("invalid-argument-type", "'bad'")),
+            ),
+            (
+                source.replace("'shard_index': Count", "'shard_index': Missing"),
+                Some(("unresolved-reference", "Missing")),
+            ),
+            (
+                source.replace("LANES =", "LANES: object ="),
+                Some((
+                    "invalid-syntax",
+                    "dict[str, dict[{\n#     'shard_index': Count,\n# }]]",
+                )),
+            ),
+            (
+                source.replace("0}}", "0}}  # type: object"),
+                Some((
+                    "invalid-syntax",
+                    "dict[str, dict[{\n#     'shard_index': Count,\n# }]]",
+                )),
+            ),
+        ] {
+            analysis.update_file(file, text.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            if let Some((id, span)) = expected {
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.id().as_str() == id
+                            && diagnostic
+                                .primary_span()
+                                .and_then(|s| s.range())
+                                .is_some_and(|range| &text[range] == span)),
+                    "{text}: {diagnostics:?}"
+                );
+            } else {
+                assert!(diagnostics.is_empty(), "{text}: {diagnostics:?}");
+            }
+        }
+    }
+
+    #[test]
     fn comment_alias_edits_recheck_callers() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

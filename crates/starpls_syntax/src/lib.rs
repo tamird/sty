@@ -3,6 +3,8 @@ pub use rowan::TextSize;
 pub use rowan::TokenAtOffset;
 
 pub use crate::comment_alias::parse_module;
+pub use crate::parser::indentation;
+pub use crate::parser::parse_annotation;
 pub use crate::parser::parse_type_comments;
 pub use crate::parser::ParseTree;
 pub use crate::parser::SyntaxError;
