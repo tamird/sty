@@ -172,6 +172,31 @@ Excluding a name describes the residual keyword row; the wrapper body must
 still supply any required argument. Wrapper-specific inputs belong in the
 wrapper's own signature.
 
+When a ruleset accepts arbitrary keywords, its stub can export a type for the
+keys it recognizes:
+
+```starlark
+# @rules_foo//:defs.bzli
+class TestKwargs(TypedDict, extra_items=object):
+    python_version: NotRequired[str]
+
+def test(name: str, **kwargs: Unpack[TestKwargs]) -> None: ...
+```
+
+A wrapper's stub can reuse that type through the ruleset's `.bzl` label:
+
+```starlark
+load("@rules_foo//:defs.bzl", _TestKwargs = "TestKwargs")
+
+def wrapped_test(name: str, **kwargs: Unpack[_TestKwargs]) -> None: ...
+```
+
+Both functions accept an omitted `python_version` and reject
+`python_version=42`. A custom keyword such as `plugin_options=[42]` is
+checked only as `object`. The stub author supplies the known types; when the
+implementation forwards `**kwargs` to a dynamically chosen rule, sty cannot
+infer that rule's requirements from the forwarding call.
+
 A callable `Protocol` class projects the signature of its instances. A stub
 can use this form to replace individual inputs while forwarding the remaining
 keywords through the implementation's `**kwargs`:
