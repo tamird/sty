@@ -1514,6 +1514,120 @@ def shadow(Name: str) -> str:
     }
 
     #[test]
+    fn comment_type_aliases_in_build_files() {
+        let (mut analysis, _) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = "\
+before = 1
+# type Row = dict[{
+#     'name': str,
+#     'retry': int,
+# }]
+# type Rows = list[Row]
+rows = [{'name': 'one', 'retry': 3}]  # type: Rows
+";
+        let file = fixture.add_file_with_options(
+            &mut analysis.db,
+            "//:BUILD.bazel",
+            source,
+            starpls_common::Dialect::Bazel,
+            Some(starpls_common::FileInfo::Bazel {
+                api_context: starpls_bazel::APIContext::Build,
+                is_external: false,
+                bundled_cc_common: false,
+            }),
+        );
+        for (text, expected) in [
+            (source.to_owned(), None),
+            (
+                source.replace("'retry': 3", "'retry': 'three'"),
+                Some("invalid-assignment"),
+            ),
+            (
+                source.replace("'retry': int", "'retry': str"),
+                Some("invalid-assignment"),
+            ),
+            (
+                source.replace("before = 1", "before = Rows"),
+                Some("unresolved-reference"),
+            ),
+            (
+                source.replace("# type Rows", "type Rows"),
+                Some("invalid-syntax"),
+            ),
+            (source.to_owned(), None),
+        ] {
+            analysis.update_file(file, text.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+            match expected {
+                Some(id) => assert!(ids.contains(&id), "{text}: {diagnostics:?}"),
+                None => assert!(ids.is_empty(), "{text}: {diagnostics:?}"),
+            }
+        }
+
+        let text = source.replace("'retry': int", "'retry': Missing");
+        analysis.update_file(file, text.clone());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics.iter().any(|d| {
+                d.primary_span()
+                    .and_then(|s| s.range())
+                    .is_some_and(|r| &text[r] == "Missing")
+            }),
+            "{diagnostics:?}"
+        );
+
+        let injected = "# type Row = list[\n# def leaked(): pass\nvalue = leaked()\n";
+        analysis.update_file(file, injected.into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.id().as_str() == "unresolved-reference"
+                    && d.primary_span()
+                        .and_then(|s| s.range())
+                        .is_some_and(|r| &injected[r] == "leaked")),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn comment_alias_edits_recheck_callers() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = "# type Name = str\ndef use_name(name: Name):\n    pass\n";
+        let definition = fixture.add_file(&mut analysis.db, "//:defs.bzl", source);
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "//:caller.bzl",
+            "load('//:defs.bzl', 'use_name')\nuse_name('yes')\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        for (ty, expected) in [
+            ("str", None),
+            ("int", Some("invalid-argument-type")),
+            ("str", None),
+        ] {
+            analysis.update_file(
+                definition,
+                source.replace("Name = str", &format!("Name = {ty}")),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+            let ids: Vec<_> = diagnostics.iter().map(|d| d.id().as_str()).collect();
+            assert_eq!(
+                ids,
+                expected.into_iter().collect::<Vec<_>>(),
+                "{diagnostics:?}"
+            );
+        }
+        analysis.update_file(caller, "load('//:defs.bzl', 'Name')\n".into());
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].id().as_str(), "unresolved-import");
+    }
+
+    #[test]
     fn native_assignments_check_initialization_and_reassignment() {
         let source = "value: int = 1 # type: string\nvalue = 2\nvalues: list[int] = []\nvalues.append(value)\n";
         let (mut analysis, fixture) = native_analysis(source);

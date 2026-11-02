@@ -42,6 +42,7 @@ pub fn validate(
 ) -> Vec<NodeIndex> {
     crate::lexical::validate(source, parsed.tokens(), string_mode, errors);
     let mut validator = Validator {
+        source,
         tokens: parsed.tokens(),
         errors,
         loads: Vec::new(),
@@ -158,6 +159,7 @@ fn single_string_token(range: TextRange, tokens: &Tokens) -> bool {
 }
 
 struct Validator<'a> {
+    source: &'a str,
     tokens: &'a Tokens,
     errors: &'a mut dyn FnMut(SyntaxError),
     loads: Vec<TextRange>,
@@ -172,6 +174,7 @@ struct Validator<'a> {
 impl Validator<'_> {
     fn error(&mut self, range: TextRange, message: impl Into<String>) {
         let Self {
+            source: _,
             tokens: _,
             errors,
             loads: _,
@@ -226,6 +229,7 @@ impl Validator<'_> {
 
     fn load(&mut self, call: &py::ExprCall) {
         let Self {
+            source: _,
             tokens,
             errors: _,
             loads: _,
@@ -289,7 +293,10 @@ impl Validator<'_> {
             return;
         }
         match stmt {
-            Stmt::TypeAlias(alias) if self.annotation_mode != AnnotationMode::Disabled => {
+            Stmt::TypeAlias(alias)
+                if self.annotation_mode != AnnotationMode::Disabled
+                    || crate::comment_alias::is_alias(self.source, stmt.range()) =>
+            {
                 let py::StmtTypeAlias {
                     node_index: _,
                     range: _,
@@ -297,8 +304,12 @@ impl Validator<'_> {
                     type_params,
                     value,
                 } = alias;
-                let source_error = if self.annotation_mode != AnnotationMode::Source {
+                let source_error = if self.annotation_mode == AnnotationMode::Interface {
                     None
+                } else if crate::comment_alias::is_alias(self.source, stmt.range())
+                    && self.source[stmt.end().to_usize()..].trim_start_matches([' ', '\t']).starts_with(';')
+                {
+                    Some("A type alias comment may declare only one type")
                 } else if !top_level {
                     Some("Starlark type aliases must be top-level declarations")
                 } else if type_params.as_ref().is_some_and(|parameters| {
@@ -315,7 +326,7 @@ impl Validator<'_> {
                     self.error(stmt.range(), error);
                     return;
                 }
-                if self.annotation_mode == AnnotationMode::Source {
+                if self.annotation_mode != AnnotationMode::Interface {
                     if let Some(name) = name.as_name_expr() {
                         if !self.type_alias_names.insert(name.id.clone()) {
                             self.excluded.push(stmt.node_index().load());

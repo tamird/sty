@@ -530,7 +530,7 @@ impl ty_python_core::Db for Database {
 
     fn type_aliases_bind_runtime_names(&self, file: ProgramFile<'_>) -> bool {
         self.starlark_file(file)
-            .is_none_or(|file| file.annotation_mode(self) != starpls_syntax::AnnotationMode::Source)
+            .is_none_or(|file| file.is_type_interface(self))
     }
 
     fn source_exclusions(&self, file: ProgramFile<'_>) -> ty_python_core::SourceExclusions {

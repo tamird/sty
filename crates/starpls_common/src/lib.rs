@@ -58,17 +58,23 @@ impl SourceMode {
     ) -> ruff_db::PythonFile<'db> {
         let namespace = (self.string_mode() == starpls_syntax::StringMode::BazelFile)
             .then_some(BAZEL_STRING_NAMESPACE);
-        ruff_db::PythonFile::new_with_parse_options(
+        ruff_db::PythonFile::new_with_module_parser(
             db,
             source,
             version,
             ruff_python_ast::PySourceType::Python,
             namespace,
+            (self != Self::BazelInterface).then_some(COMMENT_ALIAS_NAMESPACE),
         )
     }
 }
 
 const BAZEL_STRING_NAMESPACE: &str = "starpls:bazel-file-bytes";
+const COMMENT_ALIAS_NAMESPACE: &str = "sty:comment-type-aliases";
+
+pub fn module_parser(namespace: &'static str) -> Option<ruff_db::ModuleParser> {
+    (namespace == COMMENT_ALIAS_NAMESPACE).then_some(starpls_syntax::parse_module)
+}
 
 pub fn string_literal_decoder(namespace: &'static str) -> Option<ruff_db::StringLiteralDecoder> {
     (namespace == BAZEL_STRING_NAMESPACE).then_some(starpls_syntax::source::bazel_string_source)

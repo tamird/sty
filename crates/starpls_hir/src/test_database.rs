@@ -58,6 +58,10 @@ impl ruff_db::Db for TestDatabase {
     ) -> Option<ruff_db::StringLiteralDecoder> {
         starpls_common::string_literal_decoder(namespace)
     }
+
+    fn module_parser(&self, namespace: &'static str) -> Option<ruff_db::ModuleParser> {
+        starpls_common::module_parser(namespace)
+    }
 }
 #[salsa::db]
 impl starpls_common::Db for TestDatabase {
