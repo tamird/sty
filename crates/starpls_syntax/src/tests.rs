@@ -87,6 +87,32 @@ fn callable_type_comments_preserve_argument_lists() {
 }
 
 #[test]
+fn multiline_comments_preserve_text_and_stop_at_the_closing_bracket() {
+    use ruff_python_ast::PySourceType;
+    use ruff_python_parser::parse_unchecked_source;
+
+    let comment = "    # type: list[dict[{\n    #     'é': str,\n    # }]]";
+    for newline in ["\n", "\r", "\r\n"] {
+        let source =
+            format!("{comment}\n    # unrelated comment\n    x = []").replace('\n', newline);
+        let parsed = parse_unchecked_source(&source, PySourceType::Python);
+        let comments =
+            crate::parse_type_comments(&source, parsed.tokens(), &mut |error| panic!("{error:?}"));
+        let [annotation] = comments.as_slice() else {
+            panic!("expected one annotation")
+        };
+        assert_eq!(
+            &source[annotation.range],
+            comment.trim_start().replace('\n', newline)
+        );
+        assert_eq!(
+            annotation.parsed.syntax().text().to_string(),
+            &source[annotation.range]
+        );
+    }
+}
+
+#[test]
 fn dictionary_shape_type_comments_report_malformed_fields() {
     let source = r#"# type: dict[{"name" str}]"#;
     let parsed =

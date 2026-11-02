@@ -57,7 +57,11 @@ pub fn parse_module(source: &str, options: ParseOptions) -> Parsed<ModModule> {
         {
             continue;
         }
-        let (text, bytes) = alias_text(&source[start_byte..]);
+        let (mut text, bytes, semi) = logical_comment(&source[start_byte..], "", PREFIX, "type   ");
+        // A type alias comment cannot introduce a second runtime statement.
+        if let Some(semi) = semi {
+            text.replace_range(semi..semi + 1, "#");
+        }
         let end = start + TextSize::try_from(bytes).unwrap();
         let projected = projected.get_or_insert_with(|| source.to_owned());
         projected.replace_range(start_byte..end.to_usize(), &text[..bytes]);
@@ -90,21 +94,31 @@ pub fn parse_module(source: &str, options: ParseOptions) -> Parsed<ModModule> {
 }
 
 /// Unwrap one logical statement; normal comments after its closing delimiter stay comments.
-fn alias_text(source: &str) -> (String, usize) {
+pub(crate) fn logical_comment(
+    source: &str,
+    indent: &str,
+    prefix: &str,
+    replacement: &str,
+) -> (String, usize, Option<usize>) {
+    debug_assert_eq!(prefix.len(), replacement.len());
     let mut lines = source.split_inclusive(['\r', '\n']);
     let mut text = String::from(lines.next().unwrap());
-    text.replace_range(..PREFIX.len(), "type   ");
+    text.replace_range(..prefix.len(), replacement);
     for line in lines {
         if line == "\n" && text.ends_with('\r') {
             text.push('\n');
             continue;
         }
-        let Some(rest) = line.strip_prefix('#') else {
+        let Some(rest) = line
+            .strip_prefix(indent)
+            .and_then(|line| line.strip_prefix('#'))
+        else {
             break;
         };
-        if line.starts_with(PREFIX) {
+        if rest.starts_with(" type ") || rest.starts_with(" type: ") {
             break;
         }
+        text.push_str(indent);
         text.push(' ');
         text.push_str(rest);
     }
@@ -130,10 +144,7 @@ fn alias_text(source: &str) -> (String, usize) {
             _ => {}
         }
     };
-    if let Some(semi) = semi {
-        text.replace_range(semi..semi + 1, "#");
-    }
-    (text, end)
+    (text, end, semi)
 }
 
 #[cfg(test)]

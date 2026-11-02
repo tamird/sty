@@ -64,16 +64,20 @@ impl SourceMode {
             version,
             ruff_python_ast::PySourceType::Python,
             namespace,
-            (self != Self::BazelInterface).then_some(COMMENT_ALIAS_NAMESPACE),
+            (self != Self::BazelInterface).then_some(TYPE_COMMENT_NAMESPACE),
         )
     }
 }
 
 const BAZEL_STRING_NAMESPACE: &str = "starpls:bazel-file-bytes";
-const COMMENT_ALIAS_NAMESPACE: &str = "sty:comment-type-aliases";
+const TYPE_COMMENT_NAMESPACE: &str = "sty:source-type-comments";
 
 pub fn module_parser(namespace: &'static str) -> Option<ruff_db::ModuleParser> {
-    (namespace == COMMENT_ALIAS_NAMESPACE).then_some(starpls_syntax::parse_module)
+    (namespace == TYPE_COMMENT_NAMESPACE).then_some(starpls_syntax::parse_module)
+}
+
+pub fn annotation_parser(namespace: &'static str) -> Option<ruff_db::AnnotationParser> {
+    (namespace == TYPE_COMMENT_NAMESPACE).then_some(starpls_syntax::parse_annotation)
 }
 
 pub fn string_literal_decoder(namespace: &'static str) -> Option<ruff_db::StringLiteralDecoder> {
