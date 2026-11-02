@@ -1889,6 +1889,97 @@ mod tests {
     }
 
     #[test]
+    fn check_partitioned_macro_kwargs_against_both_rules() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let source_text = r#"
+def _impl(ctx):
+    return []
+
+_lib = rule(implementation = _impl, attrs = {"version": attr.string(), "jobs": attr.int()})
+_exe = rule(implementation = _impl, attrs = {"version": attr.string(), "jobs": attr.int(), "debug": attr.bool()})
+
+def _with_debug(rule):
+    def invoke(**kwargs):
+        kwargs["debug"] = True
+        return rule(**kwargs)
+    return invoke
+
+debug = _with_debug(_exe)
+_KEYS = ["version", "jobs"]
+
+def _split(kwargs):
+    result = {}
+    for key in _KEYS:
+        if key in kwargs:
+            result[key] = kwargs.pop(key)
+    return result
+
+def macro(name, launcher, expose = False, **kwargs):
+    routed = _split(kwargs)
+    venv = debug if expose else _lib
+    venv(name = name, **routed)
+    launcher(name = name, **kwargs)
+"#;
+        let stub_text = r#"
+type Version = str
+class Options(TypedDict, extra_items=object):
+    version: NotRequired[Version]
+    jobs: NotRequired[int]
+
+class _Routed(TypedDict, closed=True):
+    version: NotRequired[Version]
+    jobs: NotRequired[int]
+
+class _Rule(Protocol):
+    def __call__(self, *, name: str, debug: bool = ..., **kwargs: Unpack[_Routed]) -> None: ...
+
+_KEYS: list[Literal["version", "jobs"]]
+def _with_debug(rule: _Rule) -> _Rule: ...
+def _split(kwargs: Options) -> _Routed: ...
+def macro(name: str, launcher, expose: bool = ..., **kwargs: Unpack[Options]) -> None: ...
+"#;
+        let source = fixture.add_file(&mut analysis.db, "defs.bzl", source_text);
+        let stub = fixture.add_file(&mut analysis.db, "defs.bzli", stub_text);
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for file in [source, stub] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+
+        // Change the shared declaration, leaving every forwarding signature in agreement.
+        analysis.update_file(
+            stub,
+            stub_text.replace("type Version = str", "type Version = int"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
+        let mut arguments: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                assert_eq!(
+                    diagnostic.id().as_str(),
+                    "invalid-argument-type",
+                    "{diagnostic:?}"
+                );
+                let range = diagnostic.primary_span().unwrap().range().unwrap();
+                &source_text[range]
+            })
+            .collect();
+        arguments.sort_unstable();
+        assert_eq!(arguments, ["**routed", "_exe"]);
+    }
+
+    #[test]
     fn function_stubs_keep_donor_generic_and_load_scopes() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

@@ -193,9 +193,17 @@ def wrapped_test(name: str, **kwargs: Unpack[_TestKwargs]) -> None: ...
 
 Both functions accept an omitted `python_version` and reject
 `python_version=42`. A custom keyword such as `plugin_options=[42]` is
-checked only as `object`. The stub author supplies the known types; when the
-implementation forwards `**kwargs` to a dynamically chosen rule, sty cannot
-infer that rule's requirements from the forwarding call.
+checked as `object`.
+
+If a helper splits the keywords, annotate its input with the wrapper's
+keyword type and its result with the fields it forwards. For example,
+given `key: Literal["version", "jobs"]`, sty checks
+`result[key] = kwargs.pop(key)` separately for `"version"` and `"jobs"`.
+The result can start as `{}` if its fields are optional. Passing it as
+`**result` to a rule checks those fields against the rule's attributes.
+
+An untyped helper can hide a mismatch. Set `non-static-type = "error"` to
+report calls where the helper's parameter type is unknown.
 
 A callable `Protocol` class projects the signature of its instances. A stub
 can use this form to replace individual inputs while forwarding the remaining
