@@ -2307,9 +2307,12 @@ def collect(*values, **names):
     return list(values)
 
 def inline(
-    value,  # type: str
+    value,
+    # Text to pass to the tool.
+    # type: str
     *,
     enabled=True,  # type: bool
+    # type: str
     suffix="",
 ):
     # type: (int, int, str) -> str | None
@@ -2318,6 +2321,7 @@ def inline(
 maybe("ok", enabled=False)
 collect("ok", count=1)
 inline("ok", enabled=False)
+inline(21, enabled=True)
 maybe("ok", enabled="bad-keyword")
 collect(42, count="bad-variadic")
 inline("ok", enabled="bad-inline", suffix=123)
@@ -2345,6 +2349,7 @@ inline("ok", enabled="bad-inline", suffix=123)
         assert_eq!(
             rejected,
             [
+                "21",
                 "42",
                 "count=\"bad-variadic\"",
                 "enabled=\"bad-inline\"",
