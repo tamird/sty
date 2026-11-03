@@ -37,6 +37,7 @@ impl FileOverride {
     pub(super) fn by_file<'a>(
         overrides: &'a [Self],
         workspace: &Path,
+        mut external_source: impl FnMut(&str) -> anyhow::Result<PathBuf>,
     ) -> anyhow::Result<BTreeMap<PathBuf, Vec<&'a BTreeMap<String, String>>>> {
         let mut by_file = BTreeMap::<_, Vec<_>>::new();
         for Self { include, rules } in overrides {
@@ -49,18 +50,30 @@ impl FileOverride {
                 "overrides.rules requires at least one rule"
             );
             for name in include {
-                let path = Path::new(name);
                 anyhow::ensure!(
-                    !name.contains(['*', '?', '[', ']', '\\', ':', '\0'])
-                        && !name.ends_with('/')
-                        && path.file_name().is_some()
-                        && path.components().all(|part| matches!(
-                            part,
-                            std::path::Component::Normal(_) | std::path::Component::CurDir
-                        )),
-                    "overrides.include expects an exact workspace-relative file, got {name:?}"
+                    !name.contains(['*', '?', '[', ']', '\\', '\0']),
+                    "overrides.include expects a literal file, got {name:?}"
                 );
-                let path = starpls_common::absolute_path(&workspace.join(path))?;
+                let path = if name.starts_with('@') {
+                    anyhow::ensure!(
+                        !name.starts_with("@@") && !name.starts_with("@//"),
+                        "expected an apparent Bazel repository in {name:?}"
+                    );
+                    external_source(name)?
+                } else {
+                    let path = Path::new(name);
+                    anyhow::ensure!(
+                        !name.contains(':')
+                            && !name.ends_with('/')
+                            && path.file_name().is_some()
+                            && path.components().all(|part| matches!(
+                                part,
+                                std::path::Component::Normal(_) | std::path::Component::CurDir
+                            )),
+                        "overrides.include expects an exact workspace-relative file, got {name:?}"
+                    );
+                    starpls_common::absolute_path(&workspace.join(path))?
+                };
                 by_file.entry(path).or_default().push(rules);
             }
         }
@@ -170,12 +183,21 @@ mod tests {
 
     #[test]
     fn file_rule_overrides_reject_nonliteral_or_escaping_paths() {
-        for name in ["../package/BUILD", "/BUILD", "*.bzl", "foo/"] {
+        for name in [
+            "../package/BUILD",
+            "/BUILD",
+            "*.bzl",
+            "foo/",
+            "@rules//:*.bzl",
+            "@@rules+//:defs.bzl",
+            "@//:defs.bzl",
+        ] {
             let setting = FileOverride {
                 include: vec![name.to_owned()],
                 rules: [("strict".to_owned(), "warn".to_owned())].into(),
             };
-            let error = FileOverride::by_file(&[setting], Path::new("/repo")).unwrap_err();
+            let error = FileOverride::by_file(&[setting], Path::new("/repo"), |_| unreachable!())
+                .unwrap_err();
             assert!(error.to_string().contains(name));
         }
     }

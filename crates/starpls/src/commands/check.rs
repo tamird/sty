@@ -3118,8 +3118,10 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
                 &options,
             )
             .unwrap();
-            assert!(checker.bazel_input("@absent//:defs.bzl").is_err());
-            assert!(checker.bazel_input("@rules//other:../defs.bzl").is_err());
+            assert!(super::BazelInput::resolve(&checker.loader, "@absent//:defs.bzl").is_err());
+            assert!(
+                super::BazelInput::resolve(&checker.loader, "@rules//other:../defs.bzl").is_err()
+            );
             if failed {
                 let [error] = checker.input_errors.as_slice() else {
                     panic!("expected one failed input")
@@ -4990,14 +4992,14 @@ struct LoadGraph {
     unresolved: indexmap::IndexMap<File, Vec<LoadDependency>>,
 }
 
-#[derive(PartialEq, Eq)]
-enum BazelInput {
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum BazelInput {
     Directory,
     File { package: PathBuf },
 }
 
 impl BazelInput {
-    fn validate(&self, path: &Path, analysis: &Analysis) -> anyhow::Result<()> {
+    pub(super) fn validate(&self, path: &Path, analysis: &Analysis) -> anyhow::Result<()> {
         let metadata =
             std::fs::metadata(path).with_context(|| format!("reading {}", path.display()))?;
         match self {
@@ -5035,10 +5037,11 @@ impl BazelInput {
             }
         }
     }
-}
 
-impl Checker {
-    fn bazel_input(&self, value: &str) -> anyhow::Result<Option<(PathBuf, BazelInput)>> {
+    pub(super) fn resolve(
+        loader: &DefaultFileLoader,
+        value: &str,
+    ) -> anyhow::Result<Option<(PathBuf, Self)>> {
         let Some((_, relative)) = value
             .split_once("//")
             .filter(|(repo, _)| repo.is_empty() || repo.starts_with('@'))
@@ -5058,9 +5061,7 @@ impl Checker {
                 && !label.target().starts_with('/'),
             "invalid Bazel source label {value}"
         );
-        let repository = self
-            .loader
-            .resolve_repository(&label, &self.loader.main_repository())?;
+        let repository = loader.resolve_repository(&label, &loader.main_repository())?;
         if relative == "..." {
             return Ok(Some((repository.root, BazelInput::Directory)));
         }
@@ -5083,7 +5084,9 @@ impl Checker {
             BazelInput::File { package },
         )))
     }
+}
 
+impl Checker {
     fn new(
         analysis: Analysis,
         bazel_info: BazelInfo,
@@ -5144,7 +5147,7 @@ impl Checker {
             checker.loader.prepare_repository_mappings(&[String::new()]);
         }
         for pattern in &options.ignore_patterns {
-            if let Some(label) = checker.bazel_input(pattern)? {
+            if let Some(label) = BazelInput::resolve(&checker.loader, pattern)? {
                 checker.ignored_paths.labels.push(label);
             } else {
                 checker
@@ -5154,7 +5157,7 @@ impl Checker {
         }
         let mut inputs = paths
             .iter()
-            .map(|path| match checker.bazel_input(path)? {
+            .map(|path| match BazelInput::resolve(&checker.loader, path)? {
                 Some((path, input)) => Ok((path, Some(input))),
                 None => Ok((starpls_common::absolute_path(Path::new(path))?, None)),
             })

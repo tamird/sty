@@ -10,6 +10,7 @@ use clap::Args;
 use starpls_common::FileInfo;
 use starpls_ide::Analysis;
 
+use super::check::BazelInput;
 use super::stub_package::Registration;
 
 #[derive(Args, Clone, Default)]
@@ -85,15 +86,33 @@ impl TypeInterfaceOptions {
             );
             anyhow::Ok(selection)
         };
+        let rules = select_rules(&[])?;
+        let mut registrations = super::stub_package::load(loader, workspace, stub_packages)?;
+        let mut labels = Vec::new();
+        let external_source = |name: &str| {
+            loader.prepare_repository_mappings(&[String::new()]);
+            let (path, label) = BazelInput::resolve(loader, name)?
+                .filter(|(_, label)| matches!(label, BazelInput::File { .. }))
+                .with_context(|| format!("expected a Bazel source file label, got {name:?}"))?;
+            anyhow::ensure!(
+                registrations
+                    .iter()
+                    .any(|registration| registration.source == path),
+                "overrides.include: {name} has no implementation in the selected stub packages"
+            );
+            labels.push((path.clone(), label));
+            Ok(path)
+        };
         let mut file_rules = BTreeMap::new();
-        for (path, layers) in
-            super::project_config::FileOverride::by_file(&file_overrides, workspace)
-                .with_context(context)?
+        for (path, layers) in super::project_config::FileOverride::by_file(
+            &file_overrides,
+            workspace,
+            external_source,
+        )
+        .with_context(context)?
         {
             file_rules.insert(path, select_rules(&layers)?);
         }
-        let rules = select_rules(&[])?;
-        let mut registrations = super::stub_package::load(loader, workspace, stub_packages)?;
         let resolve = |path: &Path| -> anyhow::Result<PathBuf> {
             let path = workspace.join(path);
             match loader.repository_for_path(&path)? {
@@ -175,6 +194,7 @@ impl TypeInterfaceOptions {
             registrations,
             rules,
             file_rules,
+            labels,
             analysis,
             builtin_extension,
         })
@@ -186,6 +206,7 @@ pub(crate) struct PreparedInterfaces {
     registrations: Vec<Registration>,
     rules: starpls_ide::DiagnosticRules,
     file_rules: BTreeMap<PathBuf, starpls_ide::DiagnosticRules>,
+    labels: Vec<(PathBuf, BazelInput)>,
     analysis: super::project_config::AnalysisOptions,
     builtin_extension: Option<(PathBuf, String)>,
 }
@@ -228,9 +249,15 @@ impl PreparedInterfaces {
             registrations,
             rules,
             file_rules,
+            labels,
             analysis: analysis_options,
             builtin_extension,
         } = self;
+        for (path, label) in labels {
+            label
+                .validate(&path, analysis)
+                .context("invalid overrides.include label")?;
+        }
         let mut mappings = Vec::with_capacity(registrations.len());
         for Registration {
             source,
@@ -365,6 +392,7 @@ mod tests {
             registrations,
             rules: Default::default(),
             file_rules: Default::default(),
+            labels: Vec::new(),
             analysis: Default::default(),
             builtin_extension: None,
         }
@@ -575,16 +603,21 @@ mod tests {
             } else {
                 external.join("stubs+")
             };
-            for directory in [&workspace, &source, &stubs] {
+            let package = source.join("lib");
+            let other = source.join("other");
+            for directory in [&workspace, &package, &other, &stubs] {
                 std::fs::create_dir_all(directory).unwrap();
             }
             std::fs::write(stubs.join("BUILD.bazel"), "").unwrap();
+            std::fs::write(package.join("BUILD.bazel"), "").unwrap();
+            std::fs::write(other.join("BUILD.bazel"), "").unwrap();
+            std::fs::write(other.join("defs.bzl"), "").unwrap();
             std::fs::write(
-                source.join("defs.bzl"),
+                package.join("defs.bzl"),
                 "def declared(value): return value\ndef inferred(value): return value\n",
             )
             .unwrap();
-            let caller_text = "load('@rules//:defs.bzl', 'declared', 'inferred')\nresult = inferred('source')\nvalue = declared('ok').name\n";
+            let caller_text = "load('@rules//lib:defs.bzl', 'declared', 'inferred')\nresult = inferred('source')\nvalue = declared('ok').name\n";
             std::fs::write(workspace.join("caller.bzl"), caller_text).unwrap();
             let source_metadata = if colocated {
                 ""
@@ -593,7 +626,9 @@ mod tests {
             };
             std::fs::write(
                 stubs.join("stubs.toml"),
-                format!("format-version = 1\n{source_metadata}[files]\n'defs.bzl' = 'defs.bzli'\n"),
+                format!(
+                    "format-version = 1\n{source_metadata}[files]\n'lib/defs.bzl' = 'defs.bzli'\n"
+                ),
             )
             .unwrap();
             std::fs::write(
@@ -607,15 +642,14 @@ mod tests {
             )
             .unwrap();
             let manifest = if colocated {
-                "@rules//stubs:stubs.toml"
+                "@@rules+//stubs:stubs.toml"
             } else {
                 "@stubs//:stubs.toml"
             };
-            std::fs::write(
-                workspace.join("sty.toml"),
-                format!("[[stub-packages]]\nmanifest = '{manifest}'\n"),
-            )
-            .unwrap();
+            let config = |label| {
+                format!("[[stub-packages]]\nmanifest = '{manifest}'\n[[overrides]]\ninclude = ['{label}']\n[overrides.rules]\nmissing-return-annotation = 'warn'\n")
+            };
+            std::fs::write(workspace.join("sty.toml"), config("@rules//lib:defs.bzl")).unwrap();
             for version in ["1.0", "1.1"] {
                 let mut client = crate::document::source_tests::TestBazelClient::default();
                 client.repository_mappings.insert(
@@ -668,9 +702,10 @@ mod tests {
                 else {
                     panic!("{prepared:?}");
                 };
-                assert_eq!(*registered_source, source.join("defs.bzl"));
+                assert_eq!(*registered_source, package.join("defs.bzl"));
                 assert_eq!(*registered_interface, stubs.join("defs.bzli"));
-                let mut analysis = starpls_ide::Analysis::new(loader, Default::default()).unwrap();
+                let mut analysis =
+                    starpls_ide::Analysis::new(loader.clone(), Default::default()).unwrap();
                 prepared.install(&mut analysis, &workspace).unwrap();
                 let interface = analysis
                     .file(
@@ -688,12 +723,18 @@ mod tests {
                     .unwrap();
                 let implementation = analysis
                     .file(
-                        &source.join("defs.bzl"),
+                        &package.join("defs.bzl"),
                         starpls_common::Dialect::Bazel,
                         None,
                     )
                     .unwrap();
                 let snapshot = analysis.snapshot();
+                assert!(snapshot
+                    .diagnostics(implementation)
+                    .unwrap()
+                    .iter()
+                    .any(|d| d.id().as_str() == "missing-return-annotation"
+                        && d.severity() == ruff_db::diagnostic::Severity::Warning));
                 let resolution = snapshot.resolve_load(interface, ":types.bzli").unwrap();
                 let starpls_ide::LoadResolution::Resolved(types) = resolution else {
                     panic!("{resolution:?}");
@@ -724,6 +765,24 @@ mod tests {
                     panic!("{locations:?}");
                 };
                 assert_eq!(*target_file_id, implementation.source);
+                if !colocated {
+                    for (label, message) in [
+                        (
+                            "@rules//other:defs.bzl",
+                            "no implementation in the selected stub packages",
+                        ),
+                        ("@rules//:lib/defs.bzl", "belongs to Bazel package"),
+                    ] {
+                        std::fs::write(workspace.join("sty.toml"), config(label)).unwrap();
+                        let error = super::TypeInterfaceOptions::default()
+                            .prepare(&loader, &workspace)
+                            .and_then(|prepared| prepared.install(&mut analysis, &workspace))
+                            .unwrap_err();
+                        assert!(format!("{error:#}").contains(message), "{error:#}");
+                    }
+                    std::fs::write(workspace.join("sty.toml"), config("@rules//lib:defs.bzl"))
+                        .unwrap();
+                }
             }
         }
         std::fs::remove_dir_all(root).unwrap();

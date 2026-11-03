@@ -329,9 +329,12 @@ include = ["tests/defs.bzl", "tests/BUILD.bazel"]
 non-static-type = "warn"
 ```
 
-Each `include` entry names an exact file relative to `sty.toml`; a file with
-the same name in another package uses its own settings. This field accepts
-literal files only. Globs and directory trees require listing their files.
+Each `include` entry names an exact file. Use a path relative to `sty.toml`
+for workspace files, or an apparent Bazel label such as
+`@bazel_skylib//rules:common_settings.bzl` for a dependency implementation
+in a selected stub package. Bazel resolves the repository name from the main
+workspace. A file with the same name in another package uses its own settings.
+Globs and directory trees require listing their files.
 When checking an implementation against a companion, put
 the implementation's path in `include` to configure its diagnostics.
 
