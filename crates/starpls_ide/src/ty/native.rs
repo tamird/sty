@@ -5688,10 +5688,11 @@ def sdk(config: XcodeVersionConfig, platform: apple_platform) -> DottedVersion:
 
     #[test]
     fn configuration_fragments_use_exported_member_types() {
-        let builtins = starpls_bazel::decode_builtins(include_bytes!(
+        let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
         .unwrap();
+        env::apply_versioned_signatures(&mut builtins, "release 8.8.1");
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
             .set_builtin_defs(builtins, Default::default())
@@ -5715,6 +5716,13 @@ def platform_impl(ctx: ctx):
 
 universal = rule(implementation = platform_impl)
 
+def minimum_version(ctx: ctx) -> str:
+    version = ctx.fragments.cpp.minimum_os_version()
+    return version if version != None else "unspecified"
+
+def unchecked_version(ctx: ctx) -> str:
+    return ctx.fragments.cpp.minimum_os_version()
+
 def invalid_platform(ctx: ctx) -> str:
     return ctx.fragments.platform.platform
 "#;
@@ -5732,7 +5740,7 @@ def invalid_platform(ctx: ctx) -> str:
             )
             .unwrap();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert_eq!(diagnostics.len(), 5, "{diagnostics:?}");
+        assert_eq!(diagnostics.len(), 6, "{diagnostics:?}");
         for (diagnostic, (expected_id, expected_source)) in diagnostics.iter().zip([
             ("unresolved-attribute", "ctx.fragments.cpp.no_such_option"),
             ("unresolved-attribute", "ctx.fragments.no_such_fragment"),
@@ -5743,6 +5751,10 @@ def invalid_platform(ctx: ctx) -> str:
             (
                 "unresolved-attribute",
                 "ctx.fragments.platform.no_such_member",
+            ),
+            (
+                "invalid-return-type",
+                "ctx.fragments.cpp.minimum_os_version()",
             ),
             ("invalid-return-type", "ctx.fragments.platform.platform"),
         ]) {

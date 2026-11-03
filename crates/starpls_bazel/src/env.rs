@@ -459,8 +459,33 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
             }
             continue;
         }
-        if class.name == "cpp" && version >= (8, 0) {
-            add_cpp_fdo_methods(class);
+        if class.name == "cpp" {
+            // CppConfiguration has exposed this public method since f463dec7a0
+            // (0.16). ca247cea30 allowed it to return None starting in 3.2.
+            if version >= (0, 16)
+                && !class
+                    .field
+                    .iter()
+                    .any(|field| field.name == "minimum_os_version")
+            {
+                class.field.push(Value {
+                    name: "minimum_os_version".to_owned(),
+                    doc: "The minimum OS version for C/C++ compilation.".to_owned(),
+                    callable: Some(Callable {
+                        return_type: if version >= (3, 2) {
+                            "string; or None"
+                        } else {
+                            "string"
+                        }
+                        .to_owned(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                });
+            }
+            if version >= (8, 0) {
+                add_cpp_fdo_methods(class);
+            }
             continue;
         }
         if class.name != "attr" {
@@ -1064,7 +1089,7 @@ mod tests {
     }
 
     #[test]
-    fn cpp_fdo_methods_follow_bazel_release() {
+    fn cpp_fragment_methods_follow_bazel_release() {
         let supplied = Value {
             name: "compilation_mode".to_owned(),
             callable: Some(Callable {
@@ -1081,21 +1106,44 @@ mod tests {
             }],
             ..Default::default()
         };
-        for release in ["development version", "release 7.4.0"] {
+        for (release, minimum) in [
+            ("development version", None),
+            ("release 0.15.2", None),
+            ("release 0.16.0", Some("string")),
+            ("release 3.1.0", Some("string")),
+            ("release 3.2.0", Some("string; or None")),
+            ("release 7.4.0", Some("string; or None")),
+        ] {
             let mut builtins = original.clone();
             apply_versioned_signatures(&mut builtins, release);
-            assert_eq!(builtins, original);
+            let fields = &builtins.r#type[0].field;
+            assert_eq!(fields[0], supplied);
+            assert_eq!(
+                fields.len(),
+                1 + usize::from(minimum.is_some()),
+                "{release}"
+            );
+            if let Some(expected) = minimum {
+                assert_eq!(fields[1].name, "minimum_os_version");
+                assert_eq!(fields[1].callable.as_ref().unwrap().return_type, expected);
+            }
         }
         let mut builtins = original;
         apply_versioned_signatures(&mut builtins, "release 8.0.0");
         let fields = &builtins.r#type[0].field;
-        assert_eq!(fields.len(), 6);
+        assert_eq!(fields.len(), 7);
         assert_eq!(fields[0], supplied);
         assert_eq!(
-            fields[1].callable.as_ref().unwrap().return_type,
+            fields[2].callable.as_ref().unwrap().return_type,
             "string; or None"
         );
-        assert_eq!(fields[5].callable.as_ref().unwrap().return_type, "bool");
+        assert_eq!(fields[6].callable.as_ref().unwrap().return_type, "bool");
+        // A fork can provide its own signature for the public method.
+        builtins.r#type[0].field[1]
+            .callable
+            .as_mut()
+            .unwrap()
+            .return_type = "string".into();
         let once = builtins.clone();
         apply_versioned_signatures(&mut builtins, "release 9.0.0");
         assert_eq!(builtins, once);
