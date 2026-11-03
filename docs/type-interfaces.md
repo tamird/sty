@@ -127,7 +127,7 @@ formatted declaration, including `**kwargs`:
 ```starlark
 def wrapped(
         name: str,
-        # type: Unpack[KeywordArgs[tool, "name"]]
+        # type: Unpack[KeywordArgs[tool]]
         **kwargs):
     tool(name = name, **kwargs)
 ```
@@ -199,14 +199,15 @@ Every key is optional. Values follow the corresponding rule's attribute
 contract, including `None` and configurable inputs. The selected Bazel
 inventory determines available attributes and accepted aliases.
 
-`KeywordArgs[callable, "excluded"]` projects the remaining keyword
-parameters of an existing callable into a closed dictionary schema. It
-preserves parameter types and whether each keyword is required:
+`KeywordArgs[callable]` describes the callable's keyword parameters as a
+closed dictionary. Each key has the type and requiredness of its parameter.
+In a wrapper's `**kwargs: Unpack[KeywordArgs[callable]]`, names already bound
+by the wrapper are absent from the dictionary:
 
 ```starlark
 load(":tool.bzl", _tool = "tool")
 
-def wrapper(name: str, **kwargs: Unpack[KeywordArgs[_tool, "name"]]) -> None: ...
+def wrapper(name: str, **kwargs: Unpack[KeywordArgs[_tool]]) -> None: ...
 ```
 
 A sidecar can import a public rule from its paired source file. The callable
@@ -219,9 +220,18 @@ can follow as more string arguments. Overloads must have identical remaining
 parameter names, types, kinds, and requiredness. Parameter order and return
 types may differ.
 
-Excluding a name describes the residual keyword row; the wrapper body must
-still supply any required argument. Wrapper-specific inputs belong in the
-wrapper's own signature.
+A positional-only wrapper parameter leaves its name available as a keyword.
+When a source wrapper forwards to the projected callable in its final
+statement, sty also excludes the keywords it supplies explicitly. For example,
+`tool(srcs=[src], **kwargs)` reserves `srcs` even when the wrapper parameter
+is named `src`. This inference requires a call with only named arguments
+followed by `**kwargs`, and no other use of `kwargs` in that call.
+Assignments and expression statements can precede the call if they neither
+read nor assign `kwargs`.
+
+In other bodies or a separate declaration, specify any additional reserved
+names explicitly: `KeywordArgs[tool, "srcs"]`. A wrapper that supplies
+`size=kwargs.pop("size", "small")` still accepts `size` from its caller.
 
 When a ruleset accepts arbitrary keywords, its stub can export a type for the
 keys it recognizes:
@@ -264,7 +274,7 @@ keywords through the implementation's `**kwargs`:
 load(":tool.bzl", _tool = "tool")
 
 class _Wrapper(Protocol):
-    def __call__(self, *, srcs: list[str], **kwargs: Unpack[KeywordArgs[_tool, "srcs"]]) -> None: ...
+    def __call__(self, *, srcs: list[str], **kwargs: Unpack[KeywordArgs[_tool]]) -> None: ...
 
 def wrapper(**kwargs: Unpack[KeywordArgs[_Wrapper]]) -> None: ...
 ```
