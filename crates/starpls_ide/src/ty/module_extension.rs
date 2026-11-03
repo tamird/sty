@@ -144,17 +144,13 @@ pub(super) fn implementation_context<'db>(
     let environment = model.program_environment();
     let data = result.provided_data(db, &environment)?;
     let data = data.downcast_ref::<ExtensionData>()?;
-    let make_instance = |name: &str, fields, has_dynamic_fields, require_base| {
-        let base = factory::native_class(db, declarations, name);
-        if require_base && base.is_none() {
-            return None;
-        }
+    let make_instance = |name: &str, fields, has_dynamic_fields, bases| {
         model
             .provided_class_at_call(
                 call,
                 ProvidedClass {
                     name: Name::new(name),
-                    bases: base.into_iter().collect(),
+                    bases,
                     class_members: Box::default(),
                     instance_fields: ProvidedInstanceFields {
                         fields,
@@ -165,6 +161,22 @@ pub(super) fn implementation_context<'db>(
                 },
             )?
             .to_instance_approximation(db, &environment)
+    };
+    // Bazel exposes tags and their container as Starlark structures. The enclosing module
+    // and module context have nominal types.
+    let structure = |name: &str, fields: Box<[ProvidedField<'db>]>, complete| {
+        let arguments =
+            super::shapes::struct_type_arguments(db, &environment, &fields, &[], complete);
+        let structure = factory::specialized_native_class(db, declarations, "struct", arguments);
+        let bases = factory::native_class(db, declarations, name)
+            .into_iter()
+            .chain(structure)
+            .collect();
+        make_instance(name, fields, !complete, bases)
+    };
+    let nominal = |name: &str, fields| {
+        let base = factory::native_class(db, declarations, name)?;
+        make_instance(name, fields, false, Box::from([base]))
     };
     let list = |element| KnownClass::List.to_specialized_instance(db, &environment, &[element]);
     let tag_fields = data
@@ -188,13 +200,12 @@ pub(super) fn implementation_context<'db>(
                     source: attribute.source,
                 })
                 .collect();
-            let instance = make_instance(
+            let instance = structure(
                 "bazel_module_tag",
                 fields,
                 tag.schema
                     .as_ref()
-                    .is_none_or(|schema| !schema.names_complete),
-                false,
+                    .is_some_and(|schema| schema.names_complete),
             )?;
             Some(ProvidedField {
                 name: tag.name.clone(),
@@ -204,8 +215,8 @@ pub(super) fn implementation_context<'db>(
             })
         })
         .collect::<Option<_>>()?;
-    let tags = make_instance("bazel_module_tags", tag_fields, !data.names_complete, true)?;
-    let module = make_instance(
+    let tags = structure("bazel_module_tags", tag_fields, data.names_complete)?;
+    let module = nominal(
         "bazel_module",
         Box::from([ProvidedField {
             name: Name::new("tags"),
@@ -213,10 +224,8 @@ pub(super) fn implementation_context<'db>(
             is_required: true,
             source: None,
         }]),
-        false,
-        true,
     )?;
-    make_instance(
+    nominal(
         "module_ctx",
         Box::from([ProvidedField {
             name: Name::new("modules"),
@@ -230,8 +239,6 @@ pub(super) fn implementation_context<'db>(
             is_required: true,
             source: None,
         }]),
-        false,
-        true,
     )
 }
 

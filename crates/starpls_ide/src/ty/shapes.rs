@@ -34,6 +34,49 @@ use super::factory::BuiltinFunction;
 use super::factory::KeywordRecord;
 use crate::Database;
 
+/// The two arguments of Bazel's struct class: field values and the field schema.
+pub(super) fn struct_type_arguments<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    fields: &[ProvidedField<'db>],
+    conditional_fields: &[ProvidedField<'db>],
+    complete: bool,
+) -> Vec<Type<'db>> {
+    let object = KnownClass::Object.to_instance(db, environment);
+    let schema = TypedDictType::from_schema_items_with_openness(
+        db,
+        conditional_fields
+            .iter()
+            .map(|field| (field, false))
+            .chain(fields.iter().map(|field| (field, true)))
+            .map(|(field, required)| {
+                (
+                    field.name.clone(),
+                    TypedDictFieldBuilder::new(field.ty)
+                        .required(required)
+                        .read_only(true)
+                        .build(),
+                )
+            })
+            .collect(),
+        if complete {
+            TypedDictOpenness::Closed
+        } else {
+            TypedDictOpenness::extra(db, object, true)
+        },
+    );
+    let values = UnionType::from_elements(
+        db,
+        environment,
+        fields
+            .iter()
+            .chain(conditional_fields)
+            .map(|field| field.ty)
+            .chain((!complete).then_some(object)),
+    );
+    vec![values, Type::TypedDict(schema)]
+}
+
 pub(super) fn mapping_argument(expression: &Expr) -> Option<(&Expr, &ExprDict, bool)> {
     match expression {
         expression @ Expr::Dict(mapping) => Some((expression, mapping, false)),

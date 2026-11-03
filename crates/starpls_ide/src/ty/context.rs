@@ -48,9 +48,7 @@ use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::types::TypeDefinition;
 use ty_python_semantic::types::TypedDictFieldBuilder;
-use ty_python_semantic::types::TypedDictOpenness;
 use ty_python_semantic::types::TypedDictSchema;
-use ty_python_semantic::types::TypedDictType;
 use ty_python_semantic::types::UnionType;
 use ty_python_semantic::HasDefinition;
 use ty_python_semantic::HasType;
@@ -1207,38 +1205,6 @@ fn context_type<'db>(
                 None => complete = false,
             }
         }
-        let object = KnownClass::Object.to_instance(db, &environment);
-        let schema = TypedDictType::from_schema_items_with_openness(
-            db,
-            conditional_fields
-                .iter()
-                .map(|field| (field, false))
-                .chain(fields.iter().map(|field| (field, true)))
-                .map(|(field, required)| {
-                    (
-                        field.name.clone(),
-                        TypedDictFieldBuilder::new(field.ty)
-                            .required(required)
-                            .read_only(true)
-                            .build(),
-                    )
-                })
-                .collect(),
-            if complete {
-                TypedDictOpenness::Closed
-            } else {
-                TypedDictOpenness::extra(db, object, true)
-            },
-        );
-        let values = UnionType::from_elements(
-            db,
-            &environment,
-            fields
-                .iter()
-                .chain(&conditional_fields)
-                .map(|field| field.ty)
-                .chain((!complete).then_some(object)),
-        );
         // Outputs and RepoDefinition are Structure objects. Bazel builds the other
         // context views with StructProvider.STRUCT.
         let base = factory::specialized_native_class(
@@ -1249,7 +1215,13 @@ fn context_type<'db>(
             } else {
                 "_StructInfo"
             },
-            vec![values, Type::TypedDict(schema)],
+            super::shapes::struct_type_arguments(
+                db,
+                &environment,
+                &fields,
+                &conditional_fields,
+                complete,
+            ),
         )?;
         let ty = make_class(
             view.name(),
@@ -2040,12 +2012,18 @@ def register_schema(callback: Callable[[module_ctx], extension_metadata | None],
 def consume_modules(modules: list[bazel_module]) -> None: pass
 def consume_string(value: str) -> None: pass
 def consume_label(value: Label) -> None: pass
+def consume_patch(value: struct[{"strip": int}, ...]) -> None: pass
+def consume_tags(value: struct[{"patch": list}, ...]) -> None: pass
+def consume_struct(value: struct[{}, ...]) -> None: pass
 def implementation(context):
     consume_modules(context.modules)
     consume_modules(context.modules[:])
     consume_string(context.modules[0].tags.version[0].version)
     for module in context.modules:
+        consume_tags(module.tags)
+        consume_struct(module)
         for tag in module.tags.patch:
+            consume_patch(tag)
             consume(tag.patches, tag.strip)
             consume_label(tag.required)
             consume_label(tag.optional)
@@ -2053,6 +2031,7 @@ def implementation(context):
             consume(tag.patches, "bad")
             tag.missing
         for tag in module.tags.version:
+            consume_patch(tag)
             consume_string(tag.version)
             tag.patches
         module.tags.missing
@@ -2061,7 +2040,7 @@ extension = module_extension(
     implementation,
     tag_classes={
         "patch": tag_class(attrs={"patches": attr.label_list(), "strip": attr.int(), "required": attr.label(mandatory=True), "optional": attr.label()}),
-        "version": tag_class(attrs={"version": attr.string()}),
+        "version": tag_class(attrs={"version": attr.string(), "strip": attr.string()}),
     },
 )
 "#;
@@ -2085,9 +2064,11 @@ extension = module_extension(
         assert_eq!(
             actual,
             [
+                ("invalid-argument-type", "module"),
                 ("invalid-argument-type", "tag.optional"),
                 ("invalid-argument-type", "\"bad\""),
                 ("unresolved-attribute", "tag.missing"),
+                ("invalid-argument-type", "tag"),
                 ("unresolved-attribute", "tag.patches"),
                 ("unresolved-attribute", "module.tags.missing"),
             ]
