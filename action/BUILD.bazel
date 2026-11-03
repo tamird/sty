@@ -1,0 +1,7 @@
+load("@bazel_skylib//rules:native_binary.bzl", "native_test")
+
+native_test(
+    name = "summary_test",
+    src = "summary_test.sh",
+    data = ["summary.py"],
+)

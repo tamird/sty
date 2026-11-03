@@ -3,7 +3,7 @@ description: Build the pinned sty revision and check a Bazel workspace's impleme
 
 inputs:
   files:
-    description: Additional paths relative to working-directory or external Bazel source-file labels, one per line.
+    description: Workspace-relative paths or external source-file labels, one per line. Defaults to tracked .bzl files when no advisory is configured.
     default: ''
   advisory-files-from:
     description: Optional file listing workspace-relative files to check for an advisory report.
@@ -33,11 +33,11 @@ inputs:
     description: Report possibly unbound names and unreachable code.
     default: 'true'
   audit-loads:
-    description: Resolve every transitive load and check load cycles.
-    default: 'false'
+    description: Resolve every transitive load and check load cycles. Enabled for automatic workspace checks.
+    default: ''
   artifact-name:
     description: Name of the artifact containing build logs, diagnostics, and the coverage report.
-    default: sty
+    default: ''
 
 runs:
   using: composite
@@ -45,13 +45,23 @@ runs:
     - name: Prepare reports
       id: reports
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
         # Nested actions replace github.action_ref when evaluating their inputs.
         STY_REVISION: ${{ github.action_ref }}
       run: |
         directory=$(mktemp -d "$RUNNER_TEMP/sty.XXXXXX")
         echo "directory=$directory" >> "$GITHUB_OUTPUT"
         echo "revision=$STY_REVISION" >> "$GITHUB_OUTPUT"
+        if [[ -z "$ARTIFACT_NAME" ]]; then
+          ARTIFACT_NAME=sty
+          if [[ "$PWD" != "$GITHUB_WORKSPACE" ]]; then
+            relative=${PWD#"$GITHUB_WORKSPACE"/}
+            ARTIFACT_NAME+="-${relative//\//-}"
+          fi
+        fi
+        echo "artifact=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
 
     - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
       with:
@@ -105,7 +115,11 @@ runs:
           false) ;;
           *) echo 'code-flow-analysis must be true or false.' >&2; exit 1 ;;
         esac
-        case "$AUDIT_LOADS" in
+        automatic=false
+        if [[ -z "$CHECK_FILES$ADVISORY_FILES_FROM$ADVISORY_PATHSPECS" && "$ADVISORY_ONLY" == false ]]; then
+          automatic=true
+        fi
+        case "${AUDIT_LOADS:-$automatic}" in
           true) options+=(--audit-loads) ;;
           false) ;;
           *) echo 'audit-loads must be true or false.' >&2; exit 1 ;;
@@ -138,26 +152,33 @@ runs:
             fi
             ;;
           false)
-            source_location='^(.+):[0-9]+:[0-9]+: source file '
-            while IFS= read -r path; do
-              if [[ "$path" == @*//* ]]; then
-                if ! location=$(bazel query --output=location --norelative_locations "$path"); then
-                  strict_status=1
-                  continue
+            if [[ "$automatic" == true ]]; then
+              "$REPORT_DIRECTORY/sty" check "${options[@]}" --tracked-bzl \
+                --progress --report "$REPORT_DIRECTORY/coverage.json" --output-format json-lines \
+                > "$REPORT_DIRECTORY/diagnostics.jsonl" || strict_status=$?
+              python3 "$GITHUB_ACTION_PATH/action/summary.py" "$REPORT_DIRECTORY"
+            else
+              source_location='^(.+):[0-9]+:[0-9]+: source file '
+              while IFS= read -r path; do
+                if [[ "$path" == @*//* ]]; then
+                  if ! location=$(bazel query --output=location --norelative_locations "$path"); then
+                    strict_status=1
+                    continue
+                  fi
+                  if [[ "$location" == *$'\n'* || ! "$location" =~ $source_location ]]; then
+                    echo "$path must resolve to one Bazel source file; got: $location" >&2
+                    strict_status=1
+                    continue
+                  fi
+                  path=${BASH_REMATCH[1]}
                 fi
-                if [[ "$location" == *$'\n'* || ! "$location" =~ $source_location ]]; then
-                  echo "$path must resolve to one Bazel source file; got: $location" >&2
-                  strict_status=1
-                  continue
-                fi
-                path=${BASH_REMATCH[1]}
-              fi
-              printf '%s\n' "$path"
-            done <<< "$CHECK_FILES" > "$REPORT_DIRECTORY/files.txt"
-            "$REPORT_DIRECTORY/sty" check "${options[@]}" \
-              --files-from "$REPORT_DIRECTORY/files.txt" \
-              --progress --report "$REPORT_DIRECTORY/coverage.json" \
-              2>&1 | tee "$REPORT_DIRECTORY/diagnostics.log" || strict_status=$?
+                printf '%s\n' "$path"
+              done <<< "$CHECK_FILES" > "$REPORT_DIRECTORY/files.txt"
+              "$REPORT_DIRECTORY/sty" check "${options[@]}" \
+                --files-from "$REPORT_DIRECTORY/files.txt" \
+                --progress --report "$REPORT_DIRECTORY/coverage.json" \
+                2>&1 | tee "$REPORT_DIRECTORY/diagnostics.log" || strict_status=$?
+            fi
             ;;
           *) echo 'advisory-only must be true or false.' >&2; exit 1 ;;
         esac
@@ -190,10 +211,11 @@ runs:
       if: ${{ always() && steps.reports.outputs.directory != '' }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
-        name: ${{ inputs.artifact-name }}
+        name: ${{ steps.reports.outputs.artifact }}
         path: |
           ${{ steps.reports.outputs.directory }}/*.log
           ${{ steps.reports.outputs.directory }}/*.json
+          ${{ steps.reports.outputs.directory }}/*.jsonl
           ${{ steps.reports.outputs.directory }}/files.txt
           ${{ steps.reports.outputs.directory }}/advisory/
         if-no-files-found: warn

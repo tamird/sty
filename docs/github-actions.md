@@ -23,23 +23,39 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: tamird/sty@sty-action-v0.2.0
+      - uses: tamird/sty@sty-action-v0.3.0
 ```
 
-To pin that release by commit, use:
+The default check selects every Git-tracked `.bzl` file in the Bazel workspace.
+It respects `.bazelignore` directory entries and stops at nested workspaces.
+It also checks local implementations against adjacent `.bzli` files and
+registered interfaces, including pairs that no caller loads.
+
+For a repository with two independent Bazel workspaces, run one job per
+workspace. Each gets its own report:
 
 ```yaml
-- uses: tamird/sty@d400a00807b3c7f7b2ac82bf1e1e6a16db0290e3 # sty-action-v0.2.0
+jobs:
+  sty:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [".", "gazelle"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: tamird/sty@sty-action-v0.3.0
+        with:
+          working-directory: ${{ matrix.workspace }}
 ```
 
-Ship a companion next to the implementation, for example `foo/defs.bzli` next
-to `foo/defs.bzl`. The action checks each companion against its implementation
-in the current Bazel repository, including pairs that no caller loads. It also
-checks registered interfaces and their locally owned sources. The optional
-`files` input adds implementations or directories. To check a dependency
+Use `files` to replace Git discovery with specific sources or directories.
+The local interface check still runs. To check a dependency
 against a stub, name its source file by its Bazel label:
 
 ```yaml
@@ -56,13 +72,17 @@ declarations, and reports possibly unbound names and unreachable code. Run the
 corresponding local check with:
 
 ```sh
-sty check --check-local-interface-sources --experimental_infer_ctx_attributes --experimental_use_code_flow_analysis
+sty check --tracked-bzl --check-local-interface-sources --audit-loads \
+  --experimental_infer_ctx_attributes --experimental_use_code_flow_analysis
 ```
 
 See the [stub specification](type-interfaces.md) for supported declarations and
 external stub packages.
 
-The step fails on type errors. Set diagnostic severities in `sty.toml`:
+The step fails on errors and incomplete checks. The job summary groups
+warnings by rule; the artifact contains each diagnostic and its source
+location. Set severity in `sty.toml` to apply the same policy in the editor,
+in the CLI, and in the job:
 
 ```toml
 [rules]
@@ -72,9 +92,10 @@ division-by-zero = "error"
 ```
 
 `code-flow-analysis: false` disables the additional flow diagnostics supplied by
-the flag; explicitly configured rules retain their configured severity. Set
-`audit-loads: true` to resolve every transitive load and check cycles. Load auditing
-does not select dependency bodies for checking.
+the flag; explicitly configured rules retain their configured severity. The default workspace check audits every
+transitive load and checks cycles. To change this behavior, set `audit-loads`
+explicitly. A custom file or advisory selection enables load auditing only
+when requested.
 
 With `--check-local-interface-sources`, an `--ignore_pattern` that excludes an
 owned source fails coverage. Ignored sources remain excluded from diagnostics;
@@ -83,12 +104,13 @@ The check also fails if no implementation is selected. Configured local sources
 that resolve outside the workspace or beneath a nested repository boundary must
 be checked from their own workspace instead.
 
-Each run uploads build logs, rendered diagnostics, the requested file list,
-and a JSON coverage report as the `sty` artifact, including after a failed check.
-Build failures appear in the build step and its log; a successful type check
-requires successful dependency resolution and complete selected-file coverage.
+Each run uploads the build log, diagnostics and coverage report, including
+after a failed check. The coverage report lists the selected and checked files.
 
-To report findings across all tracked `.bzl` files, set `advisory-pathspecs: '*.bzl'`.
+## Separate advisory reports
+
+To run a second, nonblocking check over a different inventory, configure
+`files` for the required check and `advisory-pathspecs` for the advisory check.
 Supply one [Git pathspec](https://git-scm.com/docs/gitglossary#def_pathspec)
 per line to partition a repository with several Bazel workspaces. For example,
 check the root and run a separate step in `examples`:
@@ -139,7 +161,7 @@ identities fails the check.
 The checked workspace uses its own `.bazelversion`. Set `bazel-version` to an
 exact version if the project selects Bazel through another mechanism. For a
 nested workspace, set `working-directory` to its path; `files` are relative to
-that directory. Set `artifact-name` when a workflow checks multiple workspaces.
+that directory. The default artifact name is `sty` at the checkout root and `sty-<workspace>` elsewhere. Set `artifact-name` for multiple reports from the same workspace.
 
 Use the ordinary `pull_request` event and `contents: read` permissions. Bazel
 loads the contributor's repository configuration, so this job belongs on an
