@@ -50,6 +50,10 @@ pub(crate) struct CheckCommand {
     /// Paths, Bazel source labels (@repo//pkg:file.bzl), or directories (@repo//pkg/...).
     pub(crate) paths: Vec<String>,
 
+    /// Check tracked .bzl files in the current Bazel workspace.
+    #[clap(long)]
+    tracked_bzl: bool,
+
     /// Read newline-delimited paths from a file, or '-' for standard input.
     #[clap(long, value_name = "PATH")]
     files_from: Option<PathBuf>,
@@ -4233,6 +4237,69 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
     }
 
     #[test]
+    fn tracked_bzl_checks_new_sources_in_their_own_workspace() {
+        let name = "tracked-bzl-workspaces";
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap()).join(name);
+        let sources = [
+            ("MODULE.bazel", ""),
+            (".bazelignore", "vendor/\n"),
+            ("lib/macros with spaces.bzl", ""),
+            ("vendor/macro.bzl", ""),
+            ("gazelle/WORKSPACE", ""),
+            ("gazelle/setup.bzl", ""),
+            ("gazelle/testdata/REPO.bazel", ""),
+            ("gazelle/testdata/parser.bzl", ""),
+        ];
+        for (name, contents) in sources {
+            let path = root.join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, contents).unwrap();
+        }
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .current_dir(&root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["add", "."]);
+        std::fs::write(root.join("new.bzl"), "def f() -> int: return 'wrong'\n").unwrap();
+        assert_eq!(
+            super::tracked_bzl_paths(&root).unwrap(),
+            [root.join("lib/macros with spaces.bzl").to_str().unwrap()]
+        );
+        assert_eq!(
+            super::tracked_bzl_paths(&root.join("gazelle")).unwrap(),
+            [root.join("gazelle/setup.bzl").to_str().unwrap()]
+        );
+        git(&["add", "new.bzl"]);
+        let mut checker = local_checker_with_options(
+            name,
+            &[],
+            CheckCommand {
+                tracked_bzl: true,
+                ..Default::default()
+            },
+        );
+        let mut output = Vec::new();
+        let status = checker
+            .report_diagnostics_to(None, &mut output, &mut Vec::new())
+            .unwrap();
+        assert_eq!(status, std::process::ExitCode::FAILURE);
+        let output = String::from_utf8(output).unwrap();
+        assert!(
+            output.contains("new.bzl") && output.contains("invalid-return-type"),
+            "{output}"
+        );
+    }
+
+    #[test]
     fn recursive_selection_records_nested_repository_boundaries() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("checker-selection");
@@ -4808,6 +4875,44 @@ fn read_file_list(reader: impl BufRead, paths: &mut Vec<String>) -> anyhow::Resu
     Ok(())
 }
 
+fn tracked_bzl_paths(workspace: &Path) -> anyhow::Result<Vec<String>> {
+    let git = std::process::Command::new("git")
+        .current_dir(workspace)
+        .args(["ls-files", "-z", "--", "*.bzl"])
+        .output()
+        .context("listing tracked .bzl files with Git")?;
+    anyhow::ensure!(
+        git.status.success(),
+        "git ls-files: {}",
+        String::from_utf8_lossy(&git.stderr).trim_end()
+    );
+    let ignored = bazel_ignored_directories(workspace)?;
+    let mut roots = HashMap::new();
+    let mut paths = Vec::new();
+    for name in std::str::from_utf8(&git.stdout)?.split_terminator('\0') {
+        let path = workspace.join(name);
+        if ignored.iter().any(|dir| path.starts_with(dir))
+            || path
+                .ancestors()
+                .skip(1)
+                .take_while(|dir| *dir != workspace)
+                .any(|dir| {
+                    *roots
+                        .entry(dir.to_owned())
+                        .or_insert_with(|| document::is_repository_root(dir))
+                })
+        {
+            continue;
+        }
+        paths.push(
+            path.to_str()
+                .context("workspace path must be UTF-8")?
+                .to_owned(),
+        );
+    }
+    Ok(paths)
+}
+
 /// Bazel interprets .bazelignore entries as repository-relative directory prefixes.
 fn bazel_ignored_directories(workspace: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let path = workspace.join(".bazelignore");
@@ -5097,6 +5202,10 @@ impl Checker {
         fetch_repo_receiver: crossbeam_channel::Receiver<Task>,
         options: &CheckCommand,
     ) -> anyhow::Result<Self> {
+        let mut paths = paths;
+        if options.tracked_bzl {
+            paths.extend(tracked_bzl_paths(&bazel_info.workspace)?);
+        }
         let interface_source_mode = if options.check_interface_sources {
             Some(InterfaceSourceMode::All)
         } else if options.check_local_interface_sources {
