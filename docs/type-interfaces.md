@@ -346,6 +346,20 @@ precedence over the group. Configure
 `analysis.strict-generic-narrowing`, `analysis.require-valid-suppressions`, and
 code-flow analysis separately.
 
+A repository can share one `sty.toml` across nested Bazel workspaces. The CLI
+and editor read configuration from the Git checkout root down to the active
+workspace. A nearer `[rules]` or `[analysis]` setting overrides one farther up.
+File overrides are relative to the directory containing their `sty.toml`.
+A nested checkout starts its own policy. Outside Git, configuration begins at
+the Bazel workspace root.
+
+An external stub package label such as `@rules_foo_stubs//:stubs.toml` resolves
+through each workspace's own repository mapping. Declare that dependency in
+each workspace that inherits it. A nearer `stub-packages` list replaces the
+inherited list; `stub-packages = []` clears it. Local manifests, direct
+`[type-interfaces]` mappings and `[bazel].builtins` belong to the Bazel
+workspace that declares them.
+
 ### Requiring annotations
 
 Projects can require type contracts at function boundaries:

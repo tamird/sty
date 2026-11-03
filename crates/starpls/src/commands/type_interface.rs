@@ -58,14 +58,15 @@ impl TypeInterfaceOptions {
         workspace: &Path,
         overrides: &[super::project_config::ConfigOverride],
     ) -> anyhow::Result<PreparedInterfaces> {
-        let super::project_config::ProjectConfig {
+        let super::project_config::WorkspaceConfig {
+            stub_config,
             stub_packages,
             type_interfaces,
             rules,
             overrides: file_overrides,
             mut analysis,
             bazel,
-        } = super::project_config::ProjectConfig::load(loader, workspace)?;
+        } = super::project_config::WorkspaceConfig::load(loader, workspace)?;
         for override_ in overrides {
             override_.apply_analysis(&mut analysis);
         }
@@ -76,7 +77,8 @@ impl TypeInterfaceOptions {
             )
         };
         let select_rules = |local: &[&BTreeMap<String, String>]| {
-            let layers = std::iter::once(&rules)
+            let layers = rules
+                .iter()
                 .chain(local.iter().copied())
                 .chain(overrides.iter().map(|override_| &override_.rules));
             let mut selection =
@@ -87,7 +89,7 @@ impl TypeInterfaceOptions {
             anyhow::Ok(selection)
         };
         let rules = select_rules(&[])?;
-        let mut registrations = super::stub_package::load(loader, workspace, stub_packages)?;
+        let mut registrations = super::stub_package::load(loader, &stub_config, stub_packages)?;
         let mut labels = Vec::new();
         let external_source = |name: &str| {
             loader.prepare_repository_mappings(&[String::new()]);

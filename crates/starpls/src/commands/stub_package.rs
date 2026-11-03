@@ -21,6 +21,12 @@ pub(super) struct StubPackage {
     allow_unversioned: bool,
 }
 
+impl StubPackage {
+    pub(super) fn is_external(&self) -> bool {
+        self.manifest.starts_with('@') && !self.manifest.trim_start_matches('@').starts_with("//")
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 struct Manifest {
@@ -63,10 +69,10 @@ pub(super) struct Registration {
 
 pub(super) fn load(
     loader: &DefaultFileLoader,
-    workspace: &Path,
+    config: &Path,
     stub_packages: Vec<StubPackage>,
 ) -> anyhow::Result<Vec<Registration>> {
-    let path = workspace.join("sty.toml");
+    let workspace = &loader.main_repository().root;
     let mut packages = stub_packages
         .into_iter()
         .map(|selection| {
@@ -75,7 +81,7 @@ pub(super) fn load(
                     format!(
                         "stub package {:?} in {}",
                         selection.manifest,
-                        path.display()
+                        config.display()
                     )
                 })?;
             Ok(Package {
@@ -87,14 +93,14 @@ pub(super) fn load(
         .collect::<anyhow::Result<Vec<_>>>()?;
     fetch_repositories(
         loader,
-        &path,
+        config,
         packages
             .iter()
             .map(|package| (package, &package.repository)),
     )?;
     let manifests = packages
         .iter_mut()
-        .map(|package| read_manifest(loader, package).with_context(|| package.context(&path)))
+        .map(|package| read_manifest(loader, package).with_context(|| package.context(config)))
         .collect::<anyhow::Result<Vec<_>>>()?;
     let mappings = packages
         .iter()
@@ -149,12 +155,12 @@ pub(super) fn load(
                         })
                         .transpose()
                 })
-                .with_context(|| package.context(&path))
+                .with_context(|| package.context(config))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     fetch_repositories(
         loader,
-        &path,
+        config,
         packages
             .iter()
             .zip(&sources)
@@ -164,7 +170,7 @@ pub(super) fn load(
     for ((package, manifest), source) in packages.iter().zip(manifests).zip(sources) {
         let source = source.as_ref().unwrap_or(&package.repository);
         let registrations = register_files(loader, package, manifest.files, source)
-            .with_context(|| package.context(&path))?;
+            .with_context(|| package.context(config))?;
         files.extend(registrations);
     }
     Ok(files)
@@ -420,7 +426,7 @@ mod tests {
             sender,
             true,
         );
-        let error = super::load(&loader, &root, packages).unwrap_err();
+        let error = super::load(&loader, &root.join("sty.toml"), packages).unwrap_err();
         let message = format!("{error:#}");
         assert!(message.contains("first.toml"), "{message}");
         assert!(message.contains("selected version 2"), "{message}");
@@ -629,8 +635,10 @@ mod tests {
                 bzlmod,
             );
             let config =
-                crate::commands::project_config::ProjectConfig::load(&loader, &workspace).unwrap();
-            let registrations = super::load(&loader, &workspace, config.stub_packages).unwrap();
+                crate::commands::project_config::WorkspaceConfig::load(&loader, &workspace)
+                    .unwrap();
+            let registrations =
+                super::load(&loader, &config.stub_config, config.stub_packages).unwrap();
             assert_eq!(
                 registrations
                     .iter()
@@ -695,8 +703,10 @@ mod tests {
                 .unwrap()
                 .insert("rules_two".into(), "source fetch failed".into());
             let config =
-                crate::commands::project_config::ProjectConfig::load(&loader, &workspace).unwrap();
-            let error = super::load(&loader, &workspace, config.stub_packages).unwrap_err();
+                crate::commands::project_config::WorkspaceConfig::load(&loader, &workspace)
+                    .unwrap();
+            let error =
+                super::load(&loader, &config.stub_config, config.stub_packages).unwrap_err();
             let message = format!("{error:#}");
             assert!(message.contains("@@stubs_two//:stubs.toml"), "{message}");
             assert!(message.contains("source fetch failed"), "{message}");

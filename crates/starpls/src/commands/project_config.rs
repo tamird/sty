@@ -12,7 +12,7 @@ use crate::document::DefaultFileLoader;
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(super) struct ProjectConfig {
     #[serde(default)]
-    pub stub_packages: Vec<super::stub_package::StubPackage>,
+    pub stub_packages: Option<Vec<super::stub_package::StubPackage>>,
     #[serde(default)]
     pub type_interfaces: BTreeMap<PathBuf, PathBuf>,
     #[serde(default)]
@@ -28,6 +28,8 @@ pub(super) struct ProjectConfig {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct FileOverride {
+    #[serde(skip)]
+    directory: PathBuf,
     include: Vec<String>,
     rules: BTreeMap<String, String>,
 }
@@ -40,7 +42,17 @@ impl FileOverride {
         mut external_source: impl FnMut(&str) -> anyhow::Result<PathBuf>,
     ) -> anyhow::Result<BTreeMap<PathBuf, Vec<&'a BTreeMap<String, String>>>> {
         let mut by_file = BTreeMap::<_, Vec<_>>::new();
-        for Self { include, rules } in overrides {
+        for Self {
+            directory,
+            include,
+            rules,
+        } in overrides
+        {
+            let base = if directory.as_os_str().is_empty() {
+                workspace
+            } else {
+                directory
+            };
             anyhow::ensure!(
                 !include.is_empty(),
                 "overrides.include requires at least one file"
@@ -72,7 +84,7 @@ impl FileOverride {
                             )),
                         "overrides.include expects an exact workspace-relative file, got {name:?}"
                     );
-                    starpls_common::absolute_path(&workspace.join(path))?
+                    starpls_common::absolute_path(&base.join(path))?
                 };
                 by_file.entry(path).or_default().push(rules);
             }
@@ -132,15 +144,17 @@ impl FromStr for ConfigOverride {
 
 impl ConfigOverride {
     pub(super) fn apply_analysis(&self, config: &mut AnalysisOptions) {
+        self.analysis.apply_to(config);
+    }
+}
+
+impl AnalysisOptions {
+    fn apply_to(&self, config: &mut Self) {
         let Self {
-            rules: _,
-            analysis:
-                AnalysisOptions {
-                    strict_generic_narrowing,
-                    widen_singleton_collection_elements,
-                    require_valid_suppressions,
-                    static_json_decode,
-                },
+            strict_generic_narrowing,
+            widen_singleton_collection_elements,
+            require_valid_suppressions,
+            static_json_decode,
         } = self;
         if let Some(value) = strict_generic_narrowing {
             config.strict_generic_narrowing = Some(*value);
@@ -157,21 +171,73 @@ impl ConfigOverride {
     }
 }
 
-impl ProjectConfig {
+/// Per-workspace inputs plus policy from the enclosing checkout.
+#[derive(Default)]
+pub(super) struct WorkspaceConfig {
+    pub rules: Vec<BTreeMap<String, String>>,
+    pub overrides: Vec<FileOverride>,
+    pub analysis: AnalysisOptions,
+    pub bazel: BazelOptions,
+    pub type_interfaces: BTreeMap<PathBuf, PathBuf>,
+    pub stub_packages: Vec<super::stub_package::StubPackage>,
+    pub stub_config: PathBuf,
+}
+
+impl WorkspaceConfig {
     pub(super) fn load(loader: &DefaultFileLoader, workspace: &Path) -> anyhow::Result<Self> {
-        let path = workspace.join("sty.toml");
-        loader.watch_manifest(&path);
-        let contents = match loader.read_manifest(&path) {
-            Ok(contents) => contents,
-            Err(error) => {
-                if error.kind() == std::io::ErrorKind::NotFound {
-                    return Ok(Self::default());
+        // A submodule and a linked worktree each have their own .git file.
+        // Outside a checkout, only the Bazel workspace owns configuration.
+        let root = workspace
+            .ancestors()
+            .find(|dir| dir.join(".git").exists())
+            .unwrap_or(workspace);
+        let directories: Vec<_> = workspace
+            .ancestors()
+            .take_while(|dir| dir.starts_with(root))
+            .collect();
+        let mut result = Self::default();
+        for directory in directories.into_iter().rev() {
+            let path = directory.join("sty.toml");
+            // read_manifest also watches missing files for creation in the editor.
+            let contents = match loader.read_manifest(&path) {
+                Ok(contents) => contents,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| format!("cannot read {}", path.display()))
                 }
-                return Err(error).with_context(|| format!("cannot read {}", path.display()));
+            };
+            let context = || format!("invalid configuration {}", path.display());
+            let ProjectConfig {
+                rules,
+                mut overrides,
+                analysis,
+                bazel,
+                type_interfaces,
+                stub_packages,
+            } = toml::from_str(&contents).with_context(context)?;
+            starpls_ide::DiagnosticRules::from_settings(&rules).with_context(context)?;
+            result.rules.push(rules);
+            analysis.apply_to(&mut result.analysis);
+            for override_ in &mut overrides {
+                override_.directory = directory.to_path_buf();
             }
-        };
-        toml::from_str(&contents)
-            .with_context(|| format!("invalid configuration {}", path.display()))
+            result.overrides.extend(overrides);
+            let local = directory == workspace;
+            if let Some(mut packages) = stub_packages {
+                // Local manifests and // labels describe the declaring workspace.
+                // Apparent external names resolve through each workspace's MODULE.
+                if !local {
+                    packages.retain(super::stub_package::StubPackage::is_external);
+                }
+                result.stub_config = path;
+                result.stub_packages = packages;
+            }
+            if local {
+                result.bazel = bazel;
+                result.type_interfaces = type_interfaces;
+            }
+        }
+        Ok(result)
     }
 }
 
@@ -180,6 +246,87 @@ mod tests {
     use std::path::Path;
 
     use super::FileOverride;
+
+    #[test]
+    fn nested_workspaces_share_policy_within_the_checkout() {
+        use std::fs;
+        use std::sync::Arc;
+
+        use crate::document::source_tests::TestBazelClient;
+        use crate::document::DefaultFileLoader;
+
+        let outside = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("nested-config");
+        let repo = outside.join("checkout");
+        let workspace = repo.join("plugins/gazelle");
+        fs::create_dir_all(&workspace).unwrap();
+        fs::write(repo.join(".git"), "gitdir: ../linked-worktree").unwrap();
+        fs::write(outside.join("sty.toml"), "invalid!").unwrap();
+        fs::write(
+            repo.join("sty.toml"),
+            r#"
+            [rules]
+            strict = "error"
+            [analysis]
+            require-valid-suppressions = true
+            static-json-decode = true
+            [bazel]
+            builtins = "root-only.bzli"
+            [type-interfaces]
+            "defs.bzl" = "defs.bzli"
+            [[overrides]]
+            include = ["plugins/gazelle/defs.bzl"]
+            [overrides.rules]
+            non-static-type = "warn"
+            [[stub-packages]]
+            manifest = "@common//:stubs.toml"
+            [[stub-packages]]
+            manifest = "//local:stubs.toml"
+        "#,
+        )
+        .unwrap();
+        let (sender, _) = crossbeam_channel::unbounded();
+        let loader = DefaultFileLoader::new(
+            Arc::new(TestBazelClient::default()),
+            workspace.clone(),
+            None,
+            None,
+            sender,
+            false,
+        );
+        let load = || super::WorkspaceConfig::load(&loader, &workspace).unwrap();
+        let config = load();
+        assert_eq!(config.rules[0]["strict"], "error");
+        assert_eq!(config.stub_packages.len(), 1);
+        assert_eq!(config.stub_config, repo.join("sty.toml"));
+        assert!(config.type_interfaces.is_empty());
+        assert!(config.bazel.builtins.is_none());
+        assert_eq!(config.overrides[0].directory, repo);
+        assert!(loader
+            .configuration_inputs()
+            .contains_key(&workspace.join("sty.toml")));
+        fs::write(
+            workspace.join("sty.toml"),
+            r#"
+            stub-packages = []
+            [rules]
+            non-static-type = "warn"
+            [analysis]
+            static-json-decode = false
+        "#,
+        )
+        .unwrap();
+        let config = load();
+        assert_eq!(config.rules.len(), 2);
+        assert_eq!(config.rules[1]["non-static-type"], "warn");
+        assert_eq!(config.analysis.require_valid_suppressions, Some(true));
+        assert_eq!(config.analysis.static_json_decode, Some(false));
+        assert!(config.stub_packages.is_empty());
+        fs::create_dir(workspace.join(".git")).unwrap();
+        let isolated = load();
+        assert_eq!(isolated.rules.len(), 1);
+        assert_eq!(isolated.analysis.require_valid_suppressions, None);
+    }
 
     #[test]
     fn file_rule_overrides_reject_nonliteral_or_escaping_paths() {
@@ -193,6 +340,7 @@ mod tests {
             "@//:defs.bzl",
         ] {
             let setting = FileOverride {
+                directory: Default::default(),
                 include: vec![name.to_owned()],
                 rules: [("strict".to_owned(), "warn".to_owned())].into(),
             };
