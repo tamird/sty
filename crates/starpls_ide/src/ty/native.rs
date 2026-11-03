@@ -1271,6 +1271,24 @@ fn declarations(
                 "        def __len__(self) -> _starpls_builtins.int: ..."
             )?;
         }
+        if dialect == Dialect::Bazel
+            && class.name == "ExecGroupCollection"
+            && classes.contains_key("ExecGroupContext")
+        {
+            // StarlarkExecGroupCollection casts both index and membership keys to group names.
+            for (method, result) in [
+                ("__getitem__", "_starpls_types.ExecGroupContext"),
+                ("__contains__", "_starpls_builtins.bool"),
+            ] {
+                if !class.field.iter().any(|field| field.name == method) {
+                    names.insert(method);
+                    writeln!(
+                        body,
+                        "        def {method}(self, name: _starpls_builtins.str) -> {result}: ..."
+                    )?;
+                }
+            }
+        }
         if class.name == "ToolchainContext" {
             names.extend(["__getitem__", "__contains__"]);
             writeln!(
@@ -10307,7 +10325,10 @@ def shadowed() -> Configured: ...
         analysis
             .set_builtin_defs(builtins, Default::default())
             .unwrap();
-        let source = r#"def inspect(toolchains: ToolchainContext, key: ToolchainTypeInfo, target: Target, ctx: repository_ctx):
+        let source = r#"def inspect(toolchains: ToolchainContext, key: ToolchainTypeInfo, target: Target, ctx: repository_ctx, rule_ctx: ctx):
+    group: ExecGroupContext = rule_ctx.exec_groups["test"]
+    group_toolchains: ToolchainContext = group.toolchains
+    has_test: bool = "test" in rule_ctx.exec_groups
     toolchains["//:toolchain"]
     toolchains[Label("//:toolchain")]
     toolchains[key]
@@ -10332,7 +10353,7 @@ def shadowed() -> Configured: ...
     ctx.repo_metadata(attrs_for_reproducibility={"checksum": "abc", "count": 1})
     attrs = {"checksum": "abc"}
     ctx.repo_metadata(attrs_for_reproducibility=attrs)
-    (available, selected, setting, metadata, variables, selected_variables, visibility)
+    (available, selected, setting, metadata, variables, selected_variables, visibility, group_toolchains, has_test)
 "#;
         let file = analysis
             .open_document(
@@ -10346,6 +10367,9 @@ def shadowed() -> Configured: ...
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         for invalid in [
+            "rule_ctx.exec_groups[42]",
+            "42 in rule_ctx.exec_groups",
+            "_wrong: str = rule_ctx.exec_groups['test']; _wrong",
             "toolchains[42]",
             "42 in toolchains",
             "platform_common.ToolchainInfo(42)",
