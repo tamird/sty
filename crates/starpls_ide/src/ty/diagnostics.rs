@@ -1,6 +1,8 @@
 //! Starlark diagnostic policy over Ty's inference, bindings, and reachability facts.
 
 use std::collections::BTreeMap;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use ruff_db::diagnostic::Annotation;
@@ -179,28 +181,7 @@ impl DiagnosticRules {
         layers: impl IntoIterator<Item = &'a BTreeMap<String, String>>,
     ) -> anyhow::Result<Self> {
         let mut rules = Self::default();
-        for settings in layers {
-            if let Some(level) = settings.get(STRICT_RULE_GROUP) {
-                let severity = parse_rule_level(STRICT_RULE_GROUP, level)?;
-                let lints = STY_STRICT_LINTS.into_iter().map(LintId::of).chain(
-                    TY_STRICT_LINTS
-                        .into_iter()
-                        .map(|name| registry().get(name).expect("ty registers strict lints")),
-                );
-                for lint in lints {
-                    rules.set_severity(lint, severity);
-                }
-            }
-            for (name, level) in settings {
-                if name == STRICT_RULE_GROUP {
-                    continue;
-                }
-                let lint = registry()
-                    .get(name)
-                    .map_err(|error| anyhow::anyhow!("invalid rule {name:?}: {error}"))?;
-                rules.set_severity(lint, parse_rule_level(name, level)?);
-            }
-        }
+        RuleOverrides::new(layers)?.apply(&mut rules);
         Ok(rules)
     }
 
@@ -236,6 +217,129 @@ impl DiagnosticRules {
     }
 }
 
+/// Validated rule changes, applied in declaration order.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct RuleOverrides(Vec<(LintId, Option<Severity>)>);
+
+impl RuleOverrides {
+    fn new<'a>(
+        layers: impl IntoIterator<Item = &'a BTreeMap<String, String>>,
+    ) -> anyhow::Result<Self> {
+        let mut changes = Self::default();
+        for settings in layers {
+            if let Some(level) = settings.get(STRICT_RULE_GROUP) {
+                let severity = parse_rule_level(STRICT_RULE_GROUP, level)?;
+                let lints = STY_STRICT_LINTS.into_iter().map(LintId::of).chain(
+                    TY_STRICT_LINTS
+                        .into_iter()
+                        .map(|name| registry().get(name).expect("ty registers strict lints")),
+                );
+                for lint in lints {
+                    changes.0.push((lint, severity));
+                }
+            }
+            for (name, level) in settings {
+                if name == STRICT_RULE_GROUP {
+                    continue;
+                }
+                let lint = registry()
+                    .get(name)
+                    .map_err(|error| anyhow::anyhow!("invalid rule {name:?}: {error}"))?;
+                changes.0.push((lint, parse_rule_level(name, level)?));
+            }
+        }
+        Ok(changes)
+    }
+
+    fn apply(&self, rules: &mut DiagnosticRules) {
+        for &(lint, severity) in &self.0 {
+            rules.set_severity(lint, severity);
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RulePath {
+    Exact(PathBuf),
+    Glob(PathBuf, glob::Pattern),
+}
+
+impl RulePath {
+    pub fn pattern(directory: &Path, pattern: &str) -> anyhow::Result<Self> {
+        let pattern = glob::Pattern::new(pattern)?;
+        Ok(Self::Glob(directory.to_owned(), pattern))
+    }
+
+    fn matches(&self, path: &Path) -> bool {
+        match self {
+            Self::Exact(exact) => path == exact,
+            Self::Glob(directory, pattern) => path.strip_prefix(directory).is_ok_and(|relative| {
+                pattern.matches_path_with(
+                    relative,
+                    glob::MatchOptions {
+                        require_literal_separator: true,
+                        ..glob::MatchOptions::new()
+                    },
+                )
+            }),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct FileRuleOverrides {
+    layers: Vec<(Vec<RulePath>, RuleOverrides)>,
+    cli: RuleOverrides,
+}
+
+impl FileRuleOverrides {
+    pub(super) fn is_empty(&self) -> bool {
+        self.layers.is_empty()
+    }
+
+    pub fn push(
+        &mut self,
+        paths: Vec<RulePath>,
+        settings: &BTreeMap<String, String>,
+    ) -> anyhow::Result<()> {
+        self.layers.push((paths, RuleOverrides::new([settings])?));
+        Ok(())
+    }
+
+    pub fn set_cli<'a>(
+        &mut self,
+        layers: impl IntoIterator<Item = &'a BTreeMap<String, String>>,
+    ) -> anyhow::Result<()> {
+        self.cli = RuleOverrides::new(layers)?;
+        Ok(())
+    }
+
+    fn select(&self, path: &Path, defaults: &DiagnosticRules) -> Option<DiagnosticRules> {
+        let mut selected = None;
+        for (paths, changes) in &self.layers {
+            if paths.iter().any(|pattern| pattern.matches(path)) {
+                changes.apply(selected.get_or_insert_with(|| defaults.clone()));
+            }
+        }
+        if let Some(rules) = &mut selected {
+            self.cli.apply(rules);
+        }
+        selected
+    }
+}
+
+#[salsa::tracked(returns(ref))]
+pub(super) fn file_rules(
+    db: &dyn super::interface::Db,
+    file: ruff_db::files::File,
+    settings: CheckSettings,
+) -> Option<DiagnosticRules> {
+    settings.file_rules(db).select(
+        file.path(db).as_system_path()?.as_std_path(),
+        settings.rules(db),
+    )
+}
+
 fn parse_rule_level(name: &str, level: &str) -> anyhow::Result<Option<Severity>> {
     Ok(match level {
         "ignore" => None,
@@ -252,7 +356,7 @@ pub(crate) struct CheckSettings {
     #[returns(ref)]
     pub rules: DiagnosticRules,
     #[returns(ref)]
-    pub file_rules: BTreeMap<std::path::PathBuf, DiagnosticRules>,
+    pub file_rules: FileRuleOverrides,
     #[returns(ref)]
     pub analysis: crate::ty::FileAnalysisSettings,
     pub static_json_decode: bool,

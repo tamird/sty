@@ -2627,6 +2627,7 @@ dependencies = [
  "dashmap 5.5.3",
  "expect-test",
  "get-size2",
+ "glob",
  "log",
  "ruff_db",
  "ruff_python_ast",

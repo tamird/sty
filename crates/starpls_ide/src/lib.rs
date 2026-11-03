@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::panic;
 use std::path::PathBuf;
@@ -58,6 +57,8 @@ pub use crate::signature_help::SignatureInfo;
 pub use crate::ty::load::LoadDependency;
 pub use crate::ty::load::LoadResolution;
 pub use crate::ty::DiagnosticRules;
+pub use crate::ty::FileRuleOverrides;
+pub use crate::ty::RulePath;
 
 mod build_targets;
 mod completions;
@@ -310,7 +311,7 @@ impl Analysis {
             .to(rules);
     }
 
-    pub fn set_file_rules(&mut self, rules: BTreeMap<PathBuf, DiagnosticRules>) {
+    pub fn set_file_rules(&mut self, rules: FileRuleOverrides) {
         self.db
             .check_settings
             .expect("database initialization is complete")
@@ -368,7 +369,7 @@ impl Analysis {
         db.check_settings = Some(ty::CheckSettings::new(
             &db,
             DiagnosticRules::default(),
-            BTreeMap::new(),
+            FileRuleOverrides::default(),
             ty::FileAnalysisSettings::default(),
             false,
         ));

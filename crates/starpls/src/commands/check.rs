@@ -1703,7 +1703,7 @@ invalid-return-type = "warn"
 missing-type-argument = "ignore"
 
 [[overrides]]
-include = ["./defs.bzl"]
+include = ["./d*.bzl"]
 [overrides.rules]
 missing-type-argument = "warn"
 "#;

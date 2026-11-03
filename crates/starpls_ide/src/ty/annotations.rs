@@ -189,7 +189,18 @@ mod tests {
         let file = fixture.main_file();
         assert!(analysis.snapshot().diagnostics(file).unwrap().is_empty());
         let path = analysis.snapshot().path(file).to_owned();
-        analysis.set_file_rules([(path, rules("warn"))].into());
+        let mut overrides = crate::FileRuleOverrides::default();
+        overrides
+            .push(
+                vec![crate::RulePath::Exact(path)],
+                &[
+                    ("missing-parameter-annotation".into(), "warn".into()),
+                    ("missing-return-annotation".into(), "warn".into()),
+                ]
+                .into(),
+            )
+            .unwrap();
+        analysis.set_file_rules(overrides);
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 2);
         assert!(diagnostics

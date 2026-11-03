@@ -1,5 +1,4 @@
 use std::collections::hash_map::Entry;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -76,19 +75,11 @@ impl TypeInterfaceOptions {
                 workspace.join("sty.toml").display()
             )
         };
-        let select_rules = |local: &[&BTreeMap<String, String>]| {
-            let layers = rules
-                .iter()
-                .chain(local.iter().copied())
-                .chain(overrides.iter().map(|override_| &override_.rules));
-            let mut selection =
-                starpls_ide::DiagnosticRules::from_layers(layers).with_context(context)?;
-            selection.set_require_valid_suppressions(
-                analysis.require_valid_suppressions.unwrap_or(false),
-            );
-            anyhow::Ok(selection)
-        };
-        let rules = select_rules(&[])?;
+        let layers = rules
+            .iter()
+            .chain(overrides.iter().map(|override_| &override_.rules));
+        let mut rules = starpls_ide::DiagnosticRules::from_layers(layers).with_context(context)?;
+        rules.set_require_valid_suppressions(analysis.require_valid_suppressions.unwrap_or(false));
         let mut registrations = super::stub_package::load(loader, &stub_config, stub_packages)?;
         let mut labels = Vec::new();
         let external_source = |name: &str| {
@@ -105,16 +96,12 @@ impl TypeInterfaceOptions {
             labels.push((path.clone(), label));
             Ok(path)
         };
-        let mut file_rules = BTreeMap::new();
-        for (path, layers) in super::project_config::FileOverride::by_file(
-            &file_overrides,
-            workspace,
-            external_source,
-        )
-        .with_context(context)?
-        {
-            file_rules.insert(path, select_rules(&layers)?);
-        }
+        let mut file_rules =
+            super::project_config::FileOverride::by_file(&file_overrides, external_source)
+                .with_context(context)?;
+        file_rules
+            .set_cli(overrides.iter().map(|override_| &override_.rules))
+            .with_context(context)?;
         let resolve = |path: &Path| -> anyhow::Result<PathBuf> {
             let path = workspace.join(path);
             match loader.repository_for_path(&path)? {
@@ -207,7 +194,7 @@ impl TypeInterfaceOptions {
 pub(crate) struct PreparedInterfaces {
     registrations: Vec<Registration>,
     rules: starpls_ide::DiagnosticRules,
-    file_rules: BTreeMap<PathBuf, starpls_ide::DiagnosticRules>,
+    file_rules: starpls_ide::FileRuleOverrides,
     labels: Vec<(PathBuf, BazelInput)>,
     analysis: super::project_config::AnalysisOptions,
     builtin_extension: Option<(PathBuf, String)>,

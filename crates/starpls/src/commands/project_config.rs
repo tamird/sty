@@ -35,24 +35,17 @@ pub(super) struct FileOverride {
 }
 
 impl FileOverride {
-    /// Group layers by exact source path so checking a file needs only a lookup.
-    pub(super) fn by_file<'a>(
-        overrides: &'a [Self],
-        workspace: &Path,
+    pub(super) fn by_file(
+        overrides: &[Self],
         mut external_source: impl FnMut(&str) -> anyhow::Result<PathBuf>,
-    ) -> anyhow::Result<BTreeMap<PathBuf, Vec<&'a BTreeMap<String, String>>>> {
-        let mut by_file = BTreeMap::<_, Vec<_>>::new();
+    ) -> anyhow::Result<starpls_ide::FileRuleOverrides> {
+        let mut layers = starpls_ide::FileRuleOverrides::default();
         for Self {
-            directory,
             include,
             rules,
+            directory,
         } in overrides
         {
-            let base = if directory.as_os_str().is_empty() {
-                workspace
-            } else {
-                directory
-            };
             anyhow::ensure!(
                 !include.is_empty(),
                 "overrides.include requires at least one file"
@@ -61,35 +54,50 @@ impl FileOverride {
                 !rules.is_empty(),
                 "overrides.rules requires at least one rule"
             );
+            let mut paths = Vec::new();
             for name in include {
-                anyhow::ensure!(
-                    !name.contains(['*', '?', '[', ']', '\\', '\0']),
-                    "overrides.include expects a literal file, got {name:?}"
-                );
+                let metacharacters = name.contains(['*', '?', '[', ']']);
                 let path = if name.starts_with('@') {
                     anyhow::ensure!(
-                        !name.starts_with("@@") && !name.starts_with("@//"),
-                        "expected an apparent Bazel repository in {name:?}"
+                        !metacharacters
+                            && !name.contains(['\\', '\0'])
+                            && !name.starts_with("@@")
+                            && !name.starts_with("@//"),
+                        "expected an apparent Bazel repository and a literal file in {name:?}"
                     );
-                    external_source(name)?
+                    starpls_ide::RulePath::Exact(external_source(name)?)
                 } else {
                     let path = Path::new(name);
                     anyhow::ensure!(
-                        !name.contains(':')
+                        !name.contains([':', '\\', '\0'])
                             && !name.ends_with('/')
                             && path.file_name().is_some()
                             && path.components().all(|part| matches!(
                                 part,
                                 std::path::Component::Normal(_) | std::path::Component::CurDir
                             )),
-                        "overrides.include expects an exact workspace-relative file, got {name:?}"
+                        "overrides.include expects a workspace-relative path, got {name:?}"
                     );
-                    starpls_common::absolute_path(&base.join(path))?
+                    if metacharacters {
+                        let normalized = name
+                            .split('/')
+                            .filter(|part| !part.is_empty() && *part != ".")
+                            .collect::<Vec<_>>()
+                            .join("/");
+                        starpls_ide::RulePath::pattern(directory, &normalized).with_context(
+                            || format!("invalid overrides.include pattern {name:?}"),
+                        )?
+                    } else {
+                        starpls_ide::RulePath::Exact(starpls_common::absolute_path(
+                            &directory.join(path),
+                        )?)
+                    }
                 };
-                by_file.entry(path).or_default().push(rules);
+                paths.push(path);
             }
+            layers.push(paths, rules)?;
         }
-        Ok(by_file)
+        Ok(layers)
     }
 }
 
@@ -243,8 +251,6 @@ impl WorkspaceConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::FileOverride;
 
     #[test]
@@ -329,23 +335,22 @@ mod tests {
     }
 
     #[test]
-    fn file_rule_overrides_reject_nonliteral_or_escaping_paths() {
+    fn file_rule_overrides_reject_malformed_or_escaping_paths() {
         for name in [
             "../package/BUILD",
             "/BUILD",
-            "*.bzl",
+            "[broken.bzl",
             "foo/",
             "@rules//:*.bzl",
             "@@rules+//:defs.bzl",
             "@//:defs.bzl",
         ] {
             let setting = FileOverride {
-                directory: Default::default(),
+                directory: "/repo".into(),
                 include: vec![name.to_owned()],
                 rules: [("strict".to_owned(), "warn".to_owned())].into(),
             };
-            let error = FileOverride::by_file(&[setting], Path::new("/repo"), |_| unreachable!())
-                .unwrap_err();
+            let error = FileOverride::by_file(&[setting], |_| unreachable!()).unwrap_err();
             assert!(error.to_string().contains(name));
         }
     }

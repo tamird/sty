@@ -50,6 +50,8 @@ mod support;
 pub(crate) use diagnostics::check;
 pub(crate) use diagnostics::CheckSettings;
 pub use diagnostics::DiagnosticRules;
+pub use diagnostics::FileRuleOverrides;
+pub use diagnostics::RulePath;
 pub(crate) use factory::Documentation;
 pub(crate) use repository_rule::dependencies as repository_rule_dependencies;
 pub(crate) use support::file_system;
@@ -884,11 +886,13 @@ impl ty_python_semantic::Db for Database {
         let settings = self
             .check_settings
             .expect("database initialization is complete");
-        let rules = file
-            .path(self)
-            .as_system_path()
-            .and_then(|path| settings.file_rules(self).get(path.as_std_path()))
-            .unwrap_or_else(|| settings.rules(self));
+        let rules = if settings.file_rules(self).is_empty() {
+            settings.rules(self)
+        } else {
+            diagnostics::file_rules(self, file, settings)
+                .as_ref()
+                .unwrap_or_else(|| settings.rules(self))
+        };
         rules.selection(self.environment().options(self).use_code_flow_analysis)
     }
 
