@@ -110,6 +110,7 @@ pub enum SyntaxKind {
     PATH_SEGMENT,
 
     IGNORE_TYPE,
+    TYPE_PARAMETERS,            // [T: Bound = Default] before a function signature
     FUNCTION_TYPE,              // e.g. (int, int) -> int
     PARAMETER_TYPES,            // the (int, int) in the signature above
     SIMPLE_PARAMETER_TYPE,      // int

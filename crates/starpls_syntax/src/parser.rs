@@ -95,6 +95,49 @@ pub struct TypeComment {
     pub parsed: ParseTree<crate::ast::TypeComment>,
 }
 
+impl TypeComment {
+    /// Locate part of this comment's syntax tree in its original file.
+    pub fn source_range(
+        &self,
+        node: &impl crate::ast::AstNode<Language = StarlarkLanguage>,
+    ) -> ruff_text_size::TextRange {
+        let range = node.syntax().text_range();
+        ruff_text_size::TextRange::new(
+            self.range.start() + ruff_text_size::TextSize::from(u32::from(range.start())),
+            self.range.start() + ruff_text_size::TextSize::from(u32::from(range.end())),
+        )
+    }
+
+    /// A function signature comment belongs between the suite colon and its first statement.
+    pub fn for_function<'a>(
+        comments: &'a [Self],
+        tokens: &ruff_python_ast::token::Tokens,
+        function: &ruff_python_ast::StmtFunctionDef,
+    ) -> Option<&'a Self> {
+        use ruff_text_size::Ranged;
+        let suite = crate::source::suite_range(
+            tokens,
+            &function.body,
+            function.parameters.end(),
+            function.end(),
+            None,
+        )?;
+        let end = function
+            .body
+            .first()
+            .map_or(suite.end(), Ranged::start)
+            .max(suite.start());
+        let header = ruff_text_size::TextRange::new(suite.start(), end);
+        Self::first_in(comments, header)
+    }
+
+    pub fn first_in(comments: &[Self], range: ruff_text_size::TextRange) -> Option<&Self> {
+        comments
+            .get(comments.partition_point(|comment| comment.range.start() < range.start()))
+            .filter(|comment| range.contains_range(comment.range))
+    }
+}
+
 pub fn parse_type_comments(
     source: &str,
     tokens: &ruff_python_ast::token::Tokens,
@@ -154,7 +197,14 @@ pub fn parse_annotation(
     ruff_python_parser::Parsed<ruff_python_ast::ModExpression>,
     ruff_python_parser::ParseError,
 > {
-    use ruff_python_parser::parse_expression_range_with_options;
+    ruff_python_parser::parse_expression_range_with_options(
+        &comment_source(source, range),
+        range,
+        options,
+    )
+}
+
+pub(crate) fn comment_source(source: &str, range: ruff_text_size::TextRange) -> Cow<'_, str> {
     let mut projected = None;
     let mut offset = range.start().to_usize();
     for line in source[range].split_inclusive(['\r', '\n']) {
@@ -169,5 +219,5 @@ pub fn parse_annotation(
         }
         offset += line.len();
     }
-    parse_expression_range_with_options(projected.as_deref().unwrap_or(source), range, options)
+    projected.map_or(Cow::Borrowed(source), Cow::Owned)
 }

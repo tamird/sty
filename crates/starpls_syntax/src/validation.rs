@@ -312,7 +312,7 @@ impl Validator<'_> {
                     Some("A type alias comment may declare only one type")
                 } else if !top_level {
                     Some("Starlark type aliases must be top-level declarations")
-                } else if type_params.as_ref().is_some_and(|parameters| {
+                } else if !crate::comment_alias::is_alias(self.source, stmt.range()) && type_params.as_ref().is_some_and(|parameters| {
                     parameters.iter().any(|parameter| {
                         !matches!(parameter, py::TypeParam::TypeVar(variable) if variable.bound.is_none() && variable.default.is_none())
                     })
@@ -388,11 +388,15 @@ impl Validator<'_> {
                     }),
                     _ => false,
                 };
-                if *is_async
+                // Native binders precede the arguments; a signature comment follows them.
+                let native_type_params = type_params
+                    .as_ref()
+                    .is_some_and(|params| params.start() < parameters.start());
+                let invalid_header = *is_async
                     || !supported_decorators
-                    || (type_params.is_some() && self.annotation_mode != AnnotationMode::Interface)
-                    || (self.annotation_mode == AnnotationMode::Disabled && returns.is_some())
-                {
+                    || (native_type_params && self.annotation_mode != AnnotationMode::Interface)
+                    || (self.annotation_mode == AnnotationMode::Disabled && returns.is_some());
+                if invalid_header {
                     if let Some(decorator) = decorator_list.iter().find(|decorator| {
                         self.annotation_mode == AnnotationMode::Interface
                             && decorator
@@ -416,10 +420,7 @@ impl Validator<'_> {
                 }
                 let invalid_positional_only = self.annotation_mode != AnnotationMode::Interface
                     && self.reject_positional_only(parameters);
-                if *is_async
-                    || !supported_decorators
-                    || (type_params.is_some() && self.annotation_mode != AnnotationMode::Interface)
-                    || (self.annotation_mode == AnnotationMode::Disabled && returns.is_some())
+                if invalid_header
                     || invalid_positional_only
                     || (self.annotation_mode == AnnotationMode::Disabled
                         && parameters

@@ -117,9 +117,14 @@ impl TypeComment {
 
 ast_node! {
     TypeCommentBody => TYPE_COMMENT_BODY
+    child type_parameters -> TypeParameters;
     child type_ -> Type;
     child function_type -> FunctionType;
     child ignore -> IgnoreType;
+}
+
+ast_node! {
+    TypeParameters => TYPE_PARAMETERS
 }
 
 ast_node! {

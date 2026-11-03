@@ -15,10 +15,8 @@ use rustc_hash::FxHashSet;
 use starpls_common::Diagnostic;
 use starpls_common::File;
 use starpls_common::SourceMode;
-use starpls_syntax::ast::AstNode;
 use starpls_syntax::source::parameter_range;
 use starpls_syntax::source::string_value;
-use starpls_syntax::source::suite_range;
 use starpls_syntax::TypeComment;
 
 use crate::Db;
@@ -57,10 +55,7 @@ impl<'db> Source<'db> {
             if !matches!(between.trim_matches([' ', '\t']), "" | ",") {
                 return None;
             }
-            Some((
-                key,
-                comment_type_range(comment, &comment.parsed.tree().type_()?),
-            ))
+            Some((key, comment.source_range(&comment.parsed.tree().type_()?)))
         })
     }
 
@@ -180,21 +175,9 @@ struct SourceVisitor<'a> {
     info: SourceInfo,
 }
 
-fn comment_type_range(comment: &TypeComment, ty: &starpls_syntax::ast::Type) -> TextRange {
-    let range = ty.syntax().text_range();
-    TextRange::new(
-        comment.range.start() + TextSize::from(u32::from(range.start())),
-        comment.range.start() + TextSize::from(u32::from(range.end())),
-    )
-}
-
 impl<'a> SourceVisitor<'a> {
     fn comment_in(&self, range: TextRange) -> Option<&'a TypeComment> {
-        self.comments[self
-            .comments
-            .partition_point(|comment| comment.range.start() < range.start())..]
-            .first()
-            .filter(|comment| range.contains_range(comment.range))
+        TypeComment::first_in(self.comments, range)
     }
 
     fn leading_type(&self, start: TextSize) -> Option<(&'a TypeComment, TextRange)> {
@@ -211,7 +194,7 @@ impl<'a> SourceVisitor<'a> {
             return None;
         }
         let ty = comment.parsed.tree().type_()?;
-        Some((comment, comment_type_range(comment, &ty)))
+        Some((comment, comment.source_range(&ty)))
     }
 
     fn duplicate_annotation(&mut self, subject: &str, range: TextRange) {
@@ -279,9 +262,7 @@ impl<'a> SourceVisitor<'a> {
                         .and_then(|(_, range)| self.leading_type(range.start()))
                         .is_none_or(|(leading, _)| leading.range != comment.range)
                 })
-                .and_then(|comment| {
-                    Some(comment_type_range(comment, &comment.parsed.tree().type_()?))
-                });
+                .and_then(|comment| Some(comment.source_range(&comment.parsed.tree().type_()?)));
             let parameter = parameter.as_parameter();
             let annotation = self.annotation(
                 "parameter",
@@ -303,36 +284,19 @@ impl<'a> SourceVisitor<'a> {
         }
         match statement {
             py::Stmt::FunctionDef(function) => {
-                let suite = suite_range(
-                    self.tokens,
-                    &function.body,
-                    function.parameters.end(),
-                    function.end(),
-                    None,
-                );
-                let comment = suite.and_then(|range| {
-                    self.comment_in(TextRange::new(
-                        range.start(),
-                        function
-                            .body
-                            .first()
-                            .map_or(range.end(), Ranged::start)
-                            .max(range.start()),
-                    ))
-                });
+                let comment = TypeComment::for_function(self.comments, self.tokens, function);
                 let mut specification = Vec::new();
                 if let Some(comment) = comment {
                     if let Some(function_type) = comment.parsed.tree().function_type() {
                         if let Some(parameters) = function_type.parameter_types() {
                             specification.extend(parameters.types().map(|parameter| {
-                                parameter.type_().map(|ty| comment_type_range(comment, &ty))
+                                parameter.type_().map(|ty| comment.source_range(&ty))
                             }));
                         }
                         if let Some(ty) = function_type.ret_type() {
-                            self.info.annotations.insert(
-                                function.node_index().load(),
-                                comment_type_range(comment, &ty),
-                            );
+                            self.info
+                                .annotations
+                                .insert(function.node_index().load(), comment.source_range(&ty));
                         }
                     }
                 }
@@ -353,7 +317,7 @@ impl<'a> SourceVisitor<'a> {
                                 .parsed
                                 .tree()
                                 .type_()
-                                .map(|ty| comment_type_range(comment, &ty))
+                                .map(|ty| comment.source_range(&ty))
                         });
                     if let Some(range) =
                         self.annotation("assignment", assignment.start(), trailing, false)

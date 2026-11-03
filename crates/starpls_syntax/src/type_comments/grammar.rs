@@ -210,6 +210,33 @@ pub(crate) fn path_segment(p: &mut Parser) {
 
 pub(crate) fn type_comment_body(p: &mut Parser) {
     let m = p.start();
+    if p.at(T!['[']) {
+        // A bracket list before a signature declares type parameters. Ruff
+        // parses the contents with its function type-parameter grammar.
+        let mut depth = 0;
+        let mut index = 0;
+        loop {
+            match p.nth(index) {
+                OPEN_BRACK => depth += 1,
+                CLOSE_BRACK => {
+                    depth -= 1;
+                    if depth == 0 {
+                        if p.nth_at(index + 1, OPEN_PAREN) {
+                            let parameters = p.start();
+                            for _ in 0..=index {
+                                p.bump_any();
+                            }
+                            parameters.complete(p, TYPE_PARAMETERS);
+                        }
+                        break;
+                    }
+                }
+                EOF => break,
+                _ => {}
+            }
+            index += 1;
+        }
+    }
     match p.current() {
         T![ignore] => {
             let m = p.start();

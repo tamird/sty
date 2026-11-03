@@ -81,6 +81,32 @@ sty resolves the alias in this file's type comments:
 PROFILES = [{"name": "client", "args": []}]  # type: list[Profile]
 ```
 
+A function signature comment can declare type parameters before its parameter
+list. The parameters are local to the function, just as in a generic `.bzli`
+signature:
+
+```starlark
+# type Keys[T: Hashable] = list[T]
+
+def first(keys):
+    # type: [T: Hashable](Keys[T]) -> T
+    return keys[0]
+```
+
+Here `first(["a"])` returns `str`; `first([42])` returns `int`. To put each
+parameter's type beside its declaration, use `(...)` in the signature comment:
+
+```starlark
+def identity(
+        value,  # type: T
+):
+    # type: [T](...) -> T
+    return value
+```
+
+The bracket list accepts the same bounds, defaults and parameter packs as a
+generic stub, including `[T: Hashable = Hashable]` and `[**P, R]`.
+
 A type used by one assignment can go immediately above the variable at the same
 indentation. A blank line or another comment separates it from the assignment.
 Use one annotation per assignment.

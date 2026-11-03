@@ -2,7 +2,7 @@ pub use rowan::TextRange;
 pub use rowan::TextSize;
 pub use rowan::TokenAtOffset;
 
-pub use crate::comment_alias::parse_module;
+pub use crate::comment_parameters::parse_module;
 pub use crate::parser::indentation;
 pub use crate::parser::parse_annotation;
 pub use crate::parser::parse_type_comments;
@@ -17,6 +17,7 @@ pub use crate::validation::AnnotationMode;
 
 pub mod ast;
 mod comment_alias;
+mod comment_parameters;
 mod lexical;
 mod parser;
 pub mod source;

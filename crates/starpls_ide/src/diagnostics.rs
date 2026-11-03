@@ -1441,6 +1441,83 @@ answer = identity(1)
     }
 
     #[test]
+    fn generic_function_type_comments() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let source = "\
+# type KeyList[K: Hashable = Hashable] = list[K]
+def first(keys):
+    # type: [
+    #     K: Hashable = Hashable,
+    # ](KeyList[K]) -> K
+    return keys[0]
+def identity(
+        value,  # type: T
+):
+    # type: [T](...) -> T
+    return value
+def exact(func):
+    # type: [**P, R](Callable[P, R]) -> Callable[P, R]
+    return func
+def takes_str(value):
+    # type: (str) -> str
+    return value
+";
+        let defs = fixture.add_file(&mut analysis.db, "//:defs.bzl", source);
+        let calls = "\
+load('//:defs.bzl', 'first', 'identity', 'exact', 'takes_str')
+a = first(['x'])  # type: str
+b = identity(1)  # type: int
+exact(takes_str)('x')
+";
+        let caller = fixture.add_file(&mut analysis.db, "//:caller.bzl", calls);
+        loader.add_files_from_fixture(&fixture);
+        for file in [defs, caller] {
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        analysis.update_file(
+            caller,
+            calls
+                .replace("first(['x'])", "first([1])")
+                .replace("identity(1)", "identity('x')")
+                .replace("takes_str)('x')", "takes_str)(1)"),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|d| d.id().as_str())
+                .collect::<Vec<_>>(),
+            [
+                "invalid-assignment",
+                "invalid-assignment",
+                "invalid-argument-type"
+            ],
+            "{diagnostics:?}"
+        );
+        for (source, id) in [
+            (
+                source.replace("return keys[0]", "return 1"),
+                "invalid-return-type",
+            ),
+            (
+                source.replace("(KeyList[K])", "(KeyList[Free])"),
+                "unresolved-reference",
+            ),
+            (source.replace("[T](...)", "[T:](...)"), "invalid-syntax"),
+            (format!("# type: [T](T) -> T\n{source}"), "invalid-syntax"),
+        ] {
+            analysis.update_file(defs, source);
+            let diagnostics = analysis.snapshot().diagnostics(defs).unwrap();
+            assert!(
+                diagnostics.iter().any(|d| d.id().as_str() == id),
+                "{id}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
     fn source_type_aliases_are_type_only() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
