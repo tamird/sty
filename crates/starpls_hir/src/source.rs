@@ -214,7 +214,7 @@ impl<'a> SourceVisitor<'a> {
         Some((comment, comment_type_range(comment, &ty)))
     }
 
-    fn duplicate_annotation(&mut self, range: TextRange) {
+    fn duplicate_annotation(&mut self, subject: &str, range: TextRange) {
         self.info.diagnostics.push(starpls_common::diagnostic(
             self.file,
             starpls_common::DiagnosticId::InvalidSyntax,
@@ -223,9 +223,29 @@ impl<'a> SourceVisitor<'a> {
                 u32::from(range.start()).into(),
                 u32::from(range.end()).into(),
             ),
-            "This assignment already has a type annotation",
+            format!("This {subject} already has a type annotation"),
             [],
         ));
+    }
+
+    fn annotation(
+        &mut self,
+        subject: &str,
+        start: TextSize,
+        trailing: Option<TextRange>,
+        declared: bool,
+    ) -> Option<TextRange> {
+        if let Some((comment, ty)) = self.leading_type(start) {
+            if declared || trailing.is_some() || self.leading_type(comment.range.start()).is_some()
+            {
+                self.duplicate_annotation(subject, ty);
+            }
+            return trailing.or(Some(ty));
+        }
+        if let Some(ty) = trailing.filter(|_| declared) {
+            self.duplicate_annotation(subject, ty);
+        }
+        trailing
     }
 
     fn parameters(&mut self, syntax: &py::Parameters, specification: &[Option<TextRange>]) {
@@ -248,23 +268,31 @@ impl<'a> SourceVisitor<'a> {
                 continue;
             };
             let specified_type = specification.next().copied().flatten();
-            let end = parameters
-                .get(index + 1)
-                .map_or(syntax.end(), |(_, range)| range.start());
-            let annotation = self
+            let next = parameters.get(index + 1);
+            let end = next.map_or(syntax.end(), |(_, range)| range.start());
+            let trailing = self
                 .comment_in(TextRange::new(range.end(), end.max(range.end())))
-                .and_then(|comment| {
-                    comment
-                        .parsed
-                        .tree()
-                        .type_()
-                        .map(|ty| comment_type_range(comment, &ty))
+                .filter(|comment| {
+                    // A standalone annotation immediately above the next parameter belongs
+                    // to it. Other comments before the next delimiter keep their owner.
+                    next.filter(|(parameter, _)| parameter.is_some())
+                        .and_then(|(_, range)| self.leading_type(range.start()))
+                        .is_none_or(|(leading, _)| leading.range != comment.range)
                 })
-                .or(specified_type);
-            if let Some(annotation) = annotation {
+                .and_then(|comment| {
+                    Some(comment_type_range(comment, &comment.parsed.tree().type_()?))
+                });
+            let parameter = parameter.as_parameter();
+            let annotation = self.annotation(
+                "parameter",
+                range.start(),
+                trailing,
+                parameter.annotation.is_some(),
+            );
+            if let Some(annotation) = annotation.or(specified_type) {
                 self.info
                     .annotations
-                    .insert(parameter.as_parameter().node_index().load(), annotation);
+                    .insert(parameter.node_index().load(), annotation);
             }
         }
     }
@@ -327,14 +355,9 @@ impl<'a> SourceVisitor<'a> {
                                 .type_()
                                 .map(|ty| comment_type_range(comment, &ty))
                         });
-                    let leading = self.leading_type(assignment.start());
-                    if let Some((comment, range)) = leading {
-                        if trailing.is_some() || self.leading_type(comment.range.start()).is_some()
-                        {
-                            self.duplicate_annotation(range);
-                        }
-                    }
-                    if let Some(range) = trailing.or(leading.map(|(_, range)| range)) {
+                    if let Some(range) =
+                        self.annotation("assignment", assignment.start(), trailing, false)
+                    {
                         self.info
                             .annotations
                             .insert(target.node_index().load(), range);
@@ -343,7 +366,7 @@ impl<'a> SourceVisitor<'a> {
             }
             py::Stmt::AnnAssign(assignment) => {
                 if let Some((_, range)) = self.leading_type(assignment.start()) {
-                    self.duplicate_annotation(range);
+                    self.duplicate_annotation("assignment", range);
                 }
             }
             py::Stmt::Expr(statement) => {
@@ -391,6 +414,41 @@ mod tests {
     use crate::test_database::TestDatabase;
 
     #[test]
+    fn duplicate_parameter_annotations() {
+        let source = r#"def f(
+    # type: int
+    a: str,
+    # type: bool
+    b,  # type: int
+    # type: list
+    # type: str
+    c,
+    d: str,  # type: float
+):
+    pass
+"#;
+        let mut db = TestDatabase::default();
+        let file = starpls_common::open_document(
+            &mut db,
+            std::path::Path::new("duplicates.bzl"),
+            starpls_common::Dialect::Bazel,
+            None,
+            source.to_owned(),
+            0,
+        )
+        .unwrap();
+        let diagnostics = &source_info(&db, file).diagnostics;
+        let duplicates: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                assert_eq!(diagnostic.id(), starpls_common::DiagnosticId::InvalidSyntax);
+                &source[diagnostic.primary_span().unwrap().range().unwrap()]
+            })
+            .collect();
+        assert_eq!(duplicates, ["int", "bool", "str", "float"]);
+    }
+
+    #[test]
     fn comments_keep_source_attachment_boundaries() {
         let mut db = TestDatabase::default();
         let file = starpls_common::open_document(
@@ -436,6 +494,28 @@ def f(
     pass
 "#,
                 vec![("b", "string"), ("x", "int"), ("y", "string")],
+            ),
+            (
+                r#"def f(
+    first,  # type: str
+    # type: int
+    second,
+    previous,
+    # type: bool
+
+    untyped,
+    # type: list[
+    #     str,
+    # ]
+    **kwargs):
+    pass
+"#,
+                vec![
+                    ("first", "str"),
+                    ("second", "int"),
+                    ("previous", "bool"),
+                    ("kwargs", "list[\n    #     str,\n    # ]"),
+                ],
             ),
             (
                 r#"def f(x, y):

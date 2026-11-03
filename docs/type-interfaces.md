@@ -93,6 +93,19 @@ Use one annotation per assignment.
 PROFILES = [{"name": "client", "args": []}]
 ```
 
+Put a parameter's type comment on its line or immediately above it at the
+same indentation. A comment immediately above a bare `*` still types the
+preceding parameter. The leading form works for the last parameter of a
+formatted declaration, including `**kwargs`:
+
+```starlark
+def wrapped(
+        name: str,
+        # type: Unpack[KeywordArgs[tool, "name"]]
+        **kwargs):
+    tool(name = name, **kwargs)
+```
+
 This body correspondence requires a unique top-level source function with the
 same parameter layout. Decorated functions and partially mixed source and stub
 generic annotations produce an `invalid-function-interface` diagnostic when
