@@ -982,6 +982,11 @@ Bazel's selected module name must equal `source.module`, and its selected
 version must appear in `source.versions`. Bazel dependency declarations specify
 minimum versions; compatibility is checked against the resolved module graph.
 
+For Bazel's own `@bazel_tools`, `versions` can name Bazel releases. sty checks
+the version reported by `bazel info release` when the source repository points
+to the running installation's `embedded_tools` directory. A repository override
+needs its own version or an explicit unversioned selection.
+
 When an explicit `[source]` table identifies a repository with no selected
 version, stubs in that same canonical repository are accepted as part of the
 selected artifact. A separate stub package requires `allow-unversioned = true`

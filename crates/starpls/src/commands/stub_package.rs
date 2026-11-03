@@ -285,12 +285,28 @@ fn source_repository(
     selected_modules: &mut SelectedModules,
 ) -> anyhow::Result<Repository> {
     let source_repository = loader.canonical_repository(source_repository)?;
-    let selected = loader.selected_module(&source_repository, selected_modules)?;
     let Source {
         repository: _,
         module,
         versions,
     } = source;
+    // Older manifests explicitly opt into Bzlmod's unversioned bazel_tools
+    // module. A versioned manifest can instead identify the installed tools.
+    if !versions.is_empty() {
+        if let Some(version) = loader.installed_tools_version(&source_repository) {
+            anyhow::ensure!(
+                module == "bazel_tools",
+                "installed Bazel tools cannot supply module {module:?}"
+            );
+            anyhow::ensure!(
+                versions.iter().any(|v| v == version),
+                "installed Bazel tools have version {version}, but the stub package accepts {}",
+                versions.join(", ")
+            );
+            return Ok(source_repository);
+        }
+    }
+    let selected = loader.selected_module(&source_repository, selected_modules)?;
     if let Some(selected) = selected {
         if selected.name != *module {
             bail!(
@@ -388,6 +404,65 @@ mod tests {
 
     use crate::document::source_tests::TestBazelClient;
     use crate::document::DefaultFileLoader;
+
+    #[cfg(unix)]
+    #[test]
+    fn only_installed_tools_take_the_running_bazel_version() {
+        use std::fs;
+        use std::os::unix::fs::symlink;
+
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("versioned-bazel-tools");
+        let install = root.join("install");
+        let tools = install.join("embedded_tools");
+        let external = root.join("external");
+        fs::create_dir_all(&tools).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        symlink(&tools, external.join("bazel_tools")).unwrap();
+        fs::write(
+            root.join("stubs.toml"),
+            r#"
+            format-version = 1
+            [source]
+            repository = "@@bazel_tools"
+            module = "bazel_tools"
+            versions = ["8.8.1"]
+            [files]
+        "#,
+        )
+        .unwrap();
+        let load = |release: &str| {
+            let (sender, _) = crossbeam_channel::unbounded();
+            let loader = DefaultFileLoader::new(
+                Arc::new(TestBazelClient::default()),
+                root.clone(),
+                None,
+                external.clone(),
+                sender,
+                true,
+            )
+            .with_bazel_installation(&starpls_bazel::client::BazelInfo {
+                install_base: Some(install.clone()),
+                release: release.to_owned(),
+                ..Default::default()
+            });
+            super::load(
+                &loader,
+                &root.join("sty.toml"),
+                vec![super::StubPackage {
+                    manifest: "stubs.toml".into(),
+                    allow_unversioned: false,
+                }],
+            )
+        };
+        load("release 8.8.1").unwrap();
+        assert!(format!("{:#}", load("release 8.8.1-fork").unwrap_err())
+            .contains("installed Bazel tools have version 8.8.1-fork"));
+        fs::remove_file(external.join("bazel_tools")).unwrap();
+        fs::create_dir(external.join("bazel_tools")).unwrap();
+        assert!(format!("{:#}", load("release 8.8.1").unwrap_err())
+            .contains("no selected module version"));
+    }
 
     #[test]
     fn an_early_version_error_preserves_source_watch_scope() {

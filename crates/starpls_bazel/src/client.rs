@@ -204,6 +204,7 @@ impl MappingState {
 
 #[derive(Default)]
 pub struct BazelInfo {
+    pub install_base: Option<PathBuf>,
     pub output_base: PathBuf,
     pub release: String,
     pub starlark_semantics: String,
@@ -563,6 +564,7 @@ impl BazelClient for BazelCLI {
         let output = self.run_command([
             "info",
             "execution_root",
+            "install_base",
             "output_base",
             "release",
             "starlark-semantics",
@@ -570,6 +572,7 @@ impl BazelClient for BazelCLI {
         ])?;
 
         let output = str::from_utf8(&output)?;
+        let mut install_base = None;
         let mut output_base = None;
         let mut release = None;
         let mut starlark_semantics = None;
@@ -590,6 +593,7 @@ impl BazelClient for BazelCLI {
                         }
                     });
                 }
+                "install_base" => install_base = Some(PathBuf::from(value)),
                 "output_base" => output_base = Some(value),
                 "release" => release = Some(value),
                 "starlark-semantics" => starlark_semantics = Some(value),
@@ -599,6 +603,7 @@ impl BazelClient for BazelCLI {
         }
 
         let info = BazelInfo {
+            install_base,
             output_base: output_base
                 .ok_or_else(|| anyhow!("failed to determine output_base from `bazel info`"))?
                 .into(),

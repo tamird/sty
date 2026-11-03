@@ -332,6 +332,12 @@ impl BazelLoadContext {
     }
 }
 
+#[derive(Clone)]
+struct InstalledTools {
+    root: PathBuf,
+    version: String,
+}
+
 pub(crate) struct DefaultFileLoader {
     bazel_client: Arc<dyn BazelClient>,
     workspace: PathBuf,
@@ -340,6 +346,7 @@ pub(crate) struct DefaultFileLoader {
     fetch_repo_sender: Sender<Task>,
     bzlmod_enabled: bool,
     bundled_builtins: bool,
+    installed_tools: Option<InstalledTools>,
     repositories: RwLock<HashMap<PathBuf, RepositoryContext>>,
     bazel_load_context: BazelLoadContext,
     configuration_inputs: RwLock<HashMap<PathBuf, Option<Vec<u8>>>>,
@@ -374,6 +381,7 @@ impl DefaultFileLoader {
             fetch_repo_sender,
             bzlmod_enabled,
             bundled_builtins: false,
+            installed_tools: None,
             repositories: Default::default(),
             bazel_load_context: Default::default(),
             configuration_inputs: Default::default(),
@@ -423,6 +431,30 @@ impl DefaultFileLoader {
             .packages
             .keys()
             .map(PathBuf::as_path)
+    }
+
+    pub(crate) fn with_bazel_installation(
+        mut self,
+        info: &starpls_bazel::client::BazelInfo,
+    ) -> Self {
+        self.installed_tools = info
+            .install_base
+            .as_ref()
+            .zip(info.release.strip_prefix("release "))
+            .map(|(base, version)| InstalledTools {
+                root: base.join("embedded_tools"),
+                version: version.to_owned(),
+            });
+        self
+    }
+
+    pub(crate) fn installed_tools_version(&self, repo: &Repository) -> Option<&str> {
+        let tools = self.installed_tools.as_ref()?;
+        // --override_repository can replace @@bazel_tools independently of the
+        // running binary. Only its own installation establishes this version.
+        (repo.name == "bazel_tools"
+            && repo.root.canonicalize().ok()? == tools.root.canonicalize().ok()?)
+        .then_some(&tools.version)
     }
 
     pub(crate) fn with_bundled_builtins(mut self, bundled: bool) -> Self {
@@ -604,7 +636,7 @@ impl DefaultFileLoader {
     }
 
     pub(crate) fn fresh(&self) -> Self {
-        Self::new(
+        let mut fresh = Self::new(
             self.bazel_client.clone(),
             self.workspace.clone(),
             self.workspace_name.clone(),
@@ -612,7 +644,9 @@ impl DefaultFileLoader {
             self.fetch_repo_sender.clone(),
             self.bzlmod_enabled,
         )
-        .with_bundled_builtins(self.bundled_builtins)
+        .with_bundled_builtins(self.bundled_builtins);
+        fresh.installed_tools.clone_from(&self.installed_tools);
+        fresh
     }
 
     pub(crate) fn pause(&self, paused: bool) {

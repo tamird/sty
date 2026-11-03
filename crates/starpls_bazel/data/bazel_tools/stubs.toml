@@ -3,6 +3,11 @@ format-version = 1
 [source]
 repository = "@bazel_tools"
 module = "bazel_tools"
+# These releases ship the same tools/build_defs/repo/utils.bzl.
+versions = [
+    "8.6.0", "8.7.0", "8.8.0", "8.8.1", "8.8.2",
+    "9.0.0", "9.0.1", "9.0.2", "9.1.0", "9.1.1", "9.2.0",
+]
 
 [files]
 "tools/build_defs/repo/utils.bzl" = "utils.bzli"

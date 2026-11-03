@@ -668,6 +668,7 @@ impl Server {
                             context.info.output_base.join("external"),
                             context.bzlmod_enabled,
                         )
+                        .with_bazel_installation(&context.info)
                         .with_bundled_builtins(bundled_builtins);
                     loader.finish_mapping(String::new(), Ok(context.main_repo_mapping));
                     let builtins = load_bazel_builtins(Some(&context.info.release));

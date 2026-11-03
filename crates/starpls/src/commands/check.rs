@@ -4671,6 +4671,7 @@ impl CheckCommand {
             fetch_repo_sender,
             bazel_cx.bzlmod_enabled,
         )
+        .with_bazel_installation(&bazel_cx.info)
         .with_bundled_builtins(bazel_cx.has_bundled_builtins())
         .with_bazel_load_context(load_context, &self.required_bazel_load_context)?;
         loader.finish_mapping(String::new(), Ok(bazel_cx.main_repo_mapping));

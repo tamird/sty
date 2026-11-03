@@ -805,6 +805,7 @@ mod tests {
             Ok(starpls_bazel::client::BazelInfo {
                 workspace: self.workspace.clone(),
                 output_base: self.workspace.join("output"),
+                install_base: None,
                 release: "release 9.3.0".to_owned(),
                 starlark_semantics: String::new(),
                 workspace_name: None,

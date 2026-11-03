@@ -1,6 +1,8 @@
 # Bazel repository helper contracts.
 # Source owner: @bazel_tools//tools/build_defs/repo:utils.bzl.
 
+# TODO(https://github.com/bazelbuild/bazel/issues/32343): annotate maybe in
+# Bazel when a wrapper can borrow the keyword parameters of its argument.
 class _RepositoryRule[**P](Protocol):
     def __call__(self, *, name: str, **kwargs: KeywordArgs[P]) -> None: ...
 
