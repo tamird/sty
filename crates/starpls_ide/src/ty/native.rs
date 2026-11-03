@@ -1116,7 +1116,6 @@ fn declarations(
             "Target" => Some("_DefaultInfoFilesToRun"),
             "FilesToRunProvider" => Some("_Executable"),
             "DefaultInfo" => Some("_DefaultInfoFiles, _DefaultInfoFilesToRun"),
-            "ctx" => Some("_BuildSettingValue, _ContextAttrs"),
             "Attribute" => Some("_AttributeValue"),
             "transition" => Some("_TransitionKind"),
             _ => None,
@@ -1420,12 +1419,16 @@ fn declarations(
                 )?;
                 continue;
             }
-            if class.name == "ctx" && field.name == "build_setting_value" {
+            let context_property = match (class.name.as_str(), field.name.as_str()) {
+                ("ctx", "build_setting_value") => Some("_BuildSettingDomain"),
+                ("ctx", "attr") if field.callable.is_none() && classes.contains_key("struct") => {
+                    Some("_starpls_annotation__StructInfo[_starpls_unknown]")
+                }
+                _ => None,
+            };
+            if let Some(result) = context_property {
                 writeln!(body, "        @_starpls_builtins.property")?;
-                writeln!(
-                    body,
-                    "        def build_setting_value(self) -> _BuildSettingValue:"
-                )?;
+                writeln!(body, "        def {}(self) -> {result}:", field.name)?;
                 writeln!(
                     body,
                     "            {}",
@@ -1664,11 +1667,7 @@ fn declarations(
                         match field.name.as_str() {
                             // Missing host schemas remain gradual; registered rules supply
                             // their attribute types through the context specialization.
-                            "attr" => Some(if class.name == "ctx" {
-                                "_starpls_typing.Final[_ContextAttrs]"
-                            } else {
-                                "_starpls_annotation__StructInfo[_starpls_unknown]"
-                            }),
+                            "attr" => Some("_starpls_annotation__StructInfo[_starpls_unknown]"),
                             "file" => classes.contains_key("File").then_some("_starpls_annotation__StructInfo[_starpls_types.File | None]"),
                             "outputs" => (class.name == "ctx" && classes.contains_key("File")).then_some("_starpls_types.struct[_starpls_types.File | _starpls_builtins.list[_starpls_types.File] | None]"),
                             "executable" => classes.contains_key("File").then_some("_starpls_annotation__StructInfo[_starpls_types.File | None]"),
@@ -1814,7 +1813,7 @@ fn declarations(
             r#"    class _JavaCommonInternalMethods(_starpls_typing.Protocol):
         def create_compilation_action(
             self,
-            ctx: _starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object],
+            ctx: _starpls_types.ctx,
             java_toolchain: _starpls_types.ProviderInstance,
             output: _starpls_types.File,
             manifest_proto: _starpls_types.File,
@@ -1848,7 +1847,7 @@ fn declarations(
         ) -> None: ...
         def create_header_compilation_action(
             self,
-            ctx: _starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object],
+            ctx: _starpls_types.ctx,
             java_toolchain: _starpls_types.ProviderInstance,
             compile_jar: _starpls_types.File,
             compile_deps_proto: _starpls_types.File,
@@ -1872,7 +1871,7 @@ fn declarations(
         def check_java_toolchain_is_declared_on_rule(self, actions: _starpls_types.actions, /) -> None: ...
         def check_provider_instances(self, providers: _starpls_typing.Sequence[_starpls_builtins.object], what: _starpls_builtins.str, provider_type: _starpls_types.ProviderKey, /) -> None: ...
         def collect_native_deps_dirs(self, libraries: _starpls_types.depset[_starpls_types.LibraryToLink], /) -> _starpls_builtins.list[_starpls_builtins.str]: ...
-        def expand_java_opts(self, ctx: _starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object], attr: _starpls_builtins.str, /, *, tokenize: _starpls_builtins.bool, exec_paths: _starpls_builtins.bool = ...) -> _starpls_builtins.list[_starpls_builtins.str]: ...
+        def expand_java_opts(self, ctx: _starpls_types.ctx, attr: _starpls_builtins.str, /, *, tokenize: _starpls_builtins.bool, exec_paths: _starpls_builtins.bool = ...) -> _starpls_builtins.list[_starpls_builtins.str]: ...
         def get_runtime_classpath_for_archive(self, jars: _starpls_types.depset[_starpls_types.File], excluded_jars: _starpls_types.depset[_starpls_types.File], /) -> _starpls_types.depset[_starpls_types.File]: ...
         def google_legacy_api_enabled(self) -> _starpls_builtins.bool: ...
         def incompatible_disable_non_executable_java_binary(self) -> _starpls_builtins.bool: ...
@@ -2011,7 +2010,7 @@ fn declarations(
         body.push_str("    pass\n");
     }
     let mut output = String::from(
-        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nfrom typing_extensions import disjoint_base as _starpls_disjoint_base\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n_DownloadAuth = _starpls_typing.TypeVar(\"_DownloadAuth\", bound=_starpls_ty_extensions.Top[_starpls_typing.Mapping[_starpls_typing.Any, _starpls_typing.Any]])\n_ExecutionRequirementKey = _starpls_typing.TypeVar(\"_ExecutionRequirementKey\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_AttributeDefaultParameters = _starpls_typing.ParamSpec(\"_AttributeDefaultParameters\")\n_AttributeMaterializerParameters = _starpls_typing.ParamSpec(\"_AttributeMaterializerParameters\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_RuleInitializerParameters = _starpls_typing.ParamSpec(\"_RuleInitializerParameters\")\n_RuleInitializerResult = _starpls_typing.TypeVar(\"_RuleInitializerResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute[_starpls_builtins.object]\", default=\"_starpls_types.Attribute[_starpls_builtins.object]\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=\"_starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\", covariant=True)\n",
+        "import builtins as _starpls_builtins\nimport _starpls_allocations\nimport typing as _starpls_typing\nfrom typing_extensions import disjoint_base as _starpls_disjoint_base\nimport ty_extensions as _starpls_ty_extensions\nfrom ty_extensions._internal import Unknown as _starpls_unknown\n\n_JsonDefault = _starpls_typing.TypeVar(\"_JsonDefault\")\n_ResourceKey = _starpls_typing.TypeVar(\"_ResourceKey\", bound=_starpls_builtins.str)\n_ResourceNumber = _starpls_typing.TypeVar(\"_ResourceNumber\", bound=_starpls_builtins.float)\n_StringKey = _starpls_typing.TypeVar(\"_StringKey\", bound=_starpls_builtins.str)\n_StringValue = _starpls_typing.TypeVar(\"_StringValue\", bound=_starpls_builtins.str)\n_DownloadAuth = _starpls_typing.TypeVar(\"_DownloadAuth\", bound=_starpls_ty_extensions.Top[_starpls_typing.Mapping[_starpls_typing.Any, _starpls_typing.Any]])\n_ExecutionRequirementKey = _starpls_typing.TypeVar(\"_ExecutionRequirementKey\", bound=_starpls_builtins.str)\n\n_StructField = _starpls_typing.TypeVar(\"_StructField\", covariant=True)\nclass _StructUnknownShape(_starpls_typing.TypedDict): ...\n_StructShape = _starpls_typing.TypeVar(\"_StructShape\", covariant=True, default=_StructUnknownShape)\n_ProviderValue = _starpls_typing.TypeVar(\"_ProviderValue\", covariant=True)\n_AttributeValue = _starpls_typing.TypeVar(\"_AttributeValue\", covariant=True, default=_starpls_unknown)\n_AnalyzedAttributes = _starpls_typing.TypeVar(\"_AnalyzedAttributes\", covariant=True, default=_starpls_unknown)\n_ProviderFieldName = _starpls_typing.TypeVar(\"_ProviderFieldName\", bound=_starpls_builtins.str)\n_ProviderFieldDoc = _starpls_typing.TypeVar(\"_ProviderFieldDoc\", bound=_starpls_builtins.str)\n_ProviderInitParameters = _starpls_typing.ParamSpec(\"_ProviderInitParameters\")\n_ProviderInitResult = _starpls_typing.TypeVar(\"_ProviderInitResult\")\n_AttributeDefaultParameters = _starpls_typing.ParamSpec(\"_AttributeDefaultParameters\")\n_AttributeMaterializerParameters = _starpls_typing.ParamSpec(\"_AttributeMaterializerParameters\")\n_ImplementationParameters = _starpls_typing.ParamSpec(\"_ImplementationParameters\")\n_ImplementationResult = _starpls_typing.TypeVar(\"_ImplementationResult\")\n_RuleInitializerParameters = _starpls_typing.ParamSpec(\"_RuleInitializerParameters\")\n_RuleInitializerResult = _starpls_typing.TypeVar(\"_RuleInitializerResult\")\n_DepsetElement = _starpls_typing.TypeVar(\"_DepsetElement\", covariant=True)\n_DepsetInput = _starpls_typing.TypeVar(\"_DepsetInput\")\n_TransitionKind = _starpls_typing.TypeVar(\"_TransitionKind\", covariant=True, default=_starpls_builtins.object)\n_SelectValue = _starpls_typing.TypeVar(\"_SelectValue\", covariant=True)\n_SelectKind = _starpls_typing.TypeVar(\"_SelectKind\", covariant=True, default=_starpls_builtins.object)\n_SelectPeerValue = _starpls_typing.TypeVar(\"_SelectPeerValue\")\n_SelectCondition = _starpls_typing.TypeVar(\"_SelectCondition\", bound=\"_starpls_builtins.str | _starpls_types.Label\")\n_RuleAttributeName = _starpls_typing.TypeVar(\"_RuleAttributeName\", bound=\"_starpls_builtins.str\", default=\"_starpls_builtins.str\")\n_RuleAttribute = _starpls_typing.TypeVar(\"_RuleAttribute\", bound=\"_starpls_types.Attribute[_starpls_builtins.object]\", default=\"_starpls_types.Attribute[_starpls_builtins.object]\")\n_SelectLeft = _starpls_typing.TypeVar(\"_SelectLeft\")\n_SelectRight = _starpls_typing.TypeVar(\"_SelectRight\")\n_SelectKeyLeft = _starpls_typing.TypeVar(\"_SelectKeyLeft\")\n_SelectKeyRight = _starpls_typing.TypeVar(\"_SelectKeyRight\")\n_DefaultInfoFiles = _starpls_typing.TypeVar(\"_DefaultInfoFiles\", bound=\"_starpls_types.depset[_starpls_types.File] | None\", default=\"_starpls_types.depset[_starpls_types.File] | None\", covariant=True)\n_Executable = _starpls_typing.TypeVar(\"_Executable\", bound=\"_starpls_types.File | None\", default=\"_starpls_types.File | None\", covariant=True)\n_DefaultInfoFilesToRun = _starpls_typing.TypeVar(\"_DefaultInfoFilesToRun\", bound=\"_starpls_types.FilesToRunProvider | None\", default=\"_starpls_types.FilesToRunProvider | None\", covariant=True)\n_BuildSettingDomain = _starpls_builtins.bool | _starpls_builtins.int | _starpls_builtins.str | _starpls_builtins.list[_starpls_builtins.str] | _starpls_builtins.set[_starpls_builtins.str]\n_BuildSettingValue = _starpls_typing.TypeVar(\"_BuildSettingValue\", default=_BuildSettingDomain, covariant=True)\n",
     );
     if classes.contains_key("repository_ctx") || classes.contains_key("module_ctx") {
         output.push_str("_ExecuteEnvironmentValue = _starpls_typing.TypeVar(\"_ExecuteEnvironmentValue\", bound=\"_starpls_builtins.str | None\")\n");
@@ -2090,6 +2089,34 @@ _starpls_annotation_{modules_type} = {modules_type}
             modules_type = super::module_extension::MODULES_TYPE
         )?;
     }
+    if let Some(context) = classes.get("ctx") {
+        // The base context accepts every rule. Only a specialized context
+        // promises a particular attribute schema or build-setting type.
+        writeln!(
+            output,
+            "class ctx(_starpls_types.ctx, _starpls_typing.Generic[_BuildSettingValue, _ContextAttrs]):"
+        )?;
+        if let Some(field) = context
+            .field
+            .iter()
+            .find(|field| field.name == "build_setting_value")
+        {
+            writeln!(output, "    @_starpls_builtins.property\n    def build_setting_value(self) -> _BuildSettingValue:\n        {}\n        ...", quoted(&env::normalize_doc(&field.doc, false)))?;
+        }
+        if classes.contains_key("struct")
+            && context
+                .field
+                .iter()
+                .any(|field| field.name == "attr" && field.callable.is_none())
+        {
+            writeln!(output, "    attr: _starpls_typing.Final[_ContextAttrs]")?;
+        }
+        writeln!(
+            output,
+            "    ...\n_starpls_annotation_{} = ctx",
+            super::context::RULE_CONTEXT_SCHEMA
+        )?;
+    }
     if dialect == Dialect::Bazel
         && classes.contains_key("repository_ctx")
         && classes.contains_key("struct")
@@ -2129,7 +2156,7 @@ _starpls_annotation_{} = repository_ctx
             r#"_AspectSubjectAttrs = _starpls_typing.TypeVar("_AspectSubjectAttrs", default=_starpls_builtins.object, covariant=True)
 class _AspectRuleAttributes(_starpls_types.rule_attributes, _starpls_typing.Generic[_AspectSubjectAttrs]):
     attr: _starpls_typing.Final[_AspectSubjectAttrs]
-class ctx(_starpls_types.ctx[_BuildSettingValue, _ContextAttrs], _starpls_typing.Generic[_BuildSettingValue, _ContextAttrs, _AspectSubjectAttrs]):
+class ctx(_starpls_annotation__RuleContext[_BuildSettingValue, _ContextAttrs], _starpls_typing.Generic[_BuildSettingValue, _ContextAttrs, _AspectSubjectAttrs]):
     rule: _starpls_typing.Final[_AspectRuleAttributes[_AspectSubjectAttrs]]
 _starpls_annotation_{} = ctx
 "#,
@@ -2226,13 +2253,15 @@ class _ClosedRecord(_starpls_annotation_record, _starpls_typing.Generic[_RecordH
     if dialect == Dialect::Bazel {
         for (annotation, runtime) in BAZEL_ANNOTATION_ALIASES {
             if classes.contains_key(*runtime) && !classes.contains_key(*annotation) {
-                // ctx has internal type parameters, but Bazel's Ctx accepts none.
-                // An empty specialization fixes those parameters to their defaults.
-                let specialization = if *annotation == "Ctx" { "[()]" } else { "" };
-                writeln!(
-                    output,
-                    "_starpls_annotation_{annotation} = _starpls_types.{runtime}{specialization}"
-                )?;
+                if *annotation == "Ctx" {
+                    // Bazel's Ctx has no type parameters.
+                    writeln!(output, "type _starpls_annotation_Ctx = _starpls_types.ctx")?;
+                } else {
+                    writeln!(
+                        output,
+                        "_starpls_annotation_{annotation} = _starpls_types.{runtime}"
+                    )?;
+                }
             }
         }
     }
@@ -2859,7 +2888,7 @@ fn write_function(
                 // Coverage consumes the native context, independently of its
                 // build-setting value and generated attribute schema.
                 (classes.contains("ctx") && env::normalize_doc(r#type, true) == "ctx")
-                    .then_some("_starpls_types.ctx[_starpls_builtins.object, _starpls_builtins.object]")
+                    .then_some("_starpls_types.ctx")
             }
             (CallableKind::Method("coverage_common"), "instrumented_files_info", "source_attributes" | "dependency_attributes") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
             // These registrations share Bazel's toolchain requirement parser.
@@ -4650,7 +4679,7 @@ def narrow(context: ctx[object, object, struct[{"weight": object}]]) -> ctx[obje
                 .iter()
                 .map(|diagnostic| diagnostic.id().as_str())
                 .collect::<Vec<_>>(),
-            ["unresolved-reference", "invalid-type-arguments"],
+            ["unresolved-reference", "invalid-type-form"],
         );
     }
 

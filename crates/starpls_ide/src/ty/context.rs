@@ -64,6 +64,7 @@ use super::factory::RuleAttributeData;
 use super::module_extension;
 use crate::Database;
 
+pub(super) const RULE_CONTEXT_SCHEMA: &str = "_RuleContext";
 pub(super) const REPOSITORY_CONTEXT_SCHEMA: &str = "_RepositoryContext";
 pub(super) const ASPECT_CONTEXT_SCHEMA: &str = "_AspectContext";
 
@@ -77,11 +78,16 @@ pub(super) fn type_application<'db>(
         return None;
     }
     let (name, arguments) = match application.expression.slice.as_ref() {
-        Expr::Tuple(tuple)
-            if tuple.elts.len() == 3
-                && db.annotation_builtin(file, "ctx") == Some(application.value_type) =>
-        {
-            (ASPECT_CONTEXT_SCHEMA, tuple.elts.as_slice())
+        expression if db.annotation_builtin(file, "ctx") == Some(application.value_type) => {
+            let arguments = match expression {
+                Expr::Tuple(tuple) => tuple.elts.as_slice(),
+                argument => std::slice::from_ref(argument),
+            };
+            match arguments {
+                [_, _, _] => (ASPECT_CONTEXT_SCHEMA, arguments),
+                [_] | [_, _] => (RULE_CONTEXT_SCHEMA, arguments),
+                _ => return None,
+            }
         }
         expression
             if db.annotation_builtin(file, "repository_ctx") == Some(application.value_type) =>
@@ -110,19 +116,26 @@ pub(super) fn type_application<'db>(
         return None;
     };
     let declarations = definition.program_file(db);
-    // Leave argument inference to the ordinary path when host metadata does
-    // not provide the specialized class.
-    factory::native_class(db, declarations, name)?;
-    factory::specialized_native_instance(
-        db,
-        &environment,
-        declarations,
-        name,
-        arguments
-            .iter()
-            .map(|argument| context.infer_type_expression(argument))
-            .collect(),
-    )
+    let mut arguments: Vec<_> = arguments
+        .iter()
+        .map(|argument| context.infer_type_expression(argument))
+        .collect();
+    let Some(class) = factory::native_class(db, declarations, name) else {
+        context.report_invalid_type_form(
+            application.expression.range(),
+            "The active Bazel context has no matching attribute schema",
+        );
+        return Some(Type::unknown());
+    };
+    if name == RULE_CONTEXT_SCHEMA && arguments.len() == 1 {
+        let instance = class.to_instance_approximation(db, &environment)?;
+        let (_, defaults) = instance.class_specialization(db, &environment)?;
+        let [_value, attrs] = defaults.types(db) else {
+            return None;
+        };
+        arguments.push(*attrs);
+    }
+    factory::specialized_native_instance(db, &environment, declarations, name, arguments)
 }
 
 fn constructor<'db>(
@@ -1289,7 +1302,7 @@ fn context_type<'db>(
         None => {
             // The native default describes every successful build-setting read,
             // even when the exact descriptor is unavailable.
-            let instance = factory::native_class(db, declarations, "ctx")?
+            let instance = factory::native_class(db, declarations, RULE_CONTEXT_SCHEMA)?
                 .to_instance_approximation(db, &environment)?;
             let (_, specialization) = instance.class_specialization(db, &environment)?;
             let [value, _attrs] = specialization.types(db) else {
@@ -1301,7 +1314,7 @@ fn context_type<'db>(
     let base = factory::specialized_native_class(
         db,
         declarations,
-        "ctx",
+        RULE_CONTEXT_SCHEMA,
         vec![build_setting, attribute_view],
     )?;
     let mut implications = Vec::new();
@@ -5031,6 +5044,50 @@ second = rule(implementation=implementation, attrs={"enabled": attr.string()})
                     && diagnostic.headline_message().contains("argument")),
             "{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn bare_context_accepts_specialized_rule_contexts() {
+        let source = r#"def output(context: ctx) -> File:
+    context.attr = struct()
+    return context.actions.declare_file("out")
+def number(value: int) -> None: pass
+def text(value: str) -> None: pass
+def precise(context: ctx[object, struct[{"message": str}]]) -> None:
+    output(context)
+    text(context.attr.message)
+    number(context.attr.message)
+def opaque(context: ctx[bool, object]) -> None:
+    output(context)
+def implementation(context) -> list[ProviderInstance]:
+    output(context)
+    text(context.attr.message)
+    return []
+example = rule(implementation=implementation, attrs={"message": attr.string()})
+$0"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        for level in ["ignore", "error"] {
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("non-static-type".into(), level.into())].into(),
+                )
+                .unwrap(),
+            );
+            let diagnostics = analysis
+                .snapshot()
+                .diagnostics(fixture.main_file())
+                .unwrap();
+            let [readonly, wrong_type] = diagnostics.as_slice() else {
+                panic!("{diagnostics:?}")
+            };
+            assert_eq!(readonly.id().as_str(), "invalid-assignment");
+            assert_eq!(wrong_type.id().as_str(), "invalid-argument-type");
+            assert_eq!(
+                usize::from(wrong_type.range().unwrap().start()),
+                source.find("number(context.attr.message)").unwrap() + "number(".len()
+            );
+        }
     }
 
     #[test]

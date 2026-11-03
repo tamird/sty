@@ -854,8 +854,12 @@ kind explicitly. Bare `transition` accepts either kind and leaves the analyzed
 label value unknown. The kind describes the dependency view, not the number
 of outgoing configurations.
 
-`ctx[Value, Attrs]` specifies the build-setting value and the fields of
-`ctx.attr`. In an aspect callback, `ctx[Value, Attrs, SubjectAttrs]` also
+A bare `ctx` accepts any rule context. Its native members, such as
+`ctx.actions`, have their Bazel types; reading a field of `ctx.attr` yields
+an unknown when no attribute schema is available. For a registered rule,
+sty infers its implementation's `ctx.attr` fields from the rule's `attrs`.
+A helper can declare the fields it uses with `ctx[Value, Attrs]`, where
+`Value` is the build-setting value type. In an aspect callback, `ctx[Value, Attrs, SubjectAttrs]` also
 specifies the fields the callback requires from the analyzed subject's
 `ctx.rule.attr`. This requirement does not establish which targets the aspect
 visits or prove that their rules supply those fields. `repository_ctx[Attrs]`
