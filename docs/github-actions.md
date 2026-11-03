@@ -1,8 +1,9 @@
 # GitHub Actions
 
-Run sty in a dedicated job on an Ubuntu runner. Choose a
-[`sty-action-v*` tag](https://github.com/tamird/sty/tags) and use its full
-commit SHA to pin both the action and the checker source. The action builds
+Run sty in a dedicated job on an Ubuntu runner. Follow your repository’s
+convention for third-party actions: use a [release tag](https://github.com/tamird/sty/tags)
+or its full commit SHA. The ref selects both the action and the checker source.
+The action builds
 `//:sty` with Bazel, using sty's toolchain and lockfile, and caches Bazel downloads
 and build outputs. The first run for a revision includes a Rust build.
 
@@ -22,10 +23,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: tamird/sty@FULL_COMMIT_SHA
+      - uses: tamird/sty@sty-action-v0.2.0
+```
+
+To pin that release by commit, use:
+
+```yaml
+- uses: tamird/sty@d400a00807b3c7f7b2ac82bf1e1e6a16db0290e3 # sty-action-v0.2.0
 ```
 
 Ship a companion next to the implementation, for example `foo/defs.bzli` next
