@@ -322,13 +322,24 @@ Set the `strict` group to apply one severity to these additional checks:
 ```toml
 [rules]
 strict = "error"
+
+[[overrides]]
+include = ["tests/defs.bzl", "tests/BUILD.bazel"]
+[overrides.rules]
 non-static-type = "warn"
 ```
 
-Within a configuration layer, an individual rule setting takes precedence over
-the group, regardless of its position. CLI `--config` arguments override the
-workspace configuration in command-line order. The editor uses the workspace
-configuration. Configure
+Each `include` entry names an exact file relative to `sty.toml`; a file with
+the same name in another package uses its own settings. This field accepts
+literal files only. Globs and directory trees require listing their files.
+When checking an implementation against a companion, put
+the implementation's path in `include` to configure its diagnostics.
+
+Both the CLI and the editor apply the global rules and then the matching
+`[[overrides]]` sections in `sty.toml` in declaration order. CLI `--config`
+accepts `rules` and `analysis` settings and applies them last, in command-line
+order. Within any layer an individual rule takes
+precedence over the group. Configure
 `analysis.strict-generic-narrowing`, `analysis.require-valid-suppressions`, and
 code-flow analysis separately.
 

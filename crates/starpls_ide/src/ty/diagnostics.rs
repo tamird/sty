@@ -252,6 +252,8 @@ pub(crate) struct CheckSettings {
     #[returns(ref)]
     pub rules: DiagnosticRules,
     #[returns(ref)]
+    pub file_rules: BTreeMap<std::path::PathBuf, DiagnosticRules>,
+    #[returns(ref)]
     pub analysis: crate::ty::FileAnalysisSettings,
     pub static_json_decode: bool,
 }

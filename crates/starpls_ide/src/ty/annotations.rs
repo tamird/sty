@@ -188,6 +188,15 @@ mod tests {
             Analysis::from_single_file_fixture("def identity(value):\n    return value\n");
         let file = fixture.main_file();
         assert!(analysis.snapshot().diagnostics(file).unwrap().is_empty());
+        let path = analysis.snapshot().path(file).to_owned();
+        analysis.set_file_rules([(path, rules("warn"))].into());
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert_eq!(diagnostics.len(), 2);
+        assert!(diagnostics
+            .iter()
+            .all(|d| d.severity() == Severity::Warning));
+        analysis.set_file_rules(Default::default());
+        assert!(analysis.snapshot().diagnostics(file).unwrap().is_empty());
         for (level, severity) in [("warn", Severity::Warning), ("error", Severity::Error)] {
             analysis.set_rules(rules(level));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();

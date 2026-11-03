@@ -1,4 +1,5 @@
 use std::collections::hash_map::Entry;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -60,21 +61,38 @@ impl TypeInterfaceOptions {
             stub_packages,
             type_interfaces,
             rules,
+            overrides: file_overrides,
             mut analysis,
             bazel,
         } = super::project_config::ProjectConfig::load(loader, workspace)?;
-        let layers =
-            std::iter::once(&rules).chain(overrides.iter().map(|override_| &override_.rules));
-        let mut rules = starpls_ide::DiagnosticRules::from_layers(layers).with_context(|| {
+        for override_ in overrides {
+            override_.apply_analysis(&mut analysis);
+        }
+        let context = || {
             format!(
                 "invalid configuration {}",
                 workspace.join("sty.toml").display()
             )
-        })?;
-        for override_ in overrides {
-            override_.apply_analysis(&mut analysis);
+        };
+        let select_rules = |local: &[&BTreeMap<String, String>]| {
+            let layers = std::iter::once(&rules)
+                .chain(local.iter().copied())
+                .chain(overrides.iter().map(|override_| &override_.rules));
+            let mut selection =
+                starpls_ide::DiagnosticRules::from_layers(layers).with_context(context)?;
+            selection.set_require_valid_suppressions(
+                analysis.require_valid_suppressions.unwrap_or(false),
+            );
+            anyhow::Ok(selection)
+        };
+        let mut file_rules = BTreeMap::new();
+        for (path, layers) in
+            super::project_config::FileOverride::by_file(&file_overrides, workspace)
+                .with_context(context)?
+        {
+            file_rules.insert(path, select_rules(&layers)?);
         }
-        rules.set_require_valid_suppressions(analysis.require_valid_suppressions.unwrap_or(false));
+        let rules = select_rules(&[])?;
         let mut registrations = super::stub_package::load(loader, workspace, stub_packages)?;
         let resolve = |path: &Path| -> anyhow::Result<PathBuf> {
             let path = workspace.join(path);
@@ -156,6 +174,7 @@ impl TypeInterfaceOptions {
         Ok(PreparedInterfaces {
             registrations,
             rules,
+            file_rules,
             analysis,
             builtin_extension,
         })
@@ -166,6 +185,7 @@ impl TypeInterfaceOptions {
 pub(crate) struct PreparedInterfaces {
     registrations: Vec<Registration>,
     rules: starpls_ide::DiagnosticRules,
+    file_rules: BTreeMap<PathBuf, starpls_ide::DiagnosticRules>,
     analysis: super::project_config::AnalysisOptions,
     builtin_extension: Option<(PathBuf, String)>,
 }
@@ -207,6 +227,7 @@ impl PreparedInterfaces {
         let Self {
             registrations,
             rules,
+            file_rules,
             analysis: analysis_options,
             builtin_extension,
         } = self;
@@ -239,6 +260,7 @@ impl PreparedInterfaces {
             return Err(error);
         }
         analysis.set_rules(rules);
+        analysis.set_file_rules(file_rules);
         analysis.set_analysis_options(
             analysis_options.strict_generic_narrowing,
             analysis_options.widen_singleton_collection_elements,
@@ -342,6 +364,7 @@ mod tests {
         super::PreparedInterfaces {
             registrations,
             rules: Default::default(),
+            file_rules: Default::default(),
             analysis: Default::default(),
             builtin_extension: None,
         }

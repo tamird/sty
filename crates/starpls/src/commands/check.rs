@@ -1683,6 +1683,79 @@ mod tests {
     }
 
     #[test]
+    fn file_rule_overrides_check_the_source_of_a_companion() {
+        // A Bazel installation can expose the same source at two module paths.
+        #[cfg(unix)]
+        {
+            let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+                .join("file-rule-overrides");
+            std::fs::create_dir_all(root.join("nested")).unwrap();
+            std::os::unix::fs::symlink("nested/defs.bzl", root.join("defs.bzl")).unwrap();
+        }
+        let config = r#"
+[rules]
+missing-type-argument = "error"
+
+[[overrides]]
+include = ["defs.bzl"]
+[overrides.rules]
+invalid-return-type = "warn"
+missing-type-argument = "ignore"
+
+[[overrides]]
+include = ["./defs.bzl"]
+[overrides.rules]
+missing-type-argument = "warn"
+"#;
+        let source = "def result(): return 'bad'\ndef consume(items: list) -> None: print(items)\n";
+        for cli in [false, true] {
+            let mut checker = local_checker_with_options(
+                "file-rule-overrides",
+                &[
+                    ("sty.toml", config),
+                    ("defs.bzl", source),
+                    ("defs.bzli", "def result() -> int: ...\n"),
+                    ("nested/defs.bzl", source),
+                    ("nested/defs.bzli", "def result() -> int: ...\n"),
+                ],
+                CheckCommand {
+                    paths: vec!["defs.bzl".into(), "nested/defs.bzl".into()],
+                    config: cli
+                        .then(|| "rules.strict='error'".parse().unwrap())
+                        .into_iter()
+                        .collect(),
+                    output_format: super::OutputFormat::JsonLines,
+                    ..Default::default()
+                },
+            );
+            let mut output = Vec::new();
+            checker
+                .report_diagnostics_to(None, &mut output, &mut Vec::new())
+                .unwrap();
+            let diagnostics = serde_json::Deserializer::from_slice(&output)
+                .into_iter::<serde_json::Value>()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            for (path, bad_return, bare_list) in [
+                ("defs.bzl", "warning", if cli { "error" } else { "warning" }),
+                ("nested/defs.bzl", "error", "error"),
+            ] {
+                let file = checker.bazel_info.workspace.join(path);
+                for (name, expected) in [
+                    ("invalid-return-type", bad_return),
+                    ("missing-type-argument", bare_list),
+                ] {
+                    let d = diagnostics
+                        .iter()
+                        .find(|d| d["filename"] == file.to_str().unwrap() && d["name"] == name)
+                        .unwrap_or_else(|| panic!("missing {name} in {path}: {diagnostics:?}"));
+                    assert_eq!(d["severity"], expected, "{path}: {name}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn config_overrides_reject_invalid_or_non_check_settings() {
         use clap::Parser;
 

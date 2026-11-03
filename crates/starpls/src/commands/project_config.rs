@@ -18,9 +18,54 @@ pub(super) struct ProjectConfig {
     #[serde(default)]
     pub rules: BTreeMap<String, String>,
     #[serde(default)]
+    pub overrides: Vec<FileOverride>,
+    #[serde(default)]
     pub analysis: AnalysisOptions,
     #[serde(default)]
     pub bazel: BazelOptions,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct FileOverride {
+    include: Vec<String>,
+    rules: BTreeMap<String, String>,
+}
+
+impl FileOverride {
+    /// Group layers by exact source path so checking a file needs only a lookup.
+    pub(super) fn by_file<'a>(
+        overrides: &'a [Self],
+        workspace: &Path,
+    ) -> anyhow::Result<BTreeMap<PathBuf, Vec<&'a BTreeMap<String, String>>>> {
+        let mut by_file = BTreeMap::<_, Vec<_>>::new();
+        for Self { include, rules } in overrides {
+            anyhow::ensure!(
+                !include.is_empty(),
+                "overrides.include requires at least one file"
+            );
+            anyhow::ensure!(
+                !rules.is_empty(),
+                "overrides.rules requires at least one rule"
+            );
+            for name in include {
+                let path = Path::new(name);
+                anyhow::ensure!(
+                    !name.contains(['*', '?', '[', ']', '\\', ':', '\0'])
+                        && !name.ends_with('/')
+                        && path.file_name().is_some()
+                        && path.components().all(|part| matches!(
+                            part,
+                            std::path::Component::Normal(_) | std::path::Component::CurDir
+                        )),
+                    "overrides.include expects an exact workspace-relative file, got {name:?}"
+                );
+                let path = starpls_common::absolute_path(&workspace.join(path))?;
+                by_file.entry(path).or_default().push(rules);
+            }
+        }
+        Ok(by_file)
+    }
 }
 
 #[derive(Default, Deserialize)]
@@ -59,6 +104,7 @@ impl FromStr for ConfigOverride {
             stub_packages: _,
             type_interfaces: _,
             rules,
+            overrides: _,
             analysis,
             bazel: _,
         } = table.try_into()?;
@@ -113,5 +159,24 @@ impl ProjectConfig {
         };
         toml::from_str(&contents)
             .with_context(|| format!("invalid configuration {}", path.display()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::FileOverride;
+
+    #[test]
+    fn file_rule_overrides_reject_nonliteral_or_escaping_paths() {
+        for name in ["../package/BUILD", "/BUILD", "*.bzl", "foo/"] {
+            let setting = FileOverride {
+                include: vec![name.to_owned()],
+                rules: [("strict".to_owned(), "warn".to_owned())].into(),
+            };
+            let error = FileOverride::by_file(&[setting], Path::new("/repo")).unwrap_err();
+            assert!(error.to_string().contains(name));
+        }
     }
 }

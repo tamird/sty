@@ -880,11 +880,16 @@ impl ty_python_semantic::Db for Database {
         &self.semantic.program.python_version
     }
 
-    fn rule_selection(&self, _file: File) -> &RuleSelection {
-        self.check_settings
-            .expect("database initialization is complete")
-            .rules(self)
-            .selection(self.environment().options(self).use_code_flow_analysis)
+    fn rule_selection(&self, file: File) -> &RuleSelection {
+        let settings = self
+            .check_settings
+            .expect("database initialization is complete");
+        let rules = file
+            .path(self)
+            .as_system_path()
+            .and_then(|path| settings.file_rules(self).get(path.as_std_path()))
+            .unwrap_or_else(|| settings.rules(self));
+        rules.selection(self.environment().options(self).use_code_flow_analysis)
     }
 
     fn lint_registry(&self) -> &LintRegistry {

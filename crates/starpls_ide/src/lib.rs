@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::panic;
 use std::path::PathBuf;
@@ -309,6 +310,14 @@ impl Analysis {
             .to(rules);
     }
 
+    pub fn set_file_rules(&mut self, rules: BTreeMap<PathBuf, DiagnosticRules>) {
+        self.db
+            .check_settings
+            .expect("database initialization is complete")
+            .set_file_rules(&mut self.db)
+            .to(rules);
+    }
+
     pub fn set_static_json_decode(&mut self, enabled: bool) {
         self.db
             .check_settings
@@ -359,6 +368,7 @@ impl Analysis {
         db.check_settings = Some(ty::CheckSettings::new(
             &db,
             DiagnosticRules::default(),
+            BTreeMap::new(),
             ty::FileAnalysisSettings::default(),
             false,
         ));
