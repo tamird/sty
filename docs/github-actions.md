@@ -1,7 +1,8 @@
 # GitHub Actions
 
-Run sty in a dedicated job on an Ubuntu runner. Pin the action to a full commit
-SHA; that pin selects both the action and the checker source. The action builds
+Run sty in a dedicated job on an Ubuntu runner. Choose a
+[`sty-action-v*` tag](https://github.com/tamird/sty/tags) and use its full
+commit SHA to pin both the action and the checker source. The action builds
 `//:sty` with Bazel, using sty's toolchain and lockfile, and caches Bazel downloads
 and build outputs. The first run for a revision includes a Rust build.
 
@@ -80,9 +81,20 @@ and a JSON coverage report as the `sty` artifact, including after a failed check
 Build failures appear in the build step and its log; a successful type check
 requires successful dependency resolution and complete selected-file coverage.
 
-To report findings outside the strict selection, supply `advisory-files-from`:
-a file containing one workspace-relative path per line.
-Generate that inventory from tracked source files in each Bazel workspace.
+To report findings across all tracked `.bzl` files, set `advisory-pathspecs: '*.bzl'`.
+Supply one [Git pathspec](https://git-scm.com/docs/gitglossary#def_pathspec)
+per line to partition a repository with several Bazel workspaces. For example,
+check the root and run a separate step in `examples`:
+
+```yaml
+with:
+  advisory-pathspecs: |
+    *.bzl
+    :(exclude)examples/**
+```
+
+Git evaluates the patterns from `working-directory`. For a custom inventory,
+use `advisory-files-from` with one workspace-relative file per line instead.
 Both selections use the workspace configuration by default.
 The strict selection still fails on errors. The advisory check writes
 `advisory/diagnostics.jsonl`, `advisory/coverage.json`, and the requested
@@ -92,7 +104,7 @@ inventory, missing requested file, incomplete coverage, or tool failure fails
 the job.
 
 For a workspace that has no strict selection, set `advisory-only: true`
-with `advisory-files-from`. This mode requires a nonempty advisory inventory
+with either advisory input. This mode requires a nonempty advisory inventory
 and rejects the strict `files` input.
 
 Set `advisory-config` to a tracked TOML file to override rules or analysis

@@ -8,6 +8,9 @@ inputs:
   advisory-files-from:
     description: Optional file listing workspace-relative files to check for an advisory report.
     default: ''
+  advisory-pathspecs:
+    description: Git pathspecs selecting tracked files for the advisory report, one per line, relative to working-directory.
+    default: ''
   advisory-config:
     description: Tracked TOML file of advisory rules and analysis overrides, relative to working-directory.
     default: ''
@@ -83,6 +86,7 @@ runs:
         CHECK_FILES: ${{ inputs.files }}
         ADVISORY_ONLY: ${{ inputs.advisory-only }}
         ADVISORY_FILES_FROM: ${{ inputs.advisory-files-from }}
+        ADVISORY_PATHSPECS: ${{ inputs.advisory-pathspecs }}
         ADVISORY_CONFIG: ${{ inputs.advisory-config }}
         ADVISORY_LOAD_TARGETS: ${{ inputs.advisory-bazel-load-context }}
         ADVISORY_LOAD_FILES: ${{ inputs.advisory-require-bazel-load-context }}
@@ -106,13 +110,22 @@ runs:
           false) ;;
           *) echo 'audit-loads must be true or false.' >&2; exit 1 ;;
         esac
+        if [[ -n "$ADVISORY_PATHSPECS" ]]; then
+          if [[ -n "$ADVISORY_FILES_FROM" ]]; then
+            echo 'Choose either advisory-pathspecs or advisory-files-from.' >&2
+            exit 1
+          fi
+          mapfile -t pathspecs < <(printf '%s' "$ADVISORY_PATHSPECS")
+          ADVISORY_FILES_FROM="$REPORT_DIRECTORY/tracked-files.txt"
+          git -c core.quotePath=false ls-files -- "${pathspecs[@]}" > "$ADVISORY_FILES_FROM"
+        fi
         if [[ -n "$ADVISORY_CONFIG" && -z "$ADVISORY_FILES_FROM" ]]; then
-          echo 'advisory-config requires advisory-files-from.' >&2
+          echo 'advisory-config requires an advisory file selection.' >&2
           exit 1
         fi
         if [[ -n "$ADVISORY_LOAD_TARGETS" || -n "$ADVISORY_LOAD_FILES" ]]; then
           if [[ -z "$ADVISORY_FILES_FROM" || -z "$ADVISORY_LOAD_TARGETS" || -z "$ADVISORY_LOAD_FILES" ]]; then
-            echo 'Advisory load context requires targets, required files, and advisory-files-from.' >&2
+            echo 'Advisory load context requires targets, required files, and an advisory file selection.' >&2
             exit 1
           fi
         fi
@@ -120,7 +133,7 @@ runs:
         case "$ADVISORY_ONLY" in
           true)
             if [[ -z "$ADVISORY_FILES_FROM" || -n "$CHECK_FILES" ]]; then
-              echo 'advisory-only requires advisory-files-from and cannot be combined with files.' >&2
+              echo 'advisory-only requires an advisory file selection and cannot be combined with files.' >&2
               exit 1
             fi
             ;;
