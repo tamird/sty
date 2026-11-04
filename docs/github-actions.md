@@ -38,6 +38,14 @@ For example, if a local stub declares `digest() -> str`, returning an integer
 or an untyped value in the installed function fails the check. The stub's
 declarations determine which dependency bodies sty checks.
 
+Use `additional-files` to check a BUILD file that calls your macros along with
+the tracked implementations. List one workspace-relative path per line:
+
+```yaml
+with:
+  additional-files: docs/BUILD
+```
+
 For a repository with two independent Bazel workspaces, run one job per
 workspace. Each gets its own report:
 

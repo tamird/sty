@@ -5,6 +5,9 @@ inputs:
   files:
     description: Workspace-relative paths or external source-file labels, one per line. Defaults to tracked .bzl files when no advisory is configured.
     default: ''
+  additional-files:
+    description: Workspace-relative sources to check alongside every tracked .bzl file, one per line.
+    default: ''
   advisory-files-from:
     description: Optional file listing workspace-relative files to check for an advisory report.
     default: ''
@@ -94,6 +97,7 @@ runs:
       env:
         REPORT_DIRECTORY: ${{ steps.reports.outputs.directory }}
         CHECK_FILES: ${{ inputs.files }}
+        ADDITIONAL_FILES: ${{ inputs.additional-files }}
         ADVISORY_ONLY: ${{ inputs.advisory-only }}
         ADVISORY_FILES_FROM: ${{ inputs.advisory-files-from }}
         ADVISORY_PATHSPECS: ${{ inputs.advisory-pathspecs }}
@@ -118,6 +122,10 @@ runs:
         automatic=false
         if [[ -z "$CHECK_FILES$ADVISORY_FILES_FROM$ADVISORY_PATHSPECS" && "$ADVISORY_ONLY" == false ]]; then
           automatic=true
+        fi
+        if [[ -n "$ADDITIONAL_FILES" && "$automatic" != true ]]; then
+          echo 'additional-files requires automatic .bzl discovery.' >&2
+          exit 1
         fi
         case "${AUDIT_LOADS:-$automatic}" in
           true) options+=(--audit-loads) ;;
@@ -153,9 +161,9 @@ runs:
             ;;
           false)
             if [[ "$automatic" == true ]]; then
-              "$REPORT_DIRECTORY/sty" check "${options[@]}" --tracked-bzl \
+              "$REPORT_DIRECTORY/sty" check "${options[@]}" --tracked-bzl --files-from - \
                 --progress --report "$REPORT_DIRECTORY/coverage.json" --output-format json-lines \
-                > "$REPORT_DIRECTORY/diagnostics.jsonl" || strict_status=$?
+                <<< "$ADDITIONAL_FILES" > "$REPORT_DIRECTORY/diagnostics.jsonl" || strict_status=$?
               python3 "$GITHUB_ACTION_PATH/action/summary.py" "$REPORT_DIRECTORY"
             else
               source_location='^(.+):[0-9]+:[0-9]+: source file '
