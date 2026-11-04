@@ -56,6 +56,11 @@ precedence. Generic annotations retain the stub's type parameters and scope.
 A stub variable annotation also supplies the declared type of a unique,
 direct module assignment with the same name. ty checks the assigned value in
 the stub annotation's context, including private bindings used by functions.
+When a workspace provides a stub for an installed dependency, each public
+variable must have a runtime export whose type satisfies its declaration. For example,
+`VALUE = _loaded_value` re-exports a dependency's value; a bare `load` makes
+the name local to the loading `.bzl` file. Type aliases in a stub can describe
+those exports without requiring corresponding runtime names.
 
 Annotation expressions in the implementation can also refer to declarations and
 imports in its stub. Source lexical bindings take precedence over

@@ -904,7 +904,9 @@ impl ty_python_semantic::Db for Database {
         let settings = self
             .check_settings
             .expect("database initialization is complete");
-        let rules = if settings.file_rules(self).is_empty() {
+        let rules = if settings.file_rules(self).is_empty()
+            && !settings.external_contract_sources(self).contains_key(&file)
+        {
             settings.rules(self)
         } else {
             diagnostics::file_rules(self, file, settings)

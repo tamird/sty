@@ -88,6 +88,10 @@ pub(super) static INVALID_FUNCTION_INTERFACE: LintMetadata = lint(
     "invalid-function-interface",
     "Reports function implementations that cannot satisfy their stub declarations.",
 );
+pub(super) static INVALID_VALUE_INTERFACE: LintMetadata = lint(
+    "invalid-value-interface",
+    "Reports runtime exports that do not satisfy their stub value declarations.",
+);
 pub(super) static MISSING_PARAMETER_ANNOTATION: LintMetadata = LintMetadata {
     default_level: Level::Ignore,
     ..lint(
@@ -144,6 +148,7 @@ pub(super) fn registry() -> &'static LintRegistry {
             &INVALID_BUILD_ANNOTATION,
             &INVALID_MODULE_ANNOTATION,
             &INVALID_FUNCTION_INTERFACE,
+            &INVALID_VALUE_INTERFACE,
         ]
         .into_iter()
         .chain(STY_STRICT_LINTS)
@@ -334,10 +339,29 @@ pub(super) fn file_rules(
     file: ruff_db::files::File,
     settings: CheckSettings,
 ) -> Option<DiagnosticRules> {
-    settings.file_rules(db).select(
+    let selected = settings.file_rules(db).select(
         file.path(db).as_system_path()?.as_std_path(),
         settings.rules(db),
-    )
+    );
+    let scope = match settings.external_contract_sources(db).get(&file) {
+        Some(scope) => scope,
+        None => return selected,
+    };
+    let mut rules = match scope {
+        crate::ExternalContractScope::Declarations => DiagnosticRules::default(),
+        crate::ExternalContractScope::WholeFile => {
+            selected.unwrap_or_else(|| settings.rules(db).clone())
+        }
+    };
+    // The dependency may use untyped code internally, but it must establish the
+    // types its consumer advertises for returned and stored values.
+    for name in ["unsound-return-statement", "unsound-assignment"] {
+        rules.set_severity(
+            registry().get(name).expect("ty registers this lint"),
+            Some(Severity::Error),
+        );
+    }
+    Some(rules)
 }
 
 fn parse_rule_level(name: &str, level: &str) -> anyhow::Result<Option<Severity>> {
@@ -360,6 +384,9 @@ pub(crate) struct CheckSettings {
     #[returns(ref)]
     pub analysis: crate::ty::FileAnalysisSettings,
     pub static_json_decode: bool,
+    #[returns(ref)]
+    pub external_contract_sources:
+        rustc_hash::FxHashMap<ruff_db::files::File, crate::ExternalContractScope>,
 }
 
 fn default_rules(use_code_flow_analysis: bool) -> RuleSelection {

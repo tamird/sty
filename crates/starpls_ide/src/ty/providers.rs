@@ -648,6 +648,18 @@ fn initializer_contracts(
     collect_initializers(db, super::interface::registered_provider_pairs(db))
 }
 
+pub(super) fn initializer_ranges(
+    db: &dyn super::interface::Db,
+    file: ProgramFile<'_>,
+    module: &ruff_db::parsed::ParsedModuleRef,
+) -> Vec<ruff_text_size::TextRange> {
+    initializer_contracts(db)
+        .keys()
+        .filter(|definition| definition.program_file(db) == file)
+        .map(|definition| definition.kind(db).full_range(module))
+        .collect()
+}
+
 #[salsa::tracked(returns(ref))]
 fn adjacent_initializers<'db>(
     db: &'db dyn super::interface::Db,

@@ -18,10 +18,19 @@ impl Db for Database {
 
         // Limit the amount of syntax errors we send, as this many syntax errors probably means something
         // is really wrong with the file being analyzed.
-        diagnostics_for_file(self, file)
+        let mut diagnostics = diagnostics_for_file(self, file)
             .take(128)
             .chain(diagnostics)
-            .collect()
+            .collect();
+        if let Some(scope) = self
+            .check_settings
+            .expect("database initialization is complete")
+            .external_contract_sources(self)
+            .get(&file.source)
+        {
+            crate::ty::interface::check_external_contract(self, file, *scope, &mut diagnostics);
+        }
+        diagnostics
     }
 }
 

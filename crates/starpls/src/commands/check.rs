@@ -84,7 +84,7 @@ pub(crate) struct CheckCommand {
     #[clap(long)]
     audit_loads: bool,
 
-    /// Check the current repository’s companion pairs and locally owned configured implementations.
+    /// Check companion pairs and configured contracts owned by this workspace.
     #[clap(long)]
     check_local_interface_sources: bool,
 
@@ -3351,7 +3351,7 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
         std::fs::create_dir_all(&workspace).unwrap();
         let source = root.join("source.bzl");
         std::fs::write(&source, "_VALUE = 'wrong'\nvalue = _VALUE\n").unwrap();
-        std::fs::write(workspace.join("source.bzli"), "_VALUE: int\n").unwrap();
+        std::fs::write(workspace.join("source.bzli"), "_VALUE: int\nABSENT: str\n").unwrap();
         let (sender, receiver) = crossbeam_channel::unbounded();
         let loader = DefaultFileLoader::new(
             Arc::new(TestBazelClient::default()),
@@ -3391,10 +3391,16 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
             .iter()
             .flat_map(|(_, diagnostics)| diagnostics)
             .collect();
-        let [diagnostic] = diagnostics.as_slice() else {
-            panic!("expected the implementation assignment error: {diagnostics:?}")
-        };
-        assert_eq!(diagnostic.id().as_str(), "invalid-assignment");
+        let mut codes: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.id().as_str())
+            .collect();
+        codes.sort_unstable();
+        assert_eq!(
+            codes,
+            ["invalid-assignment", "invalid-value-interface"],
+            "{diagnostics:?}"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -4557,6 +4563,194 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
     }
 
     #[test]
+    fn local_stub_checks_its_installed_declarations() {
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("checker-owned-stub");
+        let workspace = root.join("workspace");
+        let external = root.join("external");
+        let repository = external.join("rules+");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&repository).unwrap();
+        std::fs::write(repository.join("BUILD.bazel"), "").unwrap();
+        std::fs::write(
+            workspace.join("sty.toml"),
+            "[[stub-packages]]\nmanifest='stubs.toml'\n[rules]\nstrict='error'\n",
+        )
+        .unwrap();
+        std::fs::write(
+            workspace.join("stubs.toml"),
+            r#"format-version = 1
+[source]
+repository = "@rules"
+module = "rules"
+versions = ["1"]
+[files]
+"impl.bzl" = "impl.bzli"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            workspace.join("impl.bzli"),
+            "\
+type Text = str
+ACTUAL: Text
+RE_EXPORTED: Text
+PACKED: Text
+FUNCTION: str
+LOADED_ONLY: str
+MISSING: str
+def good(value: str) -> str: ...
+def bad(value: str) -> str: ...
+def calls(value: str) -> str: ...
+def dynamic(value: str) -> str: ...
+def alias(value: str) -> str: ...
+def removed() -> str: ...
+",
+        )
+        .unwrap();
+        std::fs::write(
+            repository.join("helper.bzl"),
+            "VALUE = 'value'\nLOADED_ONLY = 'local to the importing file'\ndef untyped(value): return value\n",
+        )
+        .unwrap();
+        std::fs::write(
+            repository.join("impl.bzl"),
+            r#"load(":helper.bzl", "LOADED_ONLY", "untyped", _value = "VALUE")
+ACTUAL = "text"
+RE_EXPORTED = _value
+PACKED, _unused = ("text", None)
+def FUNCTION(): return "text"
+def unrelated(): return 42 + "private"
+def good(value):
+    untyped(0)
+    return value
+def bad(value): return 42
+def calls(value): return good(42)
+def dynamic(value): return untyped(value)
+alias = untyped
+"#,
+        )
+        .unwrap();
+        let caller = workspace.join("caller.bzl");
+        std::fs::write(
+            &caller,
+            "load('@rules//:impl.bzl', 'good')\nvalue = good(42)\n",
+        )
+        .unwrap();
+        let mut client = TestBazelClient::default();
+        client.selected_modules.insert(
+            "rules+".into(),
+            starpls_bazel::client::SelectedModule {
+                name: "rules".into(),
+                version: Some("1".into()),
+            },
+        );
+        let client = Arc::new(client);
+        let mut implicit_diagnostics = Vec::new();
+        for (local, all, explicit) in [
+            (true, false, false),
+            (false, true, false),
+            (true, false, true),
+            (false, false, true),
+        ] {
+            let (sender, receiver) = crossbeam_channel::unbounded();
+            let loader = DefaultFileLoader::new(
+                client.clone(),
+                workspace.clone(),
+                None,
+                external.clone(),
+                sender,
+                true,
+            );
+            let info = starpls_bazel::client::BazelInfo {
+                workspace: workspace.clone(),
+                ..Default::default()
+            };
+            let mut paths = vec![caller.to_str().unwrap().to_owned()];
+            if explicit {
+                paths.push("@@rules+//:impl.bzl".into());
+            }
+            let options = CheckCommand {
+                check_local_interface_sources: local,
+                check_interface_sources: all,
+                ..Default::default()
+            };
+            let (analysis, loader) = options
+                .prepare_analysis(loader, &info, Default::default())
+                .unwrap();
+            let mut checker =
+                Checker::new(analysis, info, paths, &[], loader, receiver, &options).unwrap();
+            assert!(
+                checker.input_errors.is_empty(),
+                "local={local} all={all} explicit={explicit}: {}",
+                serde_json::to_string(&checker.input_errors).unwrap()
+            );
+            let result = checker.check_files().unwrap();
+            let snapshot = checker.analysis.snapshot();
+            let mut diagnostics: Vec<_> = result
+                .diagnostics
+                .iter()
+                .flat_map(|(file, diagnostics)| {
+                    let path = snapshot.path(*file).file_name().unwrap();
+                    diagnostics.iter().map(move |diagnostic| {
+                        (
+                            path.to_str().unwrap().to_owned(),
+                            diagnostic.id().as_str().to_owned(),
+                            diagnostic.headline_message().to_string(),
+                        )
+                    })
+                })
+                .collect();
+            diagnostics.sort();
+            if all || explicit {
+                assert!(
+                    implicit_diagnostics
+                        .iter()
+                        .all(|diagnostic| diagnostics.contains(diagnostic)),
+                    "local={local} all={all} explicit={explicit}: {diagnostics:?}"
+                );
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|(_, id, _)| id == "unsupported-operator"),
+                    "local={local} all={all} explicit={explicit}: {diagnostics:?}"
+                );
+                continue;
+            }
+            let codes: Vec<_> = diagnostics
+                .iter()
+                .map(|(path, id, _)| (path.as_str(), id.as_str()))
+                .collect();
+            assert_eq!(
+                codes,
+                [
+                    ("caller.bzl", "invalid-argument-type"),
+                    ("impl.bzl", "invalid-argument-type"),
+                    ("impl.bzl", "invalid-function-interface"),
+                    ("impl.bzl", "invalid-function-interface"),
+                    ("impl.bzl", "invalid-return-type"),
+                    ("impl.bzl", "invalid-value-interface"),
+                    ("impl.bzl", "invalid-value-interface"),
+                    ("impl.bzl", "invalid-value-interface"),
+                    ("impl.bzl", "unsound-return-statement"),
+                ],
+                "local={local} all={all} explicit={explicit}: {diagnostics:?}"
+            );
+            for name in ["FUNCTION", "LOADED_ONLY", "MISSING"] {
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|(_, id, message)| *id == "invalid-value-interface"
+                            && message.contains(name)),
+                    "local={local} all={all} explicit={explicit}: {diagnostics:?}"
+                );
+            }
+            implicit_diagnostics = diagnostics;
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn interface_sources_select_external_package_implementations() {
         let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
             .join("checker-stub-graph");
@@ -5597,53 +5791,82 @@ impl Checker {
             }
         }
         pairs.extend(adjacent);
-        if let Some(InterfaceSources { mode, files }) = &mut checker.selected_interface_sources {
-            let main_repository = checker.loader.main_repository();
-            for (source, _) in pairs {
-                let path = snapshot.path(source);
-                let Some(repository) = checker.loader.repository_for_path(path)? else {
-                    checker.input_errors.push(InputError {
-                        path: path.to_path_buf(),
-                        message: "cannot determine the repository of a configured interface source"
-                            .to_owned(),
-                    });
+        let mut external_contracts = Vec::new();
+        let main_repository = checker.loader.main_repository();
+        for (source, interface) in pairs {
+            let explicit = checker.files.contains(&source);
+            if interface_source_mode.is_none() && !explicit {
+                continue;
+            }
+            let path = snapshot.path(source);
+            let repository = checker.loader.repository_for_path(path)?;
+            // A filesystem operand can name a registered source outside every
+            // Bazel repository. Automatic selection still requires an owner.
+            if repository.is_none() && !explicit {
+                checker.input_errors.push(InputError {
+                    path: path.to_path_buf(),
+                    message: "cannot determine the repository of a configured interface source"
+                        .to_owned(),
+                });
+                continue;
+            }
+            let in_workspace = repository.as_ref() == Some(&main_repository);
+            if in_workspace {
+                if interface_source_mode.is_none() {
                     continue;
-                };
-                if repository == main_repository {
-                    let physical = snapshot.source_path(path)?;
-                    // Workspace edits use both logical and physical ownership,
-                    // including nested repositories reached through file symlinks.
-                    if !checker.loader.is_editable(path, &physical)? {
-                        checker.input_errors.push(InputError {
+                }
+                let physical = snapshot.source_path(path)?;
+                // Workspace edits use both logical and physical ownership,
+                // including nested repositories reached through file symlinks.
+                if !checker.loader.is_editable(path, &physical)? {
+                    checker.input_errors.push(InputError {
                             path: path.to_path_buf(),
                             message: "configured interface source is outside the checked workspace or in a nested repository; check it from its own workspace instead"
                                 .to_owned(),
                         });
-                        continue;
-                    }
-                } else if matches!(mode, InterfaceSourceMode::Local) {
                     continue;
                 }
-                if checker.ignored_paths.contains(path, &checker.analysis) {
-                    checker
-                        .exclusions
-                        .insert(path.to_path_buf(), Exclusion::Ignored);
-                    checker.input_errors.push(InputError {
+            } else {
+                let interface_path = snapshot.path(interface);
+                let physical = snapshot.source_path(interface_path)?;
+                if checker.loader.is_editable(interface_path, &physical)? {
+                    let scope = if explicit
+                        || matches!(interface_source_mode, Some(InterfaceSourceMode::All))
+                    {
+                        starpls_ide::ExternalContractScope::WholeFile
+                    } else {
+                        starpls_ide::ExternalContractScope::Declarations
+                    };
+                    external_contracts.push((source, scope));
+                } else if matches!(interface_source_mode, Some(InterfaceSourceMode::Local)) {
+                    continue;
+                }
+            }
+            let Some(selected) = &mut checker.selected_interface_sources else {
+                continue;
+            };
+            if checker.ignored_paths.contains(path, &checker.analysis) {
+                checker
+                    .exclusions
+                    .insert(path.to_path_buf(), Exclusion::Ignored);
+                checker.input_errors.push(InputError {
                         path: path.to_path_buf(),
-                        message: if repository == main_repository {
+                        message: if in_workspace {
                             "configured local interface source is excluded by --ignore_pattern; remove the exclusion to check its implementation"
                         } else {
                             "configured interface source is excluded by --ignore_pattern; remove the exclusion to check its implementation"
                         }
                         .to_owned(),
                     });
-                } else {
-                    checker.files.insert(source);
-                    files.push(source);
-                }
+            } else {
+                checker.files.insert(source);
+                selected.files.push(source);
             }
         }
         drop(snapshot);
+        checker
+            .analysis
+            .set_external_contract_sources(external_contracts);
         if let Some(InterfaceSources { mode, files }) = &checker.selected_interface_sources {
             let missing_implementation = checker.input_errors.is_empty()
                 && match mode {

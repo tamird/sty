@@ -308,7 +308,9 @@ use `...` or `pass`, and optional defaults use `= ...`.
 Ship `defs.bzli` beside `defs.bzl` to type its callers and check its
 implementation. An explicit stub mapping overrides that companion.
 `sty check --check-local-interface-sources` discovers companion pairs in the
-current repository and checks locally owned configured sources. To check a file
+current repository and checks configured pairs owned by either their source or
+their stub. A local stub for an installed dependency checks the declarations it
+covers against the dependency's implementation. To check a file
 inventory and every configured implementation, including external repositories,
 use `--check-interface-sources`. Additional input paths select ordinary source
 files in either mode. The [stub specification](docs/type-interfaces.md) describes

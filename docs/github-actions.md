@@ -31,8 +31,12 @@ jobs:
 
 The default check selects every Git-tracked `.bzl` file in the Bazel workspace.
 It respects `.bazelignore` directory entries and stops at nested workspaces.
-It also checks local implementations against adjacent `.bzli` files and
-registered interfaces, including pairs that no caller loads.
+It checks local implementations against adjacent or registered stubs, including
+pairs that no caller loads. When a workspace provides a stub for a dependency,
+sty checks the declared functions and values against the source Bazel installed.
+For example, if a local stub declares `digest() -> str`, returning an integer
+or an untyped value in the installed function fails the check. The stub's
+declarations determine which dependency bodies sty checks.
 
 For a repository with two independent Bazel workspaces, run one job per
 workspace. Each gets its own report:
@@ -55,8 +59,8 @@ jobs:
 ```
 
 Use `files` to replace Git discovery with specific sources or directories.
-The local interface check still runs. To check a dependency
-against a stub, name its source file by its Bazel label:
+The local interface check still runs. To check an entire dependency file with
+your workspace's rules, name its source by its Bazel label:
 
 ```yaml
 with:
@@ -65,7 +69,8 @@ with:
     @bazel_skylib//lib:shell.bzl
 ```
 
-The action asks the checked workspace's Bazel for the installed file.
+When both the stub and the implementation come from dependencies, sty verifies
+the stub manifest's version constraint and uses the stub to check callers.
 
 The check follows loads and enables inference of `ctx.attr` fields from Bazel rule
 declarations, and reports possibly unbound names and unreachable code. Run the

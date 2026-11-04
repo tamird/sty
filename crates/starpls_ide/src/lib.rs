@@ -83,6 +83,14 @@ mod incremental;
 
 pub type Cancellable<T> = Result<T, Cancelled>;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExternalContractScope {
+    /// Check the declarations covered by a workspace stub for an installed dependency.
+    Declarations,
+    /// Check those declarations and the rest of the explicitly selected source file.
+    WholeFile,
+}
+
 #[salsa::db]
 #[derive(Clone)]
 pub(crate) struct Database {
@@ -319,6 +327,20 @@ impl Analysis {
             .to(rules);
     }
 
+    pub fn set_external_contract_sources(
+        &mut self,
+        files: impl IntoIterator<Item = (File, ExternalContractScope)>,
+    ) {
+        self.db
+            .check_settings
+            .expect("database initialization is complete")
+            .set_external_contract_sources(&mut self.db)
+            .to(files
+                .into_iter()
+                .map(|(file, scope)| (file.source, scope))
+                .collect());
+    }
+
     pub fn set_static_json_decode(&mut self, enabled: bool) {
         self.db
             .check_settings
@@ -372,6 +394,7 @@ impl Analysis {
             FileRuleOverrides::default(),
             ty::FileAnalysisSettings::default(),
             false,
+            Default::default(),
         ));
         for dialect in [Dialect::Standard, Dialect::Bazel] {
             db.set_builtin_defs(dialect, Builtins::default(), Default::default())

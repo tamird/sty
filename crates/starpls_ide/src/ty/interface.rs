@@ -376,6 +376,114 @@ fn implementation_annotations(db: &dyn Db, file: File) -> Option<&Implementation
     ))
 }
 
+/// Check the declarations promised by a workspace-owned stub for an installed
+/// module. Module syntax, loads and correspondence errors may lie outside the
+/// ranges of those declarations; in particular a missing export has no source range.
+pub(crate) fn check_external_contract(
+    db: &Database,
+    file: File,
+    scope: crate::ExternalContractScope,
+    diagnostics: &mut Vec<ruff_db::diagnostic::Diagnostic>,
+) {
+    use ruff_db::diagnostic::Annotation;
+    use ruff_db::diagnostic::Diagnostic;
+    use ruff_db::diagnostic::DiagnosticId;
+    use ruff_db::diagnostic::Severity;
+    use ruff_db::diagnostic::Span;
+
+    let (_, stub) = pair_for_source(db, file).expect("external contract requires an interface");
+    let source = db.starlark_program_file(file);
+    let model = SemanticModel::new(db, source);
+    let parsed = starpls_common::parsed_module(db, file).load(db);
+    let interface = starpls_common::parsed_module(db, stub).load(db);
+    let mut ranges = Vec::new();
+    for statement in interface.suite() {
+        let name = match statement {
+            Stmt::FunctionDef(function) => &function.name.id,
+            Stmt::AnnAssign(binding) => {
+                let Some(name) = binding.target.as_name_expr() else {
+                    continue;
+                };
+                &name.id
+            }
+            Stmt::ClassDef(class) if is_provider_class(class) => &class.name.id,
+            _ => continue,
+        };
+        let exports = export_definitions(db, source, name);
+        if let Stmt::AnnAssign(binding) = statement {
+            if !name.starts_with('_') {
+                let exported = |file| {
+                    ty_python_semantic::provided::ProvidedBindingValue::Export {
+                        file,
+                        name: name.clone(),
+                        value: None,
+                    }
+                    .resolve_type(db)
+                };
+                let actual = exports
+                    .iter()
+                    .any(|&definition| !model.is_type_alias_definition(definition))
+                    .then(|| exported(source))
+                    .flatten();
+                let expected = exported(db.starlark_program_file(stub));
+                let environment = model.program_environment();
+                let message = match (actual, expected) {
+                    (None, _) => Some(format!(
+                        "The implementation does not export the declared value `{name}`"
+                    )),
+                    (Some(actual), Some(expected))
+                        if !actual.is_subtype_of(db, &environment, expected) =>
+                    {
+                        Some(format!(
+                            "Export `{name}` has type `{}`; its stub declares `{}`",
+                            actual.display(db, &environment),
+                            expected.display(db, &environment)
+                        ))
+                    }
+                    (Some(_), None) => {
+                        Some(format!("Cannot resolve the declared type of `{name}`"))
+                    }
+                    _ => None,
+                };
+                if let Some(message) = message {
+                    let mut diagnostic = Diagnostic::new(
+                        DiagnosticId::Lint(super::diagnostics::INVALID_VALUE_INTERFACE.name()),
+                        Severity::Error,
+                        message,
+                    );
+                    diagnostic.annotate(Annotation::primary(
+                        Span::from(stub.source).with_range(binding.target.range()),
+                    ));
+                    diagnostics.push(diagnostic);
+                }
+            }
+        }
+        ranges.extend(
+            exports
+                .into_iter()
+                .map(|definition| definition.kind(db).full_range(&parsed)),
+        );
+    }
+    if scope == crate::ExternalContractScope::WholeFile {
+        return;
+    }
+    ranges.extend(super::providers::initializer_ranges(db, source, &parsed));
+    diagnostics.retain(|diagnostic| {
+        let ruff_db::diagnostic::DiagnosticId::Lint(name) = diagnostic.id() else {
+            return true;
+        };
+        matches!(
+            name.as_str(),
+            "load-error"
+                | "invalid-function-interface"
+                | "invalid-provider-interface"
+                | "invalid-value-interface"
+        ) || diagnostic
+            .range()
+            .is_some_and(|span| ranges.iter().any(|range| range.contains_range(span)))
+    });
+}
+
 /// Correspondence is needed during indexing and must depend only on syntax.
 #[salsa::tracked(returns(ref))]
 fn implementation_annotations_query(
@@ -703,7 +811,17 @@ fn function_diagnostics(db: &Database, file: File) -> Vec<ruff_db::diagnostic::D
             ));
             continue;
         };
-        if !actual.is_assignable_to(db, &environment, expected) {
+        let contract_check = db
+            .check_settings
+            .expect("database initialization is complete")
+            .external_contract_sources(db)
+            .contains_key(&file.source);
+        let compatible = if contract_check {
+            actual.is_subtype_of(db, &environment, expected)
+        } else {
+            actual.is_assignable_to(db, &environment, expected)
+        };
+        if !compatible {
             diagnostics.push(invalid(
                 source_range,
                 declaration.name.range(),
