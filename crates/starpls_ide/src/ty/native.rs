@@ -1096,8 +1096,9 @@ fn declarations(
                 continue;
             }
         }
-        // Bazel structures can have different implementations, but none is a dict or string.
-        if class.name == "struct" {
+        // Each family has several implementations, but a rule is never a struct,
+        // and neither can also be a dictionary or a string.
+        if matches!(class.name.as_str(), "struct" | "rule") {
             body.push_str("    @_starpls_disjoint_base\n");
         }
         // These native instance types have no Starlark subclasses. Finality
@@ -11737,6 +11738,41 @@ strict_labels(labels)
             assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
             assert!(usize::from(diagnostics[0].range().unwrap().start()) > source.len());
         }
+    }
+
+    #[test]
+    fn a_struct_predicate_excludes_rule_callables() {
+        let source = r#"
+# type Partial = struct[{"function": Callable[[], str]}, ...]
+def has_function(value: object) -> TypeIs[struct[{"function": object}, ...]]:
+    return type(value) == "struct" and hasattr(value, "function")
+def call_partial(value: Partial) -> str:
+    return value.function()
+def run(value: rule | Partial) -> str | None:
+    if has_function(value):
+        return call_partial(value)
+    value(name="test")
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.update_file(file, source.replace("-> str | None:", "-> int | None:"));
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let [failure] = diagnostics.as_slice() else {
+            panic!("{diagnostics:?}")
+        };
+        assert_eq!(failure.id().as_str(), "invalid-return-type");
     }
 
     #[test]
