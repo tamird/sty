@@ -765,7 +765,7 @@ fn registration_parameter_type<'db>(
         BuiltinFunction::Provider => return None,
         BuiltinFunction::Select => return None,
         BuiltinFunction::Download { always_blocking: _ } => return None,
-        BuiltinFunction::ArgsMapEach => return None,
+        BuiltinFunction::ArgsMapEach | BuiltinFunction::ExistingRules => return None,
     };
     let parameter_count = if context_kind == ContextKind::Aspect {
         2

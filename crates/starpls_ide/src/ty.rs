@@ -42,6 +42,8 @@ pub(crate) mod load;
 mod module_extension;
 mod native;
 mod providers;
+mod reflection;
+mod reflection_origins;
 mod repository_rule;
 mod shapes;
 mod strictness;
@@ -212,54 +214,62 @@ impl Database {
             return None;
         }
         let namespace = file.program(self).semantic_namespace(self).as_ref()?;
-        let mut parts = namespace.as_str().split(':');
-        if parts.next()? != "starpls" {
-            return None;
-        }
-        let dialect = match parts.next()? {
-            "standard" => Dialect::Standard,
-            "bazel" => Dialect::Bazel,
-            _ => return None,
-        };
-        let api_context = match parts.next()? {
-            "none" => None,
-            "bzl" => Some(APIContext::Bzl),
-            "build" => Some(APIContext::Build),
-            "module" => Some(APIContext::Module),
-            "repo" => Some(APIContext::Repo),
-            "workspace" => Some(APIContext::Workspace),
-            "prelude" => Some(APIContext::Prelude),
-            "cquery" => Some(APIContext::Cquery),
-            "vendor" => Some(APIContext::Vendor),
-            _ => return None,
-        };
-        let is_external = match parts.next()? {
-            "local" => false,
-            "external" => true,
-            _ => return None,
-        };
-        let bundled_cc_common = match parts.next() {
-            Some(namespace) => {
-                if namespace != "bundled-cc-common" {
-                    return None;
-                }
-                true
-            }
-            None => false,
-        };
-        if parts.next().is_some() {
-            return None;
-        }
+        let (dialect, info) = source_context(reflection::source_namespace(namespace))?;
         Some(starpls_common::File {
             source: file.file(self),
             dialect,
-            info: api_context.map(|api_context| FileInfo::Bazel {
-                api_context,
-                is_external,
-                bundled_cc_common,
-            }),
+            info,
         })
     }
+}
+
+fn source_context(namespace: &str) -> Option<(Dialect, Option<FileInfo>)> {
+    let mut parts = namespace.split(':');
+    if parts.next()? != "starpls" {
+        return None;
+    }
+    let dialect = match parts.next()? {
+        "standard" => Dialect::Standard,
+        "bazel" => Dialect::Bazel,
+        _ => return None,
+    };
+    let api_context = match parts.next()? {
+        "none" => None,
+        "bzl" => Some(APIContext::Bzl),
+        "build" => Some(APIContext::Build),
+        "module" => Some(APIContext::Module),
+        "repo" => Some(APIContext::Repo),
+        "workspace" => Some(APIContext::Workspace),
+        "prelude" => Some(APIContext::Prelude),
+        "cquery" => Some(APIContext::Cquery),
+        "vendor" => Some(APIContext::Vendor),
+        _ => return None,
+    };
+    let is_external = match parts.next()? {
+        "local" => false,
+        "external" => true,
+        _ => return None,
+    };
+    let bundled_cc_common = match parts.next() {
+        Some(namespace) => {
+            if namespace != "bundled-cc-common" {
+                return None;
+            }
+            true
+        }
+        None => false,
+    };
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((
+        dialect,
+        api_context.map(|api_context| FileInfo::Bazel {
+            api_context,
+            is_external,
+            bundled_cc_common,
+        }),
+    ))
 }
 
 impl Database {
@@ -715,6 +725,14 @@ impl ty_python_semantic::Db for Database {
                         | factory::BuiltinFunction::Macro
                 )
             )
+    }
+
+    fn provided_mapping_read_schema<'db>(
+        &'db self,
+        env: &ProgramEnvironment<'db>,
+        instance: Type<'db>,
+    ) -> Option<TypedDictType<'db>> {
+        factory::mapping_read_schema(self, env, instance)
     }
 
     fn provided_getattr_result<'db>(

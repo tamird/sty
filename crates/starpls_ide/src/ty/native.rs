@@ -945,6 +945,13 @@ fn declarations(
         def get(self, key: _starpls_builtins.str, /, default: _starpls_builtins.object = ...) -> _starpls_unknown: ...
         @_starpls_typing.overload
         def get(self, key: _starpls_typing.Hashable, /, default: _starpls_builtins.object = ...) -> _starpls_builtins.object: ...
+    @_starpls_typing.final
+    class _ReflectedRule(_ExistingRule[_starpls_builtins.tuple[_starpls_builtins.str, ...]], _starpls_typing.Generic[_ReflectedSchema]): ...
+    @_starpls_typing.final
+    class _AmbientRule(_ExistingRule[_starpls_builtins.tuple[_starpls_builtins.str, ...]]): ...
+    @_starpls_typing.final
+    class _PackageRulesView[_Row: _ExistingRule[_starpls_builtins.tuple[_starpls_builtins.str, ...]]]({EXISTING_RULE_VIEW}[_ExistingRule[_starpls_builtins.tuple[_starpls_builtins.str, ...]]]):
+        def values(self) -> _starpls_typing.Sequence[_Row]: ...
 "#
         )?;
     }
@@ -2050,6 +2057,11 @@ fn declarations(
         "_starpls_unknown"
     };
     writeln!(output, "_ContextAttrs = _starpls_typing.TypeVar(\"_ContextAttrs\", default=\"{context_attrs}\", covariant=True)\n")?;
+    if declared_classes.contains(EXISTING_RULE_VIEW) {
+        // A less precise instantiation of the same rule must not absorb the
+        // known fields of another one when ty builds a union of their views.
+        output.push_str("_ReflectedSchema = _starpls_typing.TypeVar(\"_ReflectedSchema\")\n");
+    }
     output.push_str(
         "_starpls_native_rule_available: _starpls_builtins.bool\n\nclass _starpls_types:\n",
     );
@@ -2253,6 +2265,17 @@ class _ClosedRecord(_starpls_annotation_record, _starpls_typing.Generic[_RecordH
     }
     for name in classes.keys() {
         writeln!(output, "_starpls_annotation_{name} = _starpls_types.{name}")?;
+    }
+    if declared_classes.contains(EXISTING_RULE_VIEW) {
+        for name in [
+            EXISTING_RULE_VIEW,
+            "_ExistingRule",
+            "_ReflectedRule",
+            "_AmbientRule",
+            "_PackageRulesView",
+        ] {
+            writeln!(output, "_starpls_annotation_{name} = _starpls_types.{name}")?;
+        }
     }
     if dialect == Dialect::Bazel {
         for (annotation, runtime) in BAZEL_ANNOTATION_ALIASES {

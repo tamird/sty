@@ -744,6 +744,17 @@ pub(super) fn resolve_function<'db>(
     expression: &Expr,
     visited: &mut FxHashSet<Definition<'db>>,
 ) -> Option<Definition<'db>> {
+    let declaration = resolve_declaration(db, file, expression, visited)?;
+    matches!(declaration.kind(db), DefinitionKind::Function(_)).then_some(declaration)
+}
+
+/// Follow a source name through ordinary assignments and explicit Starlark loads.
+pub(super) fn resolve_declaration<'db>(
+    db: &'db dyn super::interface::Db,
+    file: ProgramFile<'db>,
+    expression: &Expr,
+    visited: &mut FxHashSet<Definition<'db>>,
+) -> Option<Definition<'db>> {
     let Expr::Name(name) = expression else {
         return None;
     };
@@ -781,7 +792,12 @@ fn resolve_definition<'db>(
         DefinitionKind::Assignment(assignment) => {
             let file = definition.program_file(db);
             let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
-            resolve_function(db, file, assignment.value(&parsed), visited)
+            let value = assignment.value(&parsed);
+            if value.is_name_expr() && assignment.unpack().is_none() {
+                resolve_declaration(db, file, value, visited)
+            } else {
+                Some(definition)
+            }
         }
         DefinitionKind::ProvidedBinding(_) => {
             let (from, module, name) = super::load::binding_names(db, definition)?;

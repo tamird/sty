@@ -543,6 +543,9 @@ pub(crate) fn check(db: &Database, file: File) -> Vec<Diagnostic> {
             visitor.visit_stmt(statement);
         }
     }
+    if file.api_context() == Some(APIContext::Build) {
+        diagnostics.extend(super::reflection::diagnostics(db, program_file));
+    }
     check_types_with_diagnostics(db, program_file, diagnostics)
 }
 

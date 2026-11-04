@@ -144,6 +144,15 @@ directory recursively. For example, `sty check @rules_foo//tools:defs.bzl`
 checks the installed file with that repository's load mappings;
 `sty check @rules_foo//tools/...` checks the Bazel sources under `tools`.
 
+A macro that calls `native.existing_rules()` sees the rules declared so far
+in its calling package. When you check the macro's `.bzl` file on its own,
+sty knows the standard fields of an immutable rule view, such as `kind` and
+`name`. Check the calling BUILD file to use the rule declarations too. For
+example, in a loop over `native.existing_rules().values()`, a guard on
+`row["kind"]` can identify a rule whose mandatory `attr.output()` reflects
+as a string. An iteration that stops early, or a branch selected by a macro
+argument, leaves the custom field type unknown.
+
 Use `--output-format json-lines` to write one diagnostic JSON object per
 line to stdout. Each object includes `name`, its actual `severity`,
 `filename`, `message`, and 1-indexed `location` and `end_location` positions

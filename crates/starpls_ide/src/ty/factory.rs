@@ -276,6 +276,164 @@ impl RuleData {
     }
 }
 
+/// Describes the keys visible through Bazel's existing_rule(s). The schema is
+/// metadata for the read-only rule view; the view itself is not a Starlark dict.
+fn reflected_rule_schema<'db>(
+    db: &'db Database,
+    declarations: ProgramFile<'db>,
+    kind: &str,
+    rule: Type<'db>,
+    plain_arguments: &[Name],
+) -> Option<TypedDictType<'db>> {
+    let environment = ProgramEnvironment::from_file(declarations);
+    // RuleData is also used by macros and repository rules.
+    native_type_argument(db, &environment, declarations, rule, "_AnalyzedRule")?;
+    let data = rule
+        .provided_data(db, &environment)?
+        .downcast_ref::<RuleData>()?;
+    let object = KnownClass::Object.to_instance(db, &environment);
+    let string = KnownClass::Str.to_instance(db, &environment);
+    let integer = KnownClass::Int.to_instance(db, &environment);
+    let tuple = |element| Type::homogeneous_tuple(db, &environment, element);
+    // Nested dictionaries are frozen. Their keys are Starlark sequences, not
+    // Python Mapping's set-like KeysView.
+    let mapping = |value| {
+        specialized_native_instance(
+            db,
+            &environment,
+            declarations,
+            "_ExistingRuleView",
+            vec![value],
+        )
+    };
+    let field = |value, required| {
+        TypedDictFieldBuilder::new(value)
+            .required(required)
+            .read_only(true)
+            .build()
+    };
+    let mut fields = TypedDictSchema::default();
+    for entry in &data.attributes {
+        let Some(attribute) = &entry.descriptor else {
+            continue;
+        };
+        // ExistingRuleView omits hidden and implicit attributes.
+        if !entry.name.starts_with(char::is_alphabetic) {
+            continue;
+        }
+        // A configurable attribute can reflect as either its value or a
+        // selector. Its declaration alone cannot tell which the caller used.
+        let configurable = attribute.configurable() != Some(false);
+        if configurable && !plain_arguments.contains(&entry.name) {
+            continue;
+        }
+        // StarlarkNativeModule.starlarkifyValue renders labels as strings and
+        // snapshots lists as tuples, including lists nested inside dictionaries.
+        let value = match attribute.kind {
+            AttributeKind::Bool => KnownClass::Bool.to_instance(db, &environment),
+            AttributeKind::Int => integer,
+            AttributeKind::Label | AttributeKind::Output | AttributeKind::String => string,
+            AttributeKind::IntList => tuple(integer),
+            AttributeKind::LabelList
+            | AttributeKind::NodepLabelList
+            | AttributeKind::OutputList
+            | AttributeKind::StringList => tuple(string),
+            AttributeKind::LabelKeyedStringDict
+            | AttributeKind::StringKeyedLabelDict
+            | AttributeKind::StringDict => mapping(string)?,
+            AttributeKind::StringKeyedLabelListDict | AttributeKind::StringListDict => {
+                mapping(tuple(string))?
+            }
+        };
+        // Unset outputs and computed defaults can disappear from the view.
+        fields.insert(
+            entry.name.clone(),
+            field(value, !configurable && attribute.has_non_none_value()),
+        );
+    }
+    fields.insert(Name::new("name"), field(string, true));
+    fields.insert(
+        Name::new("kind"),
+        field(Type::string_literal(db, kind), true),
+    );
+    fields.insert(Name::new("tags"), field(tuple(string), true));
+    Some(TypedDictType::from_schema_items_with_openness(
+        db,
+        fields,
+        TypedDictOpenness::extra(db, object, true),
+    ))
+}
+
+pub(super) fn reflected_rule_type<'db>(
+    db: &'db Database,
+    declarations: ProgramFile<'db>,
+    kind: &str,
+    rule: Type<'db>,
+    plain_arguments: &[Name],
+) -> Option<Type<'db>> {
+    let schema = reflected_rule_schema(db, declarations, kind, rule, plain_arguments)?;
+    specialized_native_instance(
+        db,
+        &ProgramEnvironment::from_file(declarations),
+        declarations,
+        "_ReflectedRule",
+        vec![Type::TypedDict(schema)],
+    )
+}
+
+/// Preserve the unclassified rules of a partially known BUILD separately in a
+/// union: an open structural view would absorb every rule we did identify.
+pub(super) fn ambient_rule_type<'db>(
+    db: &'db Database,
+    declarations: ProgramFile<'db>,
+) -> Option<Type<'db>> {
+    native_class(db, declarations, "_AmbientRule")?
+        .to_instance_approximation(db, &ProgramEnvironment::from_file(declarations))
+}
+
+pub(super) fn mapping_read_schema<'db>(
+    db: &'db Database,
+    environment: &ProgramEnvironment<'db>,
+    instance: Type<'db>,
+) -> Option<TypedDictType<'db>> {
+    let (class, specialization) = instance.class_specialization(db, environment)?;
+    let [Type::TypedDict(schema)] = specialization.types(db) else {
+        return None;
+    };
+    let file = db
+        .files
+        .try_virtual_file(&super::native::path(starpls_common::Dialect::Bazel))?;
+    let declarations = ty_python_semantic::Db::program_file(db, file.file());
+    (native_class(db, declarations, "_ReflectedRule")? == Type::from(class)).then_some(*schema)
+}
+
+fn existing_rules_result<'db>(
+    db: &'db Database,
+    call: &CheckedCall<'_, 'db>,
+    rows: impl FnOnce() -> Option<Type<'db>>,
+) -> Option<Type<'db>> {
+    if call.has_binding_errors() {
+        return None;
+    }
+    let declarations = call.declaration()?.program_file(db);
+    let environment = ProgramEnvironment::from_file(declarations);
+    let result = call.return_type();
+    // Libraries and vendor overrides may describe a mutable dictionary or an
+    // older view without intrinsic fields. Specialize only the immutable API
+    // whose signature was recognized from the configured Bazel.
+    let row = native_type_argument(db, &environment, declarations, result, "_ExistingRuleView")?;
+    native_type_argument(db, &environment, declarations, row, "_ExistingRule")?;
+    // Origins identify the rules an iteration visits, not the producer of a
+    // specific target name. A named lookup still uses the ordinary view.
+    specialized_native_instance(
+        db,
+        &environment,
+        declarations,
+        "_PackageRulesView",
+        vec![rows()?],
+    )
+}
+
 struct RuleAttribute<'db> {
     name: Name,
     parameter: Option<Parameter<'db>>,
@@ -661,6 +819,7 @@ pub(super) enum BuiltinFunction {
     Select,
     Download { always_blocking: bool },
     ArgsMapEach,
+    ExistingRules,
 }
 
 // Keep parse and lexical-owner dependencies behind a small, backdated declaration identity.
@@ -709,6 +868,9 @@ pub(super) fn declaration<'db>(
             return None;
         }
         return match class.node(&parsed).name.as_str() {
+            "native" if function.name.as_str() == "existing_rules" => {
+                Some(BuiltinFunction::ExistingRules)
+            }
             "repository_ctx" | "module_ctx" => match function.name.as_str() {
                 "download" => Some(BuiltinFunction::Download {
                     always_blocking: false,
@@ -747,6 +909,7 @@ pub(super) fn declaration<'db>(
         return None;
     }
     Some(match function.name.as_str() {
+        "existing_rules" => BuiltinFunction::ExistingRules,
         "rule" => BuiltinFunction::Rule { repository: false },
         "repository_rule" => BuiltinFunction::Rule { repository: true },
         "aspect" => BuiltinFunction::Aspect,
@@ -837,6 +1000,9 @@ pub(super) fn result<'db>(
         }
         BuiltinFunction::Provider => provider(db, call, diagnostics),
         BuiltinFunction::Download { always_blocking } => download(db, call, always_blocking),
+        BuiltinFunction::ExistingRules => {
+            existing_rules_result(db, call, || super::reflection::rows_for_call(db, call))
+        }
     }
 }
 
@@ -3378,6 +3544,109 @@ mod tests {
     use super::*;
     use crate::Analysis;
     use crate::FilePosition;
+
+    #[test]
+    fn reflected_fields_follow_the_rule_declaration_not_its_exported_name() {
+        let (mut analysis, mut fixture) = Analysis::from_single_file_fixture(
+            r#"def impl(ctx): return []
+renderer = rule(implementation=impl, attrs={
+    "out": attr.output(mandatory=True),
+    "log": attr.output(),
+    "reports": attr.output_list(),
+    "dep": attr.label(),
+    "groups": attr.string_list_dict(),
+    "_tool": attr.label(default="//:tool"),
+})
+"#,
+        );
+        let other = fixture.add_file(&mut analysis.db, "other.bzl",
+            "def impl(ctx): return []\nrenderer = rule(implementation=impl, attrs={'out': attr.int()})\n",
+        );
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let snapshot = analysis.snapshot();
+        let db = &snapshot.db;
+        let declarations = db
+            .files
+            .try_virtual_file(&super::super::native::path(starpls_common::Dialect::Bazel))
+            .unwrap();
+        let declarations = ty_python_semantic::Db::program_file(db, declarations.file());
+        let environment = ProgramEnvironment::from_file(declarations);
+        let string = KnownClass::Str.to_instance(db, &environment);
+        let integer = KnownClass::Int.to_instance(db, &environment);
+        let row_for = |source, plain_arguments: &[Name]| {
+            let rule = ProvidedBindingValue::Export {
+                file: db.starlark_program_file(source),
+                name: Name::new("renderer"),
+                value: None,
+            }
+            .resolve_type(db)
+            .unwrap();
+            let row =
+                reflected_rule_type(db, declarations, "renderer", rule, plain_arguments).unwrap();
+            let ambient = ambient_rule_type(db, declarations).unwrap();
+            assert!(matches!(
+                UnionType::from_elements(db, &environment, [row, ambient]),
+                Type::Union(_)
+            ));
+            assert!(!row.is_subtype_of(
+                db,
+                &environment,
+                KnownClass::Dict.to_instance(db, &environment)
+            ));
+            row
+        };
+        let fields = |row| {
+            mapping_read_schema(db, &environment, row)
+                .unwrap()
+                .items(db)
+        };
+        let renderer = fields(row_for(
+            fixture.main_file(),
+            &[Name::new("dep"), Name::new("groups")],
+        ));
+        assert_eq!(
+            renderer["kind"].declared_type(),
+            Type::string_literal(db, "renderer")
+        );
+        let output = &renderer["out"];
+        assert!(output.is_read_only() && output.is_required());
+        assert_eq!(output.declared_type(), string);
+        assert!(!renderer["log"].is_required());
+        assert_eq!(
+            renderer["reports"].declared_type(),
+            Type::homogeneous_tuple(db, &environment, string)
+        );
+        assert!(!renderer.contains_key("_tool"));
+        assert_eq!(renderer["dep"].declared_type(), string);
+        assert_eq!(
+            native_type_argument(
+                db,
+                &environment,
+                declarations,
+                renderer["groups"].declared_type(),
+                "_ExistingRuleView"
+            ),
+            Some(Type::homogeneous_tuple(db, &environment, string))
+        );
+        let plain = row_for(other, &[Name::new("out")]);
+        let homonym = fields(plain);
+        assert_eq!(renderer["kind"], homonym["kind"]);
+        assert_eq!(homonym["out"].declared_type(), integer);
+        let opaque = row_for(other, &[]);
+        assert!(!fields(opaque).contains_key("out"));
+        assert!(matches!(
+            UnionType::from_elements(db, &environment, [plain, opaque]),
+            Type::Union(_)
+        ));
+    }
 
     #[test]
     fn download_results_preserve_flags_and_checksums() {
