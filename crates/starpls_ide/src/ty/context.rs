@@ -1474,11 +1474,14 @@ fn field_type<'db>(
     match view {
         View::Attr => {
             if attribute.kind == AttributeKind::Label {
-                match attribute.configuration {
-                    AttributeConfiguration::Split => return Some(list(target()?)),
-                    AttributeConfiguration::Unknown => return Some(Type::unknown()),
-                    AttributeConfiguration::Ordinary => return Some(present(target()?)),
-                }
+                let target = target()?;
+                return Some(match attribute.configuration {
+                    AttributeConfiguration::Split => list(target),
+                    AttributeConfiguration::Ordinary => present(target),
+                    AttributeConfiguration::Unknown => {
+                        UnionType::from_elements(db, environment, [present(target), list(target)])
+                    }
+                });
             }
             if attribute.kind == AttributeKind::Output {
                 return Some(present(native("Label")?));
@@ -1767,6 +1770,11 @@ mod tests {
     use crate::Analysis;
     use crate::FilePosition;
     use crate::LocationLink;
+
+    const POSSIBLY_SPLIT_OPTIONAL_LABEL: &str = concat!(
+        "Target[FilesToRunProvider[File | None]] | Target[None] | None | ",
+        "list[Target[FilesToRunProvider[File | None]] | Target[None]]",
+    );
 
     fn enable_context(analysis: &mut Analysis) {
         install_bazel_builtins(analysis);
@@ -3334,7 +3342,7 @@ example(name="rewritten", own=1, dep=1)
             file,
             source,
             "ctx.attr.dep",
-            "Unknown",
+            POSSIBLY_SPLIT_OPTIONAL_LABEL,
             "\"dep\"",
         );
         check_field(
@@ -5962,6 +5970,50 @@ example = rule(implementation=implementation, attrs={"out": attr.output()})
     }
 
     #[test]
+    fn a_possibly_split_label_retains_its_target_type_and_optionality() {
+        let source = r#"def config(enabled: bool) -> transition | None:
+    return analysis_test_transition(settings={}) if enabled else None
+def run(ctx):
+    required: Target | list[Target] = ctx.attr.required
+    optional: Target | list[Target] | None = ctx.attr.optional
+    number: int = ctx.attr.required
+    non_null: Target | list[Target] = ctx.attr.optional
+    print(required, optional, number, non_null)
+target = rule(implementation=run, attrs={
+    "required": attr.label(cfg=config(True), mandatory=True),
+    "optional": attr.label(cfg=config(True)),
+})
+target(name="good", required=":input")
+target(name="bad", required=42)
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        enable_context(&mut analysis);
+        let diagnostics = analysis
+            .snapshot()
+            .diagnostics(fixture.main_file())
+            .unwrap();
+        let mut sites = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let range = diagnostic.primary_span().unwrap().range().unwrap();
+                (range.start(), diagnostic.id().as_str(), &source[range])
+            })
+            .collect::<Vec<_>>();
+        sites.sort_unstable_by_key(|(start, _, _)| *start);
+        assert_eq!(
+            sites
+                .into_iter()
+                .map(|(_, id, site)| (id, site))
+                .collect::<Vec<_>>(),
+            [
+                ("invalid-assignment", "ctx.attr.required"),
+                ("invalid-assignment", "ctx.attr.optional"),
+                ("invalid-argument-type", "required=42"),
+            ]
+        );
+    }
+
+    #[test]
     fn context_views_share_attribute_origins_and_transition_types() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
@@ -6134,7 +6186,7 @@ example = rule(implementation=rule_impl, attrs={
                 "ctx.attr._exec_late_bound",
                 "Target[FilesToRunProvider[File]] | None",
             ),
-            ("ctx.attr.uncertain_exec", "Unknown"),
+            ("ctx.attr.uncertain_exec", POSSIBLY_SPLIT_OPTIONAL_LABEL),
             ("ctx.attr.unknown", "Unknown"),
         ] {
             check_field(&snapshot, file, source, expression, expected, "");
@@ -6192,7 +6244,7 @@ example = rule(implementation=implementation, outputs=unknown({}), executable=un
         let snapshot = analysis.snapshot();
         for (expression, expected) in [
             ("ctx.attr.count", "int"),
-            ("ctx.attr.dep", "Unknown"),
+            ("ctx.attr.dep", POSSIBLY_SPLIT_OPTIONAL_LABEL),
             ("ctx.files.dep", "list[File]"),
             ("ctx.file.dep", "Unknown"),
             ("ctx.executable.dep", "Unknown"),
