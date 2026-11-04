@@ -904,6 +904,8 @@ fn declarations(
             )
             .any(|value| existing_rule_view_result(value).is_some())
     {
+        // A .bzl file can reflect rules from any package that calls its macros.
+        // Only that package can supply the types of custom string keys.
         declared_classes.insert(EXISTING_RULE_VIEW.to_owned());
         // StarlarkNativeModule.DictLikeView defines the read operations shared
         // by existing_rule and existing_rules. Bazel can also return a dictionary,
@@ -928,17 +930,19 @@ fn declarations(
         def keys(self) -> _starpls_typing.Sequence[_starpls_builtins.str]: ...
         def values(self) -> _starpls_typing.Sequence[_Value]: ...
         def items(self) -> _starpls_typing.Sequence[_starpls_builtins.tuple[_starpls_builtins.str, _Value]]: ...
-    class _ExistingRule[_Tags = _starpls_builtins.object]({EXISTING_RULE_VIEW}[_starpls_builtins.object], _starpls_typing.Protocol):
+    class _ExistingRule[_Tags = _starpls_builtins.object]({EXISTING_RULE_VIEW}[_starpls_builtins.object]):
         @_starpls_typing.overload
         def __getitem__(self, key: _starpls_typing.Literal["name", "kind"]) -> _starpls_builtins.str: ...
         @_starpls_typing.overload
         def __getitem__(self, key: _starpls_typing.Literal["tags"]) -> _Tags: ...
         @_starpls_typing.overload
-        def __getitem__(self, key: _starpls_builtins.str) -> _starpls_builtins.object: ...
+        def __getitem__(self, key: _starpls_builtins.str) -> _starpls_unknown: ...
         @_starpls_typing.overload
         def get(self, key: _starpls_typing.Literal["name", "kind"], /, default: _starpls_builtins.object = ...) -> _starpls_builtins.str: ...
         @_starpls_typing.overload
         def get(self, key: _starpls_typing.Literal["tags"], /, default: _starpls_builtins.object = ...) -> _Tags: ...
+        @_starpls_typing.overload
+        def get(self, key: _starpls_builtins.str, /, default: _starpls_builtins.object = ...) -> _starpls_unknown: ...
         @_starpls_typing.overload
         def get(self, key: _starpls_typing.Hashable, /, default: _starpls_builtins.object = ...) -> _starpls_builtins.object: ...
 "#
@@ -6641,11 +6645,8 @@ def other() -> str:
                 "release 7.4.1",
                 &["name", "kind", "tags", "all_tags", "mutable_tags", "other"],
             ),
-            (
-                "release 8.0.0",
-                &["tags", "all_tags", "mutable_tags", "other"],
-            ),
-            ("release 9.0.0", &["mutable_tags", "other"]),
+            ("release 8.0.0", &["tags", "all_tags", "mutable_tags"]),
+            ("release 9.0.0", &["mutable_tags"]),
         ];
         for (release, expected) in cases {
             let mut builtins = starpls_bazel::decode_builtins(include_bytes!(
@@ -6683,6 +6684,26 @@ def other() -> str:
                 })
                 .collect();
             assert_eq!(failed_functions, expected, "{release}: {diagnostics:?}");
+            if release == "release 9.0.0" {
+                let source = "def name() -> str:\n    return native.existing_rules()['target']['name']\ndef custom() -> str:\n    return native.existing_rules()['target']['srcs']\n";
+                analysis.set_rules(
+                    crate::DiagnosticRules::from_settings(
+                        &[("non-static-type".into(), "error".into())].into(),
+                    )
+                    .unwrap(),
+                );
+                analysis.update_file(file, source.into());
+                let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+                assert!(!diagnostics.is_empty());
+                for diagnostic in &diagnostics {
+                    assert_eq!(diagnostic.id().as_str(), "non-static-type");
+                    assert!(
+                        usize::from(diagnostic.range().unwrap().start())
+                            >= source.find("custom").unwrap(),
+                        "{diagnostic:?}"
+                    );
+                }
+            }
         }
     }
 
