@@ -2058,9 +2058,7 @@ fn declarations(
     output.push_str(
         "_DownloadResult = _starpls_typing.TypeVar(\"_DownloadResult\", covariant=True)\n",
     );
-    output.push_str(
-        "_RepositoryAttributeValue = _starpls_typing.TypeVar(\"_RepositoryAttributeValue\")\n",
-    );
+    output.push_str("_DictionaryValue = _starpls_typing.TypeVar(\"_DictionaryValue\")\n");
     let context_attrs = if classes.contains_key("struct") {
         "_starpls_annotation__StructInfo[_starpls_unknown]"
     } else {
@@ -2695,6 +2693,8 @@ fn write_function(
 ) -> anyhow::Result<()> {
     const STRING_DICTIONARY_INPUT: &str =
         "_starpls_builtins.dict[_StringKey, _StringValue] | _DictSchema[_starpls_builtins.str]";
+    const STRING_KEYED_DICTIONARY_INPUT: &str =
+        "_starpls_builtins.dict[_StringKey, _DictionaryValue] | _DictSchema[_starpls_builtins.object]";
 
     let provider = matches!(kind, CallableKind::Provider(_));
     let empty_depset = matches!(kind, CallableKind::EmptyDepset);
@@ -2841,7 +2841,7 @@ fn write_function(
             // schemas without promising mutation through their required fields.
             (CallableKind::Method("repository_ctx" | "module_ctx"), "download" | "download_and_extract", "auth") => Some("_starpls_typing.Mapping[_StringKey, _DownloadAuth]"),
             // repoMetadata casts a concrete dictionary to string keys and arbitrary values.
-            (CallableKind::Method("repository_ctx"), "repo_metadata", "attrs_for_reproducibility") => (env::normalize_doc(r#type, true) == "Dictionary: string -> object").then_some("_starpls_builtins.dict[_StringKey, _RepositoryAttributeValue] | _DictSchema[_starpls_builtins.object]"),
+            (CallableKind::Method("repository_ctx"), "repo_metadata", "attrs_for_reproducibility") => (env::normalize_doc(r#type, true) == "Dictionary: string -> object").then_some(STRING_KEYED_DICTIONARY_INPUT),
             // Fill the inventory's missing element type. Remotable repository
             // rules further exclude paths.
             (CallableKind::Method("repository_ctx" | "module_ctx"), "execute", "arguments") => (classes.contains("Label") && classes.contains("path") && env::normalize_doc(r#type, true).eq_ignore_ascii_case("sequence")).then_some("_starpls_typing.Sequence[_starpls_builtins.str | _starpls_types.Label | _starpls_types.path]"),
@@ -2874,6 +2874,8 @@ fn write_function(
             (CallableKind::Function, "macro", "implementation") => Some("_starpls_ty_extensions.Intersection[_starpls_annotation_function, _starpls_typing.Callable[_ImplementationParameters, None]]"),
             (CallableKind::Function, "subrule", "implementation") => Some("_starpls_annotation_function"),
             (CallableKind::Function, "transition" | "exec_transition", "inputs" | "outputs") => Some("_starpls_typing.Sequence[_starpls_builtins.str]"),
+            // ConfigGlobalLibrary requires string keys; each setting determines its value type.
+            (CallableKind::Function, "analysis_test_transition", "settings") => Some(STRING_KEYED_DICTIONARY_INPUT),
             (CallableKind::Function, "rule" | "aspect", "provides") => {
                 provider_requirement_annotation(r#type, false)
             }
@@ -7772,6 +7774,49 @@ def inspect(
                 assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
                 assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
             }
+        }
+    }
+
+    #[test]
+    fn analysis_test_transition_accepts_string_keyed_dictionaries() {
+        let source = r#"
+def set_values(settings: dict[str, bool], row: dict[{"//flags:limit": int}]) -> None:
+    analysis_test_transition(settings=settings)
+    analysis_test_transition(settings=row)
+    analysis_test_transition(settings={"//flags:features": ["a"], "//flags:enabled": True})
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        analysis.set_rules(
+            crate::DiagnosticRules::from_settings(
+                &[("non-static-type".into(), "error".into())].into(),
+            )
+            .unwrap(),
+        );
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        analysis.set_rules(crate::DiagnosticRules::default());
+        for ty in [
+            "dict[Label, bool]",
+            "dict[int, bool]",
+            "list[tuple[str, bool]]",
+        ] {
+            analysis.update_file(file, source.replace("dict[str, bool]", ty));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [failure] = diagnostics.as_slice() else {
+                panic!("{ty}: {diagnostics:?}")
+            };
+            assert_eq!(failure.id().as_str(), "invalid-argument-type");
         }
     }
 
