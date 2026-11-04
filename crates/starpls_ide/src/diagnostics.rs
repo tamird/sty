@@ -1591,6 +1591,40 @@ def shadow(Name: str) -> str:
     }
 
     #[test]
+    fn stubs_can_load_a_source_type_alias() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(&mut analysis.db, "types.bzl", "# type Rows[T] = list[T]\n");
+        let source = fixture.add_file(
+            &mut analysis.db,
+            "lookup.bzl",
+            "def first(rows):\n    return rows[0]\n",
+        );
+        let stub = fixture.add_file(
+            &mut analysis.db,
+            "lookup.bzli",
+            "load('types.bzl', 'Rows')\ndef first(rows: Rows[str]) -> str: ...\n",
+        );
+        let caller = fixture.add_file(
+            &mut analysis.db,
+            "main.bzl",
+            "load('lookup.bzl', 'first')\nfirst(['a'])\n",
+        );
+        loader.add_files_from_fixture(&fixture);
+        analysis.set_type_interfaces([(source, stub)]).unwrap();
+        for file in [source, stub, caller] {
+            let ds = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(ds.is_empty(), "{ds:?}");
+        }
+        analysis.update_file(caller, "load('lookup.bzl', 'first')\nfirst([42])\n".into());
+        let ds = analysis.snapshot().diagnostics(caller).unwrap();
+        let [failure] = ds.as_slice() else {
+            panic!("{ds:?}")
+        };
+        assert_eq!(failure.id().as_str(), "invalid-argument-type");
+    }
+
+    #[test]
     fn comment_type_aliases_in_build_files() {
         let (mut analysis, _) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

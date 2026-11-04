@@ -65,7 +65,8 @@ runtime expressions use the implementation's own bindings.
 Bazel 9 `.bzl` files can declare top-level aliases such as `type Name = str`
 and `type Names[T] = list[T]` when type syntax is enabled. sty resolves these
 names in type expressions. In Bazel's default syntax-only mode, an alias is
-separate from runtime bindings and module exports.
+separate from runtime bindings and module exports. A `.bzli` file may
+`load` a public source alias for use in its declarations.
 
 In a BUILD file or a ruleset that supports older Bazel versions, put the
 declaration in a comment. Start it at column one between top-level statements.

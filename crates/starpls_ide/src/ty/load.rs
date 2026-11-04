@@ -174,6 +174,15 @@ pub(super) fn resolve<'db>(
                 return ProvidedBindingValue::Value(Type::unknown()).into();
             }
             let loaded_file = db.load_export_file(source_file, loaded, &name);
+            if source_file.is_type_interface(db) {
+                let index = ty_python_core::semantic_index(db, loaded_file);
+                if let Some(alias) =
+                    index.type_only_alias(ty_python_core::FileScopeId::global(), &name)
+                {
+                    let model = ty_python_semantic::SemanticModel::new(db, loaded_file);
+                    return ProvidedBindingValue::Value(model.definition_type(alias)).into();
+                }
+            }
             if is_loaded_alias(db, loaded_file, &name) {
                 return error(format!(
                     "Cannot load \"{name}\" from \"{module_name}\": loaded symbols are not exported"
