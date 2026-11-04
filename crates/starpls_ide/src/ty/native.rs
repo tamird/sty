@@ -1708,6 +1708,15 @@ fn declarations(
                         "dict" | "Dict" | "Dictionary"
                     ) {
                         Some("_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]")
+                    } else if dialect == Dialect::Bazel
+                        && class.name == "Action"
+                        && matches!(field.name.as_str(), "inputs" | "outputs")
+                        && classes.contains_key("File")
+                        && classes.contains_key("depset")
+                        && env::normalize_doc(&field.r#type, true) == "depset"
+                    {
+                        // AbstractAction wraps both nested sets with Depset.of(Artifact.class, ...).
+                        Some("_starpls_types.depset[_starpls_types.File]")
                     } else if class.name == "runfiles" {
                         // RunfilesApi's Java declarations omit these depset
                         // arguments from exported metadata.
@@ -7953,6 +7962,32 @@ def compose(s, p, opaque):
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert_eq!(diagnostics.len(), 1, "{value}: {diagnostics:?}");
             assert_eq!(diagnostics[0].id().as_str(), "invalid-argument-type");
+        }
+    }
+
+    #[test]
+    fn bazel_action_inputs_and_outputs_contain_files() {
+        let source = "def artifacts(action: Action) -> tuple[File, File]:\n    return (action.inputs.to_list()[0], action.outputs.to_list()[0])\n";
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis
+            .set_builtin_defs(
+                starpls_bazel::decode_builtins(include_bytes!(
+                    "../../../starpls/src/builtin/builtin.pb"
+                ))
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        for wrong in ["tuple[str, File]", "tuple[File, str]"] {
+            analysis.update_file(file, source.replace("tuple[File, File]", wrong));
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let [failure] = diagnostics.as_slice() else {
+                panic!("{diagnostics:?}")
+            };
+            assert_eq!(failure.id().as_str(), "invalid-return-type");
         }
     }
 
