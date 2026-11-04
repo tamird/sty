@@ -3678,6 +3678,66 @@ example_test(name="missing")
     }
 
     #[test]
+    fn rule_factory_merges_keyword_attributes_into_a_fresh_caller_mapping() {
+        let factory = r#"def make(cb, attrs={}):
+    return rule(implementation=cb, attrs=dict(attrs, subject=attr.label(mandatory=True)), test=True)
+def leaking(cb, attrs, clear):
+    return rule(implementation=cb, attrs=dict(attrs, fixed=clear(attrs)))
+def aliases(cb, attrs, clear):
+    return rule(implementation=cb, attrs=dict(attrs, fixed=clear()))
+api = struct(make=make, leaking=leaking, aliases=aliases)
+"#;
+        let source = r#"load("factory.bzl", "api")
+def impl(ctx): return []
+target = api.make(impl, {"subject": attr.int(), "text": attr.string(mandatory=True)})
+target(name="ok", subject=":src", text="hello", timeout="short")
+target(name="bad_subject", subject=42, text="hello")
+target(name="bad_text", subject=":src", text=42)
+target(name="missing", subject=":src")
+target(name="extra", subject=":src", text="hello", typo="no")
+def clear(attrs):
+    attrs.clear()
+    return attr.string()
+leaked = api.leaking(impl, {"removed": attr.int(mandatory=True)}, clear)
+leaked(name="ok", fixed="yes")
+attrs = {"removed": attr.int(mandatory=True)}
+def clear_alias(): return clear(attrs)
+aliased = api.aliases(impl, attrs, clear_alias)
+aliased(name="ok", fixed="yes")
+"#;
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = starpls_hir::Fixture::new(&mut analysis.db);
+        fixture.add_file(&mut analysis.db, "factory.bzl", factory);
+        let file = fixture.add_file(&mut analysis.db, "defs.bzl", source);
+        loader.add_files_from_fixture(&fixture);
+        enable_context(&mut analysis);
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        let mut sites = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let range = diagnostic.primary_span().unwrap().range().unwrap();
+                (range.start(), diagnostic.id().as_str(), &source[range])
+            })
+            .collect::<Vec<_>>();
+        sites.sort_unstable_by_key(|(start, _, _)| *start);
+        assert_eq!(
+            sites
+                .into_iter()
+                .map(|(_, id, text)| (id, text))
+                .collect::<Vec<_>>(),
+            [
+                ("invalid-argument-type", "subject=42"),
+                ("invalid-argument-type", "text=42"),
+                (
+                    "missing-argument",
+                    "target(name=\"missing\", subject=\":src\")"
+                ),
+                ("unknown-argument", "typo=\"no\""),
+            ]
+        );
+    }
+
+    #[test]
     fn forwarded_rule_uses_native_parent_and_outputs() {
         let source = r#"def make(cb, attrs, **options): return rule(implementation=cb, attrs=attrs, **options)
 def number(value: int) -> None: pass

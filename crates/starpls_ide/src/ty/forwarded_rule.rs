@@ -1,9 +1,11 @@
 //! Source functions that return a single native rule registration.
 
+use ruff_python_ast::helpers::any_over_expr;
 use ruff_python_ast::name::Name;
 use ruff_python_ast::Expr;
 use ruff_python_ast::Operator;
 use ruff_python_ast::Stmt;
+use ruff_text_size::Ranged;
 use ty_python_core::definition::Definition;
 use ty_python_core::definition::DefinitionKind;
 use ty_python_core::global_scope;
@@ -14,12 +16,15 @@ use ty_python_semantic::provided::BuiltinUsage;
 use ty_python_semantic::types::CheckedArgument;
 use ty_python_semantic::types::CheckedCall;
 use ty_python_semantic::types::DictionaryFirstEntry;
+use ty_python_semantic::types::DictionaryItem;
+use ty_python_semantic::types::DictionaryItemKind;
 use ty_python_semantic::types::DictionaryItems;
 use ty_python_semantic::types::KnownClass;
 use ty_python_semantic::types::Parameter;
 use ty_python_semantic::types::Parameters;
 use ty_python_semantic::types::Signature;
 use ty_python_semantic::types::Type;
+use ty_python_semantic::HasType;
 use ty_python_semantic::ProgramEnvironment;
 use ty_python_semantic::SemanticModel;
 
@@ -71,6 +76,12 @@ fn sequence_operands<'a>(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
+enum ExtraAttributes<'db> {
+    Frozen(Name),
+    Keywords(DictionaryItems<'db>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub(super) struct ForwardedRule<'db> {
     pub(super) native: Definition<'db>,
     pub(super) implementation: Name,
@@ -79,7 +90,8 @@ pub(super) struct ForwardedRule<'db> {
     attrs: Name,
     empty_default: bool,
     parameters: Box<[Name]>,
-    extra: Option<Name>,
+    extra: Option<ExtraAttributes<'db>>,
+    fixed_options: Box<[(Name, Type<'db>)]>,
     fragments: Option<FixedFragments>,
     sequence_parameters: Box<[(Name, bool)]>,
     requires_load: bool,
@@ -131,6 +143,26 @@ pub(super) fn definition<'db>(
             .find(|p| p.parameter.name.id == *name)
     };
     let implementation = parameter(&call.arguments.find_keyword("implementation")?.value)?;
+    let model = SemanticModel::new(db, file);
+    let scope = model.scope(call.into())?.to_scope_id(db, file);
+    let name = &call.func.as_name_expr()?.id;
+    if [scope, global_scope(db, file)].into_iter().any(|scope| {
+        place_table(db, scope)
+            .symbol_by_name(name)
+            .is_some_and(|symbol| symbol.is_bound() || symbol.is_declared())
+    }) {
+        return None;
+    }
+    let native_type = model.builtin_type(name, BuiltinUsage::Runtime)?;
+    let native = native_type
+        .definition(db, &model.program_environment())?
+        .definition()?;
+    if !matches!(
+        factory::declaration(db, native),
+        Some(BuiltinFunction::Rule { repository: false })
+    ) {
+        return None;
+    }
     let attrs = &call.arguments.find_keyword("attrs")?.value;
     let (attrs, extra) = match attrs {
         Expr::BinOp(union) => {
@@ -138,7 +170,47 @@ pub(super) fn definition<'db>(
                 return None;
             }
             let left = parameter(&union.left)?;
-            (left, Some(union.right.as_ref()))
+            let name = &union.right.as_name_expr()?.id;
+            if place_table(db, scope)
+                .symbol_by_name(name)
+                .is_some_and(|s| s.is_bound() || s.is_declared())
+            {
+                return None;
+            }
+            (left, Some(ExtraAttributes::Frozen(name.clone())))
+        }
+        Expr::Call(copy) => {
+            let [original] = copy.arguments.args.as_ref() else {
+                return None;
+            };
+            let attrs = parameter(original)?;
+            let builtin = model.builtin_type("dict", BuiltinUsage::Runtime)?;
+            if copy.func.inferred_type(&model)? != builtin
+                || any_over_expr(returned, |expr| {
+                    expr.range() != original.range()
+                        && expr
+                            .as_name_expr()
+                            .is_some_and(|n| n.id == attrs.parameter.name.id)
+                })
+            {
+                return None;
+            }
+            let mut fixed = super::context::empty_mapping();
+            fixed.items = copy
+                .arguments
+                .keywords
+                .iter()
+                .map(|keyword| {
+                    let key = keyword.arg.as_ref()?;
+                    Some(DictionaryItem {
+                        name: key.id.clone(),
+                        ty: keyword.value.inferred_type(&model)?,
+                        kind: DictionaryItemKind::Required,
+                        source: key.range(),
+                    })
+                })
+                .collect::<Option<_>>()?;
+            (attrs, Some(ExtraAttributes::Keywords(fixed)))
         }
         expr => (parameter(expr)?, None),
     };
@@ -147,13 +219,20 @@ pub(super) fn definition<'db>(
     }
     let mut variadic = None;
     let mut operand_names = Vec::new();
+    let mut fixed_options = Vec::new();
     for keyword in &call.arguments.keywords {
         match keyword.arg.as_ref().map(|arg| arg.as_str()) {
             Some("implementation" | "attrs") => {}
             Some("fragments" | "toolchains") => {
                 sequence_operands(&keyword.value, false, &mut operand_names)?
             }
-            Some(_) => return None,
+            Some(_) => {
+                if !matches!(extra, Some(ExtraAttributes::Keywords(_))) {
+                    return None;
+                }
+                let name = keyword.arg.as_ref()?;
+                fixed_options.push((name.id.clone(), keyword.value.inferred_type(&model)?));
+            }
             None => {
                 if variadic
                     .replace(&keyword.value.as_name_expr()?.id)
@@ -173,39 +252,6 @@ pub(super) fn definition<'db>(
     {
         return None;
     }
-    let model = SemanticModel::new(db, file);
-    let name = &call.func.as_name_expr()?.id;
-    let scope = model.scope(call.into())?.to_scope_id(db, file);
-    if [scope, global_scope(db, file)].into_iter().any(|scope| {
-        place_table(db, scope)
-            .symbol_by_name(name)
-            .is_some_and(|symbol| symbol.is_bound() || symbol.is_declared())
-    }) {
-        return None;
-    }
-    let native_type = model.builtin_type(name, BuiltinUsage::Runtime)?;
-    let native = native_type
-        .definition(db, &model.program_environment())?
-        .definition()?;
-    if !matches!(
-        factory::declaration(db, native),
-        Some(BuiltinFunction::Rule { repository: false })
-    ) {
-        return None;
-    }
-    let extra = match extra {
-        Some(expr) => {
-            let name = &expr.as_name_expr()?.id;
-            if place_table(db, scope)
-                .symbol_by_name(name)
-                .is_some_and(|symbol| symbol.is_bound() || symbol.is_declared())
-            {
-                return None;
-            }
-            Some(name.clone())
-        }
-        None => None,
-    };
     let mut sequence_parameters = Vec::new();
     let mut requires_load = extra.is_some();
     for name in operand_names {
@@ -289,6 +335,7 @@ pub(super) fn definition<'db>(
             .map(|p| p.parameter.name.id.clone())
             .collect(),
         extra,
+        fixed_options: fixed_options.into(),
     })
 }
 
@@ -365,10 +412,17 @@ impl<'a, 'db> BoundRule<'a, 'db> {
             }
         }
         let mut attrs = match call.argument(forwarder.attrs.as_str()) {
-            CheckedArgument::Value {
-                expression: _,
-                ty: _,
-            } => call.dictionary_argument(db, forwarder.attrs.as_str())?,
+            CheckedArgument::Value { expression, ty: _ } => {
+                // Fixed keyword expressions may call arbitrary code. A new dictionary
+                // literal has no earlier aliases, and the wrapper reads it only as
+                // the first input to dict(). Its keys survive until that copy.
+                if matches!(forwarder.extra, Some(ExtraAttributes::Keywords(_)))
+                    && !expression.is_some_and(Expr::is_dict_expr)
+                {
+                    return None;
+                }
+                call.dictionary_argument(db, forwarder.attrs.as_str())?
+            }
             CheckedArgument::Omitted => {
                 if !forwarder.empty_default {
                     return None;
@@ -408,8 +462,13 @@ impl<'a, 'db> BoundRule<'a, 'db> {
             }
         }
         let extra = match &forwarder.extra {
-            Some(name) => {
-                let extra = SemanticModel::new(db, owner).frozen_export_dictionary_items(name)?;
+            Some(spec) => {
+                let extra = match spec {
+                    ExtraAttributes::Frozen(name) => {
+                        SemanticModel::new(db, owner).frozen_export_dictionary_items(name)?
+                    }
+                    ExtraAttributes::Keywords(items) => (owner, items.clone()),
+                };
                 if ![&attrs, &extra.1].into_iter().all(|mapping| {
                     mapping.is_complete() && mapping.items.iter().all(|item| item.is_required())
                 }) {
@@ -433,6 +492,17 @@ impl<'a, 'db> BoundRule<'a, 'db> {
     }
 
     pub(super) fn option(&self, name: &str) -> CheckedArgument<'a, 'db> {
+        if let Some((_, value)) = self
+            .forwarder
+            .fixed_options
+            .iter()
+            .find(|(key, _)| key.as_str() == name)
+        {
+            return CheckedArgument::Value {
+                ty: *value,
+                expression: None,
+            };
+        }
         self.options
             .iter()
             .find(|(key, _, _)| key.as_str() == name)

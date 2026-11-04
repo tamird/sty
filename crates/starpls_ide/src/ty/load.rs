@@ -30,10 +30,13 @@ use ty_python_core::place_table;
 use ty_python_core::scope::ScopeId;
 use ty_python_core::use_def_map;
 use ty_python_core::ProgramFile;
+use ty_python_semantic::provided::BuiltinUsage;
 use ty_python_semantic::provided::ProvidedBindingResolution;
 use ty_python_semantic::provided::ProvidedBindingValue;
 use ty_python_semantic::types::Type;
 use ty_python_semantic::Db as _;
+use ty_python_semantic::HasType;
+use ty_python_semantic::SemanticModel;
 
 use crate::Database;
 
@@ -280,10 +283,14 @@ pub(super) fn loaded_function_at_call<'db>(
     {
         return None;
     }
+    let (callee, mut member) = match callee {
+        Expr::Attribute(attr) => (attr.value.as_ref(), Some(&attr.attr.id)),
+        other => (other, None),
+    };
     let mut binding = binding_at_name(db, scope, callee.as_name_expr()?)?;
     let mut seen = Vec::new();
     loop {
-        if binding == target {
+        if member.is_none() && binding == target {
             return Some(());
         }
         if seen.contains(&binding) {
@@ -313,11 +320,18 @@ pub(super) fn loaded_function_at_call<'db>(
                 }
                 let file = binding.program_file(db);
                 let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
-                binding_at_name(
-                    db,
-                    binding.scope(db),
-                    assignment.value(&parsed).as_name_expr()?,
-                )?
+                let mut value = assignment.value(&parsed);
+                if let Some(call) = value.as_call_expr() {
+                    let field = member.take()?;
+                    let model = SemanticModel::new(db, file);
+                    if call.func.inferred_type(&model)?
+                        != model.builtin_type("struct", BuiltinUsage::Runtime)?
+                    {
+                        return None;
+                    }
+                    value = &call.arguments.find_keyword(field)?.value;
+                }
+                binding_at_name(db, binding.scope(db), value.as_name_expr()?)?
             }
             _ => return None,
         };
