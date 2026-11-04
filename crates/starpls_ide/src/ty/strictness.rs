@@ -8,7 +8,6 @@ use ruff_db::diagnostic::Span;
 use ruff_python_ast::visitor;
 use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::AnyNodeRef;
-use ruff_python_ast::ArgOrKeyword;
 use ruff_python_ast::Expr;
 use ruff_python_ast::ExprContext;
 use ruff_python_ast::HasNodeIndex;
@@ -202,7 +201,7 @@ impl<'db> Checks<'_, 'db> {
         }
     }
 
-    /// Returns direct call results consumed by a proven static parameter contract.
+    /// Returns arguments whose value is covered by the selected static parameter.
     fn check_call_inputs(
         &mut self,
         call: &ruff_python_ast::ExprCall,
@@ -223,11 +222,39 @@ impl<'db> Checks<'_, 'db> {
                 // A checked invocation need only satisfy the selected contracts for supplied
                 // arguments. Subtyping proves that no gradual alternative was needed; the
                 // argument values and the checked result are inspected separately below.
-                for input in arguments.iter().flatten() {
-                    if !input
-                        .argument_type
-                        .is_subtype_of(self.db, &env, input.parameter_type)
+                let mut covered = FxHashSet::default();
+                let mut static_callee = None;
+                let mut reported = false;
+                for (argument, inputs) in call.arguments.iter_source_order().zip(arguments) {
+                    let expression = argument.value();
+                    let empty = matches!(expression, Expr::List(list) if list.elts.is_empty())
+                        || matches!(expression, Expr::Dict(dict) if dict.items.is_empty());
+                    // A fresh literal can take the element type of any matched parameter.
+                    // The generic declaration can be fully static even if this literal
+                    // leaves T undetermined; the call result is checked independently.
+                    if empty
+                        && !argument.is_variadic()
+                        && !inputs.is_empty()
+                        && (inputs
+                            .iter()
+                            .all(|input| self.is_fully_static(input.parameter_type))
+                            || *static_callee.get_or_insert_with(|| {
+                                call.func
+                                    .inferred_type(self.model)
+                                    .is_some_and(|callee| self.is_fully_static_invocation(callee))
+                            }))
                     {
+                        covered.insert(expression.range());
+                        continue;
+                    }
+                    if let Some(input) = inputs.iter().find(|input| {
+                        !reported
+                            && !input.argument_type.is_subtype_of(
+                                self.db,
+                                &env,
+                                input.parameter_type,
+                            )
+                    }) {
                         self.report(
                             call.func.range(),
                             &NON_STATIC_TYPE,
@@ -237,43 +264,27 @@ impl<'db> Checks<'_, 'db> {
                                 input.parameter_type.display(self.db, &env),
                             ),
                         );
-                        break;
+                        reported = true;
                     }
-                }
-                call.arguments
-                    .iter_source_order()
-                    .zip(arguments)
-                    .filter_map(|(argument, inputs)| {
-                        let expression = match argument {
-                            ArgOrKeyword::Arg(expression) => expression,
-                            ArgOrKeyword::Keyword(keyword) => {
-                                keyword.arg.as_ref()?;
-                                &keyword.value
-                            }
-                        };
-                        if !matches!(expression, Expr::Call(_)) || inputs.is_empty() {
-                            return None;
-                        }
-                        let result = expression.inferred_type(self.model)?;
-                        if self.is_fully_static(result) {
-                            return None;
-                        }
+                    if argument.is_variadic() || !matches!(expression, Expr::Call(_)) {
+                        continue;
+                    }
+                    let Some(result) = expression.inferred_type(self.model) else {
+                        continue;
+                    };
+                    if !inputs.is_empty() && !self.is_fully_static(result) {
                         // Every runtime value must fit every selected parameter. Top
                         // materialization preserves variance and existential containers.
                         let upper_bound = result.top_materialization(self.db, &env);
-                        inputs
-                            .iter()
-                            .all(|input| {
-                                self.is_fully_static(input.parameter_type)
-                                    && upper_bound.is_subtype_of(
-                                        self.db,
-                                        &env,
-                                        input.parameter_type,
-                                    )
-                            })
-                            .then_some(expression.range())
-                    })
-                    .collect()
+                        if inputs.iter().all(|input| {
+                            self.is_fully_static(input.parameter_type)
+                                && upper_bound.is_subtype_of(self.db, &env, input.parameter_type)
+                        }) {
+                            covered.insert(expression.range());
+                        }
+                    }
+                }
+                covered
             }
             Err(CallInputError::Invalid) => FxHashSet::default(),
             Err(CallInputError::Incomplete) => {
@@ -981,6 +992,81 @@ def Initialized(value: str, count: int = ...) -> record[{"value": str, "count": 
             .diagnostics(fixture.main_file())
             .unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn static_parameters_accept_fresh_empty_literals() {
+        let source = r#"
+def opaque(value: object) -> None: pass
+def strings(values: Collection[str]) -> None: pass
+def counts(values: dict[str, int]) -> None: pass
+def choose(value, choices):
+    # type: [T](T, Collection[T]) -> T
+    return value
+def identity(items):
+    # type: [T](list[T]) -> list[T]
+    return items
+def copy_values(items):
+    # type: [K: Hashable, V](dict[K, V]) -> dict[K, V]
+    return items
+def required_field(value: dict[{"name": str}]) -> None: pass
+
+opaque([])
+opaque({})
+strings([])
+counts(values={})
+choose("name", [])
+opaque(identity([]))
+opaque(copy_values({}))
+"#;
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
+        analysis.set_rules(rules(&["non-static-type"]));
+        let file = fixture.main_file();
+        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        for (statement, failing, lint) in [
+            (
+                "def forward(xs: list[Any]) -> None:\n    opaque(xs)",
+                "xs",
+                "non-static-type",
+            ),
+            (
+                "def forward(x: Any) -> None:\n    strings([x])",
+                "[x]",
+                "non-static-type",
+            ),
+            (
+                "def forward(x: Any) -> None:\n    opaque({'key': x})",
+                "{'key': x}",
+                "non-static-type",
+            ),
+            ("counts([])", "[]", "invalid-argument-type"),
+            ("required_field({})", "{}", "missing-typed-dict-key"),
+            (
+                "def untyped(value: Any) -> None: pass\nuntyped([])",
+                "[]",
+                "non-static-type",
+            ),
+            (
+                "unresolved = identity([])",
+                "identity([])",
+                "non-static-type",
+            ),
+        ] {
+            let source = format!("{source}\n{statement}\n");
+            analysis.update_file(file, source.clone());
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.id().as_str() == lint
+                        && diagnostic.range().is_some_and(|range| {
+                            range.start().to_usize() == source.rfind(failing).unwrap()
+                        })
+                }),
+                "{statement}: {diagnostics:?}"
+            );
+        }
     }
 
     #[test]
