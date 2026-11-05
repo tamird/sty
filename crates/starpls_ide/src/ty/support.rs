@@ -924,6 +924,14 @@ def invalid_projected(target, wrong_values, keys_only):
     # type: (dict[str, int], Intersection[Top[dict[Unknown, str]], Collection[str]], Collection[str]) -> None
     target.update(wrong_values)
     target.update(keys_only)
+
+def select_keys(source, keys):
+    # type: (dict[int, str], list[float]) -> dict[float, str]
+    return {k: source[k] for k in keys if k in source}
+
+def unfiltered(source, keys):
+    # type: (dict[int, str], list[float]) -> list[str]
+    return [source[k] for k in keys]
 "#;
         let (mut analysis, _) = Analysis::new_for_test();
         analysis
@@ -975,6 +983,7 @@ def invalid_projected(target, wrong_values, keys_only):
                 ),
                 ("no-matching-overload", "target.update(wrong_values)"),
                 ("no-matching-overload", "target.update(keys_only)"),
+                ("invalid-argument-type", "return [source[k] for k in keys]"),
             ],
         );
     }
