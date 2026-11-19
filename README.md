@@ -19,7 +19,7 @@ Put it on your `PATH` as `sty`, or configure your editor with its absolute path.
 Tagged builds use the [releases page](https://github.com/tamird/sty/releases).
 
 See [BuildBuddy builds](docs/buildbuddy.md) for remote execution and Remote Bazel,
-and the [work map](docs/work-map.html) for the recovered community-project work.
+and the [work map](https://tamird.github.io/sty/) for the recovered community-project work.
 
 ### VS Code and Cursor
 

@@ -1,0 +1,12 @@
+load("@aspect_rules_js//js:defs.bzl", "js_test")
+
+js_test(
+    name = "work_map_test",
+    data = [
+        "app.mjs",
+        "index.html",
+        "style.css",
+        "work-map-data.mjs",
+    ],
+    entry_point = "work_map_test.mjs",
+)
