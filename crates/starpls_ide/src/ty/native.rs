@@ -1080,6 +1080,12 @@ fn declarations(
         .collect();
     let mut provider_declarations = String::new();
     for class in classes.values() {
+        if class.name == env::XCODE_PLATFORM_NAME {
+            body.push_str(
+                "    class _XcodePlatformName(_starpls_typing.Protocol):\n        @property\n        def name(self) -> _starpls_builtins.str: ...\n",
+            );
+            continue;
+        }
         if class.name == "apple_platform_type" {
             if let Some(namespace) = string_platform_types {
                 let values = namespace
@@ -1217,7 +1223,12 @@ fn declarations(
                 "_starpls_builtins.str"
             };
             writeln!(body, "        minimum_os_for_platform_type: _starpls_typing.Final[_starpls_typing.Callable[[{platform_type}], _starpls_types.DottedVersion]]")?;
-            writeln!(body, "        sdk_version_for_platform: _starpls_typing.Final[_starpls_typing.Callable[[_starpls_types.apple_platform], _starpls_types.DottedVersion]]")?;
+            let sdk_platform = if classes.contains_key(env::XCODE_PLATFORM_NAME) {
+                "_starpls_types.apple_platform | _starpls_ty_extensions.Intersection[_starpls_types.struct[_starpls_builtins.object], _starpls_types._XcodePlatformName]"
+            } else {
+                "_starpls_types.apple_platform"
+            };
+            writeln!(body, "        sdk_version_for_platform: _starpls_typing.Final[_starpls_typing.Callable[[{sdk_platform}], _starpls_types.DottedVersion]]")?;
             writeln!(body, "        availability: _starpls_typing.Final[_starpls_typing.Callable[[], _starpls_builtins.str]]")?;
             writeln!(body, "        execution_info: _starpls_typing.Final[_starpls_typing.Callable[[], _starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]]]")?;
         }
@@ -5695,17 +5706,25 @@ wrong: str = apple_common.platform_type.ios
             "../../../starpls/src/builtin/builtin.pb"
         ))
         .unwrap();
-        let (mut analysis, _) = Analysis::new_for_test();
-        analysis
-            .set_builtin_defs(builtins, Default::default())
-            .unwrap();
-        analysis.set_rules(
-            crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
-            )
-            .unwrap(),
-        );
-        let source = r#"
+        for (release, structural_platforms) in [
+            ("development version", false),
+            ("release 7.6.1", false),
+            ("release 8.0.0", true),
+            ("release 9.3.0", true),
+        ] {
+            let mut profile = builtins.clone();
+            env::apply_versioned_signatures(&mut profile, release);
+            let (mut analysis, _) = Analysis::new_for_test();
+            analysis
+                .set_builtin_defs(profile, Default::default())
+                .unwrap();
+            analysis.set_rules(
+                crate::DiagnosticRules::from_settings(
+                    &[("unsound-return-statement".into(), "error".into())].into(),
+                )
+                .unwrap(),
+            );
+            let source = r#"
 def selected(target: Target) -> XcodeVersionConfig:
     return target[apple_common.XcodeVersionConfig]
 
@@ -5724,34 +5743,65 @@ def version(config: XcodeVersionConfig) -> DottedVersion | str | None:
 def sdk(config: XcodeVersionConfig, platform: apple_platform) -> DottedVersion:
     return config.sdk_version_for_platform(platform)
 "#;
-        let file = analysis
-            .open_document(
-                Path::new("/xcode.bzl"),
-                Dialect::Bazel,
-                None,
-                source.to_owned(),
-                1,
-            )
-            .unwrap();
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        analysis.update_file(
-            file,
-            "def invalid(config: XcodeVersionConfig) -> int:\n    config.execution_info = lambda: {}\n    apple_common.target_apple_env(config, 'ios')\n    return config.execution_info()\n".into(),
-        );
-        let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
-        let ids: Vec<_> = diagnostics
-            .iter()
-            .map(|diagnostic| diagnostic.id().as_str())
-            .collect();
-        assert_eq!(
-            ids,
-            [
-                "invalid-assignment",
-                "invalid-argument-type",
-                "invalid-return-type"
-            ]
-        );
+            let file = analysis
+                .open_document(
+                    Path::new("/xcode.bzl"),
+                    Dialect::Bazel,
+                    None,
+                    source.to_owned(),
+                    1,
+                )
+                .unwrap();
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            analysis.update_file(
+                file,
+                r#"def sdk(config: XcodeVersionConfig) -> DottedVersion:
+    return config.sdk_version_for_platform(struct(name="ios_device", is_device=True))
+"#
+                .into(),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            if structural_platforms {
+                assert!(diagnostics.is_empty(), "{release}: {diagnostics:?}");
+            } else {
+                assert_eq!(ids, ["invalid-argument-type"], "{release}");
+            }
+            analysis.update_file(
+                file,
+                r#"def invalid(config: XcodeVersionConfig) -> int:
+    config.execution_info = lambda: {}
+    apple_common.target_apple_env(config, "ios")
+    config.sdk_version_for_platform(struct(platform="ios_device"))
+    config.sdk_version_for_platform(struct(name=1))
+    config.sdk_version_for_platform("ios_device")
+    config.sdk_version_for_platform(Label("//:ios_device"))
+    return config.execution_info()
+"#
+                .into(),
+            );
+            let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
+            let ids: Vec<_> = diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.id().as_str())
+                .collect();
+            assert_eq!(
+                ids,
+                [
+                    "invalid-assignment",
+                    "invalid-argument-type",
+                    "invalid-argument-type",
+                    "invalid-argument-type",
+                    "invalid-argument-type",
+                    "invalid-argument-type",
+                    "invalid-return-type"
+                ]
+            );
+        }
     }
 
     #[test]

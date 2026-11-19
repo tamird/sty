@@ -229,6 +229,8 @@ pub fn configure_attr_license(
     Some(member)
 }
 
+pub const XCODE_PLATFORM_NAME: &str = "_XcodePlatformName";
+
 /// Complete version-dependent API metadata using `bazel info release`.
 pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
     let Some(parsed) = BazelVersion::parse_release(release) else {
@@ -240,6 +242,24 @@ pub fn apply_versioned_signatures(builtins: &mut Builtins, release: &str) {
         patch: _,
     } = parsed;
     let version = (major, minor);
+    // Bazel 8's Starlark Xcode provider reads only platform.name, accepting
+    // both native platforms and compatibility structs. Bazel 7 requires its
+    // native ApplePlatform enum.
+    // https://github.com/bazelbuild/bazel/blob/8.0.0/src/main/starlark/builtins_bzl/common/xcode/providers.bzl
+    if version >= (8, 0)
+        && ["apple_common", "apple_platform", "struct"]
+            .iter()
+            .all(|name| builtins.r#type.iter().any(|class| class.name == *name))
+        && !builtins
+            .r#type
+            .iter()
+            .any(|class| class.name == XCODE_PLATFORM_NAME)
+    {
+        builtins.r#type.push(Type {
+            name: XCODE_PLATFORM_NAME.to_owned(),
+            ..Default::default()
+        });
+    }
     // https://github.com/bazelbuild/bazel/commit/09d0ada6fe2f92207f08e81dc21ba39a1fcea7db
     if let Some(callable) = builtins
         .global
