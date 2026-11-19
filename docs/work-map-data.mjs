@@ -41,7 +41,8 @@ export const upstream = [
   {
     "id": "destructured-list-elements",
     "title": "Literal element types in destructured list loops",
-    "state": "Awaiting Tamir review",
+    "state": "Revising after Tamir review",
+    "nextAction": "Qualify the clearer guard comment and tuple-size regression before requesting review again.",
     "source": "c52778b7343432c867b5325b26fd5da72329b5ca",
     "summary": "Preserve literal types when destructuring immediately consumed lists, using the existing shared inference machinery. Qualified remotely and published on the Ruff fork; not submitted upstream.",
     "qualifiedBase": "912ba68f546006f42264c43180c9ce83a76b87cd",

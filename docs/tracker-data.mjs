@@ -46,6 +46,7 @@ export function buildTracker({ projects, additionalProjects, upstream, goals, ba
       summary: `${item.summary}\n\n${item.qualification?.summary || ''}\n\nTamir must approve before any upstream submission.`,
       evidence: item.qualification?.evidence || [],
     };
+    if (item.nextAction) node.followup = { owner: 'Agent', sourceHead: item.qualifiedHead, nextAction: item.nextAction };
     if (item.state === 'Awaiting Tamir review') node.contributorReview = {
       kind: 'proposal', status: 'pending', title: 'Review qualified ty proposal',
       summary: 'Review the published change and decide whether to submit upstream. Qualification is recorded in the item details. Nothing has been submitted upstream.',
