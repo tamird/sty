@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "repo": "astral-sh/ruff",
+  "owner": "tamird",
+  "registryDate": "2026-11-19T20:48:13Z",
+  "checkedAt": "2026-11-19T20:48:13Z",
+  "repositories": {
+    "astral-sh/ruff": "none",
+    "tamird/ruff": "none",
+    "bazelbuild/bazel-skylib": "none",
+    "bazelbuild/rules_cc": "none",
+    "hermeticbuild/hermetic-llvm": "none",
+    "bazelbuild/apple_support": "none",
+    "fmeum/with_cfg.bzl": "none",
+    "bazel-contrib/rules_runfiles_group": "none",
+    "hermeticbuild/rules_rs": "none",
+    "bazel-contrib/bazel_features": "none"
+  },
+  "prs": [],
+  "issues": {}
+}

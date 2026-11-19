@@ -1,0 +1,446 @@
+{
+  "meta": {
+    "repo": "astral-sh/ruff",
+    "owner": "tamird",
+    "updatedAt": "2026-11-19T20:48:13Z",
+    "repositories": {
+      "astral-sh/ruff": "none",
+      "tamird/ruff": "none",
+      "bazelbuild/bazel-skylib": "none",
+      "bazelbuild/rules_cc": "none",
+      "hermeticbuild/hermetic-llvm": "none",
+      "bazelbuild/apple_support": "none",
+      "fmeum/with_cfg.bzl": "none",
+      "bazel-contrib/rules_runfiles_group": "none",
+      "hermeticbuild/rules_rs": "none",
+      "bazel-contrib/bazel_features": "none"
+    }
+  },
+  "groups": [
+    {
+      "id": "community",
+      "label": "Community type checking"
+    },
+    {
+      "id": "ty",
+      "label": "Upstream ty"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pr:bazelbuild/bazel-skylib:641",
+      "type": "pr",
+      "repo": "bazelbuild/bazel-skylib",
+      "number": 641,
+      "title": "Bazel Skylib: add type checking",
+      "group": "community",
+      "status": "draft",
+      "url": "https://github.com/bazelbuild/bazel-skylib/pull/641",
+      "head": "baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",
+      "summary": "Helper, collection, partial, provider and rule contracts.\n\nRecorded checks: Fork PR #1: root and Gazelle sty checks passed. Upstream head has a successful CLA check.\n\nIncludes open fixes #643 and #647. Native build_test tag handling is tracked separately in #644.",
+      "evidence": [
+        {
+          "label": "Skylib #643",
+          "url": "https://github.com/bazelbuild/bazel-skylib/pull/643"
+        },
+        {
+          "label": "Skylib #647",
+          "url": "https://github.com/bazelbuild/bazel-skylib/pull/647"
+        },
+        {
+          "label": "Skylib #644",
+          "url": "https://github.com/bazelbuild/bazel-skylib/pull/644"
+        }
+      ],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",
+        "nextAction": "Resolve helper and tag follow-ups"
+      }
+    },
+    {
+      "id": "pr:bazelbuild/rules_cc:940",
+      "type": "pr",
+      "repo": "bazelbuild/rules_cc",
+      "number": 940,
+      "title": "rules_cc: add type checking",
+      "group": "community",
+      "status": "draft",
+      "url": "https://github.com/bazelbuild/rules_cc/pull/940",
+      "head": "bbec9dfcba1604fa7c42810edec3b617a62f872f",
+      "summary": "C++ toolchain providers, helper constructors and macro contracts.\n\nRecorded checks: Upstream and fork sty checks passed.\n\nRelated #960 closed without merging; #967 remains open. Do not treat the closed fix as landed.",
+      "evidence": [
+        {
+          "label": "rules_cc #960",
+          "url": "https://github.com/bazelbuild/rules_cc/pull/960"
+        },
+        {
+          "label": "rules_cc #967",
+          "url": "https://github.com/bazelbuild/rules_cc/pull/967"
+        }
+      ],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "bbec9dfcba1604fa7c42810edec3b617a62f872f",
+        "nextAction": "Reconcile #960 / #967 fixes"
+      }
+    },
+    {
+      "id": "pr:hermeticbuild/hermetic-llvm:835",
+      "type": "pr",
+      "repo": "hermeticbuild/hermetic-llvm",
+      "number": 835,
+      "title": "hermetic-llvm: add type checking",
+      "group": "community",
+      "status": "draft",
+      "url": "https://github.com/hermeticbuild/hermetic-llvm/pull/835",
+      "head": "53f3ce81e92dd1bffe6100797620b45740795ffd",
+      "summary": "LLVM helper, selector and callback contracts compatible with older Bazel releases.\n\nRecorded checks: Upstream sty and the listed CI checks passed.\n\nConsumes Skylib and rules_cc declarations or versioned stubs until releases include those types.",
+      "evidence": [
+        {
+          "label": "Skylib #641",
+          "url": "https://github.com/bazelbuild/bazel-skylib/pull/641"
+        },
+        {
+          "label": "rules_cc #940",
+          "url": "https://github.com/bazelbuild/rules_cc/pull/940"
+        }
+      ],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "53f3ce81e92dd1bffe6100797620b45740795ffd",
+        "nextAction": "Track typed dependency releases"
+      }
+    },
+    {
+      "id": "pr:bazelbuild/apple_support:668",
+      "type": "pr",
+      "repo": "bazelbuild/apple_support",
+      "number": 668,
+      "title": "apple_support: add type checking",
+      "group": "community",
+      "status": "draft",
+      "url": "https://github.com/bazelbuild/apple_support/pull/668",
+      "head": "6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",
+      "summary": "Xcode, lipo, Apple action, DMG and platform provider contracts.\n\nRecorded checks: sty passed.\n\nUses versioned Skylib stubs and a narrow rules_cc annotation patch until supported releases carry them.",
+      "evidence": [
+        {
+          "label": "Skylib #641",
+          "url": "https://github.com/bazelbuild/bazel-skylib/pull/641"
+        },
+        {
+          "label": "rules_cc #940",
+          "url": "https://github.com/bazelbuild/rules_cc/pull/940"
+        }
+      ],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",
+        "nextAction": "Replace temporary contracts after typed releases"
+      }
+    },
+    {
+      "id": "pr:fmeum/with_cfg.bzl:269",
+      "type": "pr",
+      "repo": "fmeum/with_cfg.bzl",
+      "number": 269,
+      "title": "with_cfg.bzl: add type checking",
+      "group": "community",
+      "status": "draft",
+      "url": "https://github.com/fmeum/with_cfg.bzl/pull/269",
+      "head": "52365fcdb3cf36149ee0937fb0b812968e4cb56f",
+      "summary": "Settings, selectors, frontend rules, argument rewriting and provider contracts.\n\nRecorded checks: sty passed; a macOS test was cancelled.\n\nGitHub reports a merge conflict. Reconcile against upstream before claiming readiness.",
+      "evidence": [],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "52365fcdb3cf36149ee0937fb0b812968e4cb56f",
+        "nextAction": "Resolve merge conflict"
+      }
+    },
+    {
+      "id": "pr:bazel-contrib/rules_runfiles_group:23",
+      "type": "pr",
+      "repo": "bazel-contrib/rules_runfiles_group",
+      "number": 23,
+      "title": "rules_runfiles_group: add type checking",
+      "group": "community",
+      "status": "draft",
+      "url": "https://github.com/bazel-contrib/rules_runfiles_group/pull/23",
+      "head": "0f3a7b23dd0624aeac263f5328b494a37fba5d9c",
+      "summary": "Provider fields and generic handle types shared by materialize, transform and merge callbacks.\n\nRecorded checks: sty and Bazel matrix passed.\n\nDraft awaiting further review and continuation.",
+      "evidence": [],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "0f3a7b23dd0624aeac263f5328b494a37fba5d9c",
+        "nextAction": "Confirm current-head checks; review draft"
+      }
+    },
+    {
+      "id": "pr:hermeticbuild/rules_rs:306",
+      "type": "pr",
+      "repo": "hermeticbuild/rules_rs",
+      "number": 306,
+      "title": "rules_rs: add type checking",
+      "group": "community",
+      "status": "draft",
+      "url": "https://github.com/hermeticbuild/rules_rs/pull/306",
+      "head": "8c0866a3c27e7cad86b55cf09392ea44f34444a0",
+      "summary": "Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.\n\nRecorded checks: sty passed. One Bazel 8 Ubuntu job failed while fetching NetBSD standard libraries.\n\nThe failed job reports No space left on device. This establishes runner disk exhaustion, not a typing regression.",
+      "evidence": [
+        {
+          "label": "Failed runner log",
+          "url": "https://github.com/hermeticbuild/rules_rs/actions/runs/41667742544/job/126028278197"
+        }
+      ],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "8c0866a3c27e7cad86b55cf09392ea44f34444a0",
+        "nextAction": "Rerun CI after runner disk fix"
+      }
+    },
+    {
+      "id": "pr:bazel-contrib/bazel_features:158",
+      "type": "pr",
+      "repo": "bazel-contrib/bazel_features",
+      "number": 158,
+      "title": "bazel_features: add type checking",
+      "group": "community",
+      "status": "open",
+      "url": "https://github.com/bazel-contrib/bazel_features/pull/158",
+      "head": "a14724e000bbdc0bb1406ac620465527d83e892f",
+      "summary": "Feature compatibility declarations checked against implementations.\n\nRecorded checks: Fork sty passed; a macOS test was cancelled.\n\nOpen, non-draft. Qualification and approval status must be checked separately.",
+      "evidence": [],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "a14724e000bbdc0bb1406ac620465527d83e892f",
+        "nextAction": "Check remaining CI and reviews"
+      }
+    },
+    {
+      "id": "branch:destructured-list-elements",
+      "type": "branch",
+      "repo": "tamird/ruff",
+      "title": "Literal element types in destructured list loops",
+      "group": "ty",
+      "status": "Awaiting Tamir review",
+      "ref": "upstream/destructured-list-elements",
+      "head": "5485dac87269c66659f6a76be2b759dbec723ff3",
+      "url": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...5485dac87269c66659f6a76be2b759dbec723ff3",
+      "summary": "Preserve literal types when destructuring immediately consumed lists, using the existing shared inference machinery. Qualified remotely and published on the Ruff fork; not submitted upstream.\n\nLinux qualification completed: matched baseline regression; strict focused fixtures; full semantic, core, IDE and external mdtest suites; workspace Clippy; formatting and required changed-file hooks. Detailed run logs are private and delivered directly to Tamir.\n\nTamir must approve before any upstream submission.",
+      "evidence": [
+        {
+          "label": "Upstream base fixture",
+          "url": "https://github.com/astral-sh/ruff/blob/912ba68f546006f42264c43180c9ce83a76b87cd/crates/ty_python_semantic/resources/mdtest/unpacking.md"
+        }
+      ],
+      "contributorReview": {
+        "kind": "proposal",
+        "status": "pending",
+        "title": "Review qualified ty proposal",
+        "summary": "Review the published change and decide whether to submit upstream. Qualification is recorded in the item details. Nothing has been submitted upstream.",
+        "head": "5485dac87269c66659f6a76be2b759dbec723ff3",
+        "baseHead": "912ba68f546006f42264c43180c9ce83a76b87cd",
+        "url": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...5485dac87269c66659f6a76be2b759dbec723ff3"
+      }
+    },
+    {
+      "id": "pr:29138",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29138,
+      "title": "Local keyword dictionaries",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/29138",
+      "summary": "In upstream review. Zsol contribution; use as an upstream template.",
+      "evidence": []
+    },
+    {
+      "id": "pr:29141",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29141,
+      "title": "Conditional keyword dictionaries",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/29141",
+      "summary": "In upstream review. Zsol contribution; use as an upstream template.",
+      "evidence": []
+    },
+    {
+      "id": "pr:29186",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29186,
+      "title": "Alternative semantic-index design",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/29186",
+      "summary": "Related upstream design. Related upstream work; inspect before proposing overlapping changes.",
+      "evidence": []
+    },
+    {
+      "id": "pr:28820",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 28820,
+      "title": "Dictionary-key completions",
+      "group": "ty",
+      "status": "merged",
+      "url": "https://github.com/astral-sh/ruff/pull/28820",
+      "summary": "Merged. Zsol contribution; use as an upstream template.",
+      "evidence": [
+        {
+          "label": "Upstream merge",
+          "url": "https://github.com/astral-sh/ruff/commit/6cddbe8ee3"
+        }
+      ]
+    },
+    {
+      "id": "pr:28821",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 28821,
+      "title": "Literal call unpacking",
+      "group": "ty",
+      "status": "merged",
+      "url": "https://github.com/astral-sh/ruff/pull/28821",
+      "summary": "Merged. Zsol contribution; use as an upstream template.",
+      "evidence": [
+        {
+          "label": "Upstream merge",
+          "url": "https://github.com/astral-sh/ruff/commit/da9e37289d"
+        }
+      ]
+    },
+    {
+      "id": "pr:29131",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29131,
+      "title": "Empty collection peers",
+      "group": "ty",
+      "status": "merged",
+      "url": "https://github.com/astral-sh/ruff/pull/29131",
+      "summary": "Merged. Zsol contribution; use as an upstream template.",
+      "evidence": [
+        {
+          "label": "Upstream merge",
+          "url": "https://github.com/astral-sh/ruff/commit/5d16eb00e9"
+        }
+      ]
+    },
+    {
+      "id": "pr:29135",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29135,
+      "title": "Composite Final restrictions",
+      "group": "ty",
+      "status": "merged",
+      "url": "https://github.com/astral-sh/ruff/pull/29135",
+      "summary": "Merged. Zsol contribution; use as an upstream template.",
+      "evidence": [
+        {
+          "label": "Upstream merge",
+          "url": "https://github.com/astral-sh/ruff/commit/73e6c488b6"
+        }
+      ]
+    },
+    {
+      "id": "pr:29136",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29136,
+      "title": "Absent closed-TypedDict get defaults",
+      "group": "ty",
+      "status": "merged",
+      "url": "https://github.com/astral-sh/ruff/pull/29136",
+      "summary": "Merged. Zsol contribution; use as an upstream template.",
+      "evidence": [
+        {
+          "label": "Upstream merge",
+          "url": "https://github.com/astral-sh/ruff/commit/97aa1f69d8"
+        }
+      ]
+    }
+  ],
+  "edges": [],
+  "investigations": [
+    {
+      "id": "investigation:checker",
+      "title": "Build an excellent Bazel Starlark checker",
+      "owner": "Tamir / Agent",
+      "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
+      "status": "active",
+      "updatedAt": "2026-11-19T20:48:13Z",
+      "evidence": [
+        {
+          "label": "sty source",
+          "url": "https://github.com/tamird/sty"
+        }
+      ],
+      "findings": []
+    },
+    {
+      "id": "investigation:bazel",
+      "title": "Improve upstream Bazel type checking",
+      "owner": "Tamir / Agent",
+      "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
+      "status": "active",
+      "updatedAt": "2026-11-19T20:48:13Z",
+      "evidence": [
+        {
+          "label": "sty source",
+          "url": "https://github.com/tamird/sty"
+        }
+      ],
+      "findings": []
+    },
+    {
+      "id": "investigation:ty",
+      "title": "Return general improvements to ty",
+      "owner": "Tamir / Agent",
+      "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
+      "status": "active",
+      "updatedAt": "2026-11-19T20:48:13Z",
+      "evidence": [
+        {
+          "label": "sty source",
+          "url": "https://github.com/tamird/sty"
+        }
+      ],
+      "findings": []
+    },
+    {
+      "id": "investigation:community",
+      "title": "Give community projects complete support",
+      "owner": "Tamir / Agent",
+      "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
+      "status": "active",
+      "updatedAt": "2026-11-19T20:48:13Z",
+      "evidence": [
+        {
+          "label": "sty source",
+          "url": "https://github.com/tamird/sty"
+        }
+      ],
+      "findings": []
+    },
+    {
+      "id": "investigation:hosts",
+      "title": "Make the work reusable by other Starlark hosts",
+      "owner": "Tamir / Agent",
+      "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
+      "status": "active",
+      "updatedAt": "2026-11-19T20:48:13Z",
+      "evidence": [
+        {
+          "label": "sty source",
+          "url": "https://github.com/tamird/sty"
+        }
+      ],
+      "findings": []
+    }
+  ]
+}
