@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { generated } from './generate-registry.mjs';
-import { goals, projects, upstream } from './work-map-data.mjs';
+import { goals, projects, additionalProjects, relatedChanges, languageWork, bazelFeedback, bazelFeedbackObservedAt, tyWork, upstream } from './work-map-data.mjs';
 
 function unique(values, label) {
   assert.equal(new Set(values).size, values.length, `${label} must be unique`);
@@ -64,7 +64,7 @@ for (const [name, expected] of [['registry.json', generated.registry], ['github-
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 assert.ok(source.endsWith('start();\n'));
 const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
-({ validateRegistry, validateSnapshot, attentionReasons, historical, citationURL,
+({ validateRegistry, validateSnapshot, attentionReasons, historical, citationURL, status,
   load(data, snapshot) {
     registry = data;
     model = { ...data, nodes: registryNodes(data) };
@@ -75,11 +75,11 @@ const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
 tracker.validateRegistry(generated.registry);
 tracker.validateSnapshot(generated.snapshot, generated.registry);
 const nodes = tracker.load(generated.registry, generated.snapshot);
-assert.equal(nodes.filter(node => node.group === 'community').length, projects.length);
-assert.equal(generated.registry.investigations.length, goals.length);
+assert.equal(nodes.filter(node => node.group === 'community').length, projects.length + additionalProjects.length + relatedChanges.length);
+assert.equal(generated.registry.investigations.length, goals.length + tyWork.length);
 assert.equal(generated.snapshot.prs.length, 0, 'Do not invent provider-level check or review evidence');
-assert.deepEqual(generated.registry.edges, [], 'Related links do not establish blocking dependencies');
-for (const item of projects) {
+assert.ok(generated.registry.edges.every(edge => edge.type === 'includes'), 'Related links do not establish blocking dependencies');
+for (const item of [...projects, ...additionalProjects]) {
   const node = nodes.find(node => node.repo === item.repo && node.number === item.number);
   assert.equal(node.followup.sourceHead, item.head);
   assert.equal(node.followup.nextAction, item.nextAction);
@@ -98,3 +98,37 @@ for (const item of upstream) {
   invalid.nodes.find(candidate => candidate.id === node.id).contributorReview.head = '0'.repeat(40);
   assert.throws(() => tracker.validateRegistry(invalid), /Invalid contributor decision/);
 }
+
+unique(bazelFeedback.map(item => item.number), 'Bazel feedback issues');
+assert.equal(bazelFeedback.length, 17, 'Reconcile the full discovered typing issue set');
+assert.equal(Object.keys(generated.snapshot.issues).length, bazelFeedback.length);
+for (const item of bazelFeedback) {
+  const id = `issue:bazelbuild/bazel:${item.number}`;
+  const node = nodes.find(node => node.id === id);
+  assert.equal(node.type, 'issue');
+  const receipt = generated.snapshot.issues[id];
+  assert.equal(receipt.githubState, item.state);
+  assert.ok(tracker.status({ ...node, ...receipt }).startsWith(`Issue ${item.state}`));
+  assert.ok(tracker.historical({ ...node, ...receipt, githubState: 'closed' }), 'Closed issues become history through provider state');
+  assert.equal(receipt.checkedAt, bazelFeedbackObservedAt);
+  assert.ok(Date.parse(receipt.updatedAt) <= Date.parse(receipt.checkedAt));
+  assert.equal(receipt.githubStateReason, undefined, 'Unknown closure reason must stay absent');
+}
+const incompleteIssues = structuredClone(generated.snapshot);
+delete incompleteIssues.issues[`issue:bazelbuild/bazel:${bazelFeedback[0].number}`];
+assert.throws(() => tracker.validateSnapshot(incompleteIssues, generated.registry), /Incomplete issue inventory/);
+const invalidIssue = structuredClone(generated.snapshot);
+invalidIssue.issues[`issue:bazelbuild/bazel:${bazelFeedback[0].number}`].updatedAt = 'unknown';
+assert.throws(() => tracker.validateSnapshot(invalidIssue, generated.registry), /Invalid issue provider/);
+for (const item of tyWork) {
+  const node = nodes.find(node => node.id === `investigation:${item.id}`);
+  assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
+  assert.equal(tracker.attentionReasons({ ...node, owner: 'Maintainer' }, 'tamird').length, 0);
+  assert.equal(tracker.attentionReasons({ ...node, task: false }, 'tamird').length, 0);
+  assert.equal(node.contributorReview, undefined, 'Inventory candidates are not qualified review proposals');
+}
+const invalidGroup = structuredClone(generated.registry);
+invalidGroup.investigations.find(item => item.task).group = 'unknown';
+assert.throws(() => tracker.validateRegistry(invalidGroup), /Invalid investigation group/);
+assert.ok(generated.registry.meta.inventory.status.includes('progress'));
+assert.ok(languageWork.some(item => item.number === 318 && item.state === 'merged'));

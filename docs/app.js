@@ -624,9 +624,12 @@ function attentionReasons(node, owner) {
       else reasons.push({ ...ATTENTION_REASONS.find(item => item.id === dispositionId), detail: triage });
     } else if (!reasons.some(item => item.id === id)) reasons.push({ ...ATTENTION_REASONS.find(item => item.id === id), ...(title ? { title } : {}), detail });
   };
-  if (node.followup?.owner === "Agent" && node.followup.sourceHead === node.head && !historical(node)
+  if (node.followup?.owner === "Agent" && /^[a-f0-9]{40}$/.test(node.followup.sourceHead) && node.followup.sourceHead === node.head && !historical(node)
       && (!node.github || node.github.head === node.followup.sourceHead) && node.followup.nextAction)
     add("agent-recorded-followup", node.followup.nextAction);
+  if (node.type === "investigation" && node.task === true && node.owner === "Agent" && node.status === "active"
+      && typeof node.nextStep === "string" && node.nextStep.trim())
+    add("agent-recorded-followup", node.nextStep);
   const issueWork = node.issueFeedback?.filter(row => !row.claimed);
   if (issueWork?.length) add("agent-issue-reply", issueWork.map(row =>
     `@${row.author} · ${row.action}`).join(" "));
@@ -1812,7 +1815,7 @@ function drawTable(nodes) {
     identity.append(link(label(node), node.url));
     const choose = button(node.title, () => select(node.id)); choose.dataset.node = node.id;
     title.append(choose);
-    if (node.followup?.nextAction) title.append(element("span", "next-action", node.followup.nextAction));
+    if (node.followup?.nextAction || node.nextStep) title.append(element("span", "next-action", node.followup?.nextAction || node.nextStep));
     const decisions = visibleDecisions(node).filter(decision => !contributorDecisionNeedsRefresh(node, decision));
     for (const decision of decisions.filter(decision => ["review-changes", "proposal"].includes(decisionReason(decision)) || decision.kind === "proposal")) {
       const revision = refinementComparison(node, decision);
@@ -2360,7 +2363,7 @@ function applyLive(snapshot, nextRegistry = registry) {
   }
   const stale = Date.now() - new Date(snapshot.checkedAt).getTime() > STALE_AGE;
   setFreshness(`Work map · ${date(registry.meta.updatedAt)} | Evidence snapshot · ${date(snapshot.checkedAt)}${stale ? " · older than 2 hours" : ""}`, stale);
-  $("freshness-detail").textContent = "This is a curated recovery snapshot, not a live GitHub status feed. Recorded checks and next actions appear in item details; missing check and review data stay unknown. Reload fetches the latest published registry and evidence. A non-draft PR does not establish qualification or approval. Every upstream contribution requires Tamir’s approval after qualification. Investigations preserve the five goals; Buck2 support is not yet established.";
+  $("freshness-detail").textContent = "Curated records and dated GitHub issue receipts are separate from fresh reproductions. Missing check and review data stay unknown. Reload fetches the latest published registry and evidence. A non-draft PR does not establish qualification or approval. Every upstream contribution requires Tamir’s approval after qualification. " + (registry.meta.inventory?.scope || "") + " " + (registry.meta.inventory?.qualification || "");
 }
 function validIssueDraft(decision) {
   return decision?.kind === "issue" && /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/new$/.test(decision.url)

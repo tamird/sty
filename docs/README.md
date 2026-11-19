@@ -11,8 +11,11 @@ records with `bazel run //docs:generate_registry -- --write`; the docs test
 checks that both generated files match the source.
 
 `generate-registry.mjs` records the curation time. Rebuilding does not refresh
-that timestamp. These recovered records are curated evidence, not a live GitHub
-feed: absent provider-level check and review receipts stay unknown. Existing
+that timestamp. The inventory separates curated recovery records from dated GitHub issue
+receipts. It is not a live GitHub feed: absent provider-level check and review
+receipts stay unknown. Open feedback is not proof that an old reproduction
+still fails on current Bazel. Ruff mechanism groups are preliminary until the
+whole pinned fork is reconciled against current upstream. Existing
 dependency references are evidence links, not invented blocking graph edges.
 All repositories use the tracker's ordinary GitHub policy, without Copybara.
 
