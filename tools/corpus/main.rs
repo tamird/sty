@@ -43,6 +43,24 @@ struct Checker<'a> {
     bazel_version: &'a str,
 }
 
+#[derive(Debug)]
+struct PreparedCase {
+    name: String,
+    output: PathBuf,
+    selected: BTreeSet<PathBuf>,
+    expected: Vec<ExpectedDiagnostic>,
+    command: Command,
+}
+
+struct PreparedRepository {
+    directory: PathBuf,
+    checkout: PathBuf,
+    origin: String,
+    commit: String,
+    bazel_version: String,
+    cases: Vec<PreparedCase>,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Repository {
@@ -290,13 +308,13 @@ fn check_report(
     Ok(())
 }
 
-fn run_case(
+fn prepare_case(
     checker: &Checker<'_>,
     checkout: &Path,
     output: &Path,
     sources: &[PathBuf],
     case: Case,
-) -> Result<()> {
+) -> Result<PreparedCase> {
     let Checker {
         sty,
         runfiles,
@@ -307,7 +325,7 @@ fn run_case(
     let Case {
         name,
         overlays,
-        mut expected,
+        expected,
     } = case;
     relative(Path::new(&name))?;
     let output = output.join(&name);
@@ -372,6 +390,23 @@ fn run_case(
         selected.insert(logical);
     }
     command.args(&selected);
+    Ok(PreparedCase {
+        name,
+        output,
+        selected,
+        expected,
+        command,
+    })
+}
+
+fn run_case(checkout: &Path, bazel_version: &str, case: PreparedCase) -> Result<()> {
+    let PreparedCase {
+        name,
+        output,
+        selected,
+        mut expected,
+        mut command,
+    } = case;
     let start = Instant::now();
     let Output {
         status,
@@ -392,7 +427,7 @@ fn run_case(
         actual == expected,
         "diagnostics differ:\nexpected {expected:?}\nactual {actual:?}"
     );
-    let report = fs::read(&report_path)?;
+    let report = fs::read(output.join("report.json"))?;
     let report = serde_json::from_slice(&report)?;
     check_report(report, checkout, &selected, expected.len(), bazel_version)?;
     let expected_exit = if expected.is_empty() { 0 } else { 1 };
@@ -462,7 +497,7 @@ fn main() -> Result<()> {
     let path =
         std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&inherited_path)))?;
     let started = Instant::now();
-    let mut failures = 0;
+    let mut prepared = Vec::new();
     for Repository {
         directory,
         origin,
@@ -489,10 +524,38 @@ fn main() -> Result<()> {
         };
         let output = output_dir.join(&directory);
         fs::create_dir(&output)?;
+        let mut prepared_cases = Vec::new();
+        for case in cases {
+            let name = case.name.clone();
+            let case = prepare_case(&checker, &checkout, &output, &sources, case)
+                .with_context(|| format!("{} / {name}", directory.display()))?;
+            prepared_cases.push(case);
+        }
+        prepared.push(PreparedRepository {
+            directory,
+            checkout,
+            origin,
+            commit,
+            bazel_version,
+            cases: prepared_cases,
+        });
+    }
+    let mut failures = 0;
+    for PreparedRepository {
+        directory,
+        checkout,
+        origin,
+        commit,
+        bazel_version,
+        cases,
+    } in prepared
+    {
+        repository_identity(&checkout, &origin, &commit)?;
         println!("{} at {commit}", directory.display());
         for case in cases {
             let name = case.name.clone();
-            if let Err(error) = run_case(&checker, &checkout, &output, &sources, case) {
+            let output = case.output.clone();
+            if let Err(error) = run_case(&checkout, &bazel_version, case) {
                 failures += 1;
                 eprintln!(
                     "{} / {name}: {error:#}; evidence: {}",
@@ -511,6 +574,63 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cases_are_prepared_without_starting_the_checker() {
+        let temporary = PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap());
+        let checkout = temporary.join("preparation-checkout");
+        let output = temporary.join("preparation-output");
+        fs::create_dir(&checkout).unwrap();
+        fs::create_dir(&output).unwrap();
+        let source = PathBuf::from("source.bzl");
+        fs::write(checkout.join(&source), "return value").unwrap();
+        let missing_executable = temporary.join("checker-must-not-start");
+        let runfiles = Runfiles::create().unwrap();
+        let checker = Checker {
+            sty: &missing_executable,
+            runfiles: &runfiles,
+            fixtures: Path::new(""),
+            path: OsStr::new(""),
+            bazel_version: "9.3.1",
+        };
+        let case = |name: &str, old: &str| Case {
+            name: name.into(),
+            overlays: vec![Overlay::Replace {
+                path: source.clone(),
+                old: old.into(),
+                new: "42".into(),
+            }],
+            expected: Vec::new(),
+        };
+        prepare_case(
+            &checker,
+            &checkout,
+            &output,
+            std::slice::from_ref(&source),
+            case("valid", "value"),
+        )
+        .unwrap();
+        let stale = prepare_case(
+            &checker,
+            &checkout,
+            &output,
+            std::slice::from_ref(&source),
+            case("stale", "missing"),
+        );
+        assert!(stale.unwrap_err().to_string().contains("exactly once"));
+        fs::remove_file(checkout.join(&source)).unwrap();
+        let missing = prepare_case(
+            &checker,
+            &checkout,
+            &output,
+            std::slice::from_ref(&source),
+            case("missing", "value"),
+        );
+        assert!(missing
+            .unwrap_err()
+            .to_string()
+            .contains("source does not exist"));
+    }
 
     #[test]
     fn primary_location_is_required() {

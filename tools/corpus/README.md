@@ -44,6 +44,8 @@ complete coverage and zero diagnostics. Negative cases overlay an incorrect
 caller or replace exactly one source fragment, then require the precise
 diagnostic ID, source path, and line. Overlays and reports are written to the
 output directory. Repository contents are read directly from the pinned checkout.
+The runner prepares every overlay and validates all selected sources before
+starting a checker, so stale corpus inputs fail before any source checks run.
 
 The cases cover container element types, fixed tuples, optional results, callable
 inputs, configurable rule attributes, and provider return lists. The `with_cfg`
