@@ -44,15 +44,12 @@ export const upstream = [
     "state": "Awaiting Tamir review",
     "source": "c52778b7343432c867b5325b26fd5da72329b5ca",
     "summary": "Preserve literal types when destructuring immediately consumed lists, using the existing shared inference machinery. Qualified remotely and published on the Ruff fork; not submitted upstream.",
-    "qualifiedHead": "cb60f9c33cff9897f49d110ed22c68829bb60da9",
-    "qualifiedURL": "https://github.com/tamird/ruff/commit/cb60f9c33cff9897f49d110ed22c68829bb60da9",
+    "qualifiedBase": "912ba68f546006f42264c43180c9ce83a76b87cd",
+    "qualifiedHead": "5485dac87269c66659f6a76be2b759dbec723ff3",
+    "qualifiedURL": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...5485dac87269c66659f6a76be2b759dbec723ff3",
     "qualification": {
       "summary": "Linux qualification completed: matched baseline regression; strict focused fixtures; full semantic, core, IDE and external mdtest suites; workspace Clippy; formatting and required changed-file hooks. Detailed run logs are private and delivered directly to Tamir.",
       "evidence": [
-        {
-          "label": "Exact source manifest",
-          "url": "https://github.com/tamird/sty/blob/38c493e8fa8dc1aa566ec83e282e4e5c3fb73415/docs/proposals/ty-list-loop.json"
-        },
         {
           "label": "Upstream base fixture",
           "url": "https://github.com/astral-sh/ruff/blob/912ba68f546006f42264c43180c9ce83a76b87cd/crates/ty_python_semantic/resources/mdtest/unpacking.md"

@@ -1,14 +1,27 @@
-load("@aspect_rules_js//js:defs.bzl", "js_test")
+load("@aspect_rules_js//js:defs.bzl", "js_binary", "js_test")
+
+js_binary(
+    name = "generate_registry",
+    data = ["tracker-data.mjs", "work-map-data.mjs"],
+    entry_point = "generate-registry.mjs",
+)
 
 js_test(
     name = "work_map_test",
     data = [
-        "app.mjs",
+        "app.js",
+        "draft.html",
+        "draft.js",
+        "draft-reader.js",
+        "generate-registry.mjs",
+        "github-status.json",
+        "icon.svg",
         "index.html",
-        "proposals/ty-list-loop.json",
-        "proposals/ty-list-loop.patch",
+        "registry.json",
         "style.css",
+        "tracker-data.mjs",
         "work-map-data.mjs",
+        "vendor/markdown-it-15.0.3/markdown-it.min.js",
     ],
     entry_point = "work_map_test.mjs",
 )

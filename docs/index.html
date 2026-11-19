@@ -1,26 +1,84 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Current actions, upstream ty contributions, and community Starlark type checking.">
-<title>sty · Work map</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#111917">
+  <meta name="description" content="Track sty community type checking, ty upstream proposals, evidence and dependencies.">
+  <title>sty · Type checking work</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css?v=20261119-gvisor">
+  <script src="draft.js?v=20261119-gvisor" defer></script>
+  <script src="app.js?v=20261119-gvisor" defer></script>
 </head>
 <body>
-<header class="topbar"><h1>sty <span>work map</span></h1><nav aria-label="Workstreams"><a href="#community">Community</a><a href="#upstream">Upstream ty</a><a href="#reference">Reference</a></nav><span class="snapshot">Observed 19 Nov 2026</span></header>
-<main>
-<section class="queue" aria-labelledby="next-title"><div class="section-heading"><h2 id="next-title">Next actions</h2><span class="muted">Qualification first. Tamir approves upstream submissions.</span></div><div class="table-scroll" role="region" aria-label="Next actions" tabindex="0"><table><caption class="visually-hidden">Next actions and who needs to act</caption><thead><tr><th scope="col">Owner</th><th scope="col">Action</th><th scope="col">Open</th></tr></thead><tbody id="next-actions"></tbody></table></div></section>
-<div class="dashboard">
-<section id="community" aria-labelledby="community-title"><div class="section-heading"><h2 id="community-title">Community projects</h2><span id="count" role="status" aria-live="polite"></span></div><div class="controls"><label for="search" class="visually-hidden">Find a project or dependency</label><input id="search" type="search" placeholder="Filter projects or dependencies"><label for="state" class="visually-hidden">PR state</label><select id="state"><option value="all">All states</option><option value="blocked">Known follow-up</option><option value="draft">Draft PRs</option><option value="non-draft">Non-draft PRs</option></select></div><div class="table-scroll" role="region" aria-label="Community project status" tabindex="0"><table class="community-table"><thead><tr><th scope="col">Project / PR</th><th scope="col">State</th><th scope="col">Next action</th><th scope="col">Evidence</th></tr></thead><tbody id="projects"></tbody></table></div><p class="table-note">Corpus: 148 cases at eight restored pins. Current PR heads are newer; the corpus has not been rerun against them.</p></section>
-<div class="secondary-column">
-<section id="upstream" aria-labelledby="upstream-title"><div class="section-heading"><h2 id="upstream-title">Upstream ty</h2><span class="muted">Active work</span></div><div class="table-scroll" role="region" aria-label="Active upstream ty work" tabindex="0"><table><thead><tr><th scope="col">Change</th><th scope="col">State / next action</th><th scope="col">Evidence</th></tr></thead><tbody id="upstream-items"></tbody></table></div></section>
-<section class="infrastructure" aria-labelledby="build-title"><h2 id="build-title">Build infrastructure</h2><dl><dt>sty</dt><dd>Bazel + RBE qualified. <a href="https://github.com/tamird/sty/blob/bazel-buildbuddy/docs/buildbuddy.md">Run instructions</a></dd><dt>Ruff / ty</dt><dd>Qualification runs remotely. Bazel integration is pending.</dd><dt>Buck2</dt><dd>Host separation is a goal; support is not established.</dd></dl></section>
-</div></div>
-<section id="reference" class="reference" aria-label="Reference material"><details><summary>Merged ty templates <span id="merged-count"></span></summary><div class="table-scroll" role="region" aria-label="Merged ty templates" tabindex="0"><table><thead><tr><th scope="col">Adaptation</th><th scope="col">Upstream PR</th><th scope="col">Merged change</th></tr></thead><tbody id="merged-items"></tbody></table></div></details><details><summary>Five goals and the upstream review boundary</summary><ol id="goals"></ol><p>Every proposed upstream contribution is implemented, independently reviewed, and fully qualified before Tamir reviews the exact change and evidence. Upstream submission follows only after approval. This includes Bazel feedback and community contributions.</p></details><details><summary>Recovery and corpus context</summary><p>The <a href="https://github.com/tamird/sty/tree/sty-advisory-implementations">recovered integration branch</a> supplies the checker and <a href="https://github.com/tamird/sty/blob/bazel-buildbuddy/tools/corpus/README.md">community corpus</a>. GitHub links show current PR discussions; this map records dated observations and does not infer qualification or approval from PR draft state. General inference belongs in ty; Starlark language rules and host-specific APIs need separate owners.</p></details></section>
-</main>
-<noscript><p>JavaScript displays the work records. Open the <a href="https://github.com/tamird/sty/blob/bazel-buildbuddy/tools/corpus/README.md">corpus inventory</a> or <a href="https://github.com/astral-sh/ruff/pulls?q=is%3Apr+author%3Azsol">Zsol's upstream contributions</a> directly.</p></noscript>
-<footer>Prepared with Codex under Tamir's direction. <a href="https://github.com/tamird/sty/tree/bazel-buildbuddy">Source</a> · <a href="https://tamird.github.io/gvisor/">gVisor work map</a></footer>
-<script type="module" src="app.mjs"></script>
+  <a class="skip-link" href="#workspace">Skip to work</a>
+  <header class="masthead">
+    <a class="brand" href="./"><img src="icon.svg" alt="" width="24" height="24"><strong>sty</strong><span>/ type checking</span></a>
+    <span id="inventory" class="inventory">Loading registry…</span>
+    <a class="source-link" href="https://github.com/tamird/sty/tree/bazel-buildbuddy/docs" target="_blank" rel="noopener noreferrer">Source ↗</a>
+  </header>
+  <main id="workspace">
+    <p id="outreach-pause" class="notice" hidden></p>
+    <div class="toolbar">
+      <div class="view-switch" aria-label="View"><button id="dag-view" aria-pressed="false" aria-controls="dag-pane">Dependency DAG</button><button id="table-view" aria-pressed="true" aria-controls="table-pane">Table</button><button id="investigations-view" aria-pressed="false" aria-controls="investigations-pane">Investigations</button></div>
+      <a href="?view=table&amp;reason=queue-user">Review queue</a>
+      <label class="search"><span class="sr-only">Search work</span><input id="search" type="search" placeholder="Search title, PR #, or branch" autocomplete="off"><kbd>/</kbd></label>
+      <label id="investigation-search-control" class="search" hidden><span class="sr-only">Search investigations</span><input id="investigation-search" type="search" placeholder="Search investigations and findings" autocomplete="off"><kbd>/</kbd></label>
+      <label id="group-control"><span class="sr-only">Workstream</span><select id="group-filter"><option value="">All workstreams</option></select></label>
+      <label id="resolved-control" class="resolved-control"><input id="show-resolved" type="checkbox"> Show history</label>
+      <label id="investigation-filter-control" hidden><span class="sr-only">Investigation status</span><select id="investigation-filter"><option value="">All investigations</option><option value="active">Active</option><option value="concluded">Concluded</option></select></label>
+      <button id="toolbar-reset" class="subtle">Reset</button>
+    </div>
+    <section id="work-state-controls" class="state-toolbar" aria-label="Work state filters">
+      <div id="state-filters" class="state-filters" role="group" aria-label="Filter by state; select multiple reasons to match any"></div>
+      <span id="legacy-state-filter" hidden></span>
+      <details class="state-help"><summary>Attention &amp; evidence</summary><p>Each item counts once in the four queues. A decision you can make comes first, followed by agent work and maintainer action. Other tracked work includes branches waiting for prerequisites, drafts and items without a recorded action. Choose “Show this queue” to see the items in its count.</p><p>Individual reasons can overlap. Selecting a reason includes items with that reason in any queue. Review changes, draft reviews and replies have separate filters. Recorded qualification is distinct from approval. Missing live check and review data remain unknown. An unanswered review remains open until there is evidence that it was addressed.</p><p>Show history includes delivered, withdrawn, retired and merged work. Dates show when the recorded state was observed or changed.</p></details>
+    </section>
+    <div class="workspace-body">
+      <section class="work-pane" aria-label="Work inventory">
+        <div class="pane-bar"><span id="visible-count">Loading…</span><span id="filter-note"></span></div>
+        <section id="dag-pane" aria-label="Dependency DAG">
+          <label id="chain-control" class="chain-control"><span>Focus</span><select id="chain-filter" aria-label="Graph focus"></select></label>
+          <p id="dag-warning" class="notice warning" role="alert" hidden></p>
+          <div id="graph-stage" class="graph-stage">
+            <svg id="graph" tabindex="0" role="group" aria-label="Prerequisite to dependent graph. Drag to pan; pinch to zoom, or use zoom controls and arrow keys."><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker><marker id="arrow-blocked" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs><g id="graph-content"></g></svg>
+            <div class="map-controls" aria-label="Graph controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button id="fit">Fit</button><button id="reset-view">100%</button></div>
+            <span class="map-hint">R maintainer · C source checks · solid blue: prerequisite · dashed amber: dependent</span>
+          </div>
+        </section>
+        <section id="table-pane" class="table-pane" aria-label="All work table" tabindex="0" role="region" hidden>
+          <div class="table-tools">
+            <div class="table-actions"><label><input id="group-by-attention" type="checkbox"> Group by attention</label><button id="handoff-copy-all" disabled>Copy visible</button></div>
+            <p id="handoff-snapshot"></p><p id="handoff-copy-status" role="status" aria-live="polite"></p>
+            <div id="handoff-manual" hidden><label for="handoff-copy-text">Plain text</label><textarea id="handoff-copy-text" readonly rows="8"></textarea></div>
+          </div>
+          <table id="work-table"><thead><tr>
+            <th scope="col" aria-sort="none"><button data-sort="number">Item</button></th>
+            <th scope="col" aria-sort="none"><button data-sort="title">Title</button></th>
+            <th scope="col" class="numeric" aria-sort="descending"><button data-sort="impact" title="Unique downstream open PRs">Blocks</button></th>
+            <th scope="col" class="numeric" aria-sort="none"><button data-sort="direct">Direct</button></th>
+            <th scope="col" aria-sort="none"><button data-sort="age" title="Sort by oldest matching state at the snapshot">State · age</button></th>
+            <th scope="col" aria-sort="none"><button data-sort="review">Maintainer review</button></th>
+            <th scope="col" aria-sort="none"><button data-sort="checks">PR checks</button></th>
+            <th scope="col">Related checks</th>
+            <th scope="col" aria-sort="none"><button data-sort="group">Workstream</button></th>
+          </tr></thead><tbody></tbody></table>
+        </section>
+        <section id="investigations-pane" class="investigations-pane" aria-label="Investigations and findings" hidden>
+          <p class="investigation-intro">Research and tasks can start before a Git branch exists. Use Show history for concluded investigations; direct links always remain available.</p>
+          <div id="investigation-list"></div>
+        </section>
+        <div id="empty" class="empty" hidden><h2 id="empty-title">No matching work</h2><p id="empty-text">Try another search or reset the filters.</p><div><button id="reset-filters">Reset filters</button></div></div>
+      </section>
+      <aside id="details" class="details" aria-label="Selected item details" aria-live="polite" hidden></aside>
+    </div>
+  </main>
+  <footer class="freshness">
+    <div><span class="status-dot" id="freshness-dot"></span><span id="freshness-text" role="status">Saved snapshot</span><button id="refresh" title="Reload the published evidence snapshot">Reload snapshot ↻</button><a href="github-status.json">Evidence data ↗</a><a href="registry.json">Registry ↗</a></div>
+    <details><summary id="registry-age">About this data</summary><p id="freshness-detail">Evidence is curated and dated. No recorded dependency does not mean ready to merge. Upstream submissions require Tamir’s review after qualification.</p></details>
+  </footer>
+  <noscript><p>The dashboard needs JavaScript. Read the <a href="registry.json">dependency registry</a> directly.</p></noscript>
 </body>
 </html>

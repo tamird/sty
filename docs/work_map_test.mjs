@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
+import { generated } from './generate-registry.mjs';
 import { goals, projects, upstream } from './work-map-data.mjs';
 
 function unique(values, label) {
@@ -42,27 +43,58 @@ for (const item of upstream) {
   }
 }
 
-const manifest = JSON.parse(readFileSync(new URL('./proposals/ty-list-loop.json', import.meta.url), 'utf8'));
-const patch = readFileSync(new URL('./proposals/ty-list-loop.patch', import.meta.url));
-const candidate = upstream.find(item => item.id === 'destructured-list-elements');
-assert.equal(manifest.qualifiedHead, candidate.qualifiedHead);
-assert.equal(createHash('sha256').update(patch).digest('hex'), manifest.patchSha256);
-assert.ok(patch.toString().startsWith(`From ${manifest.qualifiedHead} `));
-assert.ok(patch.toString().includes(`base-commit: ${manifest.base}`));
-const patchPaths = [...patch.toString().matchAll(/^diff --git a\/(.+) b\/(.+)$/gm)].map(match => {
-  assert.equal(match[1], match[2]);
-  return match[1];
-});
-assert.deepEqual(patchPaths, manifest.files.map(file => file.path));
-assert.equal(patchPaths.length, 4);
-for (const path of patchPaths) assert.ok(path.startsWith('crates/ty_python_semantic/'), `Unexpected review scope: ${path}`);
-
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
-for (const asset of ['style.css', 'app.mjs']) {
-  assert.ok(html.includes(`"${asset}"`), `Missing published asset reference: ${asset}`);
+for (const asset of ['style.css', 'app.js', 'draft.js', 'icon.svg']) {
+  assert.ok(html.includes(asset), `Missing published asset reference: ${asset}`);
+  assert.ok(readFileSync(new URL(asset, import.meta.url)).length > 0);
 }
-for (const id of ['next-actions', 'goals', 'merged-items', 'upstream-items', 'projects', 'search', 'state', 'count']) {
+for (const id of ['workspace', 'state-filters', 'dag-pane', 'table-pane', 'investigations-pane', 'details', 'search', 'group-filter', 'work-table', 'refresh']) {
   assert.ok(html.includes(`id="${id}"`), `Missing app mount: ${id}`);
 }
-const syntax = spawnSync(process.execPath, ['--check', fileURLToPath(new URL('./app.mjs', import.meta.url))], { encoding: 'utf8' });
-assert.equal(syntax.status, 0, syntax.stderr);
+for (const asset of ['app.js', 'draft.js', 'draft-reader.js']) {
+  const syntax = spawnSync(process.execPath, ['--check', fileURLToPath(new URL(asset, import.meta.url))], { encoding: 'utf8' });
+  assert.equal(syntax.status, 0, syntax.stderr);
+}
+for (const [name, expected] of [['registry.json', generated.registry], ['github-status.json', generated.snapshot]]) {
+  const actual = JSON.parse(readFileSync(new URL(name, import.meta.url), 'utf8'));
+  assert.deepEqual(actual, expected, `Regenerate ${name} with bazel run //docs:generate_registry -- --write`);
+}
+
+// Exercise the inherited browser application's real schema and attention logic.
+const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+assert.ok(source.endsWith('start();\n'));
+const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
+({ validateRegistry, validateSnapshot, attentionReasons, historical, citationURL,
+  load(data, snapshot) {
+    registry = data;
+    model = { ...data, nodes: registryNodes(data) };
+    for (const node of model.nodes) node.workStates = stateRecords(snapshot, node);
+    return model.nodes;
+  }
+})`, { URL, console });
+tracker.validateRegistry(generated.registry);
+tracker.validateSnapshot(generated.snapshot, generated.registry);
+const nodes = tracker.load(generated.registry, generated.snapshot);
+assert.equal(nodes.filter(node => node.group === 'community').length, projects.length);
+assert.equal(generated.registry.investigations.length, goals.length);
+assert.equal(generated.snapshot.prs.length, 0, 'Do not invent provider-level check or review evidence');
+assert.deepEqual(generated.registry.edges, [], 'Related links do not establish blocking dependencies');
+for (const item of projects) {
+  const node = nodes.find(node => node.repo === item.repo && node.number === item.number);
+  assert.equal(node.followup.sourceHead, item.head);
+  assert.equal(node.followup.nextAction, item.nextAction);
+  assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
+  assert.equal(node.github, undefined, 'Curated check prose must not become an effective approval');
+}
+for (const item of upstream) {
+  if (item.state === 'Merged') assert.ok(tracker.historical(nodes.find(node => node.number === item.number)));
+  if (item.state !== 'Awaiting Tamir review') continue;
+  const node = nodes.find(node => node.id === `branch:${item.id}`);
+  assert.equal(node.contributorReview.head, item.qualifiedHead);
+  assert.equal(node.contributorReview.url, item.qualifiedURL);
+  assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
+  assert.equal(node.humanAction, undefined, 'Review does not authorize an upstream submission');
+  const invalid = structuredClone(generated.registry);
+  invalid.nodes.find(candidate => candidate.id === node.id).contributorReview.head = '0'.repeat(40);
+  assert.throws(() => tracker.validateRegistry(invalid), /Invalid contributor decision/);
+}

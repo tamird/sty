@@ -6,6 +6,3 @@
 
 # Preserve the mixed line endings used to check global type-comment byte offsets.
 crates/starpls_syntax/test_data/err/type_comments.star -text
-
-# This byte-checked Git patch preserves spaces on blank context lines.
-docs/proposals/ty-list-loop.patch -text -whitespace
