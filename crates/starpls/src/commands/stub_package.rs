@@ -290,21 +290,21 @@ fn source_repository(
         module,
         versions,
     } = source;
-    // Older manifests explicitly opt into Bzlmod's unversioned bazel_tools
-    // module. A versioned manifest can instead identify the installed tools.
-    if !versions.is_empty() {
-        if let Some(version) = loader.installed_tools_version(&source_repository) {
-            anyhow::ensure!(
-                module == "bazel_tools",
-                "installed Bazel tools cannot supply module {module:?}"
-            );
+    // The installation proves the identity of these tools even for manifests
+    // that opt into an unversioned source. Bazel 7.1 crashes querying their graph node.
+    if let Some(version) = loader.installed_tools_version(&source_repository) {
+        anyhow::ensure!(
+            module == "bazel_tools",
+            "installed Bazel tools cannot supply module {module:?}"
+        );
+        if !versions.is_empty() {
             anyhow::ensure!(
                 versions.iter().any(|v| v == version),
                 "installed Bazel tools have version {version}, but the stub package accepts {}",
                 versions.join(", ")
             );
-            return Ok(source_repository);
         }
+        return Ok(source_repository);
     }
     let selected = loader.selected_module(&source_repository, selected_modules)?;
     if let Some(selected) = selected {
@@ -462,6 +462,67 @@ mod tests {
         fs::create_dir(external.join("bazel_tools")).unwrap();
         assert!(format!("{:#}", load("release 8.8.1").unwrap_err())
             .contains("no selected module version"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unversioned_installed_tools_do_not_require_module_queries() {
+        use std::fs;
+        use std::os::unix::fs::symlink;
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::path::PathBuf::from(std::env::var_os("TEST_TMPDIR").unwrap())
+            .join("unversioned-installed-tools");
+        let install = root.join("install");
+        let tools = install.join("embedded_tools");
+        let external = root.join("external");
+        fs::create_dir_all(&tools).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        symlink(&tools, external.join("bazel_tools")).unwrap();
+        fs::write(
+            root.join("stubs.toml"),
+            "format-version=1\n[source]\nrepository='@@bazel_tools'\nmodule='bazel_tools'\n[files]\n",
+        )
+        .unwrap();
+        let executable = root.join("bazel");
+        fs::write(
+            &executable,
+            "#!/bin/sh\nif [ \"$1\" = fetch ]; then exit 0; fi\necho 'module queries unavailable' >&2\nexit 1\n",
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        let client = Arc::new(starpls_bazel::client::BazelCLI::new(&executable));
+        let load = || {
+            let (sender, _) = crossbeam_channel::unbounded();
+            let loader = DefaultFileLoader::new(
+                client.clone(),
+                root.clone(),
+                None,
+                external.clone(),
+                sender,
+                true,
+            )
+            .with_bazel_installation(&starpls_bazel::client::BazelInfo {
+                install_base: Some(install.clone()),
+                release: "release 7.1.0".to_owned(),
+                ..Default::default()
+            });
+            super::load(
+                &loader,
+                &root.join("sty.toml"),
+                vec![super::StubPackage {
+                    manifest: "stubs.toml".into(),
+                    allow_unversioned: true,
+                }],
+            )
+        };
+        load().unwrap();
+        // A replacement repository must still establish its own module identity.
+        fs::remove_file(external.join("bazel_tools")).unwrap();
+        fs::create_dir(external.join("bazel_tools")).unwrap();
+        let message = format!("{:#}", load().unwrap_err());
+        assert!(message.contains("module queries unavailable"), "{message}");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
