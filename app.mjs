@@ -27,7 +27,7 @@ for (const item of upstream) {
   if (item.number) card.append(linkedParagraph(`astral-sh/ruff #${item.number}`, `https://github.com/astral-sh/ruff/pull/${item.number}`));
   if (item.summary) card.append(element('p', item.summary));
   if (item.source) card.append(linkedParagraph('Original fork change', `https://github.com/tamird/ruff/commit/${item.source}`));
-  if (item.qualifiedHead) card.append(linkedParagraph('Qualified adapted change', `https://github.com/tamird/ruff/commit/${item.qualifiedHead}`));
+  if (item.qualifiedHead) card.append(linkedParagraph('Qualified adapted change', item.qualifiedURL ?? `https://github.com/tamird/ruff/commit/${item.qualifiedHead}`));
   if (item.qualification) {
     card.append(element('p', item.qualification.summary));
     for (const evidence of item.qualification.evidence) card.append(linkedParagraph(evidence.label, evidence.url));

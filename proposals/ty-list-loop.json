@@ -1,0 +1,28 @@
+{
+  "project": "astral-sh/ruff",
+  "base": "912ba68f546006f42264c43180c9ce83a76b87cd",
+  "qualifiedHead": "cb60f9c33cff9897f49d110ed22c68829bb60da9",
+  "patchSha256": "bfadebf3ef2a84bf804bd5849dceb5a66cf9b9c2ac6366412c4df92f900e6643",
+  "files": [
+    {
+      "path": "crates/ty_python_semantic/resources/mdtest/unpacking.md",
+      "gitBlob": "942c459559fa0572b607313bd8565ed92457d665",
+      "sha256": "ca121b76f12b7e9892a3168ca1613f29b793917d115d0a4f5e958093926403a0"
+    },
+    {
+      "path": "crates/ty_python_semantic/src/types/infer/builder.rs",
+      "gitBlob": "4c560f1e3a76b9ec435cd620a1f24b6244989303",
+      "sha256": "0d18d972a95f1b6a336911ce1559e0b5efdc34eed322ad7be5af3c06e441875a"
+    },
+    {
+      "path": "crates/ty_python_semantic/src/types/iteration.rs",
+      "gitBlob": "bca5118b016c3d3f58a4b568fa54d1a2ddd8b996",
+      "sha256": "19fc3c9787f06406e0e7c6bd3e652735cbb7e8f5c28c1a1e1062a28c9866af65"
+    },
+    {
+      "path": "crates/ty_python_semantic/src/types/unpacker.rs",
+      "gitBlob": "99066355e313f0e51f7fb3a9e2520ec82fd8431a",
+      "sha256": "eb2aea87c30d5a2294460c1b64d7421473b156adf19bd43a6a2ef57dcdb683fc"
+    }
+  ]
+}

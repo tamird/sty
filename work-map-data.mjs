@@ -39,6 +39,49 @@ export const goals = [
 
 export const upstream = [
   {
+    "id": "destructured-list-elements",
+    "title": "Literal element types in destructured list loops",
+    "state": "Awaiting Tamir review",
+    "source": "c52778b7343432c867b5325b26fd5da72329b5ca",
+    "summary": "Preserve literal types when destructuring immediately consumed lists, using the existing shared inference machinery. Qualified locally; not submitted upstream.",
+    "qualifiedHead": "cb60f9c33cff9897f49d110ed22c68829bb60da9",
+    "qualifiedURL": "https://github.com/tamird/sty/blob/38c493e8fa8dc1aa566ec83e282e4e5c3fb73415/docs/proposals/ty-list-loop.patch",
+    "qualification": {
+      "summary": "Linux qualification completed: matched baseline regression; strict focused fixtures; full semantic, core, IDE and external mdtest suites; workspace Clippy; formatting and required changed-file hooks. Detailed run logs are private and delivered directly to Tamir.",
+      "evidence": [
+        {
+          "label": "Exact source manifest",
+          "url": "https://github.com/tamird/sty/blob/38c493e8fa8dc1aa566ec83e282e4e5c3fb73415/docs/proposals/ty-list-loop.json"
+        },
+        {
+          "label": "Upstream base fixture",
+          "url": "https://github.com/astral-sh/ruff/blob/912ba68f546006f42264c43180c9ce83a76b87cd/crates/ty_python_semantic/resources/mdtest/unpacking.md"
+        }
+      ]
+    }
+  },
+  {
+    "id": "local-keyword-dicts",
+    "title": "Local keyword dictionaries",
+    "number": 29138,
+    "state": "In upstream review",
+    "author": "zsol"
+  },
+  {
+    "id": "conditional-keyword-dicts",
+    "title": "Conditional keyword dictionaries",
+    "number": 29141,
+    "state": "In upstream review",
+    "author": "zsol"
+  },
+  {
+    "id": "nested-access-design",
+    "title": "Alternative semantic-index design",
+    "number": 29186,
+    "state": "Related upstream design",
+    "author": "upstream"
+  },
+  {
     "id": "dictionary-completions",
     "title": "Dictionary-key completions",
     "number": 28820,
@@ -82,33 +125,5 @@ export const upstream = [
     "author": "zsol",
     "source": "773bc39f51",
     "merge": "97aa1f69d8"
-  },
-  {
-    "id": "local-keyword-dicts",
-    "title": "Local keyword dictionaries",
-    "number": 29138,
-    "state": "In upstream review",
-    "author": "zsol"
-  },
-  {
-    "id": "conditional-keyword-dicts",
-    "title": "Conditional keyword dictionaries",
-    "number": 29141,
-    "state": "In upstream review",
-    "author": "zsol"
-  },
-  {
-    "id": "nested-access-design",
-    "title": "Alternative semantic-index design",
-    "number": 29186,
-    "state": "Related upstream design",
-    "author": "upstream"
-  },
-  {
-    "id": "destructured-list-elements",
-    "title": "Literal element types in destructured list loops",
-    "state": "In qualification",
-    "source": "c52778b7343432c867b5325b26fd5da72329b5ca",
-    "summary": "Adapt shared iterable inference to immediate list displays; retain tuple behavior and test mutation and fallback cases. Not submitted upstream."
   }
 ];
