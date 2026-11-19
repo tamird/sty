@@ -5,6 +5,8 @@ js_test(
     data = [
         "app.mjs",
         "index.html",
+        "proposals/ty-list-loop.json",
+        "proposals/ty-list-loop.patch",
         "style.css",
         "work-map-data.mjs",
     ],
