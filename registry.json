@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-19T21:05:18Z",
+    "updatedAt": "2026-11-19T21:30:13Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -571,7 +571,7 @@
       "repo": "tamird/ruff",
       "title": "Literal element types in destructured list loops",
       "group": "ty",
-      "status": "Awaiting Tamir review",
+      "status": "Revising after Tamir review",
       "ref": "upstream/destructured-list-elements",
       "head": "5485dac87269c66659f6a76be2b759dbec723ff3",
       "url": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...5485dac87269c66659f6a76be2b759dbec723ff3",
@@ -582,14 +582,10 @@
           "url": "https://github.com/astral-sh/ruff/blob/912ba68f546006f42264c43180c9ce83a76b87cd/crates/ty_python_semantic/resources/mdtest/unpacking.md"
         }
       ],
-      "contributorReview": {
-        "kind": "proposal",
-        "status": "pending",
-        "title": "Review qualified ty proposal",
-        "summary": "Review the published change and decide whether to submit upstream. Qualification is recorded in the item details. Nothing has been submitted upstream.",
-        "head": "5485dac87269c66659f6a76be2b759dbec723ff3",
-        "baseHead": "912ba68f546006f42264c43180c9ce83a76b87cd",
-        "url": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...5485dac87269c66659f6a76be2b759dbec723ff3"
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "5485dac87269c66659f6a76be2b759dbec723ff3",
+        "nextAction": "Qualify the clearer guard comment and tuple-size regression before requesting review again."
       }
     },
     {
@@ -741,7 +737,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "evidence": [
         {
           "label": "sty source",
@@ -756,7 +752,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "evidence": [
         {
           "label": "sty source",
@@ -771,7 +767,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "evidence": [
         {
           "label": "sty source",
@@ -786,7 +782,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "evidence": [
         {
           "label": "sty source",
@@ -801,7 +797,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "evidence": [
         {
           "label": "sty source",
@@ -817,7 +813,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -876,7 +872,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -931,7 +927,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -994,7 +990,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting.",
       "nextStep": "Reproduce each surviving behavior on current ty; split independent fixes and qualify their solver/semantic suites before requesting Tamir review.",
       "findings": [
@@ -1044,7 +1040,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Preserve overload signatures while checking implementation bodies and projected callback signatures.",
       "nextStep": "Reproduce against current upstream; test public overload calls, implementation-body rejection and contextual callbacks independently.",
       "findings": [
@@ -1085,7 +1081,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
       "nextStep": "Extract Python-meaningful regressions; qualify narrowing stability across mutation and keep Starlark tag interpretation in the host adapter.",
       "findings": [
@@ -1126,7 +1122,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream.",
       "nextStep": "Subtract the already merged empty-peer fix, reproduce remaining cases on current ty, and qualify mutable escape/default/argument boundaries.",
       "findings": [
@@ -1172,7 +1168,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1222,7 +1218,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1254,7 +1250,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1295,7 +1291,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1345,7 +1341,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1395,7 +1391,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1418,7 +1414,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T21:05:18Z",
+      "updatedAt": "2026-11-19T21:30:13Z",
       "summary": "Reconciliation in progress. 495 divergent commits contain 483 user-authored commits and 12 upstream-authored picks across 250 changed paths. Historical commits include removed proof machinery; these mechanism groups are not a final list of independent upstream contributions.",
       "nextStep": "Classify every divergent commit as landed, superseded/removed, active upstream work, host-extension design, or remaining Python fix; record exact surviving-source coverage before claiming completeness.",
       "findings": [
