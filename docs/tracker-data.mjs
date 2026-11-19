@@ -1,6 +1,7 @@
 // Adapt sty's canonical records to the existing gVisor tracker schema.
 export function buildTracker({ projects, additionalProjects, upstream, goals, bazelFeedback,
-  bazelFeedbackObservedAt, relatedChanges, languageWork, tyWork = [], inventory = {} }, updatedAt) {
+  bazelFeedbackObservedAt, relatedChanges, languageWork, tyWork = [], inventory = {}, ruffForkAudit }, updatedAt) {
+  validateForkAudit(ruffForkAudit, tyWork);
   const repo = 'astral-sh/ruff';
   const community = [...projects, ...additionalProjects];
   const repositories = Object.fromEntries([repo, 'tamird/ruff', 'bazelbuild/bazel',
@@ -55,7 +56,14 @@ export function buildTracker({ projects, additionalProjects, upstream, goals, ba
     nodes.push(node);
   }
   const registry = {
-    meta: { repo, owner: 'tamird', updatedAt, repositories, inventory },
+    meta: { repo, owner: 'tamird', updatedAt, repositories, inventory: { ...inventory,
+      pathAudit: { scope: ruffForkAudit.scope, base: ruffForkAudit.base, fork: ruffForkAudit.fork,
+        upstream: ruffForkAudit.upstream, paths: ruffForkAudit.manifest.length,
+        classifications: Object.fromEntries([...new Set(ruffForkAudit.coverage.map(item => item.reconciliation))]
+          .map(state => [state, ruffForkAudit.coverage.filter(item => item.reconciliation === state).length])),
+        currentDeltaAudit: ruffForkAudit.currentDeltaAudit,
+        url: 'https://tamird.github.io/sty/ruff-fork-audit.json' },
+    } },
     groups: [{ id: 'community', label: 'Community type checking' }, { id: 'ty', label: 'Upstream ty' },
       { id: 'bazel', label: 'Bazel feedback' }, { id: 'language', label: 'Starlark specification' }],
     nodes, edges,
@@ -77,5 +85,44 @@ export function buildTracker({ projects, additionalProjects, upstream, goals, ba
       `issue:bazelbuild/bazel:${item.number}`, { githubState: item.state, updatedAt: item.updatedAt,
         githubURL: `https://github.com/bazelbuild/bazel/issues/${item.number}`, checkedAt: bazelFeedbackObservedAt },
     ])) };
-  return { registry, snapshot };
+  return { registry, snapshot, audit: ruffForkAudit };
+}
+
+// The captured Git manifest defines the audit's scope independently of its curation.
+// A new or omitted path must receive an explicit disposition, including unresolved work.
+export function validateForkAudit(audit, mechanisms) {
+  if (audit?.schema !== 1 || audit.scope !== 'old-fork-path-audit') throw new Error('Invalid fork audit scope');
+  for (const ref of [audit.base, audit.fork, audit.upstream]) {
+    if (!/^[a-f0-9]{40}$/.test(ref)) throw new Error('Invalid fork audit revision');
+  }
+  const scope = new Map(audit.manifest.map(item => [item.path, item]));
+  const coverage = new Map(audit.coverage.map(item => [item.path, item]));
+  if (scope.size !== audit.manifest.length || coverage.size !== audit.coverage.length ||
+      scope.size !== coverage.size || [...scope.keys()].some(path => !coverage.has(path))) {
+    throw new Error('Incomplete fork path coverage');
+  }
+  const knownMechanisms = new Set(mechanisms.map(item => item.id));
+  const categories = new Set(['host-extension-design', 'general-python-candidate',
+    'already-landed-equivalent', 'supporting-tests', 'supporting-docs',
+    'supporting-infrastructure', 'unreconciled']);
+  const reconciliations = new Set(['partial', 'unassigned', 'support-classified',
+    'exact-file-match', 'mechanism-compared']);
+  for (const item of audit.coverage) {
+    const receipt = scope.get(item.path);
+    if (!reconciliations.has(item.reconciliation) || !item.reason ||
+        !item.categories.length || item.categories.some(value => !categories.has(value)) ||
+        item.mechanisms.some(id => !knownMechanisms.has(id))) throw new Error(`Invalid fork disposition: ${item.path}`);
+    for (const blob of [receipt.oldBlob, receipt.newBlob]) {
+      if (!/^[a-f0-9]{40}$/.test(blob)) throw new Error(`Invalid fork blob: ${item.path}`);
+    }
+    if (item.reconciliation === 'exact-file-match' && item.upstreamBlob !== receipt.newBlob) {
+      throw new Error(`Unproven upstream file equivalence: ${item.path}`);
+    }
+    if (['partial', 'unassigned'].includes(item.reconciliation) && !item.categories.includes('unreconciled')) {
+      throw new Error(`Hidden unresolved fork work: ${item.path}`);
+    }
+  }
+  if (audit.currentDeltaAudit.state !== 'pending' || !audit.currentDeltaAudit.reason) {
+    throw new Error('The unfinished rebased delta needs a separate audit');
+  }
 }

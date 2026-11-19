@@ -2,7 +2,7 @@ load("@aspect_rules_js//js:defs.bzl", "js_binary", "js_test")
 
 js_binary(
     name = "generate_registry",
-    data = ["tracker-data.mjs", "work-map-data.mjs"],
+    data = ["ruff-fork-audit.mjs", "tracker-data.mjs", "work-map-data.mjs"],
     entry_point = "generate-registry.mjs",
 )
 
@@ -18,6 +18,8 @@ js_test(
         "icon.svg",
         "index.html",
         "registry.json",
+        "ruff-fork-audit.json",
+        "ruff-fork-audit.mjs",
         "style.css",
         "tracker-data.mjs",
         "work-map-data.mjs",

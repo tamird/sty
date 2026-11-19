@@ -1,3 +1,5 @@
+export { ruffForkAudit } from './ruff-fork-audit.mjs';
+
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Resolve helper and tag follow-ups",repo:"bazelbuild/bazel-skylib",number:641,head:"baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"Fork PR #1: root and Gazelle sty checks passed. Upstream head has a successful CLA check.",followup:"Includes open fixes #643 and #647. Native build_test tag handling is tracked separately in #644.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']]},
  {name:"rules_cc",nextAction:"Reconcile #960 / #967 fixes",repo:"bazelbuild/rules_cc",number:940,head:"bbec9dfcba1604fa7c42810edec3b617a62f872f",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"Upstream and fork sty checks passed.",followup:"Related #960 closed without merging; #967 remains open. Do not treat the closed fix as landed.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']]},
@@ -1023,10 +1025,143 @@ export const tyWork = [
     "nextAction": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal."
   },
   {
+    "id": "ty-loop-initial-binding",
+    "title": "Relate initial bindings across coordinated loop updates",
+    "state": "Old-fork candidate; current-upstream reproduction pending",
+    "summary": "certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
+    "sources": [
+      {
+        "commit": "1f5b037531454583e815927916829ac08063bb62",
+        "detail": "Relate initial bindings across simple for loops",
+        "paths": [
+          "crates/ty_python_core/src/builder.rs",
+          "crates/ty_python_core/src/definition.rs",
+          "crates/ty_python_core/src/lib.rs",
+          "crates/ty_python_core/src/reachability_constraints.rs",
+          "crates/ty_python_semantic/resources/mdtest/loops/for.md",
+          "crates/ty_python_semantic/src/place.rs",
+          "crates/ty_python_semantic/src/reachability.rs",
+          "crates/ty_python_semantic/src/types.rs",
+          "crates/ty_python_semantic/src/types/loop_bindings.rs"
+        ]
+      }
+    ],
+    "nextAction": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
+    "evidence": []
+  },
+  {
+    "id": "ty-attribute-presence",
+    "title": "Required intersection members during attribute assignment",
+    "state": "Old-fork candidate; current-upstream reproduction pending",
+    "summary": "AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
+    "sources": [
+      {
+        "commit": "fa52c04a810e25fbf4265750f576210797ad94fe",
+        "detail": "[ty] Fix missing-attribute intersection warnings",
+        "paths": [
+          "crates/ty_python_semantic/resources/mdtest/diagnostics/attribute_assignment.md",
+          "crates/ty_python_semantic/src/types/attribute_write.rs",
+          "crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs"
+        ]
+      }
+    ],
+    "nextAction": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
+    "evidence": []
+  },
+  {
+    "id": "ty-bound-receiver",
+    "title": "Preserve the instance while checking specialized method receivers",
+    "state": "Old-fork candidate; current-upstream reproduction pending",
+    "summary": "SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
+    "sources": [
+      {
+        "commit": "327e0042634dcbd7d1db5793b7bb0bd0d29d48a8",
+        "detail": "[ty] Bind members through union upper bounds",
+        "paths": [
+          "crates/ty_python_semantic/resources/mdtest/call/methods.md",
+          "crates/ty_python_semantic/resources/mdtest/generics/legacy/classes.md",
+          "crates/ty_python_semantic/resources/mdtest/regression/noninferable_projection_to_terminal.md",
+          "crates/ty_python_semantic/resources/mdtest/subscript/typevar.md",
+          "crates/ty_python_semantic/src/types.rs",
+          "crates/ty_python_semantic/src/types/infer/comparisons.rs",
+          "crates/ty_python_semantic/src/types/method.rs"
+        ]
+      }
+    ],
+    "nextAction": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
+    "evidence": []
+  },
+  {
+    "id": "ty-recursive-protocol-materialization",
+    "title": "Subtract landed recursive-protocol materialization work",
+    "state": "Old-fork candidate; current-upstream reproduction pending",
+    "summary": "Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
+    "sources": [
+      {
+        "commit": "cfe08719485af4506aae4ca1462a1dd13042e09e",
+        "detail": "[ty] Avoid expanding recursive protocol materializations (#29026)",
+        "paths": [
+          "crates/ruff_benchmark/benches/ty.rs",
+          "crates/ty_python_semantic/resources/mdtest/generics/legacy/classes.md",
+          "crates/ty_python_semantic/resources/mdtest/generics/pep695/classes.md",
+          "crates/ty_python_semantic/resources/mdtest/protocols.md",
+          "crates/ty_python_semantic/resources/mdtest/type_properties/materialization.md",
+          "crates/ty_python_semantic/resources/mdtest/with/async.md",
+          "crates/ty_python_semantic/src/types/generics.rs",
+          "crates/ty_python_semantic/src/types/infer/tests.rs",
+          "crates/ty_python_semantic/src/types/instance.rs",
+          "crates/ty_python_semantic/src/types/protocol_class.rs",
+          "crates/ty_python_semantic/src/types/visitor.rs"
+        ]
+      }
+    ],
+    "nextAction": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
+    "evidence": [
+      {
+        "label": "Upstream #29026 commit",
+        "url": "https://github.com/astral-sh/ruff/commit/19cb997763936be5bd7f3f791965366a99b3989b"
+      }
+    ]
+  },
+  {
+    "id": "ty-vendored-root",
+    "title": "List entries at a vendored archive root",
+    "state": "Old-fork candidate; current-upstream reproduction pending",
+    "summary": "VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
+    "sources": [
+      {
+        "commit": "17ee6afa71944cbc0f46d652e7e3a78940f9f873",
+        "detail": "List root entries in vendored archives",
+        "paths": [
+          "crates/ruff_db/src/vendored.rs"
+        ]
+      }
+    ],
+    "nextAction": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix."
+  },
+  {
+    "id": "ty-guard-call-mapping",
+    "title": "Keep TypeIs and TypeGuard targets through argument expansion",
+    "state": "Old-fork candidate; current-upstream reproduction pending",
+    "summary": "TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
+    "sources": [
+      {
+        "commit": "babd7e2affadeb88fd328fd516d43a5e5f232f4c",
+        "detail": "[ty] Track guard targets across call expansions",
+        "paths": [
+          "crates/ty_python_semantic/resources/mdtest/narrow/type_guards.md",
+          "crates/ty_python_semantic/src/types/call/bind.rs",
+          "crates/ty_python_semantic/src/types/infer/builder/typeguard.rs"
+        ]
+      }
+    ],
+    "nextAction": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change."
+  },
+  {
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "495 divergent commits contain 483 user-authored commits and 12 upstream-authored picks across 250 changed paths. Historical commits include removed proof machinery; these mechanism groups are not a final list of independent upstream contributions.",
+    "summary": "The frozen old-fork diff has an auditable receipt for all 250 changed paths, with blob identities, changed API/test anchors, mechanism mappings and explicit unresolved hunks. Mapping every path does not finish semantic reconciliation or count independent proposals. The current rebase must receive its own surviving-delta audit.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1043,9 +1178,13 @@ export const tyWork = [
       {
         "label": "Fork comparison from recorded base",
         "url": "https://github.com/tamird/ruff/compare/d63450150b...352ce32f76a8416551cb72d66dfa4f6d75a7c7e9"
+      },
+      {
+        "label": "All 250 paths: immutable source receipt and coverage",
+        "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Classify every divergent commit as landed, superseded/removed, active upstream work, host-extension design, or remaining Python fix; record exact surviving-source coverage before claiming completeness."
+    "nextAction": "Reconcile the explicitly unresolved old-fork hunks, then audit every path and mechanism in the qualified rebased tree against current upstream. Subtract landed and superseded implementations before proposing independent changes."
   }
 ];
 

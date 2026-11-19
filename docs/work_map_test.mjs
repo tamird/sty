@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
+import { createHash } from 'node:crypto';
 import { generated } from './generate-registry.mjs';
+import { validateForkAudit } from './tracker-data.mjs';
+import { ruffForkAudit } from './ruff-fork-audit.mjs';
 import { goals, projects, additionalProjects, relatedChanges, languageWork, bazelFeedback, bazelFeedbackObservedAt, tyWork, upstream } from './work-map-data.mjs';
 
 function unique(values, label) {
@@ -55,7 +58,8 @@ for (const asset of ['app.js', 'draft.js', 'draft-reader.js']) {
   const syntax = spawnSync(process.execPath, ['--check', fileURLToPath(new URL(asset, import.meta.url))], { encoding: 'utf8' });
   assert.equal(syntax.status, 0, syntax.stderr);
 }
-for (const [name, expected] of [['registry.json', generated.registry], ['github-status.json', generated.snapshot]]) {
+for (const [name, expected] of [['registry.json', generated.registry], ['github-status.json', generated.snapshot],
+  ['ruff-fork-audit.json', generated.audit]]) {
   const actual = JSON.parse(readFileSync(new URL(name, import.meta.url), 'utf8'));
   assert.deepEqual(actual, expected, `Regenerate ${name} with bazel run //docs:generate_registry -- --write`);
 }
@@ -137,3 +141,29 @@ invalidGroup.investigations.find(item => item.task).group = 'unknown';
 assert.throws(() => tracker.validateRegistry(invalidGroup), /Invalid investigation group/);
 assert.ok(generated.registry.meta.inventory.status.includes('progress'));
 assert.ok(languageWork.some(item => item.number === 318 && item.state === 'merged'));
+
+// Freeze the independently captured scope, then exercise curation failures at the
+// same boundary used by the generator. No mutable Ruff checkout is a test input.
+assert.equal(ruffForkAudit.manifest.length, 250);
+const manifestDigest = createHash('sha256').update(JSON.stringify(ruffForkAudit.manifest)).digest('hex');
+assert.equal(manifestDigest, '9e64a3e6c4c0b233270f2664f683e816a97f707fded48e86653cee8068fdf0d1');
+assert.equal(manifestDigest, ruffForkAudit.manifestSHA256);
+validateForkAudit(ruffForkAudit, tyWork);
+const missingPath = structuredClone(ruffForkAudit);
+missingPath.coverage.pop();
+assert.throws(() => validateForkAudit(missingPath, tyWork), /Incomplete fork path coverage/);
+const inventedMechanism = structuredClone(ruffForkAudit);
+inventedMechanism.coverage[0].mechanisms.push('unknown');
+assert.throws(() => validateForkAudit(inventedMechanism, tyWork), /Invalid fork disposition/);
+const unknownReconciliation = structuredClone(ruffForkAudit);
+unknownReconciliation.coverage[0].reconciliation = 'reconciled';
+assert.throws(() => validateForkAudit(unknownReconciliation, tyWork), /Invalid fork disposition/);
+const hiddenWork = structuredClone(ruffForkAudit);
+const partial = hiddenWork.coverage.find(item => item.reconciliation === 'partial');
+partial.categories = partial.categories.filter(value => value !== 'unreconciled');
+assert.throws(() => validateForkAudit(hiddenWork, tyWork), /Hidden unresolved fork work/);
+const unprovenMatch = structuredClone(ruffForkAudit);
+unprovenMatch.coverage.find(item => item.reconciliation === 'exact-file-match').upstreamBlob = '0'.repeat(40);
+assert.throws(() => validateForkAudit(unprovenMatch, tyWork), /Unproven upstream file equivalence/);
+assert.equal(generated.registry.meta.inventory.pathAudit.paths, 250);
+assert.equal(generated.registry.meta.inventory.pathAudit.currentDeltaAudit.state, 'pending');

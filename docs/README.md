@@ -22,3 +22,14 @@ All repositories use the tracker's ordinary GitHub policy, without Copybara.
 Upstream proposals link to published, qualified Ruff changes. Qualification does
 not authorize submission: Tamir reviews every potential upstream contribution
 before it is posted.
+
+`ruff-fork-audit.mjs` records every path in the immutable Ruff diff from
+`d63450150b` to `352ce32f76`, compared with upstream `aa46aae607`.
+Its captured Git manifest is independent of the curated coverage records;
+generation rejects missing paths and unknown mechanisms. The published
+[`ruff-fork-audit.json`](ruff-fork-audit.json) includes exact file blobs,
+sampled changed APIs/test headings, classifications and unresolved work.
+Whole-file blob equality is distinguished from a compared mechanism or a
+matching historical change title. Supporting tests and docs are not additional
+upstream proposals. This old-fork coverage does not replace auditing the
+surviving delta after the current rebase.
