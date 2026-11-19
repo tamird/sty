@@ -32,7 +32,10 @@ for (const item of upstream) {
   }
   if (item.state === 'Awaiting Tamir review') {
     assert.match(item.qualifiedHead, /^[a-f0-9]{40}$/);
-    assert.equal(new URL(item.qualifiedURL).protocol, 'https:');
+    const reviewURL = new URL(item.qualifiedURL);
+    assert.equal(reviewURL.protocol, 'https:');
+    assert.equal(reviewURL.hostname, 'github.com');
+    assert.match(reviewURL.pathname, /^\/tamird\/ruff\/(commit|compare|pull)\//, 'Review needs a published Ruff change, not a raw patch');
     assert.ok(item.qualification?.summary, `Review request ${item.id} needs completed qualification evidence`);
     assert.ok(item.qualification.evidence.length > 0, `Review request ${item.id} needs evidence links`);
     for (const evidence of item.qualification.evidence) assert.equal(new URL(evidence.url).protocol, 'https:');
@@ -58,7 +61,7 @@ const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 for (const asset of ['style.css', 'app.mjs']) {
   assert.ok(html.includes(`"${asset}"`), `Missing published asset reference: ${asset}`);
 }
-for (const id of ['goals', 'upstream-items', 'projects', 'search', 'state', 'count']) {
+for (const id of ['next-actions', 'goals', 'merged-items', 'upstream-items', 'projects', 'search', 'state', 'count']) {
   assert.ok(html.includes(`id="${id}"`), `Missing app mount: ${id}`);
 }
 const syntax = spawnSync(process.execPath, ['--check', fileURLToPath(new URL('./app.mjs', import.meta.url))], { encoding: 'utf8' });
