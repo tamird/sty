@@ -61,6 +61,11 @@ Use the selected instance's login configuration; the commands above do not
 establish a login. Native macOS execution requires a Mac runner, which is a
 separate service capability.
 
+`bb remote build` downloads the Linux executable under
+`bb-out/bazel-out/k8-fastbuild/bin/crates/starpls/sty` in the local checkout.
+The IDE test requests eight remote CPUs for its parallel suite; its test timeout
+is unchanged.
+
 ## Community corpus
 
 The [corpus runner](../tools/corpus/README.md) checks eight exact source

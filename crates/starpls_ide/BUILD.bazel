@@ -38,4 +38,10 @@ rust_test(
     ],
     crate = ":starpls_ide",
     deps = all_crate_deps(normal_dev = True),
+    # BuildBuddy predictions overrode EstimatedCPU during qualification. Compute
+    # units bypass prediction; use EstimatedCPU once the service honors it.
+    exec_properties = {
+        "test.EstimatedComputeUnits": "8",
+        "test.EstimatedMemory": "512M",
+    },
 )
