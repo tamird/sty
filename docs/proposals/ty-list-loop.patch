@@ -1,0 +1,240 @@
+From cb60f9c33cff9897f49d110ed22c68829bb60da9 Mon Sep 17 00:00:00 2001
+From: Tamir Duberstein <tamird@gmail.com>
+Date: Thu, 19 Nov 2026 15:02:13 -0500
+Subject: [PATCH] [ty] Preserve literals in loop unpacking
+
+Destructuring an immediately consumed list in a loop widened literal
+values, while iteration with a single target preserved them. This also
+rejected literal arguments passed from destructured comprehensions.
+
+Share the existing precise iterable-element inference with unpacking and
+use it for synchronous list displays. Keep the normal iteration fallback
+for empty and unknown-length inputs, and for stored mutable containers.
+---
+ .../resources/mdtest/unpacking.md             | 79 +++++++++++++++++++
+ .../src/types/infer/builder.rs                | 29 +++----
+ .../ty_python_semantic/src/types/iteration.rs | 25 ++++++
+ .../ty_python_semantic/src/types/unpacker.rs  | 13 +--
+ 4 files changed, 120 insertions(+), 26 deletions(-)
+
+diff --git a/crates/ty_python_semantic/resources/mdtest/unpacking.md b/crates/ty_python_semantic/resources/mdtest/unpacking.md
+index 1707e4877a..942c459559 100644
+--- a/crates/ty_python_semantic/resources/mdtest/unpacking.md
++++ b/crates/ty_python_semantic/resources/mdtest/unpacking.md
+@@ -1410,6 +1410,85 @@ for a, b in ((1, 2), (3, 4)):
+     reveal_type(b)  # revealed: Literal[2, 4]
+ ```
+ 
++### Immediate list literals
++
++Destructured loop targets preserve literals from an immediately consumed list, just as a single loop
++target does:
++
++```py
++for a, b in [(1, 2), (3, 4)]:
++    reveal_type(a)  # revealed: Literal[1, 3]
++    reveal_type(b)  # revealed: Literal[2, 4]
++
++for a, b in [(1, "a"), ("b", 2)]:
++    reveal_type(a)  # revealed: Literal[1, "b"]
++    reveal_type(b)  # revealed: Literal["a", 2]
++```
++
++Comprehensions use the same unpacking behavior:
++
++```py
++from typing import Literal
++
++def consume(a: Literal[1, 3], b: Literal[2, 4]) -> None: ...
++
++[consume(a, b) for a, b in [(1, 2), (3, 4)]]  # ok
++```
++
++An empty list yields no values:
++
++```py
++for a, b in []:
++    reveal_type(a)  # revealed: Never
++    reveal_type(b)  # revealed: Never
++```
++
++Fixed-length starred elements preserve their literals too:
++
++```py
++for a, b in [(1, 2), *((3, 4),)]:
++    reveal_type(a)  # revealed: Literal[1, 3]
++    reveal_type(b)  # revealed: Literal[2, 4]
++```
++
++An arbitrary starred iterable retains its ordinary element types:
++
++```py
++def _(pairs: list[tuple[int, str]]):
++    for a, b in [(1, "a"), *pairs]:
++        reveal_type(a)  # revealed: int
++        reveal_type(b)  # revealed: str
++```
++
++Stored lists remain mutable and retain their promoted element types:
++
++```py
++pairs = [(1, 2)]
++pairs.append((3, 4))
++for a, b in pairs:
++    reveal_type(a)  # revealed: int
++    reveal_type(b)  # revealed: int
++```
++
++The precision of the outer list does not restrict nested mutable containers:
++
++```py
++for a, b in [([1], [2])]:
++    a.append(3)  # ok
++    b.append(4)  # ok
++    reveal_type(a)  # revealed: list[int]
++    reveal_type(b)  # revealed: list[int]
++```
++
++A list literal still cannot be iterated asynchronously:
++
++```py
++async def _():
++    # error: [not-iterable]
++    async for a, b in [(1, 2)]:
++        pass
++```
++
+ ### Mixed literal values (1)
+ 
+ ```py
+diff --git a/crates/ty_python_semantic/src/types/infer/builder.rs b/crates/ty_python_semantic/src/types/infer/builder.rs
+index 7f91fce288..4c560f1e3a 100644
+--- a/crates/ty_python_semantic/src/types/infer/builder.rs
++++ b/crates/ty_python_semantic/src/types/infer/builder.rs
+@@ -109,6 +109,7 @@ use crate::types::infer::{
+     TypeAndRange, TypeExpressionFlags, infer_statement_types, nearest_enclosing_class,
+     nearest_enclosing_function, original_class_type,
+ };
++use crate::types::iteration::precise_iterable_element_type;
+ use crate::types::match_pattern::{ClassPatternPositionalResult, class_pattern_positional_result};
+ use crate::types::member::{class_body_declaration_from_bases, inherited_class_body_declaration};
+ use crate::types::narrow::NarrowingEvaluatorExtension;
+@@ -145,8 +146,8 @@ use crate::types::{
+     SentinelInstance, Signature, SpecialFormType, SubclassOfType, Type, TypeAliasType,
+     TypeAndQualifiers, TypeContext, TypeQualifiers, TypeVarBoundOrConstraints, TypeVarKind,
+     TypeVarVariance, TypingModule, UnionAccumulator, UnionBuilder, UnionType, any_over_type,
+-    binding_type, extract_fixed_length_iterable_element_types, infer_complete_scope_types,
+-    infer_scope_types, is_discarded_dict_key_assignment, todo_type,
++    binding_type, infer_complete_scope_types, infer_scope_types, is_discarded_dict_key_assignment,
++    todo_type,
+ };
+ use crate::{AnalysisSettings, Db, DisplaySettings, FxIndexSet, FxOrderSet, SemanticModel};
+ use ty_python_core::ast_ids::PlaceUse;
+@@ -5431,24 +5432,12 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {
+         iterable: &ast::Expr,
+         expression_type: impl FnMut(&ast::Expr) -> Type<'db>,
+     ) -> Option<Type<'db>> {
+-        let db = self.db();
+-        let env = self.program_environment();
+-        if let ast::Expr::Dict(dict) = iterable {
+-            return dict_literal_key_value_types(db, env, dict, expression_type)
+-                .map(|(keys, _)| keys);
+-        }
+-        let element_types =
+-            extract_fixed_length_iterable_element_types(db, env, iterable, expression_type)?;
+-
+-        if element_types.is_empty() {
+-            None
+-        } else {
+-            Some(UnionType::from_elements(
+-                db,
+-                env,
+-                element_types.iter().copied(),
+-            ))
+-        }
++        precise_iterable_element_type(
++            self.db(),
++            self.program_environment(),
++            iterable,
++            expression_type,
++        )
+     }
+ 
+     fn infer_for_statement(&mut self, for_statement: &ast::StmtFor) {
+diff --git a/crates/ty_python_semantic/src/types/iteration.rs b/crates/ty_python_semantic/src/types/iteration.rs
+index 28322d7206..bca5118b01 100644
+--- a/crates/ty_python_semantic/src/types/iteration.rs
++++ b/crates/ty_python_semantic/src/types/iteration.rs
+@@ -1,5 +1,6 @@
+ use crate::Db;
+ use crate::ProgramEnvironment;
++use crate::types::dict::dict_literal_key_value_types;
+ use crate::types::{
+     AwaitError, Bindings, CallArguments, CallDunderError, KnownClass, LintDiagnosticGuard,
+     LintDiagnosticGuardBuilder, LiteralValueTypeKind, Type, TypeContext, TypeVarBoundOrConstraints,
+@@ -181,6 +182,30 @@ pub(crate) fn extract_fixed_length_iterable_element_types<'db>(
+     Some(element_types.into_boxed_slice())
+ }
+ 
++/// Infer an immediately consumed iterable's element type from its already-inferred expressions.
++pub(super) fn precise_iterable_element_type<'db>(
++    db: &'db dyn Db,
++    env: &ProgramEnvironment<'db>,
++    iterable: &ast::Expr,
++    expression_type: impl FnMut(&ast::Expr) -> Type<'db>,
++) -> Option<Type<'db>> {
++    if let ast::Expr::Dict(dict) = iterable {
++        return dict_literal_key_value_types(db, env, dict, expression_type)
++            .map(|(keys, _values)| keys);
++    }
++    let element_types =
++        extract_fixed_length_iterable_element_types(db, env, iterable, expression_type)?;
++    if element_types.is_empty() {
++        None
++    } else {
++        Some(UnionType::from_elements(
++            db,
++            env,
++            element_types.iter().copied(),
++        ))
++    }
++}
++
+ impl<'db> Type<'db> {
+     /// Recognizes coroutines whose results can be iterated over asynchronously.
+     ///
+diff --git a/crates/ty_python_semantic/src/types/unpacker.rs b/crates/ty_python_semantic/src/types/unpacker.rs
+index 1f02d1f512..99066355e3 100644
+--- a/crates/ty_python_semantic/src/types/unpacker.rs
++++ b/crates/ty_python_semantic/src/types/unpacker.rs
+@@ -11,8 +11,8 @@ use ruff_python_ast::{self as ast, AnyNodeRef};
+ use ruff_text_size::Ranged;
+ 
+ use crate::Db;
+-use crate::types::dict::dict_literal_key_value_types;
+ use crate::types::infer::{ExpressionInference, FrozenMap};
++use crate::types::iteration::precise_iterable_element_type;
+ use crate::types::tuple::promotion::TupleSizePromotionConstraints;
+ use crate::types::tuple::{
+     ResizeTupleError, Tuple, TupleBuilder, TupleElement, TupleLength, TupleSpec,
+@@ -105,12 +105,13 @@ impl<'db, 'ast> Unpacker<'db, 'ast> {
+             UnpackKind::Iterable { mode } => {
+                 let env = self.context.program_environment();
+                 if !mode.is_async()
+-                    && let ast::Expr::Dict(dict) = value_expr
+-                    && let Some((keys, _)) = dict_literal_key_value_types(db, env, dict, |expr| {
+-                        value_inference.expression_type(expr)
+-                    })
++                    && matches!(value_expr, ast::Expr::Dict(_) | ast::Expr::List(_))
++                    && let Some(element) =
++                        precise_iterable_element_type(db, env, value_expr, |expr| {
++                            value_inference.expression_type(expr)
++                        })
+                 {
+-                    keys
++                    element
+                 } else {
+                     value_type
+                         .try_iterate_with_mode(db, env, mode)
+
+base-commit: 912ba68f546006f42264c43180c9ce83a76b87cd
