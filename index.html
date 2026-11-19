@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Bazel Starlark type checking on ty: upstream work, community contracts, and reusable host support.">
+<title>sty · Work map</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+<p class="eyebrow">STY · WORK MAP</p>
+<h1>Starlark types, built together.</h1>
+<p class="lede">An excellent Bazel checker on ty, useful community contracts, and improvements that can return upstream.</p>
+<nav aria-label="Workstreams"><a href="#direction">Direction</a><a href="#upstream">Upstream ty</a><a href="#community">Community projects</a><a href="#infrastructure">Build infrastructure</a></nav>
+<p class="muted">Snapshot: 19 November 2026. PR observations are dated; linked GitHub threads show current review and CI. This site does not infer approval from a passing check.</p>
+</header>
+<main>
+<section id="direction"><h2>Five goals. One connected effort.</h2><div id="goals" class="grid"></div></section>
+<section id="upstream"><div class="section-heading"><div><p class="eyebrow">REDUCE THE FORK</p><h2>Upstream ty</h2></div><a href="https://github.com/tamird/ruff">Ruff / ty fork</a></div>
+<div class="gate"><h3>Every contribution goes through Tamir</h3><ol><li>Minimize the problem and check existing upstream work.</li><li>Implement, independently review, and finish all required qualification.</li><li>Present the exact change and evidence to Tamir for approval.</li><li>Submit upstream only after that approval.</li></ol><p>Local preparation and qualification are not an upstream submission. The same review boundary applies to proposed Bazel feedback and community contributions.</p></div>
+<div id="upstream-items" class="grid"></div>
+<p class="muted">Zsol's merged adaptations are templates for scope and review. Keyword-dictionary work already has active upstream alternatives; it is not a fresh assignment to duplicate.</p>
+</section>
+<section id="community"><p class="eyebrow">REAL IMPLEMENTATIONS, REAL CALLERS</p><h2>Community projects</h2><p>Eight full checkouts are restored at their corpus pins. The 148-case corpus predates current PR heads; restored pins and passing checker unit tests do not validate newer drafts.</p>
+<div class="controls"><label for="search">Find work</label><input id="search" type="search" placeholder="Project, contract, or dependency"><label for="state">Show</label><select id="state"><option value="all">All projects</option><option value="blocked">Known follow-up</option><option value="draft">Draft PRs</option><option value="non-draft">Non-draft PRs</option></select><span id="count" role="status" aria-live="polite"></span></div>
+<div id="projects" class="grid"></div>
+</section>
+<section id="infrastructure"><p class="eyebrow">KEEP HEAVY WORK OFF THE LAPTOP</p><h2>Build infrastructure</h2><div class="grid"><article><h3>sty: qualified with Bazel and BuildBuddy</h3><p>Native build and test targets pass. Linux RBE compilation, cache reuse, and test execution are qualified. The parallel IDE suite has an explicit remote CPU reservation.</p><p><a href="https://github.com/tamird/sty/blob/bazel-buildbuddy/docs/buildbuddy.md">Build and remote execution instructions</a></p></article><article><h3>Ruff / ty: remote qualification first</h3><p>The Bazel design starts with semantic/core/IDE libraries and the existing mdtest harness, reusing Cargo.lock and declaring generated Unicode and typeshed inputs. External-dependency mdtests need a separate integration lane. Implementation is pending; native qualification currently runs remotely.</p></article><article><h3>Host boundaries</h3><p>General inference belongs in ty. Starlark language rules and host discovery need explicit owners. Bazel-specific contracts stay separate; Buck2 compatibility requires its own evidence.</p></article></div>
+</section>
+</main>
+<noscript><p>This map needs JavaScript to display its records. Read the <a href="https://github.com/tamird/sty/blob/bazel-buildbuddy/tools/corpus/README.md">community corpus inventory</a> and <a href="https://github.com/astral-sh/ruff/pulls?q=is%3Apr+author%3Azsol">Zsol's upstream contributions</a> directly.</p></noscript>
+<footer><p>Prepared with Codex under Tamir's direction. <a href="https://github.com/tamird/sty/tree/bazel-buildbuddy">Source and current development</a> · <a href="https://github.com/tamird/sty/tree/sty-advisory-implementations">Recovered integration</a> · <a href="https://tamird.github.io/gvisor/">gVisor work map</a></p></footer>
+<script type="module" src="app.mjs"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+:root { color-scheme: dark; font: 16px/1.6 system-ui, sans-serif; background: #101725; color: #e7edf8; }
+html { scroll-behavior: smooth; }
+body { max-width: 1240px; margin: auto; padding: 2rem; }
+a { color: #9bc4ff; text-underline-offset: .2em; }
+h1 { font-size: clamp(2.4rem, 6vw, 4.5rem); line-height: 1.05; max-width: 15ch; margin: .5rem 0 1.5rem; }
+h2 { font-size: 1.8rem; line-height: 1.2; }
+h3 { font-size: 1.15rem; margin-top: 0; }
+p { max-width: 80ch; }
+.lede { font-size: 1.25rem; max-width: 58ch; }
+.eyebrow { font-size: .875rem; font-weight: 700; letter-spacing: .12em; color: #b1c5e2; }
+.muted { color: #b0bed1; }
+nav, .controls, .section-heading { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+nav { margin: 2rem 0; }
+section { margin: 4rem 0; scroll-margin-top: 1rem; }
+.section-heading { justify-content: space-between; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; }
+article, .gate { border: 1px solid #3b4b64; border-radius: 12px; padding: 1.25rem; background: #192337; min-width: 0; overflow-wrap: anywhere; }
+article p { margin: .6rem 0; }
+.gate { border-left: 4px solid #99c3ff; margin-bottom: 1.5rem; }
+.badge { font-size: .875rem; font-weight: 600; color: #b0d0ff; margin-bottom: .75rem; }
+.merged { border-top: 3px solid #86cbb4; }
+.blocker { color: #ffcf8c; }
+.controls { margin: 1.5rem 0; }
+input, select { font: inherit; background: #192337; color: inherit; border: 1px solid #6a7f9c; border-radius: 6px; padding: .5rem; }
+input { flex: 1; min-width: 12rem; }
+code { overflow-wrap: anywhere; font-size: .9em; }
+details { margin-top: 1rem; }
+summary { cursor: pointer; }
+footer { border-top: 1px solid #3b4b64; padding-top: 1rem; color: #b0bed1; }
+a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid #ffcf8c; outline-offset: 3px; }
+[hidden] { display: none; }
+@media (max-width: 480px) { body { padding: 1rem; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
