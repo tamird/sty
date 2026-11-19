@@ -2,10 +2,11 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-19T20:48:13Z",
+    "updatedAt": "2026-11-19T21:05:18Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
+      "bazelbuild/bazel": "none",
       "bazelbuild/bazel-skylib": "none",
       "bazelbuild/rules_cc": "none",
       "hermeticbuild/hermetic-llvm": "none",
@@ -13,7 +14,20 @@
       "fmeum/with_cfg.bzl": "none",
       "bazel-contrib/rules_runfiles_group": "none",
       "hermeticbuild/rules_rs": "none",
-      "bazel-contrib/bazel_features": "none"
+      "bazel-contrib/bazel_features": "none",
+      "bazelbuild/rules_java": "none",
+      "bazelbuild/starlark": "none"
+    },
+    "inventory": {
+      "pinnedFork": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
+      "forkBase": "d63450150b",
+      "upstreamAudited": "aa46aae607",
+      "divergentCommits": 495,
+      "userAuthoredCommits": 483,
+      "upstreamAuthoredPicks": 12,
+      "status": "Reconciliation in progress",
+      "scope": "All 17 user-authored Bazel typing issues were reconciled with GitHub. Ruff units group current mechanisms; the 495-commit history includes removed proof machinery and upstream picks, and has not yet been fully reduced to surviving current-upstream contributions. Source-history counts are not pending PR counts.",
+      "qualification": "Every new upstream proposal needs a current-upstream reproduction, focused negative/positive cases, relevant full qualification and Tamir approval. Existing merged templates, in-review PRs, host extension design and remaining Python fixes are distinct."
     }
   },
   "groups": [
@@ -24,6 +38,14 @@
     {
       "id": "ty",
       "label": "Upstream ty"
+    },
+    {
+      "id": "bazel",
+      "label": "Bazel feedback"
+    },
+    {
+      "id": "language",
+      "label": "Starlark specification"
     }
   ],
   "nodes": [
@@ -217,6 +239,333 @@
       }
     },
     {
+      "id": "pr:bazelbuild/bazel:32042",
+      "type": "pr",
+      "repo": "bazelbuild/bazel",
+      "number": 32042,
+      "title": "Type empty netrc entries and auth patterns",
+      "group": "community",
+      "status": "open",
+      "url": "https://github.com/bazelbuild/bazel/pull/32042",
+      "head": "0e050975ccf0a0c6964d6f75bc277929553b7888",
+      "summary": "Declare netrc entry/auth-pattern value types at their allocation boundaries.\n\nRecorded checks: Current check receipts have not been collected in this tracker.\n\nNative annotations would enable the whole-parser checker and encounter the optional-key narrowing gap in #32022. Current type-comment change does not require that bug to land first.",
+      "evidence": [
+        {
+          "label": "Bazel None-narrowing feedback #32022",
+          "url": "https://github.com/bazelbuild/bazel/issues/32022"
+        }
+      ],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "0e050975ccf0a0c6964d6f75bc277929553b7888",
+        "nextAction": "Confirm current-head checks and reconcile current upstream before requesting review."
+      }
+    },
+    {
+      "id": "pr:bazelbuild/rules_java:388",
+      "type": "pr",
+      "repo": "bazelbuild/rules_java",
+      "number": 388,
+      "title": "Construct java_common with explicit fields",
+      "group": "community",
+      "status": "open",
+      "url": "https://github.com/bazelbuild/rules_java/pull/388",
+      "head": "ddd484a4dc5e46879bca1df691f6648fa274d63d",
+      "summary": "Expose unconditional struct fields directly while preserving conditional-field values and evaluation order.\n\nRecorded checks: PR reports a downstream sty check resolves provider key/callable signatures; provider-level current check receipts are not collected here.\n\nsty loses field types across the unannotated java_common factory. This is a support refactor, not a claim that all rules_java sources are type checked.",
+      "evidence": [],
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "ddd484a4dc5e46879bca1df691f6648fa274d63d",
+        "nextAction": "Recheck factory inference before retaining the source refactor workaround."
+      }
+    },
+    {
+      "repo": "bazelbuild/bazel-skylib",
+      "number": 643,
+      "title": "Report duplicate Label conditions",
+      "head": "c37db57d4f08817c1cabdb8cd8c9fc0a2cdd56d8",
+      "state": "open",
+      "summary": "Extracted from Skylib #641; runtime duplicate-label diagnostic fix.",
+      "parent": [
+        "bazelbuild/bazel-skylib",
+        641
+      ],
+      "relation": "includes",
+      "id": "pr:bazelbuild/bazel-skylib:643",
+      "type": "pr",
+      "group": "community",
+      "status": "open",
+      "url": "https://github.com/bazelbuild/bazel-skylib/pull/643"
+    },
+    {
+      "repo": "bazelbuild/bazel-skylib",
+      "number": 647,
+      "title": "Recommend execpath in run_binary",
+      "head": "f64c8d9fa0898a9041ac6d1b996eca99f0a34ee5",
+      "state": "open",
+      "summary": "Buildifier documentation/parser compatibility; recorded inside Skylib #641.",
+      "parent": [
+        "bazelbuild/bazel-skylib",
+        641
+      ],
+      "relation": "includes",
+      "id": "pr:bazelbuild/bazel-skylib:647",
+      "type": "pr",
+      "group": "community",
+      "status": "open",
+      "url": "https://github.com/bazelbuild/bazel-skylib/pull/647"
+    },
+    {
+      "repo": "bazelbuild/bazel-skylib",
+      "number": 644,
+      "title": "Accept native tag inputs in build_test",
+      "head": "dc432570bb651ab14df44e33db75877da55ec17e",
+      "state": "open",
+      "summary": "Separate runtime tags compatibility fix extracted from #641; not an established landing prerequisite.",
+      "id": "pr:bazelbuild/bazel-skylib:644",
+      "type": "pr",
+      "group": "community",
+      "status": "open",
+      "url": "https://github.com/bazelbuild/bazel-skylib/pull/644"
+    },
+    {
+      "repo": "bazelbuild/rules_cc",
+      "number": 960,
+      "title": "Use public Bazel Features compatibility flag",
+      "head": "e64ff1bf4df7e8f8f728db44c35181d31247a57a",
+      "state": "closed",
+      "summary": "Closed without merging. Do not count the compatibility-proxy change as landed.",
+      "id": "pr:bazelbuild/rules_cc:960",
+      "type": "pr",
+      "group": "community",
+      "status": "closed",
+      "url": "https://github.com/bazelbuild/rules_cc/pull/960"
+    },
+    {
+      "repo": "bazelbuild/rules_cc",
+      "number": 967,
+      "title": "Allow header-only Objective-C compilation artifacts",
+      "head": "a39dcb143af056cc8eb0736ce39c933e3f7a38a2",
+      "state": "open",
+      "summary": "Runtime empty-source handling and actionable missing-factory error; related to rules_cc typing, not a proven blocker.",
+      "id": "pr:bazelbuild/rules_cc:967",
+      "type": "pr",
+      "group": "community",
+      "status": "open",
+      "url": "https://github.com/bazelbuild/rules_cc/pull/967"
+    },
+    {
+      "repo": "bazelbuild/starlark",
+      "number": 362,
+      "title": "Specify Starlark annotation syntax",
+      "state": "open",
+      "summary": "Open language-spec proposal includes namespaced type names used by Buck2. Syntax only: it does not specify checking semantics. sty field-map, openness and record semantics remain extensions.",
+      "id": "pr:bazelbuild/starlark:362",
+      "type": "pr",
+      "group": "language",
+      "status": "open",
+      "url": "https://github.com/bazelbuild/starlark/pull/362"
+    },
+    {
+      "repo": "bazelbuild/starlark",
+      "number": 318,
+      "title": "Align Collection, Sequence and Iterable",
+      "state": "merged",
+      "summary": "Merged 2025-09-02. sty already follows Collection for iterables and Sequence for indexed/sliced containers. A landed specification does not prove every host implementation conforms.",
+      "id": "pr:bazelbuild/starlark:318",
+      "type": "pr",
+      "group": "language",
+      "status": "merged",
+      "url": "https://github.com/bazelbuild/starlark/pull/318"
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32381",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32381,
+      "title": "Express a hashability bound on a generic type parameter",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32381",
+      "summary": "Skylib collections.uniq preserves element types but must reject nested unhashable inputs. Bound syntax is rejected; do not equate an unconstrained generic with a safe dictionary key.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32379",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32379,
+      "title": "Describe predicates that narrow a caller’s argument type",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32379",
+      "summary": "Skylib types.is_string and types.is_list need caller narrowing that preserves list element types. A boolean return alone does not supply this contract.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32377",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32377,
+      "title": "Reference a provider type without introducing a load cycle",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32377",
+      "summary": "DirectoryInfo helpers cannot load their calling provider module only for annotations without a cycle; moving a provider changes its defining-label identity.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32370",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32370,
+      "title": "Describe the fields a helper reads from a host object",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32370",
+      "summary": "A helper requiring readable ctx.file or bazel_module fields cannot accept the real host object through an open struct contract. Distinct from rule callback inference.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32369",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32369,
+      "title": "Type-check ctx.attr against the attributes declared on a rule",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32369",
+      "summary": "The native checker accepts assigning attr.bool() to str and reading misspelled ctx.attr fields. Infer callback context from the declaration instead of repeating its schema.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32343",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32343,
+      "title": "Type forwarded keyword arguments in Starlark macros",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32343",
+      "summary": "Ordinary **kwargs wrappers hide required-argument and value-type errors. sty prototypes Unpack[KeywordArgs[callee]]; symbolic macro inherit_attrs is a different mechanism.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32311",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32311,
+      "title": "Expose an annotation type for repository paths",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32311",
+      "summary": "repository_ctx.path() values cannot be named as path or Path in native annotations.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32207",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32207,
+      "title": "Allow Starlark provider declarations to specify field types",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32207",
+      "summary": "Native provider(fields=...) assigns Any to fields and misses wrong returns. sty accepts source field comments and companion provider contracts.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32104",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32104,
+      "title": "Annotate parameters with finite sets of strings",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32104",
+      "summary": "platforms_contrib accepts x86-64 levels v1–v4, but native annotations cannot express Literal strings and reject v5 statically.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32086",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32086,
+      "title": "Allow AnalysisTestResultInfo as an annotation type",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32086",
+      "summary": "The native checker rejects the public analysis-test result constructor as a type.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32085",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32085,
+      "title": "Expose the type of a rule’s provider values",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32085",
+      "summary": "list[struct] admits ctx.outputs although analysis rejects it as a provider. Provider constructors and provider instances need distinct contracts.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32059",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32059,
+      "title": "Accept iterable OutputGroupInfo values as Collection",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32059",
+      "summary": "OutputGroupInfo iterates keys and is accepted by native visibility but rejected at a Collection annotation. Starlark #318 already merged the collection distinction.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32044",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32044,
+      "title": "Support recursive type aliases",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32044",
+      "summary": "A recursive Json alias cannot resolve its own list/dictionary references in the native checker.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32024",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32024,
+      "title": "Accept real Target values in dynamic type checking",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32024",
+      "summary": "Native dynamic annotation checking rejects dependency and source-file Targets. Disabling dynamic checking makes the reproduced analysis succeed; this is separate from static inference.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32022",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32022,
+      "title": "Narrow optional lists after a None guard",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32022",
+      "summary": "The native checker still treats a guarded list[str] as list[str] | None. This blocks using native annotations throughout the netrc parser, not its current type-comment fix.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32021",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32021,
+      "title": "Support depset element types in annotations",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32021",
+      "summary": "Bare depset is accepted, but depset[str] is rejected as a nullary type constructor; collection payload contracts need parameterization.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
+      "id": "issue:bazelbuild/bazel:32020",
+      "type": "issue",
+      "repo": "bazelbuild/bazel",
+      "number": 32020,
+      "title": "Expose module and repository context annotation types",
+      "group": "bazel",
+      "status": "Feedback filed",
+      "url": "https://github.com/bazelbuild/bazel/issues/32020",
+      "summary": "Ctx exists for rule callbacks, while module_ctx and repository_ctx are absent from the native annotation environment.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+    },
+    {
       "id": "branch:destructured-list-elements",
       "type": "branch",
       "repo": "tamird/ruff",
@@ -365,7 +714,26 @@
       ]
     }
   ],
-  "edges": [],
+  "edges": [
+    {
+      "from": "pr:bazelbuild/bazel-skylib:643",
+      "to": "pr:bazelbuild/bazel-skylib:641",
+      "type": "includes",
+      "reason": "Extracted from Skylib #641; runtime duplicate-label diagnostic fix.",
+      "evidence": [
+        "https://github.com/bazelbuild/bazel-skylib/pull/643"
+      ]
+    },
+    {
+      "from": "pr:bazelbuild/bazel-skylib:647",
+      "to": "pr:bazelbuild/bazel-skylib:641",
+      "type": "includes",
+      "reason": "Buildifier documentation/parser compatibility; recorded inside Skylib #641.",
+      "evidence": [
+        "https://github.com/bazelbuild/bazel-skylib/pull/647"
+      ]
+    }
+  ],
   "investigations": [
     {
       "id": "investigation:checker",
@@ -373,7 +741,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-19T20:48:13Z",
+      "updatedAt": "2026-11-19T21:05:18Z",
       "evidence": [
         {
           "label": "sty source",
@@ -388,7 +756,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-19T20:48:13Z",
+      "updatedAt": "2026-11-19T21:05:18Z",
       "evidence": [
         {
           "label": "sty source",
@@ -403,7 +771,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-19T20:48:13Z",
+      "updatedAt": "2026-11-19T21:05:18Z",
       "evidence": [
         {
           "label": "sty source",
@@ -418,7 +786,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-19T20:48:13Z",
+      "updatedAt": "2026-11-19T21:05:18Z",
       "evidence": [
         {
           "label": "sty source",
@@ -433,7 +801,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-19T20:48:13Z",
+      "updatedAt": "2026-11-19T21:05:18Z",
       "evidence": [
         {
           "label": "sty source",
@@ -441,6 +809,635 @@
         }
       ],
       "findings": []
+    },
+    {
+      "id": "investigation:ty-host-parser",
+      "title": "Host parser and semantic file identity",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
+      "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
+      "findings": [
+        {
+          "text": "Allow explicit grammar in cached Python parses — crates/ruff_db/src/lib.rs, crates/ruff_db/src/parsed.rs, crates/ruff_python_ast/src/lib.rs",
+          "evidence": [
+            {
+              "label": "dbaf2b63ba2a5bdcd51cfb4e0bdbc03cdd3ebda4",
+              "url": "https://github.com/tamird/ruff/commit/dbaf2b63ba2a5bdcd51cfb4e0bdbc03cdd3ebda4"
+            }
+          ]
+        },
+        {
+          "text": "Separate embedded semantic program identities — crates/ty_python_core/src/program.rs, crates/ty_python_core/src/program_file.rs",
+          "evidence": [
+            {
+              "label": "43e2ef185fd950d5965823012b1ed59b15392db0",
+              "url": "https://github.com/tamird/ruff/commit/43e2ef185fd950d5965823012b1ed59b15392db0"
+            }
+          ]
+        },
+        {
+          "text": "Allow embedders to select a module parser — crates/ruff_db/src/lib.rs, crates/ruff_db/src/parsed.rs",
+          "evidence": [
+            {
+              "label": "d441e20a8f9fdefc1ffd75af8f7f430013c232ae",
+              "url": "https://github.com/tamird/ruff/commit/d441e20a8f9fdefc1ffd75af8f7f430013c232ae"
+            }
+          ]
+        },
+        {
+          "text": "Allow embedders to parse detached annotations — crates/ruff_db/src/lib.rs, crates/ruff_db/src/parsed.rs",
+          "evidence": [
+            {
+              "label": "8bb0b9cb0384ffd567841eedfc863e002706e281",
+              "url": "https://github.com/tamird/ruff/commit/8bb0b9cb0384ffd567841eedfc863e002706e281"
+            }
+          ]
+        },
+        {
+          "text": "Parse type parameters at an offset in the source — crates/ruff_python_parser/src/lib.rs, crates/ruff_python_parser/src/parser/mod.rs, crates/ruff_python_parser/src/parser/statement.rs",
+          "evidence": [
+            {
+              "label": "5ec8d1ed1b58f5b57b990daed5a1176130809e4f",
+              "url": "https://github.com/tamird/ruff/commit/5ec8d1ed1b58f5b57b990daed5a1176130809e4f"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-host-contracts",
+      "title": "Host-supplied semantic contracts",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
+      "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
+      "findings": [
+        {
+          "text": "Accept embedded source bindings and builtins — crates/ty_python_core/src/builder.rs, crates/ty_python_core/src/db.rs, crates/ty_python_core/src/definition.rs, crates/ty_python_core/src/lib.rs, crates/ty_python_semantic/src/db.rs, crates/ty_python_semantic/src/lexical_name_path.rs, crates/ty_python_semantic/src/lib.rs, crates/ty_python_semantic/src/place.rs, crates/ty_python_semantic/src/semantic_model.rs, crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/context.rs, crates/ty_python_semantic/src/types/definition_resolution.rs, crates/ty_python_semantic/src/types/diagnostic.rs, crates/ty_python_semantic/src/types/generics.rs, crates/ty_python_semantic/src/types/ide_support.rs, crates/ty_python_semantic/src/types/ide_support/unused_bindings.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/imports.rs, crates/ty_python_semantic/src/types/infer/builder/suspicious_conditions/diagnostic.rs, crates/ty_python_semantic/src/types/infer/builder/suspicious_conditions/exemptions.rs, crates/ty_python_semantic/src/types/provided.rs, crates/ty_python_semantic/src/types/provided/source_tests.rs",
+          "evidence": [
+            {
+              "label": "e7b5ba34b42483c4774dab0f3865592a6d5501cc",
+              "url": "https://github.com/tamird/ruff/commit/e7b5ba34b42483c4774dab0f3865592a6d5501cc"
+            }
+          ]
+        },
+        {
+          "text": "Model embedded factories with ordinary Ty types — crates/ty_python_semantic/resources/mdtest/ide_support/all_members.md, crates/ty_python_semantic/src/db.rs, crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/call.rs, crates/ty_python_semantic/src/types/call/bind.rs, crates/ty_python_semantic/src/types/call/checked.rs, crates/ty_python_semantic/src/types/callable.rs, crates/ty_python_semantic/src/types/class/dynamic_literal.rs, crates/ty_python_semantic/src/types/class/known.rs, crates/ty_python_semantic/src/types/display.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/new_class.rs, crates/ty_python_semantic/src/types/infer/builder/type_call.rs, crates/ty_python_semantic/src/types/instance.rs, crates/ty_python_semantic/src/types/list_members.rs, crates/ty_python_semantic/src/types/provided.rs, crates/ty_python_semantic/src/types/provided/data.rs, crates/ty_python_semantic/src/types/provided/tests.rs, crates/ty_python_semantic/src/types/signatures.rs",
+          "evidence": [
+            {
+              "label": "5078c1f9f0b2f30aa0ecf2b978487410373d7b7d",
+              "url": "https://github.com/tamird/ruff/commit/5078c1f9f0b2f30aa0ecf2b978487410373d7b7d"
+            }
+          ]
+        },
+        {
+          "text": "Share checked calls with native refinements — crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/call.rs, crates/ty_python_semantic/src/types/call/bind.rs, crates/ty_python_semantic/src/types/call/checked.rs, crates/ty_python_semantic/src/types/class/known.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/function.rs",
+          "evidence": [
+            {
+              "label": "23fa67398bdc5e361bdacd52e4b979131c1aa83f",
+              "url": "https://github.com/tamird/ruff/commit/23fa67398bdc5e361bdacd52e4b979131c1aa83f"
+            }
+          ]
+        },
+        {
+          "text": "Check supplied assignment annotations — crates/ty_python_core/src/db.rs, crates/ty_python_core/src/definition.rs, crates/ty_python_semantic/src/semantic_model.rs, crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/diagnostic.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/provided/source_tests.rs",
+          "evidence": [
+            {
+              "label": "45c16c583a0ac6042b0bf49b1296b3bdac746713",
+              "url": "https://github.com/tamird/ruff/commit/45c16c583a0ac6042b0bf49b1296b3bdac746713"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Upstream PlaceLoadResolver refactor #29791",
+          "url": "https://github.com/astral-sh/ruff/pull/29791"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-dictionary-flow",
+      "title": "Dictionary observations and flow precision",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
+      "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
+      "findings": [
+        {
+          "text": "Move dictionary observations out of call checking — crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/call.rs, crates/ty_python_semantic/src/types/call/arguments.rs, crates/ty_python_semantic/src/types/call/bind.rs, crates/ty_python_semantic/src/types/call/checked.rs, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/typed_dict.rs",
+          "evidence": [
+            {
+              "label": "956ddb3c7cd4f1e55d6e83e315c5553e5cd42532",
+              "url": "https://github.com/tamird/ruff/commit/956ddb3c7cd4f1e55d6e83e315c5553e5cd42532"
+            }
+          ]
+        },
+        {
+          "text": "Track dictionary contents through control flow — crates/ty_python_core/src/builder.rs, crates/ty_python_core/src/builder/dictionary_contents.rs, crates/ty_python_core/src/builder/loop_bindings_visitor.rs, crates/ty_python_core/src/definition.rs, crates/ty_python_core/src/lib.rs, crates/ty_python_core/src/member.rs, crates/ty_python_core/src/place.rs, crates/ty_python_core/src/symbol.rs, crates/ty_python_core/src/use_def.rs, crates/ty_python_core/src/use_def/place_state.rs, crates/ty_python_semantic/resources/mdtest/call/dictionary_contents.md, crates/ty_python_semantic/resources/mdtest/call/local_dictionary_unpacking.md, crates/ty_python_semantic/src/lexical_name_path.rs, crates/ty_python_semantic/src/place.rs, crates/ty_python_semantic/src/semantic_model.rs, crates/ty_python_semantic/src/types/call/arguments.rs, crates/ty_python_semantic/src/types/diagnostic.rs, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/dictionary/contents.rs, crates/ty_python_semantic/src/types/ide_support.rs, crates/ty_python_semantic/src/types/ide_support/unused_bindings.rs, crates/ty_python_semantic/src/types/infer.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/suspicious_conditions/exemptions.rs, crates/ty_python_semantic/src/types/narrow.rs, crates/ty_python_semantic/src/types/provided/tests.rs",
+          "evidence": [
+            {
+              "label": "74d28cc028a02fa315e40b6c368b62e73beaf794",
+              "url": "https://github.com/tamird/ruff/commit/74d28cc028a02fa315e40b6c368b62e73beaf794"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Move dictionary inventory joining to DictionaryItems — crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/dictionary/contents.rs",
+          "evidence": [
+            {
+              "label": "08fb15feb45a15b7b23091ab529d5c18944d3ca4",
+              "url": "https://github.com/tamird/ruff/commit/08fb15feb45a15b7b23091ab529d5c18944d3ca4"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Accept immediately guarded dictionary reads — crates/ty_python_semantic/resources/mdtest/narrow/conditionals/in.md, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/infer/builder/subscript.rs, crates/ty_python_semantic/src/types/subscript.rs",
+          "evidence": [
+            {
+              "label": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
+              "url": "https://github.com/tamird/ruff/commit/352ce32f76a8416551cb72d66dfa4f6d75a7c7e9"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Upstream overlapping design #29138",
+          "url": "https://github.com/astral-sh/ruff/pull/29138"
+        },
+        {
+          "label": "Upstream overlapping design #29141",
+          "url": "https://github.com/astral-sh/ruff/pull/29141"
+        },
+        {
+          "label": "Upstream overlapping design #29186",
+          "url": "https://github.com/astral-sh/ruff/pull/29186"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-solver-inference",
+      "title": "Solver and callable generic inference",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting.",
+      "nextStep": "Reproduce each surviving behavior on current ty; split independent fixes and qualify their solver/semantic suites before requesting Tamir review.",
+      "findings": [
+        {
+          "text": "[ty] Isolate inference for call candidates — crates/ty_python_semantic/resources/mdtest/call/union.md, crates/ty_python_semantic/resources/mdtest/generics/legacy/classes.md, crates/ty_python_semantic/resources/mdtest/generics/legacy/paramspec.md, crates/ty_python_semantic/resources/mdtest/generics/pep695/classes.md, crates/ty_python_semantic/resources/mdtest/generics/pep695/paramspec.md, crates/ty_python_semantic/src/types/call/bind.rs",
+          "evidence": [
+            {
+              "label": "b49d6ea5e7727b10015e87e3a8e2584b1d59560b",
+              "url": "https://github.com/tamird/ruff/commit/b49d6ea5e7727b10015e87e3a8e2584b1d59560b"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Separate atomic constraint operations — crates/ty_python_semantic/src/types/constraints/sequents.rs, crates/ty_python_semantic/src/types/constraints/variables.rs",
+          "evidence": [
+            {
+              "label": "5becae77b1455155940db1570e93be80f40a270a",
+              "url": "https://github.com/tamird/ruff/commit/5becae77b1455155940db1570e93be80f40a270a"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Group solver bounds by type variable — crates/ty_python_semantic/resources/mdtest/type_properties/materialization.md, crates/ty_python_semantic/src/types/constraints.rs, crates/ty_python_semantic/src/types/constraints/solutions.rs",
+          "evidence": [
+            {
+              "label": "bfd71700b5ff0922f3e570c79ba866098e567368",
+              "url": "https://github.com/tamird/ruff/commit/bfd71700b5ff0922f3e570c79ba866098e567368"
+            }
+          ]
+        },
+        {
+          "text": "Preserve generics through pending narrowing — crates/ty_python_semantic/resources/mdtest/generics/legacy/functions.md, crates/ty_python_semantic/resources/mdtest/generics/pep695/functions.md, crates/ty_python_semantic/src/types/generics.rs, crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs",
+          "evidence": [
+            {
+              "label": "18bf8b414cd2e2387f4a201cc8681a19211751f6",
+              "url": "https://github.com/tamird/ruff/commit/18bf8b414cd2e2387f4a201cc8681a19211751f6"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-overload-bodies",
+      "title": "Annotated overload implementation analysis",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Preserve overload signatures while checking implementation bodies and projected callback signatures.",
+      "nextStep": "Reproduce against current upstream; test public overload calls, implementation-body rejection and contextual callbacks independently.",
+      "findings": [
+        {
+          "text": "[ty] Prototype overload body domains — crates/ty_python_semantic/src/place.rs, crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/context.rs, crates/ty_python_semantic/src/types/infer.rs, crates/ty_python_semantic/src/types/infer/body_domain.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/function.rs",
+          "evidence": [
+            {
+              "label": "a8439ae9f7959c5ad2c82fb6a06180f8735839fa",
+              "url": "https://github.com/tamird/ruff/commit/a8439ae9f7959c5ad2c82fb6a06180f8735839fa"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Use complete overload body analysis — crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/call/bind.rs, crates/ty_python_semantic/src/types/context.rs, crates/ty_python_semantic/src/types/diagnostic.rs, crates/ty_python_semantic/src/types/ide_support.rs, crates/ty_python_semantic/src/types/infer.rs, crates/ty_python_semantic/src/types/infer/body_domain.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/annotation_expression.rs, crates/ty_python_semantic/src/types/infer/builder/suspicious_conditions/diagnostic.rs, crates/ty_python_semantic/src/types/string_annotation.rs",
+          "evidence": [
+            {
+              "label": "07b86b2901fc89973eb4ee226dc1694e6b549fa6",
+              "url": "https://github.com/tamird/ruff/commit/07b86b2901fc89973eb4ee226dc1694e6b549fa6"
+            }
+          ]
+        },
+        {
+          "text": "Use declared overloads for annotated implementations — crates/ty_python_semantic/src/types/function.rs, crates/ty_python_semantic/src/types/provided/source_tests.rs, crates/ty_python_semantic/src/types/string_annotation.rs",
+          "evidence": [
+            {
+              "label": "4b54a19d0cb52d081ba052fee443450a2dcaa904",
+              "url": "https://github.com/tamird/ruff/commit/4b54a19d0cb52d081ba052fee443450a2dcaa904"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-saved-tag-narrowing",
+      "title": "Saved runtime type and tagged-union narrowing",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
+      "nextStep": "Extract Python-meaningful regressions; qualify narrowing stability across mutation and keep Starlark tag interpretation in the host adapter.",
+      "findings": [
+        {
+          "text": "[ty] Narrow through saved runtime type tests — crates/ty_python_core/src/builder.rs, crates/ty_python_core/src/use_def.rs, crates/ty_python_semantic/resources/mdtest/narrow/type.md, crates/ty_python_semantic/src/types/ide_support/unused_bindings.rs, crates/ty_python_semantic/src/types/narrow.rs, crates/ty_python_semantic/src/types/provided/tests.rs",
+          "evidence": [
+            {
+              "label": "ca48a9779386a7e0ee171e99e57e5c7c8f5d738b",
+              "url": "https://github.com/tamird/ruff/commit/ca48a9779386a7e0ee171e99e57e5c7c8f5d738b"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Narrow unions through saved attribute tags — crates/ty_python_core/src/builder.rs, crates/ty_python_semantic/resources/mdtest/narrow/aliased_conditions.md, crates/ty_python_semantic/src/types/narrow.rs",
+          "evidence": [
+            {
+              "label": "fd259774b672dd8d5f1e500d4eb89c1a5e716c43",
+              "url": "https://github.com/tamird/ruff/commit/fd259774b672dd8d5f1e500d4eb89c1a5e716c43"
+            }
+          ]
+        },
+        {
+          "text": "Narrow tagged unions through saved subscripts — crates/ty_python_core/src/builder.rs, crates/ty_python_semantic/resources/mdtest/narrow/aliased_conditions.md, crates/ty_python_semantic/src/types/narrow.rs",
+          "evidence": [
+            {
+              "label": "ea11b62358b4197de3bcbf8b0e2497aeeff71cf5",
+              "url": "https://github.com/tamird/ruff/commit/ea11b62358b4197de3bcbf8b0e2497aeeff71cf5"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-contextual-empty",
+      "title": "Contextual empty collection inference",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream.",
+      "nextStep": "Subtract the already merged empty-peer fix, reproduce remaining cases on current ty, and qualify mutable escape/default/argument boundaries.",
+      "findings": [
+        {
+          "text": "Infer nonempty collection branches first; this lineage is already upstream in #29131, so subtract it before identifying remaining work — crates/ty_python_semantic/resources/mdtest/conditional/if_expression.md, crates/ty_python_semantic/src/types/infer/builder.rs",
+          "evidence": [
+            {
+              "label": "604759e7cb541d2d2c1443c2d6f00ee987e4c4a9",
+              "url": "https://github.com/tamird/ruff/commit/604759e7cb541d2d2c1443c2d6f00ee987e4c4a9"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Preserve empty collection context — crates/ty_python_semantic/resources/mdtest/bidirectional.md, crates/ty_python_semantic/src/types/call/bind.rs, crates/ty_python_semantic/src/types/infer/builder.rs",
+          "evidence": [
+            {
+              "label": "c58c6ae7d2ff11d9ff1311140f97a52da4c30fde",
+              "url": "https://github.com/tamird/ruff/commit/c58c6ae7d2ff11d9ff1311140f97a52da4c30fde"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Use return types for empty dictionaries — crates/ty_python_semantic/resources/mdtest/bidirectional.md, crates/ty_python_semantic/src/types/infer/builder.rs",
+          "evidence": [
+            {
+              "label": "372b2fc678e8190c0188bc0a399e71a413a4446d",
+              "url": "https://github.com/tamird/ruff/commit/372b2fc678e8190c0188bc0a399e71a413a4446d"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Merged empty collection peer inference #29131",
+          "url": "https://github.com/astral-sh/ruff/pull/29131"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-editor-api",
+      "title": "Reusable editor queries",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
+      "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
+      "findings": [
+        {
+          "text": "Share active signature parameter selection — crates/ty_ide/src/signature_help.rs, crates/ty_python_semantic/src/types/ide_support.rs",
+          "evidence": [
+            {
+              "label": "7ff920b199c5094e91de972c472abc8aee60f796",
+              "url": "https://github.com/tamird/ruff/commit/7ff920b199c5094e91de972c472abc8aee60f796"
+            }
+          ]
+        },
+        {
+          "text": "Share semantic token classification — crates/ty_ide/src/lib.rs, crates/ty_ide/src/semantic_tokens.rs",
+          "evidence": [
+            {
+              "label": "71f92d63100ccd58bb9441ca4ec9c9bc3e88674a",
+              "url": "https://github.com/tamird/ruff/commit/71f92d63100ccd58bb9441ca4ec9c9bc3e88674a"
+            }
+          ]
+        },
+        {
+          "text": "Expose file-local semantic references — crates/ty_ide/src/lib.rs, crates/ty_ide/src/references.rs",
+          "evidence": [
+            {
+              "label": "bc6cd6ade301e7880ed630a6ddb906c1a68849a6",
+              "url": "https://github.com/tamird/ruff/commit/bc6cd6ade301e7880ed630a6ddb906c1a68849a6"
+            }
+          ]
+        },
+        {
+          "text": "Separate inlay hints from Python edits — crates/ty_ide/src/inlay_hints.rs, crates/ty_ide/src/lib.rs",
+          "evidence": [
+            {
+              "label": "e21beab86ff5bfb3071cf81fb35abcecf6ac8356",
+              "url": "https://github.com/tamird/ruff/commit/e21beab86ff5bfb3071cf81fb35abcecf6ac8356"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-diagnostic-policy",
+      "title": "Host diagnostic and suppression policy",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
+      "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
+      "findings": [
+        {
+          "text": "Allow embedders to require valid suppressions — crates/ty/docs/rules.md, crates/ty_python_semantic/resources/lint_docs/blanket-ignore-comment.md, crates/ty_python_semantic/src/lint.rs, crates/ty_python_semantic/src/suppression.rs, crates/ty_python_semantic/src/suppression/unused.rs, ty.schema.json",
+          "evidence": [
+            {
+              "label": "fc3b29f0adb11528151e387373eea142481a5218",
+              "url": "https://github.com/tamird/ruff/commit/fc3b29f0adb11528151e387373eea142481a5218"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Require scoped suppressions for embedders — crates/ty/docs/rules.md, crates/ty_python_semantic/resources/lint_docs/blanket-ignore-comment.md, crates/ty_python_semantic/src/lint.rs, crates/ty_python_semantic/src/suppression.rs, ty.schema.json",
+          "evidence": [
+            {
+              "label": "5ee6d94cf53e4746684f7048666274b6060afbaf",
+              "url": "https://github.com/tamird/ruff/commit/5ee6d94cf53e4746684f7048666274b6060afbaf"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-host-runtime",
+      "title": "Host iterator, string and Boolean semantics",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
+      "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
+      "findings": [
+        {
+          "text": "Respect declared string iteration contracts — Cargo.lock, crates/ty_python_semantic/Cargo.toml, crates/ty_python_semantic/src/db.rs, crates/ty_python_semantic/src/types/iteration.rs, crates/ty_python_semantic/src/types/relation.rs, crates/ty_python_semantic/src/types/tests.rs",
+          "evidence": [
+            {
+              "label": "5dc76a7745ed08465ec32f3003a9bce384822a81",
+              "url": "https://github.com/tamird/ruff/commit/5dc76a7745ed08465ec32f3003a9bce384822a81"
+            }
+          ]
+        },
+        {
+          "text": "Gate Boolean numeric literal optimizations — crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/class/known.rs, crates/ty_python_semantic/src/types/enums.rs, crates/ty_python_semantic/src/types/equality.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/binary_expressions.rs, crates/ty_python_semantic/src/types/infer/builder/enum_call.rs, crates/ty_python_semantic/src/types/infer/comparisons.rs, crates/ty_python_semantic/src/types/instance.rs, crates/ty_python_semantic/src/types/narrow.rs, crates/ty_python_semantic/src/types/subscript.rs, crates/ty_python_semantic/src/types/tests.rs",
+          "evidence": [
+            {
+              "label": "d5b2f3db259cd1d0b6e3f8200f48b70be61911bd",
+              "url": "https://github.com/tamird/ruff/commit/d5b2f3db259cd1d0b6e3f8200f48b70be61911bd"
+            }
+          ]
+        },
+        {
+          "text": "Support embedded string literal interpretation — crates/ruff_db/src/lib.rs, crates/ruff_db/src/parsed.rs, crates/ruff_python_parser/src/lib.rs, crates/ruff_python_parser/src/parser/expression.rs, crates/ruff_python_parser/src/parser/mod.rs, crates/ruff_python_parser/src/parser/options.rs, crates/ruff_python_parser/src/string.rs, crates/ty_python_semantic/src/semantic_model.rs, crates/ty_python_semantic/src/types/infer/builder/suspicious_conditions/diagnostic.rs, crates/ty_python_semantic/src/types/infer/implicit_alias.rs, crates/ty_python_semantic/src/types/string_annotation.rs",
+          "evidence": [
+            {
+              "label": "6ad38a59c6268796d1ed49af724cbc05a101836a",
+              "url": "https://github.com/tamird/ruff/commit/6ad38a59c6268796d1ed49af724cbc05a101836a"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-structural-relations",
+      "title": "TypedDict and protocol relations",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
+      "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
+      "findings": [
+        {
+          "text": "Infer closed TypedDict values in protocols — crates/ty_python_semantic/resources/mdtest/typed_dict.md, crates/ty_python_semantic/src/types/class/typed_dict.rs",
+          "evidence": [
+            {
+              "label": "cb54d4b8e0ea88ff5bff0b2b4245ee1c59ba19f9",
+              "url": "https://github.com/tamird/ruff/commit/cb54d4b8e0ea88ff5bff0b2b4245ee1c59ba19f9"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Check TypedDict unions with literals — crates/ty_python_semantic/resources/mdtest/typed_dict.md, crates/ty_python_semantic/src/types/infer/builder/binary_expressions.rs, crates/ty_python_semantic/src/types/infer/builder/typed_dict.rs",
+          "evidence": [
+            {
+              "label": "c18d08bf614fac225a18aad33f7e638e2180c1cb",
+              "url": "https://github.com/tamird/ruff/commit/c18d08bf614fac225a18aad33f7e638e2180c1cb"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Reuse compatible TypedDict union results — crates/ty_python_semantic/resources/mdtest/typed_dict.md, crates/ty_python_semantic/src/types/infer/builder/binary_expressions.rs",
+          "evidence": [
+            {
+              "label": "8478653dc0f30541ee1790b113c2d18d79b31510",
+              "url": "https://github.com/tamird/ruff/commit/8478653dc0f30541ee1790b113c2d18d79b31510"
+            }
+          ]
+        },
+        {
+          "text": "Preserve bounded TypedDict values in dictionary merges — crates/ty_python_semantic/resources/mdtest/typed_dict.md, crates/ty_python_semantic/src/types/class/typed_dict.rs",
+          "evidence": [
+            {
+              "label": "14518b0b59f746166f55a8f86fb4610f315c8e83",
+              "url": "https://github.com/tamird/ruff/commit/14518b0b59f746166f55a8f86fb4610f315c8e83"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-contextual-callbacks",
+      "title": "Contextual lambda and callback inference",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
+      "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
+      "findings": [
+        {
+          "text": "[ty] Infer lambda positional captures — crates/ty_python_semantic/resources/mdtest/bidirectional.md, crates/ty_python_semantic/resources/mdtest/expression/lambda.md, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/function.rs, crates/ty_python_semantic/src/types/signatures.rs",
+          "evidence": [
+            {
+              "label": "8532eec7571c63559c6401858047cef4ffb808db",
+              "url": "https://github.com/tamird/ruff/commit/8532eec7571c63559c6401858047cef4ffb808db"
+            }
+          ]
+        },
+        {
+          "text": "[ty] Preserve contextual lambda tuple shapes — crates/ty_python_semantic/resources/mdtest/cycle/implicit_instance_attributes.md, crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/provided/tests.rs",
+          "evidence": [
+            {
+              "label": "c521d505b8e1000e218ceafe9eb1e45622f7f439",
+              "url": "https://github.com/tamird/ruff/commit/c521d505b8e1000e218ceafe9eb1e45622f7f439"
+            }
+          ]
+        },
+        {
+          "text": "Infer lambda defaults with parameter context — crates/ty_python_semantic/resources/mdtest/expression/lambda.md, crates/ty_python_semantic/src/types/infer/builder.rs",
+          "evidence": [
+            {
+              "label": "0b5c59dbadbfde1b836cdf4f7c1e82056b4783b2",
+              "url": "https://github.com/tamird/ruff/commit/0b5c59dbadbfde1b836cdf4f7c1e82056b4783b2"
+            }
+          ]
+        },
+        {
+          "text": "Infer lambda inputs from callback protocols — crates/ty_python_semantic/resources/mdtest/cycle/basic.md, crates/ty_python_semantic/resources/mdtest/expression/lambda.md, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/infer/builder/function.rs",
+          "evidence": [
+            {
+              "label": "815d619e2dea9becd7d42c588653118c97971b99",
+              "url": "https://github.com/tamird/ruff/commit/815d619e2dea9becd7d42c588653118c97971b99"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-return-inference",
+      "title": "Source function return inference",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
+      "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
+      "findings": [
+        {
+          "text": "[ty] Infer unannotated function call results — crates/ty_python_semantic/resources/mdtest/decorators.md, crates/ty_python_semantic/resources/mdtest/function/return_type_inference.md, crates/ty_python_semantic/src/db.rs, crates/ty_python_semantic/src/lib.rs, crates/ty_python_semantic/src/types.rs, crates/ty_python_semantic/src/types/function.rs, crates/ty_python_semantic/src/types/infer.rs, crates/ty_python_semantic/src/types/infer/builder.rs, crates/ty_python_semantic/src/types/method.rs, crates/ty_python_semantic/src/types/provided/tests.rs",
+          "evidence": [
+            {
+              "label": "68824c5e9831b7064734ec042d0c0739c209ebe2",
+              "url": "https://github.com/tamird/ruff/commit/68824c5e9831b7064734ec042d0c0739c209ebe2"
+            }
+          ]
+        }
+      ],
+      "evidence": []
+    },
+    {
+      "id": "investigation:ty-fork-reconciliation",
+      "title": "Reconcile the entire pinned Ruff fork",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-19T21:05:18Z",
+      "summary": "Reconciliation in progress. 495 divergent commits contain 483 user-authored commits and 12 upstream-authored picks across 250 changed paths. Historical commits include removed proof machinery; these mechanism groups are not a final list of independent upstream contributions.",
+      "nextStep": "Classify every divergent commit as landed, superseded/removed, active upstream work, host-extension design, or remaining Python fix; record exact surviving-source coverage before claiming completeness.",
+      "findings": [
+        {
+          "text": "[ty] Accept immediately guarded dictionary reads — crates/ty_python_semantic/resources/mdtest/narrow/conditionals/in.md, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/infer/builder/subscript.rs, crates/ty_python_semantic/src/types/subscript.rs",
+          "evidence": [
+            {
+              "label": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
+              "url": "https://github.com/tamird/ruff/commit/352ce32f76a8416551cb72d66dfa4f6d75a7c7e9"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Fork comparison from recorded base",
+          "url": "https://github.com/tamird/ruff/compare/d63450150b...352ce32f76a8416551cb72d66dfa4f6d75a7c7e9"
+        }
+      ]
     }
   ]
 }

@@ -2,11 +2,12 @@
   "schema": 1,
   "repo": "astral-sh/ruff",
   "owner": "tamird",
-  "registryDate": "2026-11-19T20:48:13Z",
-  "checkedAt": "2026-11-19T20:48:13Z",
+  "registryDate": "2026-11-19T21:05:18Z",
+  "checkedAt": "2026-11-19T21:05:18Z",
   "repositories": {
     "astral-sh/ruff": "none",
     "tamird/ruff": "none",
+    "bazelbuild/bazel": "none",
     "bazelbuild/bazel-skylib": "none",
     "bazelbuild/rules_cc": "none",
     "hermeticbuild/hermetic-llvm": "none",
@@ -14,8 +15,113 @@
     "fmeum/with_cfg.bzl": "none",
     "bazel-contrib/rules_runfiles_group": "none",
     "hermeticbuild/rules_rs": "none",
-    "bazel-contrib/bazel_features": "none"
+    "bazel-contrib/bazel_features": "none",
+    "bazelbuild/rules_java": "none",
+    "bazelbuild/starlark": "none"
   },
   "prs": [],
-  "issues": {}
+  "issues": {
+    "issue:bazelbuild/bazel:32381": {
+      "githubState": "open",
+      "updatedAt": "2026-11-05T02:48:57Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32381",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32379": {
+      "githubState": "open",
+      "updatedAt": "2026-11-03T22:10:37Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32379",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32377": {
+      "githubState": "open",
+      "updatedAt": "2026-11-13T19:25:41Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32377",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32370": {
+      "githubState": "open",
+      "updatedAt": "2026-11-03T15:20:19Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32370",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32369": {
+      "githubState": "open",
+      "updatedAt": "2026-11-03T15:09:45Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32369",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32343": {
+      "githubState": "open",
+      "updatedAt": "2026-11-02T19:00:52Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32343",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32311": {
+      "githubState": "open",
+      "updatedAt": "2026-10-31T11:32:36Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32311",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32207": {
+      "githubState": "open",
+      "updatedAt": "2026-10-28T18:14:45Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32207",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32104": {
+      "githubState": "open",
+      "updatedAt": "2026-10-26T15:05:37Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32104",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32086": {
+      "githubState": "open",
+      "updatedAt": "2026-11-02T22:51:48Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32086",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32085": {
+      "githubState": "open",
+      "updatedAt": "2026-10-25T22:15:49Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32085",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32059": {
+      "githubState": "open",
+      "updatedAt": "2026-10-25T16:00:36Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32059",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32044": {
+      "githubState": "open",
+      "updatedAt": "2026-10-23T21:48:58Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32044",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32024": {
+      "githubState": "open",
+      "updatedAt": "2026-10-23T14:39:45Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32024",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32022": {
+      "githubState": "open",
+      "updatedAt": "2026-10-23T14:00:20Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32022",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32021": {
+      "githubState": "open",
+      "updatedAt": "2026-10-23T14:00:13Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32021",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    },
+    "issue:bazelbuild/bazel:32020": {
+      "githubState": "open",
+      "updatedAt": "2026-11-04T21:26:56Z",
+      "githubURL": "https://github.com/bazelbuild/bazel/issues/32020",
+      "checkedAt": "2026-11-19T21:01:03Z"
+    }
+  }
 }
