@@ -1,5 +1,7 @@
 common --enable_platform_specific_config
 common --repo_env=CARGO_BAZEL_ISOLATED=false
+import %workspace%/bazel/buildbuddy.bazelrc
+try-import %workspace%/.bazelrc.local
 
 build --enable_runfiles
 

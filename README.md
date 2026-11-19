@@ -13,9 +13,13 @@ Build the executable from [this repository](https://github.com/tamird/sty):
 bazel build -c opt //:sty
 ```
 
-The executable is `bazel-bin/crates/starpls/sty` (`sty.exe` on Windows).
+Find the output directory with `bazel info bazel-bin`; the executable is
+`crates/starpls/sty` inside it (`sty.exe` on Windows).
 Put it on your `PATH` as `sty`, or configure your editor with its absolute path.
 Tagged builds use the [releases page](https://github.com/tamird/sty/releases).
+
+See [BuildBuddy builds](docs/buildbuddy.md) for remote execution and Remote Bazel,
+and the [work map](docs/work-map.html) for the recovered community-project work.
 
 ### VS Code and Cursor
 
