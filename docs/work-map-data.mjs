@@ -43,16 +43,27 @@ export const upstream = [
   {
     "id": "destructured-list-elements",
     "title": "Literal element types in destructured list loops",
-    "state": "Revising after Tamir review",
-    "nextAction": "Qualify the clearer guard comment and tuple-size regression before requesting review again.",
+    "state": "Awaiting Tamir review",
     "source": "c52778b7343432c867b5325b26fd5da72329b5ca",
     "summary": "Preserve literal types when destructuring immediately consumed lists, using the existing shared inference machinery. Qualified remotely and published on the Ruff fork; not submitted upstream.",
     "qualifiedBase": "912ba68f546006f42264c43180c9ce83a76b87cd",
-    "qualifiedHead": "5485dac87269c66659f6a76be2b759dbec723ff3",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...5485dac87269c66659f6a76be2b759dbec723ff3",
+    "qualifiedHead": "4cde8277a76d0f4c050b8fe3ff1a1a3bc13f842f",
+    "qualifiedURL": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...4cde8277a76d0f4c050b8fe3ff1a1a3bc13f842f",
     "qualification": {
-      "summary": "Linux qualification completed: matched baseline regression; strict focused fixtures; full semantic, core, IDE and external mdtest suites; workspace Clippy; formatting and required changed-file hooks. Detailed run logs are private and delivered directly to Tamir.",
+      "summary": "Earlier Linux qualification covered the unchanged runtime implementation with full semantic, core, IDE and external mdtest suites and workspace Clippy. The final comment/test revision passed strict unpacking.md, including the 65-element tuple regression, formatting and required four-file hooks. Removing the guard demonstrably bypasses tuple literal widening. Run logs require BuildBuddy access.",
       "evidence": [
+        {
+          "label": "Final revision: strict unpacking fixture and formatting passed",
+          "url": "https://app.buildbuddy.io/invocation/83431490-c343-48f0-afa6-16c73dab168d"
+        },
+        {
+          "label": "Required hooks for all four changed files passed",
+          "url": "https://app.buildbuddy.io/invocation/2d1f9fc3-7c4d-479c-a2f9-156072ffaa29"
+        },
+        {
+          "label": "Guard removal fails the tuple-size regression",
+          "url": "https://app.buildbuddy.io/invocation/165a5251-28f0-481f-9f8a-9701baee47c0"
+        },
         {
           "label": "Upstream base fixture",
           "url": "https://github.com/astral-sh/ruff/blob/912ba68f546006f42264c43180c9ce83a76b87cd/crates/ty_python_semantic/resources/mdtest/unpacking.md"

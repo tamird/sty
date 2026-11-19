@@ -5,7 +5,7 @@ import * as records from './work-map-data.mjs';
 
 // This is the curation time, not a fresh observation from the GitHub API.
 // Advance it when reviewing records, never merely when rebuilding the site.
-export const reviewedAt = '2026-11-19T22:38:17Z';
+export const reviewedAt = '2026-11-19T23:07:10Z';
 export const generated = buildTracker(records, reviewedAt);
 
 if (process.argv.includes('--write')) {
