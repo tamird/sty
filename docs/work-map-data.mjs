@@ -3,7 +3,7 @@ import { solverInventory } from './solver-inventory.mjs';
 export { solverInventory };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-20T09:57:48Z';
+export const reviewedAt = '2026-11-20T10:46:18Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Resolve helper and tag follow-ups",repo:"bazelbuild/bazel-skylib",number:641,head:"baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"Fork PR #1: root and Gazelle sty checks passed. Upstream head has a successful CLA check.",followup:"Includes open fixes #643 and #647. Native build_test tag handling is tracked separately in #644.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']]},
@@ -1047,7 +1047,13 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Reproduce against current upstream; test public overload calls, implementation-body rejection and contextual callbacks independently."
+    "evidence": [
+      {
+        "label": "Starlark requires one declared signature per function",
+        "url": "https://github.com/tamird/sty/commit/5960a4bda9c70ea815747b4ab3a5c35c6fdd0bcf"
+      }
+    ],
+    "nextAction": "Reproduce the Python behavior against current ty. Separately resolve LLVM exec_test's explicit versus omitted inner_data contract: its draft overloads are rejected by sty's one-signature rule. Preserve callback-data and default-list negative cases; do not treat Python overload analysis as an available Starlark contract."
   },
   {
     "id": "ty-saved-tag-narrowing",
@@ -1508,7 +1514,7 @@ const reviewedTyWork = [
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "Sty main uses the fork rebased onto cbcf8663796 and passes all eight Bazel targets plus a frozen optimized build. An unpublished Ruff cohort passes core and semantic units, Clippy, formatting and selected fixtures. Full mdtest still aborts in the recursive-protocol factory case; generic ParamSpec return inference remains open.",
+    "summary": "Sty main uses f9d7ec289b, including the contextual-inference cohort and Bazel port rebased onto cbcf8663796. All eight sty targets and a frozen optimized Linux build pass. Selected Ruff units, Clippy, formatting and fixture gates pass. All eight community root checks still fail; draft overload contracts and mutable-container inference remain blockers. Full mdtest still aborts in the recursive-protocol factory case; generic ParamSpec return inference remains open.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1543,24 +1549,52 @@ const reviewedTyWork = [
         "url": "https://app.buildbuddy.io/invocation/0a5dd442-a071-4359-872c-3c645a5c2200"
       },
       {
+        "label": "Published contextual inference and Bazel checkpoint",
+        "url": "https://github.com/tamird/ruff/compare/7ef19c19dfc64da53d2d2172e256630a6230a618...f9d7ec289b4b428a8994181d3c117477a8709f03"
+      },
+      {
+        "label": "Checkpoint: selected units, strict Clippy and formatting",
+        "url": "https://app.buildbuddy.io/invocation/a674c5a2-bfbf-4776-a144-88555680bd8e"
+      },
+      {
+        "label": "Community qualification: Skylib dictionary merge failures",
+        "url": "https://app.buildbuddy.io/invocation/8becd2c4-f749-453a-95ce-9044e319f343"
+      },
+      {
+        "label": "Community qualification: C++ declarations",
+        "url": "https://app.buildbuddy.io/invocation/f90ba2b1-3dbc-4eae-ba5c-e5686023b39b"
+      },
+      {
+        "label": "Community qualification: LLVM wrapper and Apple declarations",
+        "url": "https://app.buildbuddy.io/invocation/5f7f7f51-1c9b-4175-9551-e030df04ce06"
+      },
+      {
+        "label": "Community qualification: with_cfg overloads and Rust declarations",
+        "url": "https://app.buildbuddy.io/invocation/49687cef-19d7-4b8a-baae-13b5a489847d"
+      },
+      {
+        "label": "Community qualification: runfiles inference and feature helpers",
+        "url": "https://app.buildbuddy.io/invocation/3e94318f-7025-419b-9b2d-ddcdcf87dc56"
+      },
+      {
         "label": "Aborting recursive-protocol factory regression",
         "url": "https://github.com/tamird/ruff/blob/7ef19c19dfc64da53d2d2172e256630a6230a618/crates/ty_python_semantic/resources/mdtest/generics/legacy/functions.md#L6310"
       }
     ],
-    "nextAction": "Fix recursive-protocol receiver-proof ownership, finish Cargo-dev qualification and publish the verified cohort. Then refresh the source inventory and isolate remaining generic ParamSpec changes against upstream."
+    "nextAction": "Fix the eight community root checks without weakening their contracts: reconcile unsupported overloads, repair container inference, and refresh declaration annotations. Repair recursive-protocol receiver-proof ownership, finish Markdown qualification, and isolate the remaining Python fixes against upstream."
   }
 ];
 
 export const tyWork = [...reviewedTyWork, ...solverInventory.tasks];
 
 export const inventory = {
-  "pinnedFork": "7ef19c19dfc64da53d2d2172e256630a6230a618",
+  "pinnedFork": "f9d7ec289b4b428a8994181d3c117477a8709f03",
   "forkBase": "cbcf8663796a051518ecbefc560987523fe8b2d6",
   "upstreamAudited": "cbcf8663796a051518ecbefc560987523fe8b2d6",
-  "divergentCommits": 21,
-  "userAuthoredCommits": 21,
+  "divergentCommits": 23,
+  "userAuthoredCommits": 23,
   "upstreamAuthoredPicks": 0,
-  "status": "sty default refreshed; unpublished Ruff cohort under qualification",
+  "status": "sty default refreshed to the qualified inference checkpoint; community refresh under qualification",
   "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
   "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
   "sourceReviewComplete": false,
@@ -1586,16 +1620,25 @@ export const inventory = {
     "userAuthoredCommits": 483,
     "upstreamAuthoredPicks": 12
   },
+  "publishedRuffCheckpoint": {
+    "revision": "f9d7ec289b4b428a8994181d3c117477a8709f03",
+    "sourceRevision": "f939e2535d016a48509fe728d733dc62de8d3abf",
+    "url": "https://github.com/tamird/ruff/commit/f9d7ec289b4b428a8994181d3c117477a8709f03",
+    "selectedTestsURL": "https://app.buildbuddy.io/invocation/a674c5a2-bfbf-4776-a144-88555680bd8e",
+    "testScope": "Core 101, semantic 897 (35 ignored), IDE 1979, strict transitive Clippy, formatting, symlink discovery control and required changed-file hooks. External attrs smoke passed separately; full Markdown and external suites remain unqualified.",
+    "fullMarkdownQualified": false,
+    "styIntegrationQualified": true
+  },
   "currentSty": {
-    "revision": "12ff7b18d93b98ac814f5de9d4ea7fd6d6bb0510",
-    "url": "https://github.com/tamird/sty/commit/12ff7b18d93b98ac814f5de9d4ea7fd6d6bb0510",
-    "ruffRevision": "7ef19c19dfc64da53d2d2172e256630a6230a618",
-    "testScope": "All 8 Bazel targets passed on the migrated checker; the metadata-only lock correction then passed a frozen optimized Linux build.",
-    "testsURL": "https://app.buildbuddy.io/invocation/62cf257d-3522-4365-8e12-fc23a37767ec",
-    "frozenBuildURL": "https://app.buildbuddy.io/invocation/0a5dd442-a071-4359-872c-3c645a5c2200",
+    "revision": "2ea96cfeda771b57c7cbf6f686734cef5bdc66e5",
+    "url": "https://github.com/tamird/sty/commit/2ea96cfeda771b57c7cbf6f686734cef5bdc66e5",
+    "ruffRevision": "f9d7ec289b4b428a8994181d3c117477a8709f03",
+    "testScope": "All 8 Bazel test targets and the optimized Linux executable passed with frozen dependency locks at the inference checkpoint.",
+    "testsURL": "https://app.buildbuddy.io/invocation/1a3e2cc5-8d80-45ad-b3fe-061372c1e77f",
+    "frozenBuildURL": "https://app.buildbuddy.io/invocation/8c64e18a-4c1c-434f-8cf2-7ea2e6a97cd9",
     "communityWorkflowExecutionsPlanned": 20,
     "communityRefreshPublished": false,
     "runtimeCorpusQualified": false,
-    "unpublishedRuffCohortQualified": false
+    "fullRuffMarkdownQualified": false
   }
 };
