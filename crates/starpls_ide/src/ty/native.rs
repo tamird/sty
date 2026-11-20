@@ -1758,6 +1758,16 @@ fn declarations(
                     {
                         // AbstractAction wraps both nested sets with Depset.of(Artifact.class, ...).
                         Some("_starpls_types.depset[_starpls_types.File]")
+                    } else if dialect == Dialect::Bazel
+                        && class.name == "Action"
+                        && field.name == "argv"
+                        && matches!(
+                            env::normalize_doc(&field.r#type, true).as_str(),
+                            "sequence" | "Sequence" | "sequence or None" | "Sequence or None"
+                        )
+                    {
+                        // ActionApi.getStarlarkArgv returns @Nullable Sequence<String>.
+                        Some("_starpls_typing.Sequence[_starpls_builtins.str] | None")
                     } else if class.name == "runfiles" {
                         // RunfilesApi's Java declarations omit these depset
                         // arguments from exported metadata.
@@ -8106,8 +8116,8 @@ def compose(s, p, opaque):
     }
 
     #[test]
-    fn bazel_action_inputs_and_outputs_contain_files() {
-        let source = "def artifacts(action: Action) -> tuple[File, File]:\n    return (action.inputs.to_list()[0], action.outputs.to_list()[0])\n";
+    fn bazel_action_fields_have_precise_element_types() {
+        let source = "def artifacts(action: Action) -> tuple[File, File]:\n    return (action.inputs.to_list()[0], action.outputs.to_list()[0])\ndef arguments(action: Action) -> Sequence[str] | None:\n    return action.argv\n";
         let (mut analysis, fixture) = Analysis::from_single_file_fixture(source);
         analysis
             .set_builtin_defs(
@@ -8121,8 +8131,13 @@ def compose(s, p, opaque):
         let file = fixture.main_file();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        for wrong in ["tuple[str, File]", "tuple[File, str]"] {
-            analysis.update_file(file, source.replace("tuple[File, File]", wrong));
+        for (from, to) in [
+            ("tuple[File, File]", "tuple[str, File]"),
+            ("tuple[File, File]", "tuple[File, str]"),
+            ("Sequence[str] | None", "Sequence[int] | None"),
+            ("Sequence[str] | None", "Sequence[str]"),
+        ] {
+            analysis.update_file(file, source.replace(from, to));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             let [failure] = diagnostics.as_slice() else {
                 panic!("{diagnostics:?}")
