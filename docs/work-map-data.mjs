@@ -3,7 +3,7 @@ import { solverInventory } from './solver-inventory.mjs';
 export { solverInventory };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-20T06:21:38Z';
+export const reviewedAt = '2026-11-20T09:57:48Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Resolve helper and tag follow-ups",repo:"bazelbuild/bazel-skylib",number:641,head:"baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"Fork PR #1: root and Gazelle sty checks passed. Upstream head has a successful CLA check.",followup:"Includes open fixes #643 and #647. Native build_test tag handling is tracked separately in #644.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']]},
@@ -78,16 +78,20 @@ export const upstream = [
     "ref": "upstream/destructured-list-elements",
     "title": "Literal element types in destructured list loops",
     "state": "Awaiting Tamir review",
-    "source": "c52778b7343432c867b5325b26fd5da72329b5ca",
+    "source": "9d2005a35ad69a061af5d03bde3803c633f455c6",
     "summary": "Preserve literal types when destructuring immediately consumed lists, using the existing shared inference machinery. Qualified remotely and published on the Ruff fork; not submitted upstream.",
     "qualifiedBase": "912ba68f546006f42264c43180c9ce83a76b87cd",
-    "qualifiedHead": "4cde8277a76d0f4c050b8fe3ff1a1a3bc13f842f",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...4cde8277a76d0f4c050b8fe3ff1a1a3bc13f842f",
+    "qualifiedHead": "9d2005a35ad69a061af5d03bde3803c633f455c6",
+    "qualifiedURL": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...9d2005a35ad69a061af5d03bde3803c633f455c6",
     "qualification": {
-      "summary": "Earlier Linux qualification covered the unchanged runtime implementation with full semantic, core, IDE and external mdtest suites and workspace Clippy. The final comment/test revision passed strict unpacking.md, including the 65-element tuple regression, formatting and required four-file hooks. Removing the guard demonstrably bypasses tuple literal widening. Run logs require BuildBuddy access.",
+      "summary": "Earlier Linux qualification covered the unchanged runtime implementation with full semantic, core, IDE and external mdtest suites and workspace Clippy. Revision 4cde8277a7 passed strict unpacking.md, including the 65-element tuple regression, formatting and required four-file hooks. Follow-up 9d2005a35a only moves and rewrites the guard comment; its diff was checked and the runtime and test files are otherwise identical. Removing the guard demonstrably bypasses tuple literal widening. Run logs require BuildBuddy access.",
       "evidence": [
         {
-          "label": "Final revision: strict unpacking fixture and formatting passed",
+          "label": "Comment correction at the tuple exclusion guard",
+          "url": "https://github.com/tamird/ruff/commit/9d2005a35ad69a061af5d03bde3803c633f455c6"
+        },
+        {
+          "label": "4cde8277a7: strict unpacking fixture and formatting passed",
           "url": "https://app.buildbuddy.io/invocation/83431490-c343-48f0-afa6-16c73dab168d"
         },
         {
@@ -538,7 +542,7 @@ const reviewedTyWork = [
     "id": "ty-collection-use-inference",
     "title": "Reconcile collection-use inference with upstream #27665",
     "state": "Overlaps upstream review; fork regression",
-    "summary": "Three current native regressions lose dictionary value evidence or diagnostics: grouped.get(key, []), a get/write cycle, and a missing member on the inferred list. Future-use constraints must preserve evidence independently of query order. Extraction and runtime qualification remain incomplete.",
+    "summary": "Experimental checked-write and ambiguity fixes restore the existing dictionary-cycle, query-order and missing-member regressions. A flat empty-list write also gains context; nested unannotated writes and lambda context remain incomplete. These changes are not yet qualified for upstream extraction.",
     "sources": [
       {
         "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
@@ -548,8 +552,12 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Compare later fork refinements with #27665; restore collection precision and diagnostics before proposing additions to that existing workstream.",
+    "nextAction": "Finish fresh-RHS and invalid-write controls, then reconcile the checked-write and provisional-return changes with #27665. Keep unannotated nested-container and lambda precision gaps explicit.",
     "evidence": [
+      {
+        "label": "Experimental run: existing collection regressions restored; new context controls still fail",
+        "url": "https://app.buildbuddy.io/invocation/4f07218d-8e09-4dfc-aef3-0cb1c7c1feca"
+      },
       {
         "label": "Existing collection-context workstream #27665",
         "url": "https://github.com/astral-sh/ruff/pull/27665"
@@ -1500,7 +1508,7 @@ const reviewedTyWork = [
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "The rebased dfe98a7d checkpoint has source records for all 142 runtime/API paths in its 231-path delta. Its solver audit attributes 939 hunks to 169 review units. Forward review separates upstream c8ba04dc work from surviving fork changes. Constructor and collection regressions still block qualification. The historical 250-path receipt remains available separately.",
+    "summary": "Sty main uses the fork rebased onto cbcf8663796 and passes all eight Bazel targets plus a frozen optimized build. An unpublished Ruff cohort passes core and semantic units, Clippy, formatting and selected fixtures. Full mdtest still aborts in the recursive-protocol factory case; generic ParamSpec return inference remains open.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1527,24 +1535,32 @@ const reviewedTyWork = [
         "url": "https://tamird.github.io/sty/ruff-source-audit.json"
       },
       {
-        "label": "Current checker integration: constructor inference still fails",
-        "url": "https://app.buildbuddy.io/invocation/d52c8c93-0be3-4bf8-8c0e-26b60fce3d46"
+        "label": "Rebased checker: all eight Bazel targets pass",
+        "url": "https://app.buildbuddy.io/invocation/62cf257d-3522-4365-8e12-fc23a37767ec"
+      },
+      {
+        "label": "Normal lock: frozen optimized Linux build passes",
+        "url": "https://app.buildbuddy.io/invocation/0a5dd442-a071-4359-872c-3c645a5c2200"
+      },
+      {
+        "label": "Aborting recursive-protocol factory regression",
+        "url": "https://github.com/tamird/ruff/blob/7ef19c19dfc64da53d2d2172e256630a6230a618/crates/ty_python_semantic/resources/mdtest/generics/legacy/functions.md#L6310"
       }
     ],
-    "nextAction": "Fix constructor and collection regressions, qualify the resulting fork, and reconcile later source changes with the frozen inventory. Reduce each surviving Python change against upstream before asking Tamir to approve submission."
+    "nextAction": "Fix recursive-protocol receiver-proof ownership, finish Cargo-dev qualification and publish the verified cohort. Then refresh the source inventory and isolate remaining generic ParamSpec changes against upstream."
   }
 ];
 
 export const tyWork = [...reviewedTyWork, ...solverInventory.tasks];
 
 export const inventory = {
-  "pinnedFork": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
-  "forkBase": "d63450150b",
-  "upstreamAudited": "aa46aae607",
-  "divergentCommits": 495,
-  "userAuthoredCommits": 483,
-  "upstreamAuthoredPicks": 12,
-  "status": "Frozen source audit complete; runtime qualification incomplete",
+  "pinnedFork": "7ef19c19dfc64da53d2d2172e256630a6230a618",
+  "forkBase": "cbcf8663796a051518ecbefc560987523fe8b2d6",
+  "upstreamAudited": "cbcf8663796a051518ecbefc560987523fe8b2d6",
+  "divergentCommits": 21,
+  "userAuthoredCommits": 21,
+  "upstreamAuthoredPicks": 0,
+  "status": "sty default refreshed; unpublished Ruff cohort under qualification",
   "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
   "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
   "sourceReviewComplete": false,
@@ -1561,5 +1577,25 @@ export const inventory = {
     "qualified": false
   },
   "scope": "All 17 user-authored Bazel typing issues have dated GitHub receipts. Ruff's frozen source audit and forward reconciliation enumerate surviving mechanisms; reduced upstream reproductions, runtime qualification and remaining overlap review are incomplete. Historical commit counts and source review units are not pending PR counts.",
-  "qualification": "Every new upstream proposal needs a current-upstream reproduction, focused negative/positive cases, relevant full qualification and Tamir approval. Existing merged templates, in-review PRs, host extension design and remaining Python fixes are distinct."
+  "qualification": "Every new upstream proposal needs a current-upstream reproduction, focused negative/positive cases, relevant full qualification and Tamir approval. Existing merged templates, in-review PRs, host extension design and remaining Python fixes are distinct.",
+  "historicalGitInventory": {
+    "pinnedFork": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
+    "forkBase": "d63450150b",
+    "upstreamAudited": "aa46aae607",
+    "divergentCommits": 495,
+    "userAuthoredCommits": 483,
+    "upstreamAuthoredPicks": 12
+  },
+  "currentSty": {
+    "revision": "12ff7b18d93b98ac814f5de9d4ea7fd6d6bb0510",
+    "url": "https://github.com/tamird/sty/commit/12ff7b18d93b98ac814f5de9d4ea7fd6d6bb0510",
+    "ruffRevision": "7ef19c19dfc64da53d2d2172e256630a6230a618",
+    "testScope": "All 8 Bazel targets passed on the migrated checker; the metadata-only lock correction then passed a frozen optimized Linux build.",
+    "testsURL": "https://app.buildbuddy.io/invocation/62cf257d-3522-4365-8e12-fc23a37767ec",
+    "frozenBuildURL": "https://app.buildbuddy.io/invocation/0a5dd442-a071-4359-872c-3c645a5c2200",
+    "communityWorkflowExecutionsPlanned": 20,
+    "communityRefreshPublished": false,
+    "runtimeCorpusQualified": false,
+    "unpublishedRuffCohortQualified": false
+  }
 };
