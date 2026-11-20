@@ -6,10 +6,10 @@
   "upstream": "aa46aae6072ecf8342fb9bbce2b263a75b0eb11c",
   "sourceCommand": "git diff --raw --no-abbrev --no-renames -z d63450150ba77e0a542de1ce2194084a8eb88373 352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
   "manifestSHA256": "9e64a3e6c4c0b233270f2664f683e816a97f707fded48e86653cee8068fdf0d1",
-  "limits": "All paths in the frozen old-fork diff are represented. Mechanism assignment may be partial; unreconciled source hunks are explicit. This is not the surviving delta after the unfinished rebase and does not establish current-upstream bugs or independent PR counts.",
+  "limits": "All paths in the frozen old-fork diff are represented. Mechanism assignment may be partial; unreconciled source hunks are explicit. This historical manifest does not describe the surviving rebased delta or establish current-upstream bugs or independent PR counts.",
   "currentDeltaAudit": {
     "state": "pending",
-    "reason": "The rebase onto the frozen upstream comparison revision is unfinished. Audit its qualified resulting tree separately; do not substitute the mutable worktree for either immutable input."
+    "reason": "The source checkpoint dfe98a7d has records for all 142 runtime/API paths in its 231-path delta, including semantic attribution of 939 solver hunks to 169 review units. Forward review separates upstream c8ba04dc changes from fork changes through 9e0685ba; the newer fixture correction is 312f9613. Constructor and collection regressions still block runtime qualification. The Bazel port remains uncommitted. This historical 250-path manifest is preserved separately; source review does not establish qualified upstream contributions."
   },
   "manifest": [
     {
