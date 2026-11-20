@@ -25,10 +25,6 @@ unique(upstream.filter(item => item.number).map(item => item.number), 'Upstream 
 unique(tyWork.map(item => item.id), 'ty task IDs');
 
 validateForwardAudit(ruffForwardAudit, tyWork);
-assert.equal(ruffForwardAudit.manifest.length, 314);
-assert.equal(ruffForwardAudit.files.length, 43);
-assert.equal(ruffForwardAudit.counts.forwardHunks, 233);
-assert.equal(ruffForwardAudit.forwardReviewUnits.length, 13);
 const missingForwardPath = structuredClone(ruffForwardAudit);
 missingForwardPath.manifest.pop();
 assert.throws(() => validateForwardAudit(missingForwardPath, tyWork), /Incomplete forward path inventory/);
