@@ -3848,6 +3848,15 @@ def absent() -> list[int]:
     return getattr(struct(), "missing", [42])
 def direct(value: struct[{"item": str}]) -> str:
     return getattr(value, "item")
+def alternate_default(value: struct[{"items": NotRequired[list[str]]}]) -> list[str] | list[int]:
+    return getattr(value, "items", [42])
+def consume(items: Collection[object]) -> None:
+    pass
+def nested(value: struct[{"items": NotRequired[Collection[str]]}]) -> None:
+    consume(getattr(value, "items", []))
+def local(value: struct[{"items": NotRequired[list[str]]}]) -> None:
+    items = getattr(value, "items", [])
+    items.append("value")
 "#;
         let file = analysis
             .open_document(
@@ -3867,6 +3876,8 @@ def direct(value: struct[{"item": str}]) -> str:
             ("getattr(struct(item=1), 'item', 1, 2)", "no-matching-overload"),
             ("getattr(struct(item=1), name='item')", "no-matching-overload"),
             ("def wrong(value: struct[{'item': list[str]}]) -> list[int]:\n    return getattr(value, 'item', [])", "invalid-explicit-return"),
+            ("def wrong_mutation(value: struct[{'items': NotRequired[list[str]]}]) -> None:\n    items = getattr(value, 'items', [])\n    items.append(42)", "invalid-argument-type"),
+            ("def wrong_element(value: struct[{'items': NotRequired[list[str]]}]) -> list[str]:\n    return getattr(value, 'items', [42])", "invalid-explicit-return"),
         ] {
             analysis.update_file(file, source.into());
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
