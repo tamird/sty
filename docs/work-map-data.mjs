@@ -5,11 +5,11 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-20T15:05:00Z';
+export const reviewedAt = '2026-11-20T16:18:20Z';
 
 export const projects = [
- {name:"Bazel Skylib",nextAction:"Follow the refreshed draft",repo:"bazelbuild/bazel-skylib",number:641,head:"0e9e3e0358e27067a0342598cc385982722e1e0c",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"e4834aea qualification: 88 root files and five Gazelle files, zero errors.",followup:"Published checker refresh; related helper and build_test follow-ups remain linked.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/efd218b1-74a3-4496-803d-d95d0d2b4318"}]},
- {name:"rules_cc",nextAction:"Follow refreshed-head CI",repo:"bazelbuild/rules_cc",number:940,head:"b1a25563fa09d3f79c78c2ac2904c0f72a4a1727",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"e4834aea qualification: 134 strict files, zero errors; 285 advisory files retain 37,444 errors.",followup:"Published rebase is conflict-free. Related #960 closed unmerged; #967 remains open.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/de08db11-49bb-4dbb-a8aa-92b9568b3ffa"}]},
+ {name:"Bazel Skylib",nextAction:"Follow the refreshed draft",repo:"bazelbuild/bazel-skylib",number:641,head:"0e9e3e0358e27067a0342598cc385982722e1e0c",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"e4834aea qualification: 88 root files and five Gazelle files, zero errors.",followup:"Published checker refresh; Buildkite and CLA checks pass. Related helper and build_test follow-ups remain linked.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/efd218b1-74a3-4496-803d-d95d0d2b4318"}]},
+ {name:"rules_cc",nextAction:"Review the refreshed draft",repo:"bazelbuild/rules_cc",number:940,head:"b1a25563fa09d3f79c78c2ac2904c0f72a4a1727",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"e4834aea qualification: 134 strict files, zero errors; 285 advisory files retain 37,444 errors.",followup:"Published rebase is conflict-free; sty, Buildkite and CLA checks pass. Related #960 closed unmerged; #967 remains open.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/de08db11-49bb-4dbb-a8aa-92b9568b3ffa"}]},
  {name:"hermetic-llvm",nextAction:"Repair overload and repository-rule contracts",repo:"hermeticbuild/hermetic-llvm",number:835,head:"53f3ce81e92dd1bffe6100797620b45740795ffd",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"Local e4834aea qualification: five root errors and 108 errors in the rules_cc example. All six examples have complete coverage; five are advisory.",followup:"Keep restored stub mappings; repair checked overloads and http_archive schema recovery before publishing this refresh.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/c444ea3d-9da2-4d2a-ad8e-3723c108fd66"}]},
  {name:"apple_support",nextAction:"Type the lipo toolchain lookup",repo:"bazelbuild/apple_support",number:668,head:"6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"Local e4834aea qualification: 46 strict files, three errors.",followup:"Toolchain lookup remains gradual; preserve checked lipo contracts while resolving it.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/b2f203ed-e46e-4223-8219-537e5748b661"}]},
  {name:"with_cfg.bzl",nextAction:"Qualify checked overload interfaces",repo:"fmeum/with_cfg.bzl",number:269,head:"52365fcdb3cf36149ee0937fb0b812968e4cb56f",draft:true,blocked:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"Local e4834aea qualification: 20 root files with 21 errors; two example files pass. Native suites pass in fastbuild and opt.",followup:"Repair interface and implementation contracts before publishing the rebased draft.",dependencies:[],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/5d137d85-87e6-47d9-af43-5d63a461b436"}]},
@@ -79,39 +79,27 @@ export const upstream = [
   {
     "id": "destructured-list-elements",
     "ref": "upstream/destructured-list-elements",
-    "title": "Literal element types in destructured list loops",
-    "state": "Revising after Tamir review",
-    "source": "9d2005a35ad69a061af5d03bde3803c633f455c6",
-    "summary": "Preserve literal types when destructuring immediately consumed lists, using the existing shared inference machinery. Qualified remotely and published on the Ruff fork; not submitted upstream.",
-    "qualifiedBase": "912ba68f546006f42264c43180c9ce83a76b87cd",
-    "qualifiedHead": "9d2005a35ad69a061af5d03bde3803c633f455c6",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...9d2005a35ad69a061af5d03bde3803c633f455c6",
+    "title": "Preserve literals in loop unpacking",
+    "state": "Awaiting Tamir review",
+    "source": "a24a7bbed0e37f6e388fbdb85d9ab3bbedc0ee9b",
+    "summary": "Preserve literal element types when unpacking immediately consumed lists. Single and destructured loop targets share tuple widening policy. One commit on current upstream; not submitted upstream.",
+    "qualifiedBase": "e905eb561c7248cbaf4ec54f8eaf3dfab83d6b23",
+    "qualifiedHead": "a24a7bbed0e37f6e388fbdb85d9ab3bbedc0ee9b",
+    "qualifiedURL": "https://github.com/tamird/ruff/compare/e905eb561c7248cbaf4ec54f8eaf3dfab83d6b23...a24a7bbed0e37f6e388fbdb85d9ab3bbedc0ee9b",
     "qualification": {
-      "summary": "Earlier fixture runs covered the positive list/dict guard and showed that removing tuple exclusion entirely bypassed widening. They did not test the requested negative tuple guard or settle the policy difference between loop-target paths. Those questions and the four-commit presentation are being revised.",
+      "summary": "Five complete Markdown fixtures pass: unpacking, comprehensions/basic, loops/for, async_for and iterators. Core and semantic unit suites, required hooks, formatting and strict Clippy pass. Tests cover tuple aliases, names, calls and the 65-element widening boundary for both loop-target forms. No full Markdown or ecosystem qualification is claimed.",
       "evidence": [
         {
-          "label": "Comment correction at the tuple exclusion guard",
-          "url": "https://github.com/tamird/ruff/commit/9d2005a35ad69a061af5d03bde3803c633f455c6"
+          "label": "Review the single upstream commit",
+          "url": "https://github.com/tamird/ruff/commit/a24a7bbed0e37f6e388fbdb85d9ab3bbedc0ee9b"
         },
         {
-          "label": "4cde8277a7: strict unpacking fixture and formatting passed",
-          "url": "https://app.buildbuddy.io/invocation/83431490-c343-48f0-afa6-16c73dab168d"
-        },
-        {
-          "label": "Required hooks for all four changed files passed",
-          "url": "https://app.buildbuddy.io/invocation/2d1f9fc3-7c4d-479c-a2f9-156072ffaa29"
-        },
-        {
-          "label": "Guard removal fails the tuple-size regression",
-          "url": "https://app.buildbuddy.io/invocation/165a5251-28f0-481f-9f8a-9701baee47c0"
-        },
-        {
-          "label": "Upstream base fixture",
-          "url": "https://github.com/astral-sh/ruff/blob/912ba68f546006f42264c43180c9ce83a76b87cd/crates/ty_python_semantic/resources/mdtest/unpacking.md"
+          "label": "Matched baseline and revised qualification",
+          "url": "https://app.buildbuddy.io/invocation/3e27961a-71f9-4e9f-abd3-526529ae6c41"
         }
       ]
     },
-    "nextAction": "Resolve the shared tuple-precision policy for single and destructured loop targets. Use the requested negative tuple guard unless an actual counterexample justifies a restriction. Qualify aliases and fixed tuple names/calls, then squash the four iterations into one semantic commit and present the qualified revision to Tamir."
+    "nextAction": "Tamir: review the revised single commit before upstream submission. The shared helper excludes tuple expressions because their inferred type already applies literal widening; re-reading their elements would bypass that policy."
   },
   {
     "id": "related-upstream-29027",

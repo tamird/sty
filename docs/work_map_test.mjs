@@ -190,7 +190,7 @@ for (const item of [...projects, ...additionalProjects]) {
 }
 for (const item of upstream) {
   if (item.state === 'Merged') assert.ok(tracker.historical(nodes.find(node => node.number === item.number)));
-  if (item.nextAction) {
+  if (item.nextAction && item.state !== 'Awaiting Tamir review') {
     const node = nodes.find(node => node.id === `branch:${item.id}`);
     assert.equal(node.contributorReview, undefined, 'Outstanding feedback must not request approval of the old proposal');
     assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
