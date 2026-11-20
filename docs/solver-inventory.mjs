@@ -327,6 +327,18 @@ export const solverInventory = {
   ],
   "overlaps": [
     {
+      "number": 29027,
+      "url": "https://github.com/astral-sh/ruff/pull/29027",
+      "head": "1f0211e7618f60bbaa173a7234261f38821544f9",
+      "base": "248231e9936ecc0e44ecd3a69bc07899736e4e23",
+      "source": "https://github.com/astral-sh/ruff/pull/29027/commits/1f0211e7618f60bbaa173a7234261f38821544f9",
+      "review": "Binder representation and signed-proof overlap identified; complete comparison pending",
+      "detail": "The proposal adds ExistentialBound with local support, provenance, body and source ordering; it freshens captured locals and evaluates positive and negative existential edges. This overlaps the existing scoped-witness mechanism. Source identity, complete witness coverage, proof budgeting and generic-target behavior have not been established equivalent.",
+      "nextAction": "Compare the complete upstream binder proposal before extracting a second implementation; retain caller-scope, domain and incomplete-proof controls.",
+      "completeSourceReview": false,
+      "qualified": false
+    },
+    {
       "number": 27665,
       "url": "https://github.com/astral-sh/ruff/pull/27665",
       "head": "e344ca697426b84a66f341423019854cc8700885",
@@ -465,8 +477,12 @@ export const solverInventory = {
           ]
         }
       ],
-      "nextAction": "Reduce quantified-domain, witness-correlation and budget cases for upstream design review.",
+      "nextAction": "Compare upstream PR #29027 before extracting the binder representation. Reduce the remaining quantified-domain, witness-correlation and budget differences for design review.",
       "evidence": [
+        {
+          "label": "Upstream existential-binder proposal #29027",
+          "url": "https://github.com/astral-sh/ruff/pull/29027"
+        },
         {
           "label": "types/constraints/variables.rs",
           "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/variables.rs#L123"
@@ -482,7 +498,7 @@ export const solverInventory = {
       ],
       "qualified": false,
       "isPullRequestCommitment": false,
-      "overlapPullRequests": []
+      "overlapPullRequests": [29027]
     },
     {
       "id": "ty-cached-implication-conflicts",
@@ -773,7 +789,7 @@ export const solverInventory = {
       "title": "Retain quantified local binders in the constraint graph",
       "detail": "An existential constraint stores local support, provenance, body and source ordering. Mapping substitutes the body and remaining local TypeVars, then re-quantifies; vacuous quantification is removed when body support has no overlap. Atomic type enumeration intentionally excludes quantified bodies.",
       "classification": "general-python-solver-enhancement",
-      "nextAction": "Extract with quantified/free-variable counterexamples and owned round trips.",
+      "nextAction": "Compare PR #29027 before extracting; preserve quantified/free-variable counterexamples and owned round trips.",
       "evidence": [
         {
           "label": "types/constraints/variables.rs",

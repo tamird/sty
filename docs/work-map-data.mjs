@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-20T12:37:57Z';
+export const reviewedAt = '2026-11-20T13:10:00Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Resolve helper and tag follow-ups",repo:"bazelbuild/bazel-skylib",number:641,head:"baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"Fork PR #1: root and Gazelle sty checks passed. Upstream head has a successful CLA check.",followup:"Includes open fixes #643 and #647. Native build_test tag handling is tracked separately in #644.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']]},
@@ -110,6 +110,14 @@ export const upstream = [
         }
       ]
     }
+  },
+  {
+    "id": "related-upstream-29027",
+    "title": "Add existential quantification nodes",
+    "number": 29027,
+    "state": "Related upstream work",
+    "author": "dcreager",
+    "summary": "Overlaps the fork's existential binders, freshening and signed proofs. Compare source and runtime behavior before extracting another binder implementation."
   },
   {
     "id": "related-upstream-27665",
@@ -1520,6 +1528,22 @@ const reviewedTyWork = [
     "sources": [],
     "evidence": [
       {
+        "label": "Existing upstream existential-binder proposal",
+        "url": "https://github.com/astral-sh/ruff/pull/29027"
+      },
+      {
+        "label": "Earlier higher-rank comparison attempt, closed unmerged",
+        "url": "https://github.com/astral-sh/ruff/pull/26638"
+      },
+      {
+        "label": "Related upstream report: generic callable implementations",
+        "url": "https://github.com/astral-sh/ty/issues/2924"
+      },
+      {
+        "label": "Related maintainer discussion: generic protocol soundness",
+        "url": "https://github.com/astral-sh/ty/issues/2323"
+      },
+      {
         "label": "Pristine upstream aee01ae4: all four strict regressions fail",
         "url": "https://app.buildbuddy.io/invocation/c9bd6662-24de-4657-a240-8790f755e77b"
       },
@@ -1532,13 +1556,13 @@ const reviewedTyWork = [
         "url": "https://github.com/tamird/ruff/blob/f9d7ec289b4b428a8994181d3c117477a8709f03/crates/ty_python_semantic/resources/mdtest/generics/legacy/functions.md#L6310"
       }
     ],
-    "nextAction": "Extract the scoped-binder prerequisite under ty-scoped-witness-proofs before implementing the method-comparison fix. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review."
+    "nextAction": "Reconcile existing upstream reports #2924 and #2323, binder PR #29027 and the closed higher-rank attempt #26638 before preparing feedback or extracting another binder implementation. Keep the scoped-binder prerequisite under ty-scoped-witness-proofs. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review."
   },
   {
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "Sty main uses dc1bef61da, rebased onto upstream aee01ae4cc. All eight sty targets and the frozen optimized Linux build pass. Deferred receiver checking fixes the recursive-protocol factory abort; finite provided-field descent preserves rejection of nested mutable provider keys. rules_cc passed its corrected declaration check; seven other community roots remain incomplete. The latest 20-check matrix on Sty 1df698ce19 has five strict zero-error passes, one completed advisory check, thirteen failures and one required check skipped. Advisory completion does not mean zero errors. Full Markdown qualification, collection inference, checked overload contracts and generic-method soundness remain open.",
+    "summary": "Sty 1df698ce19 pins Ruff dc1bef61da on upstream aee01ae4cc; eight sty targets and the frozen optimized Linux build pass. Latest community runs: five strict zero-error passes, six advisory completions with findings, eight failures and one skipped check. LLVM stub lookup works in all six examples. Collection inference, checked overloads, host signatures, full Markdown qualification and upstream overlap remain open.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1593,8 +1617,8 @@ const reviewedTyWork = [
         "url": "https://app.buildbuddy.io/invocation/89a76599-19da-41e9-8e2d-09c834dbb943"
       },
       {
-        "label": "Community qualification: LLVM wrapper and Apple declarations",
-        "url": "https://app.buildbuddy.io/invocation/0df627b8-198d-4079-82ea-97e02d87b463"
+        "label": "LLVM: restored example coverage; strict errors remain",
+        "url": "https://app.buildbuddy.io/invocation/609fcab6-bfba-4de7-b61f-a83a2a7937aa"
       },
       {
         "label": "Community qualification: with_cfg overloads and Rust declarations",
@@ -1673,11 +1697,12 @@ export const inventory = {
       "planned": 20,
       "executed": 19,
       "strictZeroErrorPasses": 5,
-      "advisoryCompletions": 1,
-      "failures": 13,
+      "advisoryCompletions": 6,
+      "failures": 8,
       "requiredSkipped": 1,
       "published": false,
-      "scope": "Canonical workflow selections; broader advisory findings remain errors. LLVM example checks lack completed coverage; a skipped check is not a pass. GitHub workflow publication remains blocked by existing credential access."
+      "scope": "Canonical workflow selections on the same Sty revision, with the latest LLVM dependency repair replacing its prior failed setup. Five strict selections have complete nonempty zero-error coverage. Six advisory completions retain their error findings. One required LLVM check remains skipped. Community branch publication still needs GitHub workflow access.",
+      "assembledFromLatestProjectRuns": true
     }
   }
 };
