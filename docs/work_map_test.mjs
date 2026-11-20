@@ -26,8 +26,8 @@ unique(tyWork.map(item => item.id), 'ty task IDs');
 
 validateForwardAudit(ruffForwardAudit, tyWork);
 assert.equal(ruffForwardAudit.manifest.length, 310);
-assert.equal(ruffForwardAudit.files.length, 33);
-assert.equal(ruffForwardAudit.counts.forwardHunks, 133);
+assert.equal(ruffForwardAudit.files.length, 40);
+assert.equal(ruffForwardAudit.counts.forwardHunks, 184);
 assert.equal(ruffForwardAudit.forwardReviewUnits.length, 8);
 const missingForwardPath = structuredClone(ruffForwardAudit);
 missingForwardPath.manifest.pop();
@@ -35,6 +35,9 @@ assert.throws(() => validateForwardAudit(missingForwardPath, tyWork), /Incomplet
 const alteredForwardBlob = structuredClone(ruffForwardAudit);
 alteredForwardBlob.manifest[0].candidateBlob = '1'.repeat(40);
 assert.throws(() => validateForwardAudit(alteredForwardBlob, tyWork), /manifest digest/);
+const falseFrozenReuse = structuredClone(ruffForwardAudit);
+falseFrozenReuse.manifest.find(row => row.disposition === 'forward-source-attributed').disposition = 'frozen-source-reused';
+assert.throws(() => validateForwardAudit(falseFrozenReuse, tyWork), /Unproven frozen source reuse/);
 const missingForwardAttribution = structuredClone(ruffForwardAudit);
 missingForwardAttribution.files.pop();
 assert.throws(() => validateForwardAudit(missingForwardAttribution, tyWork), /Incomplete forward Rust source coverage/);

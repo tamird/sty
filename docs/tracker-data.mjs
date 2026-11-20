@@ -118,7 +118,10 @@ export function validateForwardAudit(audit, mechanisms) {
         !/^[0-7]{6}$/.test(row.oldMode) || !/^[0-7]{6}$/.test(row.newMode) || !['A', 'M', 'D'].includes(row.status))
       throw new Error(`Invalid forward source path: ${row.path}`);
     raw += `:${row.oldMode} ${row.newMode} ${row.baseBlob} ${row.candidateBlob} ${row.status}\t${row.path}\n`;
-    if (row.baseBlob === row.frozenBaseBlob && row.candidateBlob === row.frozenCandidateBlob) reused.add(row.path);
+    const sameFrozenPair = row.baseBlob === row.frozenBaseBlob && row.candidateBlob === row.frozenCandidateBlob;
+    if (row.disposition === 'frozen-source-reused' && !sameFrozenPair)
+      throw new Error(`Unproven frozen source reuse: ${row.path}`);
+    if (sameFrozenPair) reused.add(row.path);
   }
   if (createHash('sha256').update(raw).digest('hex') !== audit.rawManifestSHA256 ||
       reused.size !== audit.counts.exactFrozenBlobPairs)

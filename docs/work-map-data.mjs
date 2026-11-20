@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-20T13:10:00Z';
+export const reviewedAt = '2026-11-20T14:20:00Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Resolve helper and tag follow-ups",repo:"bazelbuild/bazel-skylib",number:641,head:"baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"Fork PR #1: root and Gazelle sty checks passed. Upstream head has a successful CLA check.",followup:"Includes open fixes #643 and #647. Native build_test tag handling is tracked separately in #644.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']]},
@@ -1059,8 +1059,16 @@ const reviewedTyWork = [
     ],
     "evidence": [
       {
-        "label": "Starlark requires one declared signature per function",
+        "label": "Sty currently rejects overload declarations",
         "url": "https://github.com/tamird/sty/commit/5960a4bda9c70ea815747b4ab3a5c35c6fdd0bcf"
+      },
+      {
+        "label": "Current body-domain test exercises upstream reachability checkpoints",
+        "url": "https://github.com/tamird/ruff/blob/afbd0d25a528ccdfb782a8985316128a7cccf7e3/crates/ty_python_semantic/src/types/infer/body_domain.rs#L2760"
+      },
+      {
+        "label": "Upstream statement-call checkpoint implementation",
+        "url": "https://github.com/astral-sh/ruff/pull/30561"
       }
     ],
     "nextAction": "Reproduce the Python behavior against current ty. Separately resolve LLVM exec_test's explicit versus omitted inner_data contract: its draft overloads are rejected by sty's one-signature rule. Preserve callback-data and default-list negative cases; do not treat Python overload analysis as an available Starlark contract."
@@ -1562,7 +1570,7 @@ const reviewedTyWork = [
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "Sty 1df698ce19 pins Ruff dc1bef61da on upstream aee01ae4cc; eight sty targets and the frozen optimized Linux build pass. Latest community runs: five strict zero-error passes, six advisory completions with findings, eight failures and one skipped check. LLVM stub lookup works in all six examples. Collection inference, checked overloads, host signatures, full Markdown qualification and upstream overlap remain open.",
+    "summary": "Sty f0f8c8a51a pins Ruff afbd0d25a5 on upstream d8c6e237e7; eight sty targets and the frozen optimized Linux build pass. Community results still cover the earlier Sty 1df698ce19: five strict zero-error passes, six advisory completions with findings, eight failures and one skipped check. LLVM stub lookup works in all six examples. Collection inference, checked overloads, host signatures, full Markdown qualification and upstream overlap remain open.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1577,7 +1585,7 @@ const reviewedTyWork = [
     ],
     "evidence": [
       {
-        "label": "Current 310-path inventory: 33 forward Rust source paths",
+        "label": "Current 310-path inventory: 40 forward Rust source paths",
         "url": "https://tamird.github.io/sty/ruff-forward-audit.json"
       },
       {
@@ -1594,11 +1602,11 @@ const reviewedTyWork = [
       },
       {
         "label": "Rebased checker: all eight Bazel targets pass",
-        "url": "https://app.buildbuddy.io/invocation/23d3cd64-eee7-495c-803e-69fc6ab5405a"
+        "url": "https://app.buildbuddy.io/invocation/d7e60411-c56c-4959-b1ca-8d58cd3824de"
       },
       {
         "label": "Normal lock: frozen optimized Linux build passes",
-        "url": "https://app.buildbuddy.io/invocation/87162ef1-b58c-400f-b781-313babbde626"
+        "url": "https://app.buildbuddy.io/invocation/862f0a57-8886-4acb-9bf7-906259cc7d61"
       },
       {
         "label": "Published contextual inference and Bazel checkpoint",
@@ -1640,13 +1648,13 @@ const reviewedTyWork = [
 export const tyWork = [...reviewedTyWork, ...solverInventory.tasks];
 
 export const inventory = {
-  "pinnedFork": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
-  "forkBase": "aee01ae4ccec82b01a4db6cf22c5461b4fcf8c3a",
-  "upstreamAudited": "aee01ae4ccec82b01a4db6cf22c5461b4fcf8c3a",
-  "divergentCommits": 26,
-  "userAuthoredCommits": 26,
+  "pinnedFork": "afbd0d25a528ccdfb782a8985316128a7cccf7e3",
+  "forkBase": "d8c6e237e7657d4d6ddd96d91d341a5af19ba325",
+  "upstreamAudited": "d8c6e237e7657d4d6ddd96d91d341a5af19ba325",
+  "divergentCommits": 29,
+  "userAuthoredCommits": 29,
   "upstreamAuthoredPicks": 0,
-  "status": "sty default uses the rebased receiver checkpoint; community refresh under qualification",
+  "status": "sty default uses the qualified d8c rebase; community results cover the prior checkpoint",
   "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
   "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
   "sourceReviewComplete": false,
@@ -1657,8 +1665,8 @@ export const inventory = {
     "runtimePathsWithSourceRecords": 142,
     "solverHunksAttributed": 939,
     "solverReviewUnits": 169,
-    "forwardCandidate": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
-    "forwardBase": "aee01ae4ccec82b01a4db6cf22c5461b4fcf8c3a",
+    "forwardCandidate": "afbd0d25a528ccdfb782a8985316128a7cccf7e3",
+    "forwardBase": "d8c6e237e7657d4d6ddd96d91d341a5af19ba325",
     "url": "https://tamird.github.io/sty/ruff-source-audit.json",
     "qualified": false
   },
@@ -1673,21 +1681,21 @@ export const inventory = {
     "upstreamAuthoredPicks": 12
   },
   "publishedRuffCheckpoint": {
-    "revision": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
-    "sourceRevision": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
-    "url": "https://github.com/tamird/ruff/commit/dc1bef61daccdfc88706b0ad99f527bf55533a59",
-    "selectedTestsURL": "https://app.buildbuddy.io/invocation/26de154f-87ca-4288-807f-c5d7de8f1fc3",
-    "testScope": "Core 101, semantic 898 (35 ignored), IDE 1979, strict transitive Clippy, formatting, changed-file hooks and five selected Markdown fixture gates pass. Full Markdown remains incomplete; individual fixture results retain their exact source scopes.",
+    "revision": "afbd0d25a528ccdfb782a8985316128a7cccf7e3",
+    "sourceRevision": "afbd0d25a528ccdfb782a8985316128a7cccf7e3",
+    "url": "https://github.com/tamird/ruff/commit/afbd0d25a528ccdfb782a8985316128a7cccf7e3",
+    "selectedTestsURL": "https://app.buildbuddy.io/invocation/f2032645-3c9d-41a3-97f3-88096bf5112d",
+    "testScope": "Core 101, semantic 899 (35 ignored), IDE 1979, strict transitive Clippy, formatting and changed-file hooks pass. Thirteen whole Markdown fixtures and both factory sections pass; cycle/basic retains three known reveal mismatches. Full Markdown remains incomplete.",
     "fullMarkdownQualified": false,
     "styIntegrationQualified": true
   },
   "currentSty": {
-    "revision": "1df698ce19af5eacd5761e9958a406a3114ec3de",
-    "url": "https://github.com/tamird/sty/commit/1df698ce19af5eacd5761e9958a406a3114ec3de",
-    "ruffRevision": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
+    "revision": "f0f8c8a51a7be6485401e0ca1fc442a22f8070a1",
+    "url": "https://github.com/tamird/sty/commit/f0f8c8a51a7be6485401e0ca1fc442a22f8070a1",
+    "ruffRevision": "afbd0d25a528ccdfb782a8985316128a7cccf7e3",
     "testScope": "All eight Bazel test targets, including the unchanged nested provider-key negative, and the optimized Linux executable pass with frozen dependency locks.",
-    "testsURL": "https://app.buildbuddy.io/invocation/23d3cd64-eee7-495c-803e-69fc6ab5405a",
-    "frozenBuildURL": "https://app.buildbuddy.io/invocation/87162ef1-b58c-400f-b781-313babbde626",
+    "testsURL": "https://app.buildbuddy.io/invocation/d7e60411-c56c-4959-b1ca-8d58cd3824de",
+    "frozenBuildURL": "https://app.buildbuddy.io/invocation/862f0a57-8886-4acb-9bf7-906259cc7d61",
     "communityWorkflowExecutionsPlanned": 20,
     "communityRefreshPublished": false,
     "runtimeCorpusQualified": false,
