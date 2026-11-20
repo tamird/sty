@@ -3089,6 +3089,7 @@ fn write_function(
             let dictionary_type = if attribute_default && env::normalize_doc(r#type, true) == "dict" {
                 match value.name.as_str() {
                     "label_list_dict" => Some(Discriminator::LabelListDict),
+                    "string_dict" => Some(Discriminator::StringDict),
                     "string_list_dict" => Some(Discriminator::StringListDict),
                     _ => None,
                 }
@@ -3264,6 +3265,7 @@ fn write_function(
                     "int_list" => Some("_starpls_types.Attribute[_starpls_builtins.list[_starpls_builtins.int]]"),
                     "string" => Some("_starpls_types.Attribute[_starpls_builtins.str]"),
                     "string_list" => Some("_starpls_types.Attribute[_starpls_builtins.list[_starpls_builtins.str]]"),
+                    "string_dict" => Some("_starpls_types.Attribute[_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.str]]"),
                     "string_list_dict" => Some("_starpls_types.Attribute[_starpls_builtins.dict[_starpls_builtins.str, _starpls_builtins.list[_starpls_builtins.str]]]"),
                     // These covariant views include provider-refined targets
                     // and split-transition lists. Checked descriptors retain
@@ -11639,7 +11641,7 @@ aspect(implementation=implementation, toolchains_aspects=toolchains)
     }
 
     #[test]
-    fn string_list_dictionary_attribute_factory_has_static_contract() {
+    fn string_dictionary_attribute_factories_have_static_contracts() {
         let builtins = starpls_bazel::decode_builtins(include_bytes!(
             "../../../starpls/src/builtin/builtin.pb"
         ))
@@ -11656,6 +11658,9 @@ aspect(implementation=implementation, toolchains_aspects=toolchains)
         );
         let source = r#"factory = attr.string_list_dict
 value: Attribute[dict[str, list[str]]] = factory(default={"srcs": ("a", "b")})
+string_factory = attr.string_dict
+strings: Attribute[dict[str, str]] = string_factory(default={"PATH": "/bin"})
+empty: Attribute[dict[str, str]] = string_factory(default={})
 "#;
         let file = analysis
             .open_document(
@@ -11669,8 +11674,15 @@ value: Attribute[dict[str, list[str]]] = factory(default={"srcs": ("a", "b")})
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-        for invalid in [r#"{1: ["a"]}"#, r#"{"srcs": [1]}"#, "lambda: 1"] {
-            analysis.update_file(file, format!("{source}factory(default={invalid})\n"));
+        for invalid in [
+            r#"factory(default={1: ["a"]})"#,
+            r#"factory(default={"srcs": [1]})"#,
+            "factory(default=lambda: 1)",
+            r#"string_factory(default={1: "value"})"#,
+            r#"string_factory(default={"key": 1})"#,
+            r#"string_factory(default=lambda: {"key": "value"})"#,
+        ] {
+            analysis.update_file(file, format!("{source}{invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{invalid}: {diagnostics:?}");
