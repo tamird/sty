@@ -17,7 +17,7 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
     title: item.title || `${item.name}: add type checking`, group: 'community',
     status: item.draft ? 'draft' : 'open', url: `https://github.com/${item.repo}/pull/${item.number}`,
     head: item.head, summary: `${item.summary}\n\nRecorded checks: ${item.checks}\n\n${item.followup}`,
-    evidence: item.dependencies.map(([label, url]) => ({ label, url })),
+    evidence: item.dependencies.map(([label, url]) => ({ label, url })).concat(item.evidence || []),
     followup: { owner: 'Agent', sourceHead: item.head, nextAction: item.nextAction },
   }));
   const edges = [];
@@ -111,6 +111,7 @@ export function validateForwardAudit(audit, mechanisms) {
   if (paths.size !== audit.manifest.length || paths.size !== audit.counts.netPaths)
     throw new Error('Incomplete forward path inventory');
   let raw = '';
+  const zeroBlob = '0'.repeat(40);
   const reused = new Set();
   for (const row of audit.manifest) {
     if (!row.path || /[\t\n\0]/.test(row.path) || !row.disposition ||
@@ -118,6 +119,9 @@ export function validateForwardAudit(audit, mechanisms) {
         !/^[0-7]{6}$/.test(row.oldMode) || !/^[0-7]{6}$/.test(row.newMode) || !['A', 'M', 'D'].includes(row.status))
       throw new Error(`Invalid forward source path: ${row.path}`);
     raw += `:${row.oldMode} ${row.newMode} ${row.baseBlob} ${row.candidateBlob} ${row.status}\t${row.path}\n`;
+    if (row.sameBaseBlobAsFrozen !== (row.baseBlob !== zeroBlob && row.baseBlob === row.frozenBaseBlob) ||
+        row.sameCandidateBlobAsFrozen !== (row.candidateBlob !== zeroBlob && row.candidateBlob === row.frozenCandidateBlob))
+      throw new Error(`Inconsistent forward blob equality: ${row.path}`);
     const sameFrozenPair = row.baseBlob === row.frozenBaseBlob && row.candidateBlob === row.frozenCandidateBlob;
     if (row.disposition === 'frozen-source-reused' && !sameFrozenPair)
       throw new Error(`Unproven frozen source reuse: ${row.path}`);

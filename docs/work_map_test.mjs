@@ -25,10 +25,10 @@ unique(upstream.filter(item => item.number).map(item => item.number), 'Upstream 
 unique(tyWork.map(item => item.id), 'ty task IDs');
 
 validateForwardAudit(ruffForwardAudit, tyWork);
-assert.equal(ruffForwardAudit.manifest.length, 310);
+assert.equal(ruffForwardAudit.manifest.length, 311);
 assert.equal(ruffForwardAudit.files.length, 40);
-assert.equal(ruffForwardAudit.counts.forwardHunks, 184);
-assert.equal(ruffForwardAudit.forwardReviewUnits.length, 8);
+assert.equal(ruffForwardAudit.counts.forwardHunks, 193);
+assert.equal(ruffForwardAudit.forwardReviewUnits.length, 9);
 const missingForwardPath = structuredClone(ruffForwardAudit);
 missingForwardPath.manifest.pop();
 assert.throws(() => validateForwardAudit(missingForwardPath, tyWork), /Incomplete forward path inventory/);
@@ -38,6 +38,9 @@ assert.throws(() => validateForwardAudit(alteredForwardBlob, tyWork), /manifest 
 const falseFrozenReuse = structuredClone(ruffForwardAudit);
 falseFrozenReuse.manifest.find(row => row.disposition === 'forward-source-attributed').disposition = 'frozen-source-reused';
 assert.throws(() => validateForwardAudit(falseFrozenReuse, tyWork), /Unproven frozen source reuse/);
+const inconsistentFrozenEquality = structuredClone(ruffForwardAudit);
+inconsistentFrozenEquality.manifest[0].sameBaseBlobAsFrozen = !inconsistentFrozenEquality.manifest[0].sameBaseBlobAsFrozen;
+assert.throws(() => validateForwardAudit(inconsistentFrozenEquality, tyWork), /Inconsistent forward blob equality/);
 const missingForwardAttribution = structuredClone(ruffForwardAudit);
 missingForwardAttribution.files.pop();
 assert.throws(() => validateForwardAudit(missingForwardAttribution, tyWork), /Incomplete forward Rust source coverage/);
