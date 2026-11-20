@@ -1948,7 +1948,7 @@ mod tests {
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
         assert!(
@@ -1990,7 +1990,7 @@ mod tests {
         analysis.set_type_interfaces([(source, stub)]).unwrap();
         for (text, expected) in [
             ("def convert(value=None):\n    if value == None:\n        value = ''\n    return value\n", None),
-            ("def convert(value=None):\n    return value\n", Some("invalid-return-type")),
+            ("def convert(value=None):\n    return value\n", Some("invalid-explicit-return")),
             ("def convert(value):\n    return value\n", Some("invalid-function-interface")),
             ("def convert(value: int = 0) -> int:\n    return value + 1\n", Some("invalid-function-interface")),
             ("def convert(value=0):\n    # type: (int) -> int\n    return value + 1\n", Some("invalid-function-interface")),
@@ -2122,7 +2122,7 @@ def macro(name: str, launcher, expose: bool = ..., **kwargs: Unpack[Options]) ->
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
         analysis.update_file(source, "Value = int\ndef identity(value: object) -> object:\n    return value\ndef upper(value):\n    return value.upper()\n".into());
@@ -2138,7 +2138,7 @@ def macro(name: str, launcher, expose: bool = ..., **kwargs: Unpack[Options]) ->
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
     }
@@ -2266,7 +2266,7 @@ def macro(name: str, launcher, expose: bool = ..., **kwargs: Unpack[Options]) ->
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
 
         let diagnostics = snapshot.diagnostics(stub).unwrap();
         assert!(
@@ -2821,7 +2821,7 @@ def macro(name: str, launcher, expose: bool = ..., **kwargs: Unpack[Options]) ->
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
         assert!(diagnostics
@@ -3059,7 +3059,10 @@ def macro(name: str, launcher, expose: bool = ..., **kwargs: Unpack[Options]) ->
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "empty-body");
+        assert_eq!(
+            diagnostic.id().as_str(),
+            "invalid-implicit-return-in-function-with-stub-body"
+        );
         for file in [interface, caller] {
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
@@ -3237,7 +3240,7 @@ def make() -> _Builder: ...
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "call-non-callable"),
+                .any(|diagnostic| diagnostic.id().as_str() == "not-callable"),
             "{diagnostics:?}"
         );
         analysis.update_file(
@@ -3896,7 +3899,7 @@ value = unmapped.value
             assert!(
                 diagnostics
                     .iter()
-                    .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                    .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
                 "{diagnostics:?}"
             );
             let hover = snapshot

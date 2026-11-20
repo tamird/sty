@@ -128,7 +128,7 @@ const STY_STRICT_LINTS: [&LintMetadata; 4] = [
 const TY_STRICT_LINTS: [&str; 7] = [
     "missing-type-argument",
     "unsound-assignment",
-    "unsound-return-statement",
+    "unsound-return",
     "blanket-ignore-comment",
     "possibly-unresolved-reference",
     "possibly-missing-attribute",
@@ -355,7 +355,7 @@ pub(super) fn file_rules(
     };
     // The dependency may use untyped code internally, but it must establish the
     // types its consumer advertises for returned and stored values.
-    for name in ["unsound-return-statement", "unsound-assignment"] {
+    for name in ["unsound-return", "unsound-assignment"] {
         rules.set_severity(
             registry().get(name).expect("ty registers this lint"),
             Some(Severity::Error),
@@ -739,7 +739,7 @@ mod tests {
                 ("division-by-zero", Some(Severity::Error)),
                 ("possibly-unresolved-reference", Some(Severity::Error)),
                 ("missing-type-argument", None),
-                ("unsound-return-statement", Some(Severity::Warning)),
+                ("unsound-return", Some(Severity::Warning)),
                 ("unused-definition", Some(Severity::Warning)),
             ] {
                 let actual = rules

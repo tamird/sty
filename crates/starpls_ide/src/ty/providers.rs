@@ -1452,11 +1452,11 @@ user = provider(fields={
             ("SDK(version='7', names=[], typo=0)", "unknown-argument"),
             (
                 "def bad(t: Target) -> int: return t[SDK].version",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 "def bad(t: Target) -> Another: return t[SDK]",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
         ] {
             analysis.update_file(caller, format!("{valid}\n{bad}\n"));
@@ -1592,7 +1592,7 @@ def contains(action: Action, extra: Extra, opaque: Hashable, keys: dict[Action, 
             ),
             ("Box(value=extra) in keys", "unsupported-operator"),
             ("extra in keys", "unsupported-operator"),
-            ("action.__hash__ == 1", "unresolved-attribute"),
+            ("action.__hash__ == 1", "missing-attribute"),
         ] {
             analysis.update_file(source, implementation(lookup));
             let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
@@ -1680,7 +1680,7 @@ def made() -> Bare:
             ("Raw(typo='x')", "unknown-argument"),
             (
                 "def bad(target: Target) -> int: return target[Info].value",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
         ] {
             analysis.update_file(caller, format!("{valid}\n{bad}\n"));
@@ -1696,7 +1696,7 @@ def made() -> Bare:
         );
         let diagnostics = analysis.snapshot().diagnostics(unpaired).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
 
         analysis.update_file(caller, valid.to_owned());
         analysis.update_file(
@@ -1707,7 +1707,7 @@ def made() -> Bare:
         assert!(
             diagnostics
                 .iter()
-                .any(|d| d.id().as_str() == "invalid-return-type"),
+                .any(|d| d.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
 
@@ -1717,7 +1717,7 @@ def made() -> Bare:
         assert!(
             diagnostics
                 .iter()
-                .all(|d| d.id().as_str() == "invalid-return-type"),
+                .all(|d| d.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
         analysis.update_file(
@@ -1742,7 +1742,7 @@ def bottom() -> Never: return Info(value="ok")
             assert_eq!(diagnostics.len(), 1, "{registration}: {diagnostics:?}");
             assert_eq!(
                 diagnostics[0].id().as_str(),
-                "invalid-return-type",
+                "invalid-explicit-return",
                 "{registration}: {diagnostics:?}"
             );
         }
@@ -1903,7 +1903,7 @@ empty: Empty = Empty()
             ("def bad(value: Shape) -> None:\n    instance(value)", "invalid-argument-type"),
             ("def bad(value: Dictionary) -> None:\n    instance(value)", "invalid-argument-type"),
             ("LegacyAlias(42)", "invalid-argument-type"),
-            ("def bad(value: DefaultInfo) -> object:\n    return value.missing", "unresolved-attribute"),
+            ("def bad(value: DefaultInfo) -> object:\n    return value.missing", "missing-attribute"),
         ] {
             analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
@@ -2133,8 +2133,8 @@ def impossible(value: Impossible) -> None:
             ("def negative(value: Info) -> str:\n    if not hasattr(value, 'value'):\n        return value.value\n    return ''", "possibly-missing-attribute"),
             ("def readonly(value: Intersection[Info, RequiredValue]) -> None:\n    value.value = 'changed'", "invalid-assignment"),
             ("def partial(value: Info) -> None:\n    value.value = 'changed'", "invalid-assignment"),
-            ("def still_nullable(value: Info) -> str:\n    if hasattr(value, 'nullable'):\n        return value.nullable\n    return ''", "invalid-return-type"),
-            ("def unknown_extra(value: Open) -> None:\n    return getattr(value, 'extra', None)", "invalid-return-type"),
+            ("def still_nullable(value: Info) -> str:\n    if hasattr(value, 'nullable'):\n        return value.nullable\n    return ''", "invalid-explicit-return"),
+            ("def unknown_extra(value: Open) -> None:\n    return getattr(value, 'extra', None)", "invalid-explicit-return"),
         ] {
             analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
@@ -2699,7 +2699,7 @@ def mutate(value: Info[object]) -> None:
         ids.sort_unstable();
         assert_eq!(
             ids,
-            ["invalid-argument-type", "invalid-return-type"],
+            ["invalid-argument-type", "invalid-explicit-return"],
             "{diagnostics:?}"
         );
     }
@@ -2803,14 +2803,14 @@ def mutate(value: Info[object]) -> None:
             ("mutate(present)", "invalid-argument-type"),
             ("def direct(value: Info[str]) -> str:\n    return value.callback(1)", "possibly-missing-attribute"),
             ("def wrong_argument(value: Info[str]) -> str:\n    if hasattr(value, 'callback'):\n        return value.callback('bad')\n    return ''", "invalid-argument-type"),
-            ("def wrong_result(value: Info[str]) -> int:\n    if hasattr(value, 'value'):\n        return value.value\n    return 0", "invalid-return-type"),
-            ("def wrong_inferred_result() -> int | None:\n    return getattr(inferred, 'value', None)", "invalid-return-type"),
+            ("def wrong_result(value: Info[str]) -> int:\n    if hasattr(value, 'value'):\n        return value.value\n    return 0", "invalid-explicit-return"),
+            ("def wrong_inferred_result() -> int | None:\n    return getattr(inferred, 'value', None)", "invalid-explicit-return"),
             ("inferred.value", "possibly-missing-attribute"),
             ("inferred_present.values.append(42)", "invalid-argument-type"),
             ("inferred_present.callback('bad')", "invalid-argument-type"),
-            ("def wrong_supplied_result() -> int:\n    return inferred_present.value", "invalid-return-type"),
-            ("def lost_defaulted_field(value: Info) -> None:\n    return getattr(value, 'value', None)", "invalid-return-type"),
-            ("def lost_opaque_field(target: Target) -> None:\n    return getattr(target[Info], 'value', None)", "invalid-return-type"),
+            ("def wrong_supplied_result() -> int:\n    return inferred_present.value", "invalid-explicit-return"),
+            ("def lost_defaulted_field(value: Info) -> None:\n    return getattr(value, 'value', None)", "invalid-explicit-return"),
+            ("def lost_opaque_field(target: Target) -> None:\n    return getattr(target[Info], 'value', None)", "invalid-explicit-return"),
         ] {
             analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
@@ -2832,7 +2832,7 @@ def mutate(value: Info[object]) -> None:
             diagnostics.iter().any(|diagnostic| {
                 matches!(
                     diagnostic.id().as_str(),
-                    "invalid-return-type" | "non-static-type"
+                    "invalid-explicit-return" | "non-static-type"
                 ) && diagnostic
                     .primary_span()
                     .and_then(|span| span.range())
@@ -2848,7 +2848,7 @@ def mutate(value: Info[object]) -> None:
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
     }
@@ -2934,8 +2934,8 @@ present: Info = raw_info(value="value", count=0, note="present")
             assert!(
                 diagnostics.iter().any(|diagnostic| matches!(
                     diagnostic.id().as_str(),
-                    "invalid-return-type"
-                        | "invalid-key"
+                    "invalid-explicit-return"
+                        | "invalid-typed-dict-key"
                         | "missing-typed-dict-key"
                         | "invalid-provider-interface"
                 )),

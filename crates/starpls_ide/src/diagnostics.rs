@@ -178,7 +178,7 @@ mod tests {
             ("Mapping[str, object]", &[][..]),
             (
                 "Mapping[str, object] | select[object, object]",
-                &["invalid-return-type"][..],
+                &["invalid-explicit-return"][..],
             ),
         ] {
             let source = format!(
@@ -258,7 +258,7 @@ def mapping(value: {annotation}) -> Mapping[str, object]:
                 assert!(
                     diagnostics
                         .iter()
-                        .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                        .all(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
                     "{source}: {diagnostics:?}"
                 );
             }
@@ -327,7 +327,7 @@ nullable: select[Label | None, Literal["label"]] = select({"//conditions:default
         analysis.update_file(file, source.replace("select[Label | str,", "select[Label,"));
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -423,7 +423,7 @@ def mapping(values: dict[str, int]) -> select[int, Literal["int"]]:
         assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
         assert!(diagnostics
             .iter()
-            .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+            .all(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"));
     }
 
     #[test]
@@ -445,7 +445,7 @@ def mapping(values: dict[str, int]) -> select[int, Literal["int"]]:
                 "items: depset[int]",
                 "{'//conditions:default': items}",
                 "select[depset[str], Literal['depset']]",
-                Some("invalid-return-type"),
+                Some("invalid-explicit-return"),
             ),
             (
                 "items: depset[str]",
@@ -463,7 +463,7 @@ def mapping(values: dict[str, int]) -> select[int, Literal["int"]]:
                 "items: depset[str]",
                 "{'//:enabled': None, '//conditions:default': items}",
                 "select[depset[str] | None, Literal['depset']]",
-                Some("invalid-return-type"),
+                Some("invalid-explicit-return"),
             ),
             (
                 "depset: Callable[[list[str]], list[str]]",
@@ -475,7 +475,7 @@ def mapping(values: dict[str, int]) -> select[int, Literal["int"]]:
                 "depset: Callable[[list[str]], list[str]]",
                 "{'//conditions:default': depset(['item'])}",
                 "select[list[str], Literal['depset']]",
-                Some("invalid-return-type"),
+                Some("invalid-explicit-return"),
             ),
         ] {
             let source = format!(
@@ -520,10 +520,13 @@ def selected({parameters}) -> {result}:
         assert!(hover.contents.value.contains("value: select[list[str] | None, Literal[\"list\"]] | select[list[str] | None, Literal[\"none\"]]\n"), "{}", hover.contents.value);
 
         for (value, expected) in [
-            ("object", &["invalid-return-type"][..]),
+            ("object", &["invalid-explicit-return"][..]),
             ("list[str] | Unknown", &[][..]),
             ("list[str] | Any", &[][..]),
-            ("list[str] | int | Unknown", &["invalid-return-type"][..]),
+            (
+                "list[str] | int | Unknown",
+                &["invalid-explicit-return"][..],
+            ),
         ] {
             analysis.update_file(file, format!("def embed(branches: dict[str, {value}]) -> {selected}:\n    return select(branches)\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -541,7 +544,7 @@ def selected({parameters}) -> {result}:
         analysis.update_file(file, format!("def first(first: list[str] | None) -> {selected}:\n    return select({{'//:first': first, '//conditions:default': 42}})\n"));
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
 
         for (left, right) in [("list", "none"), ("none", "list")] {
             analysis.update_file(file, format!("def combine(left: select[list[str] | None, Literal['{left}']], right: select[list[str] | None, Literal['{right}']]) -> object:\n    return left + right\n"));
@@ -590,7 +593,7 @@ def embed(key: str, first: list[str], rest: dict[str, list[str] | None]) -> sele
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -609,7 +612,7 @@ def absent(value: list[str] | None) -> None:
         analysis.update_file(file, source.replace("== None", "!= None"));
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -689,7 +692,7 @@ def construct(values: dict[str, str]) -> select[dict[str, str | int], Literal["d
         assert!(
             diagnostics
                 .iter()
-                .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
     }
@@ -770,7 +773,7 @@ def prepend_nullable(left: select[Sequence[str]], right: select[Sequence[int] | 
         assert!(
             diagnostics
                 .iter()
-                .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
 
@@ -786,7 +789,7 @@ def prepend_nullable(left: select[Sequence[str]], right: select[Sequence[int] | 
         assert!(
             diagnostics
                 .iter()
-                .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
 
@@ -1060,7 +1063,7 @@ consume(combined)
     fn native_getattr_refines_literal_names() {
         for (source, expected) in [
             ("def read() -> str: return getattr(struct(field='value'), 'field')\n", &[][..]),
-            ("def read() -> int: return getattr(struct(field='value'), 'field')\n", &["invalid-return-type"][..]),
+            ("def read() -> int: return getattr(struct(field='value'), 'field')\n", &["invalid-explicit-return"][..]),
             ("def read(value: struct[object], name: str) -> object: return getattr(value, name)\n", &[][..]),
             ("def read(value: struct[str]) -> object: return getattr(value, 0)\n", &["invalid-argument-type"][..]),
         ] {
@@ -1094,7 +1097,7 @@ consume(combined)
             assert!(
                 diagnostics
                     .iter()
-                    .any(|d| d.id().as_str() == "invalid-return-type"),
+                    .any(|d| d.id().as_str() == "invalid-explicit-return"),
                 "{wrong}: {diagnostics:?}"
             );
         }
@@ -1191,7 +1194,7 @@ def sequence(value: list[File] | tuple[File, ...] | None) -> list[File]:
         let (mut analysis, fixture) = native_analysis(source);
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[("unsound-return".into(), "error".into())].into(),
             )
             .unwrap(),
         );
@@ -1202,14 +1205,18 @@ def sequence(value: list[File] | tuple[File, ...] | None) -> list[File]:
             (
                 "return value\n",
                 "return value.files\n",
-                "unresolved-attribute",
+                "missing-attribute",
             ),
-            ("return value.path", "return value", "invalid-return-type"),
-            ("-> list[File]:", "-> list[str]:", "invalid-return-type"),
+            (
+                "return value.path",
+                "return value",
+                "invalid-explicit-return",
+            ),
+            ("-> list[File]:", "-> list[str]:", "invalid-explicit-return"),
             (
                 "return value.executable",
                 "return value",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 "result.extend(value)",
@@ -1257,7 +1264,7 @@ def unchecked(value: object) -> str:
             .diagnostics(fixture.main_file())
             .unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
         assert_eq!(&source[diagnostics[0].range().unwrap()], "value[0]");
     }
 
@@ -1415,7 +1422,7 @@ answer = identity(1)
             ),
             (
                 original.replace("return value", "return 'bad'"),
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 original.replace("return value", "return value + 'bad'"),
@@ -1508,7 +1515,7 @@ exact(takes_str)('x')
         for (source, id) in [
             (
                 source.replace("return keys[0]", "return 1"),
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 source.replace("(KeyList[K])", "(KeyList[Free])"),
@@ -1557,7 +1564,7 @@ def shadow(Name: str) -> str:
             (
                 definition,
                 source.replace("return values[0]", "return 1"),
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 definition,
@@ -1572,7 +1579,7 @@ def shadow(Name: str) -> str:
             (
                 caller,
                 "load('//:defs.bzl', 'Name')\n".into(),
-                "unresolved-import",
+                "import-not-found",
             ),
         ] {
             analysis.update_file(definition, source.into());
@@ -1799,7 +1806,7 @@ LANES = {'java': {'shard_index': 0}}
         analysis.update_file(caller, "load('//:defs.bzl', 'Name')\n".into());
         let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].id().as_str(), "unresolved-import");
+        assert_eq!(diagnostics[0].id().as_str(), "import-not-found");
     }
 
     #[test]
@@ -2656,7 +2663,7 @@ mapping_before = {"a": 1} | select({"//:condition": {"b": "c"}}) # type: select[
             ("select({42: ['a']})", "invalid-argument-type"),
             ("values[0]", "not-subscriptable"),
             ("list(values)", "invalid-argument-type"),
-            ("values.append('a')", "unresolved-attribute"),
+            ("values.append('a')", "missing-attribute"),
             ("values + 'a'", "unsupported-operator"),
             (
                 "bad = defaulted_right # type: select[list[str]]",
@@ -2884,19 +2891,25 @@ def inspect(target: Target, artifact: File, info: DefaultInfo, precise: DefaultI
         let file = fixture.main_file();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        for expression in [
-            "DefaultInfo().files_to_run.executable",
-            "DefaultInfo(executable=artifact).files_to_run.executable",
-            "target[DefaultInfo].files_to_run.executable",
-            "info.files_to_run.executable",
-            "precise.files_to_run.executable",
+        for (expression, expected) in [
+            ("DefaultInfo().files_to_run.executable", "missing-attribute"),
+            (
+                "DefaultInfo(executable=artifact).files_to_run.executable",
+                "missing-attribute",
+            ),
+            (
+                "target[DefaultInfo].files_to_run.executable",
+                "missing-union-attribute",
+            ),
+            ("info.files_to_run.executable", "missing-union-attribute"),
+            ("precise.files_to_run.executable", "missing-union-attribute"),
         ] {
             analysis.update_file(file, format!("{source}    {expression}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{expression}: {diagnostics:?}");
             };
-            assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+            assert_eq!(diagnostic.id().as_str(), expected, "{expression}");
             assert!(diagnostic.concise_message().to_string().contains("None"));
             assert!(diagnostic
                 .range()
@@ -3578,7 +3591,7 @@ class Builder(Protocol):
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "call-non-callable");
+        assert_eq!(diagnostic.id().as_str(), "not-callable");
     }
 
     #[test]
@@ -3587,10 +3600,17 @@ class Builder(Protocol):
         let snapshot = analysis.snapshot();
         let diagnostics = snapshot.diagnostics(fixture.main_file()).unwrap();
         let rendered = snapshot
-            .render_diagnostics(
-                &diagnostics,
-                &ruff_db::diagnostic::DisplayDiagnosticConfig::new("starpls"),
-            )
+            .render_diagnostics(|resolver| {
+                use ruff_db::diagnostic::render::FullRenderer;
+                use ruff_db::diagnostic::render::Renderer;
+
+                FullRenderer::new(
+                    resolver,
+                    &ruff_db::diagnostic::DisplayDiagnosticConfig::new("starpls"),
+                )
+                .display(&diagnostics)
+                .to_string()
+            })
             .unwrap();
         expect_test::expect![[r#"
             error[invalid-assignment]: Object of type `Literal[1]` is not assignable to `str`

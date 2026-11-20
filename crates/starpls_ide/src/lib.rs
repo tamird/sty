@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 #[cfg(test)]
 use dashmap::DashMap;
-use ruff_db::diagnostic::DisplayDiagnosticConfig;
-use ruff_db::diagnostic::DisplayDiagnostics;
+use ruff_db::diagnostic::render::FileResolver;
 use ruff_db::system::System;
 use ruff_db::system::SystemPath;
 use salsa::Setter;
@@ -774,10 +773,9 @@ impl AnalysisSnapshot {
     /// Renders diagnostics obtained from this snapshot using its captured source.
     pub fn render_diagnostics(
         &self,
-        diagnostics: &[Diagnostic],
-        config: &DisplayDiagnosticConfig,
+        render: impl FnOnce(&dyn FileResolver) -> String + panic::UnwindSafe,
     ) -> Cancellable<String> {
-        self.query(|db| DisplayDiagnostics::new(db, config, diagnostics).to_string())
+        self.query(|db| render(db))
     }
 
     pub fn document_symbols(&self, file_id: File) -> Cancellable<Option<Vec<DocumentSymbol>>> {

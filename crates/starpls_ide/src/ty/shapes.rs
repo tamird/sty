@@ -496,23 +496,23 @@ def present(value: struct[{"field": int | None}, ...]) -> Literal[True]: ...
         for (invalid, expected) in [
             (
                 "def bad():\n    # type: () -> int\n    value = struct(field='wrong')\n    return value.field if hasattr(value, 'field') else None",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 "def bad(value):\n    # type: (struct[{'field': NotRequired[int]}, ...]) -> Literal[True]\n    return hasattr(value, 'field')",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 "def bad(value):\n    # type: (struct[{'field': int}, ...]) -> Literal[True]\n    return hasattr(value, 'other')",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 "def bad(value, name):\n    # type: (struct[{'field': int}, ...], str) -> Literal[True]\n    return hasattr(value, name)",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 "def bad(value):\n    # type: (object) -> Literal[True]\n    return hasattr(value, 'field')",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 "def bad(value):\n    # type: (struct[{'field': int}, ...]) -> None\n    hasattr(value, 42)",
@@ -524,7 +524,7 @@ def present(value: struct[{"field": int | None}, ...]) -> Literal[True]: ...
             ),
             (
                 "def bad(value):\n    # type: (struct[{'field': int}, ...]) -> int\n    def hasattr(value, name):\n        # type: (object, str) -> bool\n        return False\n    return value.field if hasattr(value, 'field') else None",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
         ] {
             analysis.update_file(source, format!("{valid}\n{invalid}\n"));
@@ -549,7 +549,7 @@ def present(value: struct[{"field": int | None}, ...]) -> Literal[True]: ...
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
         assert!(usize::from(diagnostic.range().unwrap().start()) >= valid.len());
     }
 
@@ -893,7 +893,7 @@ def guarded(receiver: object) -> str:
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
     }
@@ -913,7 +913,7 @@ def guarded(receiver: object) -> str:
             crate::DiagnosticRules::from_settings(
                 &[
                     ("non-static-type".into(), "error".into()),
-                    ("unsound-return-statement".into(), "error".into()),
+                    ("unsound-return".into(), "error".into()),
                 ]
                 .into(),
             )
@@ -966,7 +966,7 @@ def opaque(value: struct[object], name: str) -> object:
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{invalid}: {diagnostics:?}");
             };
-            assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+            assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
         }
         for receiver in ["object", "struct[int] | str"] {
             analysis.update_file(
@@ -1072,7 +1072,7 @@ def uniform(value: Intersection[struct[str], struct[{"name": NotRequired[str | i
         }
         for (name, expected) in [
             ("optional", "possibly-missing-attribute"),
-            ("union", "unresolved-attribute"),
+            ("union", "missing-union-attribute"),
         ] {
             analysis.update_file(
                 implementation,
@@ -1148,7 +1148,7 @@ def saved_optional(
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "unresolved-attribute");
+        assert_eq!(diagnostics[0].id().as_str(), "missing-attribute");
         for invalid in [
             "closed(struct())",
             "closed(struct(name=1))",
@@ -1210,7 +1210,7 @@ def saved_optional(
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
     }
@@ -1230,7 +1230,7 @@ def saved_optional(
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
                 &[
-                    ("unsound-return-statement".into(), "error".into()),
+                    ("unsound-return".into(), "error".into()),
                     ("non-static-type".into(), "error".into()),
                 ]
                 .into(),
@@ -1379,9 +1379,9 @@ def selected_alias(value: struct[{{"compiler": str}}] | struct[{{}}]) -> str | N
             ("closed(struct(extra=42))", "invalid-argument-type"),
             ("def erased(value: struct[object]) -> None:\n    optional_value(value)", "invalid-argument-type"),
             ("def optional(value: struct[{'compiler': NotRequired[str]}, ...]) -> None:\n    required_value(value)", "invalid-argument-type"),
-            ("def opaque(context: ctx[object, struct[object]]) -> str:\n    return context.attr.unmodeled", "invalid-return-type"),
-            ("def unchecked(value: struct[{}]) -> None:\n    if getattr(value, 'compiler', True):\n        value.compiler", "unresolved-attribute"),
-            ("def shadowed(value: struct[{}], getattr: Callable[[object, str, object], bool]) -> None:\n    if getattr(value, 'compiler', None):\n        value.compiler", "unresolved-attribute"),
+            ("def opaque(context: ctx[object, struct[object]]) -> str:\n    return context.attr.unmodeled", "invalid-explicit-return"),
+            ("def unchecked(value: struct[{}]) -> None:\n    if getattr(value, 'compiler', True):\n        value.compiler", "missing-attribute"),
+            ("def shadowed(value: struct[{}], getattr: Callable[[object, str, object], bool]) -> None:\n    if getattr(value, 'compiler', None):\n        value.compiler", "missing-attribute"),
         ] {
             analysis.update_file(caller, format!("{valid}\n{invalid}\n"));
             let diagnostics = analysis.snapshot().diagnostics(caller).unwrap();

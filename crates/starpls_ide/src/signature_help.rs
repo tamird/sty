@@ -88,6 +88,7 @@ pub(crate) fn signature_help(
                                 label,
                                 name,
                                 ty: _,
+                                definition: _,
                                 is_positional_only: _,
                                 is_variadic: _,
                                 is_keyword_variadic: _,

@@ -47,6 +47,8 @@ const IMMUTABLE_ATOMS: [&str; 4] = ["Label", "File", "DottedVersion", "depset"];
 const STANDARD_PATH: &str = "starpls-native:standard.pyi";
 const BAZEL_PATH: &str = "starpls-native:bazel.pyi";
 const STORED_GLOB: &str = "_starpls_native_stored_glob";
+const GROUP_TARGET_PROVIDER_BOUND_NAME: &str = "_starpls_group_target_provider_bound";
+const GROUP_TARGET_PROVIDER_BOUND: &str = "_starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], None] | _starpls_types.PackageSpecificationInfo";
 const EXISTING_RULE_VIEW: &str = "_ExistingRuleView";
 const STATIC_JSON_DECODE: &str = "_starpls_static_json_decode";
 const LEGACY_PROVIDER_GLOBALS: &[&str] = &[
@@ -170,6 +172,32 @@ pub(super) fn is_builtin_declaration(
         FilePath::Vendored(path) => path.as_str() == "stdlib/builtins.pyi",
         _ => false,
     }
+}
+
+/// Package and environment groups return only DefaultInfo or PackageSpecificationInfo.
+pub(super) fn subscript_result_bound<'db>(
+    db: &'db crate::Database,
+    file: ProgramFile<'db>,
+    receiver: SemanticType<'db>,
+) -> Option<SemanticType<'db>> {
+    let source = db.starlark_file(file)?;
+    if source.dialect != Dialect::Bazel {
+        return None;
+    }
+    let native_file = db.files.try_virtual_file(&path(source.dialect))?;
+    let declarations = ty_python_semantic::Db::program_file(db, native_file.file());
+    let environment = ProgramEnvironment::from_file(file);
+    let files_to_run =
+        super::factory::native_type_argument(db, &environment, declarations, receiver, "Target")?;
+    if files_to_run != SemanticType::none(db, &environment) {
+        return None;
+    }
+    ProvidedBindingValue::Export {
+        value: None,
+        file: declarations,
+        name: Name::new(GROUP_TARGET_PROVIDER_BOUND_NAME),
+    }
+    .resolve_type(db)
 }
 
 pub(super) fn export_name(context: APIContext, name: &str) -> String {
@@ -1368,7 +1396,7 @@ fn declarations(
             writeln!(body, "        @_starpls_typing.overload")?;
             writeln!(
                 body,
-                "        def __getitem__(self: _starpls_types.Target[None], key: _starpls_types.Provider[_ProviderValue]) -> _starpls_ty_extensions.Intersection[_ProviderValue, _starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], None] | _starpls_types.PackageSpecificationInfo]: ..."
+                "        def __getitem__(self: _starpls_types.Target[None], key: _starpls_types.Provider[_ProviderValue]) -> _starpls_ty_extensions.Intersection[_ProviderValue, {GROUP_TARGET_PROVIDER_BOUND}]: ..."
             )?;
             writeln!(body, "        @_starpls_typing.overload")?;
             writeln!(
@@ -1376,7 +1404,7 @@ fn declarations(
                 "        def __getitem__(self, key: _starpls_types.Provider[_ProviderValue]) -> _ProviderValue: ..."
             )?;
             writeln!(body, "        @_starpls_typing.overload")?;
-            writeln!(body, "        def __getitem__(self: _starpls_types.Target[None], key: _starpls_types.ProviderKey) -> _starpls_types.DefaultInfo[_starpls_types.depset[_starpls_types.File], None] | _starpls_types.PackageSpecificationInfo: ...")?;
+            writeln!(body, "        def __getitem__(self: _starpls_types.Target[None], key: _starpls_types.ProviderKey) -> {GROUP_TARGET_PROVIDER_BOUND}: ...")?;
             writeln!(body, "        @_starpls_typing.overload")?;
             writeln!(body, "        def __getitem__(self, key: _starpls_types.ProviderKey) -> _starpls_types.ProviderInstance: ...")?;
             writeln!(
@@ -2086,6 +2114,12 @@ fn declarations(
     );
     output.push_str(&body);
     output.push('\n');
+    if dialect == Dialect::Bazel && declared_classes.contains("Target") {
+        writeln!(
+            output,
+            "{GROUP_TARGET_PROVIDER_BOUND_NAME}: {GROUP_TARGET_PROVIDER_BOUND}"
+        )?;
+    }
     if dialect == Dialect::Bazel
         && classes
             .get("bazel_module_tags")
@@ -3749,7 +3783,7 @@ def defaults():
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
         assert!(
@@ -3819,7 +3853,7 @@ def direct(value: struct[{"item": str}]) -> str:
             ("getattr(struct(item=1))", "no-matching-overload"),
             ("getattr(struct(item=1), 'item', 1, 2)", "no-matching-overload"),
             ("getattr(struct(item=1), name='item')", "no-matching-overload"),
-            ("def wrong(value: struct[{'item': list[str]}]) -> list[int]:\n    return getattr(value, 'item', [])", "invalid-return-type"),
+            ("def wrong(value: struct[{'item': list[str]}]) -> list[int]:\n    return getattr(value, 'item', [])", "invalid-explicit-return"),
         ] {
             analysis.update_file(file, source.into());
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -3954,18 +3988,18 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
             ),
             (
                 "def wrong(value: DormantDependency) -> str: return value.label",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             ("DormantDependency()", "unresolved-reference"),
             ("attr.string(default=42)", "invalid-argument-type"),
             ("attr.string_list(default=[42])", "invalid-argument-type"),
             (
                 "def wrong() -> Attribute[str]: return attr.bool()",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 "def wrong() -> Attribute[Target]: return attr.label()",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
         ] {
             analysis.update_file(file, format!("{source}{statement}\n"));
@@ -4076,7 +4110,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[("unsound-return".into(), "error".into())].into(),
             )
             .unwrap(),
         );
@@ -4100,7 +4134,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:#?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -4200,7 +4234,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
                 .unwrap();
             analysis.set_rules(
                 crate::DiagnosticRules::from_settings(
-                    &[("unsound-return-statement".into(), "error".into())].into(),
+                    &[("unsound-return".into(), "error".into())].into(),
                 )
                 .unwrap(),
             );
@@ -4225,7 +4259,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
                 let [diagnostic] = diagnostics.as_slice() else {
                     panic!("{diagnostics:#?}")
                 };
-                assert_eq!(diagnostic.id().as_str(), "unsound-return-statement");
+                assert_eq!(diagnostic.id().as_str(), "unsound-return");
             } else {
                 assert!(
                     diagnostics
@@ -4249,7 +4283,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[("unsound-return".into(), "error".into())].into(),
             )
             .unwrap(),
         );
@@ -4275,7 +4309,7 @@ def dependency() -> Attribute[Target[FilesToRunProvider[File]]]:
                 let [diagnostic] = diagnostics.as_slice() else {
                     panic!("{receiver}.{view}: {diagnostics:?}");
                 };
-                assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+                assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
             }
         }
         let source = r#"def optional_file(context: ctx) -> str | None:
@@ -4305,7 +4339,7 @@ def output(context: ctx) -> File | list[File] | None:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -4353,7 +4387,7 @@ def module_environment(context: module_ctx) -> dict[str, str]:
             assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
             assert!(diagnostics
                 .iter()
-                .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+                .all(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"));
         }
     }
 
@@ -4371,7 +4405,7 @@ def module_environment(context: module_ctx) -> dict[str, str]:
             crate::DiagnosticRules::from_settings(
                 &[
                     ("non-static-type".into(), "error".into()),
-                    ("unsound-return-statement".into(), "error".into()),
+                    ("unsound-return".into(), "error".into()),
                 ]
                 .into(),
             )
@@ -4426,7 +4460,7 @@ def wrong(context: {receiver}) -> list[int]:
                 panic!("{class_name}.{field_name}: {diagnostics:?}");
             };
             assert_eq!(argument.id().as_str(), "invalid-argument-type");
-            assert_eq!(returned.id().as_str(), "invalid-return-type");
+            assert_eq!(returned.id().as_str(), "invalid-explicit-return");
 
             let field = builtins
                 .r#type
@@ -4492,7 +4526,7 @@ def module_lookup(context: module_ctx) -> path:
         assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
         assert!(diagnostics
             .iter()
-            .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+            .all(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"));
     }
 
     #[test]
@@ -4524,7 +4558,7 @@ def module_lookup(context: module_ctx) -> path:
             assert!(diagnostics.is_empty(), "{receiver}: {diagnostics:?}");
             analysis.set_rules(
                 crate::DiagnosticRules::from_settings(
-                    &[("unsound-return-statement".into(), "error".into())].into(),
+                    &[("unsound-return".into(), "error".into())].into(),
                 )
                 .unwrap(),
             );
@@ -4532,7 +4566,7 @@ def module_lookup(context: module_ctx) -> path:
             assert!(
                 diagnostics
                     .iter()
-                    .any(|diagnostic| { diagnostic.id().as_str() == "unsound-return-statement" }),
+                    .any(|diagnostic| { diagnostic.id().as_str() == "unsound-return" }),
                 "{receiver}: {diagnostics:?}"
             );
         }
@@ -4544,7 +4578,7 @@ def module_lookup(context: module_ctx) -> path:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -4600,7 +4634,7 @@ def own(c: ctx[object, object], key: Label) -> object:
                 ))
                 .collect::<Vec<_>>(),
             [
-                ("invalid-return-type", "providers[DefaultInfo]"),
+                ("invalid-explicit-return", "providers[DefaultInfo]"),
                 ("invalid-argument-type", "providers"),
                 ("not-subscriptable", "c.rule.toolchains[key][DefaultInfo]"),
             ],
@@ -4624,7 +4658,7 @@ def own(c: ctx[object, object], key: Label) -> object:
                 let [diagnostic] = diagnostics.as_slice() else {
                     panic!("{release}: {diagnostics:?}");
                 };
-                assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+                assert_eq!(diagnostic.id().as_str(), "missing-attribute");
                 assert_eq!(&label_source[diagnostic.range().unwrap()], "resolved.label");
             }
         }
@@ -4646,7 +4680,7 @@ def own(c: ctx[object, object], key: Label) -> object:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+        assert_eq!(diagnostic.id().as_str(), "missing-attribute");
         assert_eq!(&source[diagnostic.range().unwrap()], "c.rule.toolchains");
     }
 
@@ -4694,9 +4728,9 @@ def narrow(context: ctx[object, object, struct[{"weight": object}]]) -> ctx[obje
                 ))
                 .collect::<Vec<_>>(),
             [
-                ("invalid-return-type", "context.rule.attr.weight"),
-                ("unresolved-attribute", "context.rule.attr.missing"),
-                ("invalid-return-type", "context"),
+                ("invalid-explicit-return", "context.rule.attr.weight"),
+                ("missing-attribute", "context.rule.attr.missing"),
+                ("invalid-explicit-return", "context"),
             ],
         );
         builtins
@@ -4763,7 +4797,7 @@ def narrow(context: ctx[object, object, struct[{"weight": object}]]) -> ctx[obje
                 .unwrap();
             analysis.set_rules(
                 crate::DiagnosticRules::from_settings(
-                    &[("unsound-return-statement".into(), "error".into())].into(),
+                    &[("unsound-return".into(), "error".into())].into(),
                 )
                 .unwrap(),
             );
@@ -4780,7 +4814,7 @@ def narrow(context: ctx[object, object, struct[{"weight": object}]]) -> ctx[obje
                 let [diagnostic] = diagnostics.as_slice() else {
                     panic!("{diagnostics:?}");
                 };
-                assert_eq!(diagnostic.id().as_str(), "unsound-return-statement");
+                assert_eq!(diagnostic.id().as_str(), "unsound-return");
             } else {
                 assert!(diagnostics.is_empty(), "{diagnostics:?}");
             }
@@ -4918,7 +4952,10 @@ patch = tag_class(attrs={"patches": attr.label_list(), "strip": attr.int()})
             );
             assert!(
                 diagnostics.iter().all(|diagnostic| {
-                    matches!(diagnostic.id().as_str(), "invalid-argument-type" | "invalid-key")
+                    matches!(
+                        diagnostic.id().as_str(),
+                        "invalid-argument-type" | "unknown-typed-dict-constructor-key"
+                    )
                         && usize::from(diagnostic.range().unwrap().start()) >= tag.len()
                 }),
                 "{statement}: {diagnostics:#?}"
@@ -4978,7 +5015,7 @@ patch = tag_class(attrs={"patches": attr.label_list(), "strip": attr.int()})
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[("unsound-return".into(), "error".into())].into(),
             )
             .unwrap(),
         );
@@ -5109,21 +5146,21 @@ def required_with_unknown_flags(flags: Sequence[str]) -> None: ...
         assert_eq!(
             findings,
             [
-                ("subrule_input", "unsound-return-statement"),
-                ("uncertain_private", "unsound-return-statement"),
-                ("late_private", "unsound-return-statement"),
-                ("overclaimed", "unsound-return-statement"),
-                ("required", "unsound-return-statement"),
-                ("flagged", "unsound-return-statement"),
-                ("unknown_flags", "unsound-return-statement"),
-                ("generated", "unsound-return-statement"),
-                ("dependency_resolution", "unsound-return-statement"),
-                ("initialized", "unsound-return-statement"),
-                ("inherited", "unsound-return-statement"),
-                ("mixed", "unsound-return-statement"),
-                ("unknown", "unsound-return-statement"),
-                ("unknown_required", "unsound-return-statement"),
-                ("wrong", "invalid-return-type"),
+                ("subrule_input", "unsound-return"),
+                ("uncertain_private", "unsound-return"),
+                ("late_private", "unsound-return"),
+                ("overclaimed", "unsound-return"),
+                ("required", "unsound-return"),
+                ("flagged", "unsound-return"),
+                ("unknown_flags", "unsound-return"),
+                ("generated", "unsound-return"),
+                ("dependency_resolution", "unsound-return"),
+                ("initialized", "unsound-return"),
+                ("inherited", "unsound-return"),
+                ("mixed", "unsound-return"),
+                ("unknown", "unsound-return"),
+                ("unknown_required", "unsound-return"),
+                ("wrong", "invalid-explicit-return"),
                 ("calls", "invalid-argument-type"),
                 ("calls", "missing-argument"),
                 ("required_with_unknown_flags", "missing-argument"),
@@ -5428,7 +5465,7 @@ called = computed.upper()
         for (source, expected) in [
             (
                 source.replace("-> list[str]", "-> list[int]"),
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
             (
                 r#"def require_text(value: str) -> None:
@@ -5458,7 +5495,7 @@ def fallback(contents: str, default: dict[int, str]) -> None:
             crate::DiagnosticRules::from_settings(
                 &[
                     ("non-static-type".into(), "error".into()),
-                    ("unsound-return-statement".into(), "error".into()),
+                    ("unsound-return".into(), "error".into()),
                 ]
                 .into(),
             )
@@ -5503,11 +5540,11 @@ def decoded_list(contents: str) -> None:
         for (source, expected) in [
             (
                 "def unsafe(contents: str) -> str:\n    return json.decode(contents).upper()\n",
-                "unresolved-attribute",
+                "missing-union-attribute",
             ),
             (
                 "def fallback(contents: str, default: dict[int, object]) -> dict[str, object]:\n    decoded = json.decode(contents, default)\n    if type(decoded) != 'dict':\n        fail('expected object')\n    return decoded\n",
-                "invalid-return-type",
+                "invalid-explicit-return",
             ),
         ] {
             analysis.update_file(file, source.into());
@@ -5597,7 +5634,7 @@ json.decode("{}", default=struct(value="fallback"))
             crate::DiagnosticRules::from_settings(
                 &[
                     ("non-static-type".into(), "error".into()),
-                    ("unsound-return-statement".into(), "error".into()),
+                    ("unsound-return".into(), "error".into()),
                 ]
                 .into_iter()
                 .collect(),
@@ -5669,10 +5706,10 @@ def invalid(config: XcodeVersionConfig, value: str) -> None:
             ids,
             [
                 "invalid-assignment",
-                "unresolved-attribute",
+                "missing-attribute",
                 "invalid-assignment",
                 "invalid-assignment",
-                "unresolved-attribute",
+                "missing-attribute",
                 "invalid-argument-type",
                 "invalid-argument-type"
             ]
@@ -5720,7 +5757,7 @@ wrong: str = apple_common.platform_type.ios
                 .unwrap();
             analysis.set_rules(
                 crate::DiagnosticRules::from_settings(
-                    &[("unsound-return-statement".into(), "error".into())].into(),
+                    &[("unsound-return".into(), "error".into())].into(),
                 )
                 .unwrap(),
             );
@@ -5798,7 +5835,7 @@ def sdk(config: XcodeVersionConfig, platform: apple_platform) -> DottedVersion:
                     "invalid-argument-type",
                     "invalid-argument-type",
                     "invalid-argument-type",
-                    "invalid-return-type"
+                    "invalid-explicit-return"
                 ]
             );
         }
@@ -5860,21 +5897,18 @@ def invalid_platform(ctx: ctx) -> str:
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 6, "{diagnostics:?}");
         for (diagnostic, (expected_id, expected_source)) in diagnostics.iter().zip([
-            ("unresolved-attribute", "ctx.fragments.cpp.no_such_option"),
-            ("unresolved-attribute", "ctx.fragments.no_such_fragment"),
+            ("missing-attribute", "ctx.fragments.cpp.no_such_option"),
+            ("missing-attribute", "ctx.fragments.no_such_fragment"),
             (
                 "unsupported-operator",
                 "ctx.fragments.cpp.apple_generate_dsym + 1",
             ),
+            ("missing-attribute", "ctx.fragments.platform.no_such_member"),
             (
-                "unresolved-attribute",
-                "ctx.fragments.platform.no_such_member",
-            ),
-            (
-                "invalid-return-type",
+                "invalid-explicit-return",
                 "ctx.fragments.cpp.minimum_os_version()",
             ),
-            ("invalid-return-type", "ctx.fragments.platform.platform"),
+            ("invalid-explicit-return", "ctx.fragments.platform.platform"),
         ]) {
             assert_eq!(diagnostic.id().as_str(), expected_id);
             let range = diagnostic.range().unwrap();
@@ -6649,13 +6683,13 @@ def inspect_all() -> str:
 
         for (invalid, expected) in [
             ("native.existing_rule(42)", "invalid-argument-type"),
-            ("native.existing_rules().clear()", "unresolved-attribute"),
+            ("native.existing_rules().clear()", "missing-attribute"),
             ("native.existing_rules().get([])", "invalid-argument-type"),
             ("[] in native.existing_rules()", "unsupported-operator"),
             ("native.existing_rules()[42]", "invalid-argument-type"),
             (
                 "native.existing_rules()[\"target\"].keys().append(\"extra\")",
-                "unresolved-attribute",
+                "missing-attribute",
             ),
         ] {
             analysis.update_file(file, format!("{source}\n{invalid}\n"));
@@ -6679,7 +6713,7 @@ def inspect_all() -> str:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+        assert_eq!(diagnostic.id().as_str(), "missing-attribute");
 
         let native = builtins
             .r#type
@@ -6756,7 +6790,7 @@ def other() -> str:
             let failed_functions: Vec<_> = diagnostics
                 .iter()
                 .map(|diagnostic| {
-                    assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+                    assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
                     source[..usize::from(diagnostic.range().unwrap().start())]
                         .lines()
                         .rev()
@@ -6861,7 +6895,7 @@ def names(directory: path) -> list[str]:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
         assert_eq!(u32::from(diagnostic.range().unwrap().start()), invalid);
     }
 
@@ -6909,7 +6943,7 @@ def names(directory: path) -> list[str]:
                 analysis.update_file(file, format!("{source}    {call}.upper()\n"));
                 let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
                 assert_eq!(diagnostics.len(), 1, "{context}, {call}: {diagnostics:?}");
-                assert_eq!(diagnostics[0].id().as_str(), "unresolved-attribute");
+                assert_eq!(diagnostics[0].id().as_str(), "missing-union-attribute");
             }
         }
     }
@@ -7149,7 +7183,7 @@ def wrong_name():
                 ("invalid-argument-type", "label_dict=label_mapping"),
                 ("invalid-argument-type", "\"not a file\""),
                 ("invalid-argument-type", "file"),
-                ("unresolved-attribute", "manifests.append"),
+                ("missing-attribute", "manifests.append"),
             ],
             "{diagnostics:?}"
         );
@@ -7471,7 +7505,7 @@ archive_override(module_name='patched', url='https://example.com/source.tar.gz',
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         for (invalid, expected) in [
-            ("AnalysisFailureInfo()", "call-non-callable"),
+            ("AnalysisFailureInfo()", "not-callable"),
             ("AnalysisFailure()", "unresolved-reference"),
             (
                 "target[AnalysisFailureInfo].causes = depset([])",
@@ -7920,7 +7954,7 @@ def compose(s, p, opaque):
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             if !available {
                 assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-                assert_eq!(diagnostics[0].id().as_str(), "unresolved-attribute");
+                assert_eq!(diagnostics[0].id().as_str(), "missing-attribute");
                 continue;
             }
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
@@ -7995,7 +8029,7 @@ def compose(s, p, opaque):
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[("unsound-return".into(), "error".into())].into(),
             )
             .unwrap(),
         );
@@ -8012,7 +8046,7 @@ def compose(s, p, opaque):
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "unsound-return-statement");
+        assert_eq!(diagnostic.id().as_str(), "unsound-return");
     }
 
     #[test]
@@ -8083,7 +8117,7 @@ def compose(s, p, opaque):
             let [failure] = diagnostics.as_slice() else {
                 panic!("{diagnostics:?}")
             };
-            assert_eq!(failure.id().as_str(), "invalid-return-type");
+            assert_eq!(failure.id().as_str(), "invalid-explicit-return");
         }
     }
 
@@ -8372,7 +8406,7 @@ def inspect(context: ctx[object, object], file: File) -> None:
             };
             assert_eq!(
                 diagnostic.id().as_str(),
-                "unresolved-attribute",
+                "missing-union-attribute",
                 "{name}: {diagnostic:?}"
             );
             assert!(
@@ -8647,8 +8681,18 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
                 "target[key].files_to_run",
                 "None",
             ),
-            ("Target[None]", "Unknown", "target[key]", "Unknown"),
-            ("Target[None]", "Any", "target[key]", "Unknown"),
+            (
+                "Target[None]",
+                "Unknown",
+                "target[key]",
+                "(Unknown & DefaultInfo[depset[File], None]) | (Unknown & PackageSpecificationInfo)",
+            ),
+            (
+                "Target[None]",
+                "Any",
+                "target[key]",
+                "(Unknown & DefaultInfo[depset[File], None]) | (Unknown & PackageSpecificationInfo)",
+            ),
             (
                 "Target[None]",
                 "Provider[Any]",
@@ -8734,8 +8778,8 @@ def aspect_implementation(target: Target, context: ctx[object, object]) -> None:
         for (statement, expected) in [
             ("target[OutputGroupInfo][42]", "invalid-argument-type"),
             ("bad: Collection[File] = groups; bad", "invalid-assignment"),
-            ("special_names.__iter__()", "call-non-callable"),
-            ("special_names.__len__()", "call-non-callable"),
+            ("special_names.__iter__()", "not-callable"),
+            ("special_names.__len__()", "not-callable"),
             (
                 "bad: list[str] = target[OutputGroupInfo].custom.to_list(); bad",
                 "invalid-assignment",
@@ -9181,7 +9225,7 @@ unpacked = rule(implementation, **{"initializer": initialize}, attrs={"value": a
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -9275,7 +9319,7 @@ def record() -> struct[int]:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
         analysis.set_rules(crate::DiagnosticRules::default());
         analysis.update_file(
             file,
@@ -9286,7 +9330,7 @@ def record() -> struct[int]:
             .iter()
             .map(|diagnostic| diagnostic.id().as_str())
             .collect();
-        assert_eq!(ids, ["unresolved-attribute"; 3], "{diagnostics:?}");
+        assert_eq!(ids, ["missing-attribute"; 3], "{diagnostics:?}");
     }
 
     #[test]
@@ -9464,7 +9508,7 @@ def typed(ctx, auth):
             .unwrap();
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[("unsound-return".into(), "error".into())].into(),
             )
             .unwrap(),
         );
@@ -9489,7 +9533,7 @@ def constructed() -> dict[str, str]:
         assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
         assert!(diagnostics
             .iter()
-            .all(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+            .all(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"));
     }
 
     #[test]
@@ -9643,7 +9687,7 @@ def inspect(internal: JavaCommonInternal, context: ctx[object, object], info: Pr
                 .iter()
                 .map(|diagnostic| diagnostic.id().as_str())
                 .collect::<Vec<_>>(),
-            ["call-non-callable", "non-static-type"],
+            ["not-callable", "non-static-type"],
             "{diagnostics:?}"
         );
         assert!(diagnostics
@@ -9814,7 +9858,7 @@ def invalid(action: actions, artifact_root: root, file: File) -> None:
             ),
             (
                 "action.declare_shareable_artifact('path').nonexistent",
-                "unresolved-attribute",
+                "missing-attribute",
             ),
             (
                 "action.declare_shareable_artifact('path').is_source = False",
@@ -9935,7 +9979,7 @@ def invalid(action: actions, artifact_root: root, file: File) -> None:
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("keyword_only={keyword_only}, return_type={return_type}, root_default={root_default}: {diagnostics:?}");
             };
-            assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+            assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
             assert!(usize::from(diagnostic.range().unwrap().start()) >= source.len());
         }
     }
@@ -10016,8 +10060,8 @@ def inspect(internal: CcInternal, action: actions, file: File) -> None:
             ("consume_never(cc_common)", "invalid-argument-type"),
             ("consume_never(output)", "invalid-argument-type"),
             ("consume_namespace(cc_common)", "invalid-argument-type"),
-            ("cc_common.is_enabled", "unresolved-attribute"),
-            ("cc_common.CcToolchainInfo", "unresolved-attribute"),
+            ("cc_common.is_enabled", "missing-attribute"),
+            ("cc_common.CcToolchainInfo", "missing-attribute"),
             ("internal.exec_os(42)", "invalid-argument-type"),
             ("internal.create_header_info(header_module=file)", "invalid-argument-type"),
             ("internal.create_header_info(pic_header_module=42)", "invalid-argument-type"),
@@ -10253,9 +10297,9 @@ forwarded = forward()
             ("def bad(value):\n    return struct(field=value)\n", "non-static-type"),
             ("def bad(callback: Callable[..., object]):\n    return struct(field=callback)\n", "non-static-type"),
             ("cc_common.get_tool_for_action(feature_configuration=42, action_name='compile')\n", "invalid-argument-type"),
-            ("def bad() -> Literal[True]:\n    return hasattr(cc_common, 'is_enabled')\n", "invalid-return-type"),
-            ("def bad(name: str) -> Literal[True]:\n    return hasattr(cc_common, name)\n", "invalid-return-type"),
-            ("def bad(value: struct[object]) -> Literal[True]:\n    return hasattr(value, 'internal_DO_NOT_USE')\n", "invalid-return-type"),
+            ("def bad() -> Literal[True]:\n    return hasattr(cc_common, 'is_enabled')\n", "invalid-explicit-return"),
+            ("def bad(name: str) -> Literal[True]:\n    return hasattr(cc_common, name)\n", "invalid-explicit-return"),
+            ("def bad(value: struct[object]) -> Literal[True]:\n    return hasattr(value, 'internal_DO_NOT_USE')\n", "invalid-explicit-return"),
         ] {
             analysis.update_file(files[1], format!("{source}{invalid}"));
             let diagnostics = analysis.snapshot().diagnostics(files[1]).unwrap();
@@ -10308,7 +10352,7 @@ def present() -> Literal[True]:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
         analysis.update_file(file, source.into());
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
@@ -10392,7 +10436,7 @@ cc_common.internal_DO_NOT_USE()
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute"),
+                .any(|diagnostic| diagnostic.id().as_str() == "missing-attribute"),
             "{diagnostics:?}"
         );
     }
@@ -10489,7 +10533,7 @@ def shadowed() -> Configured: ...
         for rules in [
             crate::DiagnosticRules::default(),
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[("unsound-return".into(), "error".into())].into(),
             )
             .unwrap(),
         ] {
@@ -10509,7 +10553,7 @@ def shadowed() -> Configured: ...
                     assert!(
                         matches!(
                             diagnostic.id().as_str(),
-                            "invalid-return-type" | "unsound-return-statement"
+                            "invalid-explicit-return" | "unsound-return"
                         ),
                         "{diagnostic:?}"
                     );
@@ -10697,7 +10741,7 @@ second = rule(implementation=implementation, attrs={"srcs": attr.label_list(), "
                 "instrumented_files_info(ctx.attr,",
                 "invalid-argument-type",
             ),
-            ("ctx.attr.srcs", "ctx.attr.missing", "unresolved-attribute"),
+            ("ctx.attr.srcs", "ctx.attr.missing", "missing-attribute"),
             (
                 "sources: Sequence[Target]",
                 "sources: Sequence[str]",
@@ -11867,7 +11911,7 @@ def run(value: rule | Partial) -> str | None:
         let [failure] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}")
         };
-        assert_eq!(failure.id().as_str(), "invalid-return-type");
+        assert_eq!(failure.id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -12643,7 +12687,7 @@ def stop():
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"),
+                .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"),
             "{diagnostics:?}"
         );
         let argument_start = source.find("type(value)").unwrap() + "type(".len();

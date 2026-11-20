@@ -678,6 +678,14 @@ impl ty_python_semantic::Db for Database {
         }
     }
 
+    fn provided_subscript_result_bound<'db>(
+        &'db self,
+        file: ProgramFile<'db>,
+        receiver: Type<'db>,
+    ) -> Option<Type<'db>> {
+        native::subscript_result_bound(self, file, receiver)
+    }
+
     fn provided_allocation_class<'db>(
         &'db self,
         program: Program<'db>,
@@ -1203,7 +1211,7 @@ def wrong() -> Literal["é"]:
             .diagnostics(fixture.main_file())
             .unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
         assert!(
             usize::from(diagnostics[0].range().unwrap().start())
                 >= source.find("def wrong").unwrap(),
@@ -1684,7 +1692,7 @@ def package(value: object) -> str:
         analysis.update_file(file, source.to_owned());
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -1970,7 +1978,7 @@ identity(value=Info(value=1))
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "unresolved-import"),
+                .any(|diagnostic| diagnostic.id().as_str() == "import-not-found"),
             "{diagnostics:?}"
         );
     }
@@ -2316,8 +2324,8 @@ def checked(value="bad"):
             ids,
             [
                 "invalid-argument-type",
-                "invalid-parameter-default",
-                "invalid-return-type"
+                "invalid-explicit-return",
+                "invalid-parameter-default"
             ],
             "{diagnostics:?}"
         );
@@ -2433,7 +2441,7 @@ text(maybe("ok"))
         ids.sort();
         assert_eq!(
             ids,
-            ["invalid-argument-type", "invalid-return-type"],
+            ["invalid-argument-type", "invalid-explicit-return"],
             "{diagnostics:?}"
         );
     }

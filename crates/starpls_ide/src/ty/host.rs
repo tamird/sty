@@ -270,7 +270,7 @@ builtins: dict[{"repository_ctx": _RepositoryContext, "module_ctx": _ExternalCon
         assert_eq!(
             original
                 .iter()
-                .filter(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute")
+                .filter(|diagnostic| diagnostic.id().as_str() == "missing-attribute")
                 .count(),
             6,
             "{original:#?}"
@@ -311,7 +311,7 @@ builtins: dict[{"repository_ctx": _RepositoryContext, "module_ctx": _ExternalCon
         assert!(
             changed
                 .iter()
-                .any(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute"),
+                .any(|diagnostic| diagnostic.id().as_str() == "missing-attribute"),
             "{changed:#?}"
         );
         analysis.set_bazel_builtin_extension(None).unwrap();

@@ -71,7 +71,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 140
           }
@@ -89,7 +89,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
             "line": 78
           }
@@ -107,7 +107,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/transitioning_alias.bzl",
             "line": 41
           }
@@ -125,7 +125,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/transitioning_alias.bzl",
             "line": 77
           }
@@ -316,7 +316,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/original_settings_rule.bzl",
             "line": 6
           }
@@ -367,7 +367,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 131
           }
@@ -385,7 +385,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/utils.bzl",
             "line": 4
           }
@@ -565,7 +565,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 59
           }
@@ -583,7 +583,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 38
           }
@@ -601,7 +601,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 16
           }
@@ -619,7 +619,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 83
           }
@@ -637,7 +637,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 35
           }
@@ -655,7 +655,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 140
           }
@@ -673,7 +673,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 57
           }
@@ -744,7 +744,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
             "line": 28
           }
@@ -762,7 +762,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
             "line": 30
           },
@@ -785,7 +785,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
             "line": 28
           },
@@ -854,7 +854,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/setting.bzl",
             "line": 49
           }
@@ -872,7 +872,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/setting.bzl",
             "line": 69
           }
@@ -890,7 +890,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 6
           }
@@ -908,7 +908,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 6
           }
@@ -944,7 +944,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 240
           }
@@ -1008,7 +1008,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/transitioning_alias.bzl",
             "line": 41
           }
@@ -1062,7 +1062,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 38
           }
@@ -1080,7 +1080,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 51
           }
@@ -1098,7 +1098,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 51
           }
@@ -1116,7 +1116,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 50
           }
@@ -1134,7 +1134,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 56
           }
@@ -1218,7 +1218,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
             "line": 24
           }
@@ -1272,7 +1272,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 23
           }
@@ -1295,7 +1295,7 @@
             "line": 26
           },
           {
-            "id": "unsound-return-statement",
+            "id": "unsound-return",
             "path": "with_cfg/private/select.bzl",
             "line": 26
           },
@@ -1338,7 +1338,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 20
           }
@@ -1356,7 +1356,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 146
           }
@@ -1410,7 +1410,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/setting.bzl",
             "line": 105
           }
@@ -1428,7 +1428,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/setting.bzl",
             "line": 100
           }
@@ -1482,7 +1482,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 203
           }
@@ -1500,7 +1500,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
             "line": 177
           }
@@ -1518,7 +1518,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/utils.bzl",
             "line": 13
           }
@@ -1569,7 +1569,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 57
           }
@@ -1587,7 +1587,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 52
           }
@@ -1605,7 +1605,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 59
           }
@@ -1623,7 +1623,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 46
           }
@@ -1684,7 +1684,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "private/parse.bzl",
             "line": 15
           }
@@ -1765,7 +1765,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "lib/paths.bzl",
             "line": 36
           }
@@ -1859,7 +1859,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "rules/directory/private/paths.bzl",
             "line": 58
           }
@@ -1918,7 +1918,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "lib/sty_type_probe.bzl",
             "line": 5
           }
@@ -1953,7 +1953,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "lib/apple_support.bzl",
             "line": 199
           }
@@ -1971,7 +1971,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "lib/apple_support.bzl",
             "line": 617
           }
@@ -2070,7 +2070,7 @@
             "line": 290
           },
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "lib/apple_support.bzl",
             "line": 289
           }
@@ -2270,7 +2270,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "defs.bzl",
             "line": 58
           }
@@ -2715,7 +2715,7 @@
             "line": 7
           },
           {
-            "id": "unresolved-attribute",
+            "id": "missing-attribute",
             "path": "cc/__sty_corpus__.bzl",
             "line": 9
           },
@@ -2756,7 +2756,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "cc/cc_toolchain_config_lib.bzl",
             "line": 114
           }
@@ -2914,7 +2914,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "rs/private/select_utils.bzl",
             "line": 22
           }
@@ -2932,7 +2932,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "rs/private/all_crate_deps.bzl",
             "line": 67
           }
@@ -2950,7 +2950,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "rs/private/all_crate_deps.bzl",
             "line": 7
           },
@@ -3094,7 +3094,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "runfiles_group/private/lib/content.bzl",
             "line": 58
           }
@@ -3148,7 +3148,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "runfiles_group/private/lib/names.bzl",
             "line": 25
           }
@@ -3198,12 +3198,12 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "runfiles_group/__sty_corpus__.bzl",
             "line": 5
           },
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "runfiles_group/__sty_corpus__.bzl",
             "line": 9
           }
@@ -3221,7 +3221,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "runfiles_group/private/lib/partial.bzl",
             "line": 11
           }
@@ -3239,7 +3239,7 @@
         ],
         "expected": [
           {
-            "id": "invalid-return-type",
+            "id": "invalid-explicit-return",
             "path": "runfiles_group/private/lib/resolve.bzl",
             "line": 118
           }

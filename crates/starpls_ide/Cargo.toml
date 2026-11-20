@@ -28,7 +28,7 @@ starpls_common = { path = "../starpls_common" }
 starpls_hir = { path = "../starpls_hir" }
 starpls_syntax = { path = "../starpls_syntax" }
 starpls_test_util = { path = "../starpls_test_util" }
-zip = { version = "8.0", default-features = false }
+zip = { version = "9.5.1", default-features = false }
 
 [dev-dependencies]
 expect-test = "1.5.0"

@@ -685,7 +685,7 @@ element = values.pop()
             ("compared", "bool"),
             ("found", "int | Literal[\"missing\"]"),
             ("copied", "dict[str | int, str | int]"),
-            ("copied_keywords", "dict[str | int, str | int]"),
+            ("copied_keywords", "dict[str | int, int | str]"),
             ("mixed_keys", "dict[str | int, int]"),
             ("element", "int"),
         ] {
@@ -778,13 +778,13 @@ def string_is_not_a_collection():
         assert_eq!(
             actual,
             [
-                ("invalid-return-type", 21),
-                ("invalid-return-type", 25),
-                ("invalid-return-type", 29),
-                ("invalid-return-type", 33),
-                ("unresolved-attribute", 37),
+                ("invalid-explicit-return", 21),
+                ("invalid-explicit-return", 25),
+                ("invalid-explicit-return", 29),
+                ("invalid-explicit-return", 33),
+                ("missing-attribute", 37),
                 ("invalid-argument-type", 41),
-                ("invalid-return-type", 45),
+                ("invalid-explicit-return", 45),
             ],
             "{diagnostics:?}",
         );
@@ -860,7 +860,7 @@ list_values(["wrong"])
         assert_eq!(
             actual,
             [
-                ("invalid-return-type", 17),
+                ("invalid-explicit-return", 17),
                 ("invalid-argument-type", 33),
                 ("invalid-argument-type", 34),
             ],
@@ -969,9 +969,9 @@ def unfiltered(source, keys):
             [
                 ("invalid-assignment", "result[1] = \"wrong\""),
                 ("invalid-assignment", "values[1] = 42"),
-                ("invalid-return-type", "return values"),
+                ("invalid-explicit-return", "return values"),
                 ("invalid-assignment", "copied[1] = \"wrong\""),
-                ("invalid-return-type", "return readonly"),
+                ("invalid-explicit-return", "return readonly"),
                 ("no-matching-overload", "target.update(source_bad)"),
                 (
                     "no-matching-overload",
@@ -1030,7 +1030,7 @@ def wrong(config):
         assert_eq!(
             actual,
             [(
-                "invalid-return-type",
+                "invalid-explicit-return",
                 "config.get(\"source\", {\"index\": 42}).get(\"index\")"
             )],
         );

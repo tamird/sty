@@ -985,7 +985,7 @@ def Initialized(value: str, count: int = ...) -> record[{"value": str, "count": 
             "explicit-any",
             "non-static-type",
             "unsound-assignment",
-            "unsound-return-statement",
+            "unsound-return",
         ]));
         let diagnostics = analysis
             .snapshot()

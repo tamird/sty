@@ -305,7 +305,7 @@ mod tests {
                 Some("invalid-argument-type"),
             ),
             ("return callback(42)", "", Some("invalid-argument-type")),
-            ("return 42", "", Some("invalid-return-type")),
+            ("return 42", "", Some("invalid-explicit-return")),
         ] {
             analysis.update_file(file, format!("{signature}    {body}\n{call}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -370,7 +370,7 @@ consume(items[0]["name"])
                 "configure({'flag': 'other'}, True, -1)",
                 Some("invalid-argument-type"),
             ),
-            ("return 'ordinary'", "", Some("invalid-return-type")),
+            ("return 'ordinary'", "", Some("invalid-explicit-return")),
         ] {
             analysis.update_file(file, format!("{signature}    {body}\n{call}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();

@@ -19,8 +19,11 @@ use clap::Args;
 use clap::ValueEnum;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
+use ruff_db::diagnostic::render::FullRenderer;
+use ruff_db::diagnostic::render::JsonLinesRenderer;
+use ruff_db::diagnostic::render::JunitRenderer;
+use ruff_db::diagnostic::render::Renderer as _;
 use ruff_db::diagnostic::Diagnostic;
-use ruff_db::diagnostic::DiagnosticFormat;
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::Serialize;
 use starpls_bazel::client::BazelCLI;
@@ -144,9 +147,28 @@ impl OutputFormat {
         match self {
             Self::Full => config.color(true),
             // The canonical renderer otherwise reports every severity as error.
-            Self::JsonLines => config.format(DiagnosticFormat::JsonLines).preview(true),
-            Self::Junit => config.format(DiagnosticFormat::Junit).preview(true),
+            Self::JsonLines => config.preview(true),
+            Self::Junit => config.preview(true),
         }
+    }
+
+    fn render(
+        self,
+        snapshot: &AnalysisSnapshot,
+        diagnostics: &[Diagnostic],
+        config: &DisplayDiagnosticConfig,
+    ) -> starpls_ide::Cancellable<String> {
+        snapshot.render_diagnostics(|resolver| match self {
+            Self::Full => FullRenderer::new(resolver, config)
+                .display(diagnostics)
+                .to_string(),
+            Self::JsonLines => JsonLinesRenderer::new(resolver, config)
+                .display(diagnostics)
+                .to_string(),
+            Self::Junit => JunitRenderer::new(resolver, config)
+                .display(diagnostics)
+                .to_string(),
+        })
     }
 }
 
@@ -310,7 +332,7 @@ mod tests {
             assert_eq!(result.ok(), expected);
             if expected.is_some() {
                 let diagnostic: serde_json::Value = serde_json::from_slice(&diagnostics).unwrap();
-                assert_eq!(diagnostic["name"], "invalid-return-type");
+                assert_eq!(diagnostic["name"], "invalid-explicit-return");
                 assert!(String::from_utf8(status)
                     .unwrap()
                     .contains("Errors: 1, warnings: 0, infos: 0"));
@@ -949,7 +971,7 @@ mod tests {
                 "implementation",
                 vec!["defs.bzl"],
                 "",
-                vec![("defs.bzl", "invalid-return-type")],
+                vec![("defs.bzl", "invalid-explicit-return")],
             ),
             (
                 "module",
@@ -1663,7 +1685,7 @@ mod tests {
                 .collect();
             actual.sort_unstable();
             let mut expected = vec![
-                ("invalid-return-type", "error"),
+                ("invalid-explicit-return", "error"),
                 ("missing-type-argument", missing_severity),
                 ("unsupported-operator", "error"),
             ];
@@ -1687,7 +1709,7 @@ mod tests {
     }
 
     #[test]
-    fn file_rule_overrides_check_the_source_of_a_companion() {
+    fn file_rule_overrides_resolve_aliases_on_companion_sources() {
         // A Bazel installation can expose the same source at two module paths.
         #[cfg(unix)]
         {
@@ -1696,6 +1718,7 @@ mod tests {
             std::fs::create_dir_all(root.join("nested")).unwrap();
             std::os::unix::fs::symlink("nested/defs.bzl", root.join("defs.bzl")).unwrap();
         }
+        // A legacy rule name must configure the canonical lint.
         let config = r#"
 [rules]
 missing-type-argument = "error"
@@ -1746,7 +1769,7 @@ missing-type-argument = "warn"
             ] {
                 let file = checker.bazel_info.workspace.join(path);
                 for (name, expected) in [
-                    ("invalid-return-type", bad_return),
+                    ("invalid-explicit-return", bad_return),
                     ("missing-type-argument", bare_list),
                 ] {
                     let d = diagnostics
@@ -2133,7 +2156,7 @@ missing-type-argument = "warn"
                             "sty.toml",
                             "[type-interfaces]\n'pipeline.bzl'='pipeline.bzli'\n\
                              [analysis]\nstrict-generic-narrowing=true\n\
-                             [rules]\nnon-static-type='error'\nunsound-assignment='error'\nunsound-return-statement='error'\n",
+                             [rules]\nnon-static-type='error'\nunsound-assignment='error'\nunsound-return='error'\n",
                         ),
                         (
                             "pipeline.bzl",
@@ -4300,7 +4323,7 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
         assert_eq!(status, std::process::ExitCode::FAILURE);
         let output = String::from_utf8(output).unwrap();
         assert!(
-            output.contains("new.bzl") && output.contains("invalid-return-type"),
+            output.contains("new.bzl") && output.contains("invalid-explicit-return"),
             "{output}"
         );
     }
@@ -4405,7 +4428,7 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
         assert!(!files[&link.join("named.MODULE.bazel")].is_empty());
         assert!(files[&link.join("defs.bzl")]
             .iter()
-            .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+            .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -4451,7 +4474,7 @@ def run[T](transform: Transformer, values: list[T]) -> Bundle[T]: ...
         assert!(files[&root.join("BUILD.bazel")].is_empty());
         assert!(files[&root.join("defs.bzl")]
             .iter()
-            .any(|diagnostic| diagnostic.id().as_str() == "invalid-return-type"));
+            .any(|diagnostic| diagnostic.id().as_str() == "invalid-explicit-return"));
     }
 
     #[cfg(unix)]
@@ -4726,13 +4749,13 @@ alias = untyped
                 [
                     ("caller.bzl", "invalid-argument-type"),
                     ("impl.bzl", "invalid-argument-type"),
+                    ("impl.bzl", "invalid-explicit-return"),
                     ("impl.bzl", "invalid-function-interface"),
                     ("impl.bzl", "invalid-function-interface"),
-                    ("impl.bzl", "invalid-return-type"),
                     ("impl.bzl", "invalid-value-interface"),
                     ("impl.bzl", "invalid-value-interface"),
                     ("impl.bzl", "invalid-value-interface"),
-                    ("impl.bzl", "unsound-return-statement"),
+                    ("impl.bzl", "unsound-return"),
                 ],
                 "local={local} all={all} explicit={explicit}: {diagnostics:?}"
             );
@@ -6268,6 +6291,7 @@ impl Checker {
             checked.insert(file);
             for diagnostic in &diagnostics {
                 match diagnostic.severity() {
+                    Severity::Hint => counts.infos += 1,
                     Severity::Info => counts.infos += 1,
                     Severity::Warning => counts.warnings += 1,
                     Severity::Error => counts.errors += 1,
@@ -6275,8 +6299,13 @@ impl Checker {
                 }
             }
             match self.output_format {
-                OutputFormat::Full | OutputFormat::JsonLines => {
-                    let rendered = snapshot.render_diagnostics(&diagnostics, &config)?;
+                OutputFormat::Full => {
+                    let rendered = OutputFormat::Full.render(&snapshot, &diagnostics, &config)?;
+                    write!(output, "{rendered}")?;
+                }
+                OutputFormat::JsonLines => {
+                    let rendered =
+                        OutputFormat::JsonLines.render(&snapshot, &diagnostics, &config)?;
                     write!(output, "{rendered}")?;
                 }
                 OutputFormat::Junit => {
@@ -6287,8 +6316,11 @@ impl Checker {
                         .partition(|d| matches!(d.severity(), Severity::Error | Severity::Fatal));
                     junit_failures.extend(failures);
                     if !notices.is_empty() {
-                        let rendered = snapshot
-                            .render_diagnostics(&notices, &DisplayDiagnosticConfig::new("sty"))?;
+                        let rendered = OutputFormat::Full.render(
+                            &snapshot,
+                            &notices,
+                            &DisplayDiagnosticConfig::new("sty"),
+                        )?;
                         write!(stderr, "{rendered}")?;
                     }
                 }
@@ -6315,13 +6347,16 @@ impl Checker {
             writer.flush()?;
         }
         if report.complete && matches!(self.output_format, OutputFormat::Junit) {
-            let rendered = snapshot.render_diagnostics(&junit_failures, &config)?;
+            let rendered = self
+                .output_format
+                .render(&snapshot, &junit_failures, &config)?;
             write!(output, "{rendered}")?;
             output.flush()?;
         }
         let status: &mut dyn Write = match self.output_format {
             OutputFormat::Full => &mut *output,
-            OutputFormat::JsonLines | OutputFormat::Junit => &mut *stderr,
+            OutputFormat::JsonLines => &mut *stderr,
+            OutputFormat::Junit => &mut *stderr,
         };
         writeln!(
             status,

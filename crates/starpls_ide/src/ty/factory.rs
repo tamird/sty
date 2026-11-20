@@ -3710,16 +3710,16 @@ def inspect(ctx: {host}, allow: bool, checksum: str, options: dict[{{'allow_fail
                 for (extra, expected) in [
                     ("text(result.success)", "invalid-argument-type"),
                     ("text(result.sha256)", "possibly-missing-attribute"),
-                    ("result.missing", "unresolved-attribute"),
+                    ("result.missing", "missing-attribute"),
                     ("result.size_bytes", "possibly-missing-attribute"),
-                    ("unpacked.integrity", "unresolved-attribute"),
+                    ("unpacked.integrity", "missing-union-attribute"),
                     (
                         "ctx.METHOD(url='https://example.com', integrity='sha384-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA').sha256",
-                        "unresolved-attribute",
+                        "missing-attribute",
                     ),
                     (
                         "failed = ctx.METHOD(url='https://example.com', allow_fail=True)\n    if not failed.success:\n        failed.integrity",
-                        "unresolved-attribute",
+                        "missing-attribute",
                     ),
                     (
                         "ctx.METHOD(url='https://example.com', allow_fail=42)",
@@ -3773,18 +3773,24 @@ def inspect(ctx: repository_ctx, allow: bool, block: bool) -> None:
         let file = fixture.main_file();
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        for extra in [
-            "pending.integrity",
-            "pending.wait().sha256",
-            "ctx.download(url='https://example.com').wait",
-            "ctx.download(url='https://example.com', block=block).integrity",
+        for (extra, expected) in [
+            ("pending.integrity", "missing-attribute"),
+            ("pending.wait().sha256", "missing-attribute"),
+            (
+                "ctx.download(url='https://example.com').wait",
+                "missing-attribute",
+            ),
+            (
+                "ctx.download(url='https://example.com', block=block).integrity",
+                "missing-union-attribute",
+            ),
         ] {
             analysis.update_file(file, format!("{source}    {extra}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{extra}: {diagnostics:?}");
             };
-            assert_eq!(diagnostic.id().as_str(), "unresolved-attribute", "{extra}");
+            assert_eq!(diagnostic.id().as_str(), expected, "{extra}");
             assert!(diagnostic.range().unwrap().start().to_usize() >= source.len());
         }
     }
@@ -3813,7 +3819,7 @@ def inspect(ctx: repository_ctx, allow: bool, block: bool) -> None:
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostic.id().as_str(), "invalid-explicit-return");
     }
 
     #[test]

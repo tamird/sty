@@ -1869,10 +1869,10 @@ with_target = subrule(implementation = shared, attrs = {
         assert_eq!(
             actual,
             [
-                ("unresolved-attribute", "_file.label"),
-                ("unresolved-attribute", "context.attr"),
+                ("missing-attribute", "_file.label"),
+                ("missing-attribute", "context.attr"),
                 ("invalid-argument-type", "_maybe"),
-                ("unresolved-attribute", "_both.path"),
+                ("missing-union-attribute", "_both.path"),
             ]
         );
     }
@@ -1888,7 +1888,7 @@ with_target = subrule(implementation = shared, attrs = {
         let [error] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(error.id().as_str(), "unresolved-attribute");
+        assert_eq!(error.id().as_str(), "missing-attribute");
         assert_eq!(
             &source[error.primary_span().unwrap().range().unwrap()],
             "ctx.fragments.apple.missing_member"
@@ -1949,11 +1949,11 @@ invalid = rule(implementation = invalid_fragment, fragments = ["File"])
             actual,
             [
                 (
-                    "unresolved-attribute",
+                    "missing-attribute",
                     "context.fragments.apple.missing_member"
                 ),
-                ("unresolved-attribute", "context.fragments.apple"),
-                ("unresolved-attribute", "context.fragments.File"),
+                ("missing-attribute", "context.fragments.apple"),
+                ("missing-attribute", "context.fragments.File"),
             ]
         );
     }
@@ -2000,7 +2000,7 @@ def register_schema(callback: Callable[[module_ctx], extension_metadata | None],
                 "module_extension(implementation, os_dependent='yes')",
                 "invalid-argument-type",
             ),
-            ("extension()", "call-non-callable"),
+            ("extension()", "not-callable"),
         ] {
             analysis.update_file(file, format!("{source}{extra}\n"));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -2088,10 +2088,10 @@ extension = module_extension(
                 ("invalid-argument-type", "module"),
                 ("invalid-argument-type", "tag.optional"),
                 ("invalid-argument-type", "\"bad\""),
-                ("unresolved-attribute", "tag.missing"),
+                ("missing-attribute", "tag.missing"),
                 ("invalid-argument-type", "tag"),
-                ("unresolved-attribute", "tag.patches"),
-                ("unresolved-attribute", "module.tags.missing"),
+                ("missing-attribute", "tag.patches"),
+                ("missing-attribute", "module.tags.missing"),
             ]
         );
     }
@@ -2119,7 +2119,7 @@ opaque_extension = module_extension(opaque, tag_classes={"opaque": opaque_tag()}
             .unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         let diagnostic = &diagnostics[0];
-        assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+        assert_eq!(diagnostic.id().as_str(), "missing-union-attribute");
         let range = diagnostic.range().unwrap();
         assert_eq!(
             &source[usize::from(range.start())..usize::from(range.end())],
@@ -2279,7 +2279,7 @@ example = rule(implementation=implementation, attrs={"known": attr.string()} | e
             (
                 "print(tool, name, absent)",
                 "print(tool, name, absent)\n    ctx.attr.invented",
-                "unresolved-attribute",
+                "missing-attribute",
             ),
         ] {
             analysis.update_file(fixture.main_file(), source.replace(from, to));
@@ -2485,7 +2485,7 @@ registered = rule(**options)
         assert!(
             diagnostics
                 .iter()
-                .any(|d| d.id().as_str() == "unresolved-attribute"),
+                .any(|d| d.id().as_str() == "missing-union-attribute"),
             "{diagnostics:?}"
         );
 
@@ -2634,7 +2634,7 @@ example = rule(implementation=implementation, attrs={
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{expression}: {diagnostics:?}");
             };
-            assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+            assert_eq!(diagnostic.id().as_str(), "missing-union-attribute");
             assert!(diagnostic.concise_message().to_string().contains("None"));
             let range = diagnostic.range().unwrap();
             assert_eq!(
@@ -2701,7 +2701,7 @@ example = rule(implementation=implementation, attrs={
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{statement}: {diagnostics:?}");
             };
-            assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+            assert_eq!(diagnostic.id().as_str(), "missing-union-attribute");
             assert!(diagnostic.concise_message().to_string().contains("None"));
             assert_eq!(&changed[diagnostic.range().unwrap()], expression);
         }
@@ -2733,7 +2733,7 @@ example = rule(implementation=implementation, attrs={
             assert_eq!(diagnostics.len(), errors, "{option}: {diagnostics:?}");
             assert!(
                 diagnostics.iter().all(|diagnostic| {
-                    diagnostic.id().as_str() == "unresolved-attribute"
+                    diagnostic.id().as_str() == "missing-attribute"
                         && changed[diagnostic.range().unwrap()].starts_with(expression)
                 }),
                 "{option}: {diagnostics:?}"
@@ -2939,7 +2939,7 @@ binary = rule(implementation=implementation, attrs={
         assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
         assert!(diagnostics
             .iter()
-            .all(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute"));
+            .all(|diagnostic| diagnostic.id().as_str() == "missing-attribute"));
     }
 
     #[test]
@@ -2972,7 +2972,7 @@ toolchain = rule(implementation=implementation, attrs={
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "unresolved-attribute");
+        assert_eq!(diagnostics[0].id().as_str(), "missing-attribute");
     }
 
     #[test]
@@ -3109,7 +3109,7 @@ example(name="dynamic", mode=dynamic())
             }
             assert_eq!(diagnostics.len(), errors.len(), "{diagnostics:?}");
             for (diagnostic, expression) in diagnostics.into_iter().zip(errors) {
-                assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+                assert_eq!(diagnostic.id().as_str(), "missing-attribute");
                 assert_eq!(
                     usize::from(diagnostic.range().unwrap().start()),
                     edited.find(expression).unwrap(),
@@ -3485,7 +3485,7 @@ native.inventory(package_metadata=["//:metadata"], applicable_licenses=[Label("/
             assert!(
                 diagnostics
                     .iter()
-                    .any(|diagnostic| diagnostic.id().as_str() == "unresolved-attribute"),
+                    .any(|diagnostic| diagnostic.id().as_str() == "missing-attribute"),
                 "{field}: {diagnostics:?}"
             );
         }
@@ -3555,7 +3555,7 @@ target(name="bad", outs=42)
                 errors,
                 [
                     ("invalid-argument-type", "outs=42"),
-                    ("unresolved-attribute", "ctx.outputs.missing"),
+                    ("missing-attribute", "ctx.outputs.missing"),
                 ],
                 "{option}: {diagnostics:?}",
             );
@@ -3803,7 +3803,7 @@ output_rule = make(files_impl, {}, outputs={"out": "%{name}.txt"})
             analysis.update_file(file, source.clone());
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
             let result: Vec<_> = diagnostics.iter().map(|d| (d.id().as_str(), &source[d.primary_span().unwrap().range().unwrap()])).collect();
-            assert_eq!(result, [("unresolved-attribute", "ctx.fragments.apple.missing_member")], "{producer}");
+            assert_eq!(result, [("missing-attribute", "ctx.fragments.apple.missing_member")], "{producer}");
         }
     }
 
@@ -3828,7 +3828,7 @@ output_rule = make(files_impl, {}, outputs={"out": "%{name}.txt"})
             .collect();
         assert_eq!(
             result,
-            [("unresolved-attribute", "ctx.fragments.apple.missing_member")]
+            [("missing-attribute", "ctx.fragments.apple.missing_member")]
         );
     }
 
@@ -4251,7 +4251,11 @@ example = aspect(implementation=implementation)
                 "invalid-assignment",
             ),
             ("mnemonic: str", "mnemonic: int", "invalid-assignment"),
-            ("return []", "return subject.actions", "invalid-return-type"),
+            (
+                "return []",
+                "return subject.actions",
+                "invalid-explicit-return",
+            ),
         ] {
             analysis.update_file(file, source.replace(from, to));
             let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
@@ -4270,7 +4274,7 @@ example = aspect(implementation=implementation)
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{source}: {diagnostics:?}");
             };
-            assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+            assert_eq!(diagnostic.id().as_str(), "missing-attribute");
         }
     }
 
@@ -4431,7 +4435,7 @@ def read(context: ctx[object, struct[{"enabled": bool}, ...]]) -> bool: ...
                 .collect();
             assert_eq!(
                 ids,
-                ["invalid-argument-type", "invalid-return-type"],
+                ["invalid-argument-type", "invalid-explicit-return"],
                 "{diagnostics:?}"
             );
         }
@@ -4723,7 +4727,7 @@ fake = rule(implementation=implementation, attrs=struct(items=lambda: []))
                     .iter()
                     .map(|diagnostic| diagnostic.id().as_str())
                     .collect::<Vec<_>>(),
-                ["unresolved-attribute"],
+                ["missing-attribute"],
                 "{attributes}: {diagnostics:?}"
             );
         }
@@ -4819,7 +4823,7 @@ def deferred() -> object:
                 .iter()
                 .map(|diagnostic| diagnostic.id().as_str())
                 .collect::<Vec<_>>(),
-            ["unresolved-attribute"],
+            ["missing-attribute"],
             "{diagnostics:?}",
         );
         let source = "def rule(implementation: Callable[[str], object]) -> None: pass\nrule(implementation=lambda ctx: ctx.attr.enabled)\n";
@@ -4830,7 +4834,7 @@ def deferred() -> object:
                 .iter()
                 .map(|diagnostic| diagnostic.id().as_str())
                 .collect::<Vec<_>>(),
-            ["unresolved-attribute"],
+            ["missing-attribute"],
             "{diagnostics:?}",
         );
     }
@@ -5165,7 +5169,7 @@ $0"#;
         enable_context(&mut analysis);
         analysis.set_rules(
             crate::DiagnosticRules::from_settings(
-                &[("unsound-return-statement".into(), "error".into())].into(),
+                &[("unsound-return".into(), "error".into())].into(),
             )
             .unwrap(),
         );
@@ -5179,7 +5183,7 @@ $0"#;
         );
         let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].id().as_str(), "invalid-return-type");
+        assert_eq!(diagnostics[0].id().as_str(), "invalid-explicit-return");
     }
 
     #[test]
@@ -5357,7 +5361,7 @@ example = macro(implementation=implementation, attrs={{
                 let diagnostics = snapshot.diagnostics(file).unwrap();
                 assert_eq!(diagnostics.len(), errors, "{diagnostics:?}");
                 if let Some(diagnostic) = diagnostics.first() {
-                    assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+                    assert_eq!(diagnostic.id().as_str(), "missing-attribute");
                 }
             }
         }
@@ -5469,7 +5473,7 @@ example = rule(implementation=implementation, attrs={
             let [diagnostic] = diagnostics.as_slice() else {
                 panic!("{expression}: {diagnostics:?}");
             };
-            assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+            assert_eq!(diagnostic.id().as_str(), "missing-union-attribute");
             assert_eq!(
                 &source[diagnostic.range().unwrap()],
                 expression,
@@ -5498,7 +5502,7 @@ example = rule(implementation=implementation, attrs={
                 let diagnostics = analysis.snapshot().diagnostics(file).unwrap();
                 assert_eq!(diagnostics.len(), errors, "{options}: {diagnostics:?}");
                 if let Some(diagnostic) = diagnostics.first() {
-                    assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+                    assert_eq!(diagnostic.id().as_str(), "missing-union-attribute");
                     assert!(diagnostic.concise_message().to_string().contains("None"));
                 }
             }
@@ -5630,7 +5634,7 @@ example = repository_rule(implementation=implementation, attrs={
         let [diagnostic] = diagnostics.as_slice() else {
             panic!("{diagnostics:?}");
         };
-        assert_eq!(diagnostic.id().as_str(), "unresolved-attribute");
+        assert_eq!(diagnostic.id().as_str(), "missing-union-attribute");
         assert_eq!(
             usize::from(diagnostic.range().unwrap().start()),
             source.find("ctx.attr.optional.name").unwrap()
