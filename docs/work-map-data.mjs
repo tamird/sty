@@ -5,17 +5,17 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-20T19:19:25Z';
+export const reviewedAt = '2026-11-20T21:27:13Z';
 
 export const projects = [
- {name:"Bazel Skylib",nextAction:"Follow the refreshed draft",repo:"bazelbuild/bazel-skylib",number:641,head:"dd3eed3ebf238c1d6443361a9d83f8ddac5f03ee",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"cd09583e qualification: 88 root files and five Gazelle files, zero errors.",followup:"Toolchain guard formatting is corrected; follow the published-head CI.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/f7b0ad11-e88d-4024-9fb9-9803f326d042"}]},
- {name:"rules_cc",nextAction:"Follow refreshed-head CI",repo:"bazelbuild/rules_cc",number:940,head:"cb7a1279ec61ff573df831c6746147bdf44eac19",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"cd09583e qualification: 134 strict files, zero errors; 285 advisory files retain 37,444 errors.",followup:"Published checker refresh. Related #960 closed unmerged; #967 remains open.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/d07b617b-0598-4c9d-86ad-d0896ed2a462"}]},
- {name:"hermetic-llvm",nextAction:"Type the rules_cc example",repo:"hermeticbuild/hermetic-llvm",number:835,head:"53f3ce81e92dd1bffe6100797620b45740795ffd",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"cd09583e qualification: 70 root files pass; the rules_cc example retains 108 errors. Five advisory examples complete; the final required proposed-contracts check is skipped after failure.",followup:"Repository-rule recovery is fixed. Repair the rules_cc example before publishing; native exec_test and buildifier pass.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/538261c0-3763-4713-92f0-6c8e2b1bbce2"}]},
- {name:"apple_support",nextAction:"Type the lipo toolchain lookup",repo:"bazelbuild/apple_support",number:668,head:"6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"cd09583e qualification: 46 strict files, two errors.",followup:"Lookup now returns ToolchainInfo | None. Its lipo_info field still needs a verified toolchain contract before publishing.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/231c2515-d1c4-4966-93fa-4277ad8798f2"}]},
- {name:"with_cfg.bzl",nextAction:"Repair comprehension and callback checking",repo:"fmeum/with_cfg.bzl",number:269,head:"52365fcdb3cf36149ee0937fb0b812968e4cb56f",draft:true,blocked:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"cd09583e qualification: 20 root files with two errors; two example files pass. Native suites pass in fastbuild and opt.",followup:"Dependency callback return types are corrected. Dictionary comprehension domains and constrained generic callback composition still block publication.",dependencies:[],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/b4823f17-a1c2-4da4-a6b6-4ee98a524a50"}]},
- {name:"rules_runfiles_group",nextAction:"Follow refreshed-head CI",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"d67aadeb6b5c74586187090440f0680055aca952",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"cd09583e qualification: 32 root files and 37 example files, zero strict errors. Complete advisory checks retain 646 root and 355 example errors.",followup:"Published checker refresh; follow native matrix and sty CI.",dependencies:[],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/231c2515-d1c4-4966-93fa-4277ad8798f2"}]},
- {name:"rules_rs",nextAction:"Repair typing and canonical formatting",repo:"hermeticbuild/rules_rs",number:306,head:"8c0866a3c27e7cad86b55cf09392ea44f34444a0",draft:true,blocked:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"cd09583e qualification: 36 root files with 29 errors; four fixture files pass. Canonical formatting has no diffs; 148 inherited lint warnings retain exit 1.",followup:"Remaining errors: 22 empty getattr defaults, five recursive cfg values and two saved-mask narrowings. Checker fixes are under qualification.",dependencies:[['Failed runner log','https://github.com/hermeticbuild/rules_rs/actions/runs/41667742544/job/126028278197']],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/ecf3e43a-6977-4676-93a2-71aae9b9802c"}]},
- {name:"bazel_features",nextAction:"Await maintainer approval for CI",repo:"bazel-contrib/bazel_features",number:158,head:"f125ddab72c0826f78f79b1fea9c5652ed177afe",draft:false,summary:"Feature compatibility declarations checked against implementations.",checks:"cd09583e qualification: eleven strict files, zero errors. The advisory BCR check completes with 22 errors; canonical native tests pass.",followup:"Remote strict and native checks pass. GitHub workflows require maintainer approval; Tamir has read-only upstream access.",dependencies:[],evidence:[{"label": "Latest canonical workflow qualification", "url": "https://app.buildbuddy.io/invocation/97b4a449-9b42-43b8-97aa-a800f89026af"}, {"label":"CI awaiting maintainer approval","url":"https://github.com/bazel-contrib/bazel_features/actions/runs/44800640617"}, {"label":"Sty CI awaiting maintainer approval","url":"https://github.com/bazel-contrib/bazel_features/actions/runs/44800640585"}]}
+ {name:"Bazel Skylib",nextAction:"Publish prepared checker pin",repo:"bazelbuild/bazel-skylib",number:641,head:"dd3eed3ebf238c1d6443361a9d83f8ddac5f03ee",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"1ec32e3 prepared qualification: 88 root files and five Gazelle files, zero errors.",followup:"Tested update awaits the SSH key.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Prepared 1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/faccc3f0-30e0-4a7a-9491-cb0aa1408b5b"}]},
+ {name:"rules_cc",nextAction:"Publish prepared checker pin",repo:"bazelbuild/rules_cc",number:940,head:"cb7a1279ec61ff573df831c6746147bdf44eac19",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"1ec32e3 prepared qualification: 134 strict files, zero errors; 285 advisory files retain 37,444 errors.",followup:"Tested update awaits the SSH key.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "Prepared 1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/5d1c4b4b-c64c-484c-9afc-58265eb050cc"}]},
+ {name:"hermetic-llvm",nextAction:"Prove released dependency contracts",repo:"hermeticbuild/hermetic-llvm",number:835,head:"53f3ce81e92dd1bffe6100797620b45740795ffd",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"1ec32e3 qualification: 70 root files pass; the rules_cc example has 31 errors, down from 108. Five advisory checks complete; the final required check is skipped. Native execution tests and formatter pass.",followup:"Remaining: 25 Skylib API errors, four cc_library forwarding errors and two sh_binary autoload errors. Unproven dependency stubs were rejected.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Prepared 1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/04062f8a-3819-486a-b64e-fa0d7ac7a3cf"}]},
+ {name:"apple_support",nextAction:"Prove the lipo toolchain contract",repo:"bazelbuild/apple_support",number:668,head:"6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"1ec32e3 qualification: 46 strict files, two errors.",followup:"ToolchainInfo | None is precise, but lipo_info needs a contract checked against selected implementations.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Prepared 1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/3849b65e-95b6-4129-ae9b-065049f2416c"}]},
+ {name:"with_cfg.bzl",nextAction:"Repair dictionary admission and callback inference",repo:"fmeum/with_cfg.bzl",number:269,head:"52365fcdb3cf36149ee0937fb0b812968e4cb56f",draft:true,blocked:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"1ec32e3 qualification: 20 root files with two errors; two example files pass. Native suites pass in fastbuild and opt.",followup:"Dictionary-union admission and a fork-only constrained callback rejection remain. The callback reproduction passes on official ty.",dependencies:[],evidence:[{"label": "Prepared 1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/9102e48f-c19f-479e-882c-1a9e583c098f"}]},
+ {name:"rules_runfiles_group",nextAction:"Publish prepared checker pin",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"d67aadeb6b5c74586187090440f0680055aca952",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"1ec32e3 prepared qualification: 32 root and 37 example files, zero strict errors. Advisory checks retain 646 root and 344 example errors.",followup:"Tested update awaits the SSH key.",dependencies:[],evidence:[{"label": "Prepared 1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/3849b65e-95b6-4129-ae9b-065049f2416c"}]},
+ {name:"rules_rs",nextAction:"Publish the prepared draft refresh",repo:"hermeticbuild/rules_rs",number:306,head:"8c0866a3c27e7cad86b55cf09392ea44f34444a0",draft:true,blocked:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"1ec32e3 qualification: 36 root and four fixture files, zero errors; the previous 29 errors are gone. Both retained Cargo tests pass. Formatting has no diffs; 148 inherited lint warnings retain exit 1.",followup:"Rebased source and generated contracts are reviewed. Two unnecessary tests were removed. Publication awaits the SSH key.",dependencies:[['Failed runner log','https://github.com/hermeticbuild/rules_rs/actions/runs/41667742544/job/126028278197']],evidence:[{"label": "Prepared 1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/30f857e4-0829-49f4-a61d-e95cb80a1b89"}]},
+ {name:"bazel_features",nextAction:"Publish prepared checker pin",repo:"bazel-contrib/bazel_features",number:158,head:"f125ddab72c0826f78f79b1fea9c5652ed177afe",draft:false,summary:"Feature compatibility declarations checked against implementations.",checks:"1ec32e3 prepared qualification: eleven strict files, zero errors. BCR advisory check retains 22 errors; native tests pass.",followup:"Tested update awaits the SSH key. Published-head CI also awaits maintainer approval.",dependencies:[],evidence:[{"label": "Prepared 1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/faccc3f0-30e0-4a7a-9491-cb0aa1408b5b"}, {"label": "Published-head CI awaits maintainer approval", "url": "https://github.com/bazel-contrib/bazel_features/actions/runs/44800640617"}, {"label": "Published-head Sty CI awaits maintainer approval", "url": "https://github.com/bazel-contrib/bazel_features/actions/runs/44800640585"}]}
 ];
 
 export const goals = [
@@ -1073,7 +1073,7 @@ const reviewedTyWork = [
         "url": "https://github.com/astral-sh/ruff/pull/30561"
       }
     ],
-    "nextAction": "Qualify the LLVM and with_cfg workflows against the restored Starlark contract. Isolate Python-meaningful body-domain regressions on current ty, preserving bad callback data, defaults, unsupported bodies and ordinary declared-type recovery before requesting Tamir review."
+    "nextAction": "Repair with_cfg dictionary-union admission and the fork-only generic callback rejection; compare the remaining body-domain APIs with upstream."
   },
   {
     "id": "ty-saved-tag-narrowing",
@@ -1112,7 +1112,7 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Extract Python-meaningful regressions; qualify narrowing stability across mutation and keep Starlark tag interpretation in the host adapter."
+    "nextAction": "Qualify exact immutable truthiness on current upstream, then separate Python flow improvements from Starlark type() tags."
   },
   {
     "id": "ty-contextual-empty",
@@ -1647,20 +1647,20 @@ const reviewedTyWork = [
         "url": "https://github.com/tamird/ruff/blob/7ef19c19dfc64da53d2d2172e256630a6230a618/crates/ty_python_semantic/resources/mdtest/generics/legacy/functions.md#L6310"
       }
     ],
-    "nextAction": "Repair the four remaining community projects without weakening contracts: the LLVM rules_cc example, comprehension and callback contracts, toolchain fields and collection/type-declaration gaps. Publish each qualified refresh, reconcile the 31 failing Markdown fixtures, and extract the remaining general ty improvements. Both revised upstream proposals await Tamir review."
+    "nextAction": "Rebase the next qualified bundle onto official f31dd86f. Publish five prepared community updates when SSH is available; repair LLVM dependency contracts, with_cfg inference and Apple toolchain fields. Extract general ty improvements after upstream reproduction and Tamir review."
   }
 ];
 
 export const tyWork = [...reviewedTyWork, ...solverInventory.tasks];
 
 export const inventory = {
-  "pinnedFork": "d10bc8c773bffee1be039574aab09559870a7e3e",
+  "pinnedFork": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
   "forkBase": "36f64044cb7af6a6590426c776b66f8926130d87",
   "upstreamAudited": "d8c6e237e7657d4d6ddd96d91d341a5af19ba325",
-  "divergentCommits": 38,
-  "userAuthoredCommits": 38,
+  "divergentCommits": 42,
+  "userAuthoredCommits": 42,
   "upstreamAuthoredPicks": 0,
-  "status": "Qualified current default checker; four community PRs refreshed and four projects under repair.",
+  "status": "Qualified Sty 1ec32e3 / Ruff ec5ee469. Five PR updates are prepared; SSH blocks workflow pushes. Three projects need further repairs.",
   "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
   "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
   "sourceReviewComplete": false,
@@ -1671,7 +1671,7 @@ export const inventory = {
     "runtimePathsWithSourceRecords": 142,
     "solverHunksAttributed": 939,
     "solverReviewUnits": 169,
-    "forwardCandidate": "d10bc8c773bffee1be039574aab09559870a7e3e",
+    "forwardCandidate": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
     "forwardBase": "36f64044cb7af6a6590426c776b66f8926130d87",
     "url": "https://tamird.github.io/sty/ruff-source-audit.json",
     "qualified": false
@@ -1687,14 +1687,25 @@ export const inventory = {
     "upstreamAuthoredPicks": 12
   },
   "publishedRuffCheckpoint": {
-    "revision": "d10bc8c773bffee1be039574aab09559870a7e3e",
-    "sourceRevision": "d10bc8c773bffee1be039574aab09559870a7e3e",
-    "url": "https://github.com/tamird/ruff/commit/d10bc8c773bffee1be039574aab09559870a7e3e",
-    "selectedTestsURL": "https://app.buildbuddy.io/invocation/c5780435-68e4-4b20-b5b1-0bfd56ccaaf9",
-    "testScope": "Core 101, semantic 903 (35 ignored), IDE 1979, hooks, formatting and strict Clippy pass on the exact published source. The full default native Markdown run completed 539 actions: 507 fixtures pass, 31 fail, and inventory passes, using one compiled harness. Failed files are identical to f6c888b5; individual mismatch bodies have not been compared. Network-backed cases remain a separate gate.",
+    "revision": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
+    "sourceRevision": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
+    "url": "https://github.com/tamird/ruff/commit/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
+    "selectedTestsURL": "https://app.buildbuddy.io/invocation/bfa3fe5a-81e6-4b51-bdda-ef2572350c27",
+    "testScope": "Core 101, semantic 904 (35 ignored), IDE 1979, hooks, format and strict Clippy pass. Full Markdown: 507 fixtures pass, 31 fail, inventory passes. Thirty failure bodies match d10; getattr removes 20 mismatch lines. Network-backed cases remain separate.",
     "fullMarkdownQualified": false,
     "styIntegrationQualified": true,
     "markdownResults": {
+      "revision": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
+      "fixtures": 538,
+      "passed": 507,
+      "failed": 31,
+      "inventoryPassed": true,
+      "compiledHarnesses": 1,
+      "actionsCompleted": 539,
+      "url": "https://app.buildbuddy.io/invocation/30d2904a-f6bc-4f5d-a726-246ae20d76e9",
+      "historical": false
+    },
+    "previousMarkdownResults": {
       "revision": "d10bc8c773bffee1be039574aab09559870a7e3e",
       "fixtures": 538,
       "passed": 507,
@@ -1703,51 +1714,49 @@ export const inventory = {
       "compiledHarnesses": 1,
       "actionsCompleted": 539,
       "url": "https://app.buildbuddy.io/invocation/acc0a4e4-a9b3-4220-ad74-d30725e6d418",
-      "historical": false
-    },
-    "previousMarkdownResults": {
-      "revision": "f6c888b545d1f2aa79d441ea6020fa5e1aae442c",
-      "fixtures": 538,
-      "passed": 507,
-      "failed": 31,
-      "inventoryPassed": true,
-      "compiledHarnesses": 1,
-      "actionsCompleted": 539,
-      "url": "https://app.buildbuddy.io/invocation/3c51faa7-a6c4-436c-8b6e-3c0cace6d0f6",
       "historical": true
     }
   },
   "currentSty": {
-    "revision": "cd09583e01456e102fb9dad01eba6656e9e18e7e",
-    "url": "https://github.com/tamird/sty/commit/cd09583e01456e102fb9dad01eba6656e9e18e7e",
-    "ruffRevision": "d10bc8c773bffee1be039574aab09559870a7e3e",
-    "testScope": "All eight native Bazel targets and the optimized Linux executable pass with frozen locks and remote execution. Includes repository-rule dictionary snapshots, checked overload bodies, optional toolchain results and the unchanged nested provider-key negative.",
-    "testsURL": "https://app.buildbuddy.io/invocation/aabff585-557a-4c6b-b06f-436a895901c7",
-    "frozenBuildURL": "https://app.buildbuddy.io/invocation/f4226b18-3a13-4419-9243-f7a6d8be08d5",
+    "revision": "1ec32e3ef847d9086034792ed587ac659c6548f6",
+    "url": "https://github.com/tamird/sty/commit/1ec32e3ef847d9086034792ed587ac659c6548f6",
+    "ruffRevision": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
+    "testScope": "All eight native Bazel targets and the optimized Linux executable pass on RBE with frozen locks. Includes contextual defaults, recursive unpacking, comprehension body domains, stable truthiness and precise Action.argv.",
+    "testsURL": "https://app.buildbuddy.io/invocation/37e07d15-8e1c-4c82-9706-8aada39ec8a7",
+    "frozenBuildURL": "https://app.buildbuddy.io/invocation/6cc2bf12-7cdf-4eed-925b-33d5d97d0e78",
     "communityWorkflowExecutionsPlanned": 20,
     "communityRefreshPublished": false,
     "runtimeCorpusQualified": false,
     "fullRuffMarkdownQualified": false,
     "communityQualification": {
-      "revision": "cd09583e01456e102fb9dad01eba6656e9e18e7e",
+      "revision": "1ec32e3ef847d9086034792ed587ac659c6548f6",
       "planned": 20,
       "executed": 19,
-      "strictZeroErrorPasses": 9,
+      "strictZeroErrorPasses": 10,
       "advisoryCompletions": 6,
-      "failures": 4,
+      "failures": 3,
       "requiredSkipped": 1,
       "published": false,
-      "scope": "All twenty canonical workflow selections are accounted for on Sty cd09583e: nineteen executed, with nine complete nonempty strict passes, six advisory completions and four failures. The final required LLVM proposed-contracts check is skipped after its rules_cc example fails. Four project refreshes are published; four projects still need repairs.",
+      "scope": "20 selections: 10 strict passes, six advisory completions, three failures and one required LLVM skip. Five prepared PR updates await SSH; three projects need further repairs.",
       "assembledFromLatestProjectRuns": true,
-      "publishedProjects": [
+      "publishedProjects": [],
+      "remainingProjects": 8,
+      "historicalForCurrentSty": false,
+      "currentRevisionPending": false,
+      "readyProjects": [
         "bazel-skylib",
         "rules_cc",
         "rules_runfiles_group",
-        "bazel_features"
+        "bazel_features",
+        "rules_rs"
       ],
-      "remainingProjects": 4,
-      "historicalForCurrentSty": false,
-      "currentRevisionPending": false
+      "repairProjects": 3,
+      "publicationBlocker": "SSH agent refuses the key; HTTPS credentials cannot update workflows."
     }
+  },
+  "latestUpstream": {
+    "revision": "f31dd86f222f7d978a65cfc453eaf88f11456ed7",
+    "observedOn": "2026-11-20",
+    "rebasePending": true
   }
 };

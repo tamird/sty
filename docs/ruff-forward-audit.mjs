@@ -4,18 +4,18 @@ export const ruffForwardAudit = {
   "frozenBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
   "frozenCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
   "currentBase": "36f64044cb7af6a6590426c776b66f8926130d87",
-  "currentCandidate": "d10bc8c773bffee1be039574aab09559870a7e3e",
-  "rawManifestSHA256": "ecac4e24721ad0b272276b2ecc78f20896c1b2e88b2cac06b06cedf3a35cfc90",
-  "forwardPatchSHA256": "37b9e9e9eeb4905ce7a4fbb009dae4e96dcf1fad1ca91ec42990c9a18f9bf433",
+  "currentCandidate": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
+  "rawManifestSHA256": "373c973e047ed5a9a50260c49f478d194232f8f6ad079f3ecd5b7897133d420a",
+  "forwardPatchSHA256": "3c9e9e91e68db76fdd633db1bd5153ea66e548239f1009430eef9f8f07b0baa0",
   "upstreamPatchSHA256": "30b035d7c487f9a1f2ec59990f4eb2282043e14e80f37871611a324314bff361",
   "counts": {
-    "netPaths": 314,
-    "rustSourcePaths": 154,
-    "exactFrozenBlobPairs": 173,
-    "exactFrozenRustSourceBlobPairs": 111,
-    "changedRustSourcePaths": 43,
-    "forwardHunks": 233,
-    "forwardProducerFamilies": 13
+    "netPaths": 316,
+    "rustSourcePaths": 155,
+    "exactFrozenBlobPairs": 170,
+    "exactFrozenRustSourceBlobPairs": 109,
+    "changedRustSourcePaths": 46,
+    "forwardHunks": 299,
+    "forwardProducerFamilies": 17
   },
   "files": [
     {
@@ -32,7 +32,9 @@ export const ruffForwardAudit = {
           "newStart": 22,
           "sha256": "e6ff571500b4168726129ba454de8a99051b7b1e6f82e52f5699823432e2e980",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ruff_python_ast/src/lib.rs#L22"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ruff_python_ast/src/lib.rs#L22"
         }
       ]
     },
@@ -50,7 +52,9 @@ export const ruffForwardAudit = {
           "newStart": 605,
           "sha256": "6a80022fcab2c237246d02f27e8f34c765e188220259635dd8b3d30fefca06a8",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_ide/src/inlay_hints.rs#L605"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_ide/src/inlay_hints.rs#L605"
         }
       ]
     },
@@ -68,7 +72,9 @@ export const ruffForwardAudit = {
           "newStart": 262,
           "sha256": "adc8992998148ae1f001df6183836c5e2c910f251d56bd3dbc183a5abe4fdc90",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_core/src/ast_ids.rs#L262"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_core/src/ast_ids.rs#L262"
         }
       ]
     },
@@ -86,7 +92,9 @@ export const ruffForwardAudit = {
           "newStart": 2632,
           "sha256": "d35648d7ccb19945bfcdf2a223120abef9bdec6036e57d2fab96a314391a50d5",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_core/src/builder.rs#L2632"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_core/src/builder.rs#L2632"
         }
       ]
     },
@@ -104,7 +112,9 @@ export const ruffForwardAudit = {
           "newStart": 469,
           "sha256": "540651369da3cfcaf69d0f30680fb5f8ee489f40ee88cfa3110c1b9c8c34ff70",
           "classification": "tracked-mapping-after-arguments-snapshot",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_core/src/builder/dictionary_contents.rs#L469"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_core/src/builder/dictionary_contents.rs#L469"
         },
         {
           "anchor": "@@ -480,23 +491,6 @@ impl<'db, 'ast> SemanticIndexBuilder<'db, 'ast> {",
@@ -112,7 +122,9 @@ export const ruffForwardAudit = {
           "newStart": 491,
           "sha256": "168ef282c0bd3d36c9a20de30dc02f7b258ac4462e08a4906211981b00bc50ab",
           "classification": "tracked-mapping-after-arguments-snapshot",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_core/src/builder/dictionary_contents.rs#L491"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_core/src/builder/dictionary_contents.rs#L491"
         }
       ]
     },
@@ -130,7 +142,9 @@ export const ruffForwardAudit = {
           "newStart": 1074,
           "sha256": "39808df832fd2e3de7bd5bad79e74e35f72f2030a9be2c2e7c38ac3cf3d9cb05",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_core/src/definition.rs#L1074"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_core/src/definition.rs#L1074"
         }
       ]
     },
@@ -148,7 +162,9 @@ export const ruffForwardAudit = {
           "newStart": 593,
           "sha256": "ca10fc833227c2e4993abe3dbcf697ffa9dcbc513739c7a3920a0b34274bc1ec",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_core/src/reachability_constraints.rs#L593"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_core/src/reachability_constraints.rs#L593"
         },
         {
           "anchor": "@@ -621,12 +628,6 @@ impl ReachabilityConstraintsBuilder {",
@@ -156,7 +172,9 @@ export const ruffForwardAudit = {
           "newStart": 628,
           "sha256": "756d5f3a5140eb619bdb534181a88e9a7e520fdfe0d6733a543f623bbf99345b",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_core/src/reachability_constraints.rs#L628"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_core/src/reachability_constraints.rs#L628"
         }
       ]
     },
@@ -174,17 +192,19 @@ export const ruffForwardAudit = {
           "newStart": 102,
           "sha256": "cebf2c452aac869fd995ef36a83db4ff9b7087578791afc3b89dce1e1cddb155",
           "classification": "lint-policy",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/lib.rs#L102"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/lib.rs#L102"
         }
       ]
     },
     {
       "path": "crates/ty_python_semantic/src/reachability.rs",
       "baseBlob": "7e393e2dd00031305c9af916e293a9b537bf9a16",
-      "candidateBlob": "a4a81d1a3622d51edbfce94efd3ffad5762fe23e",
+      "candidateBlob": "5cee94701c3a2d6ba041310aa9862f24d7a98fe9",
       "frozenCandidateBlob": "539f5c7f8f33118e3015ca0834f54fb98d51904d",
       "classification": "upstream-checkpoints-with-fork-domains",
-      "detail": "CheckpointBoundary, masks, continuation loop and sparse-path/invalidation tests are upstream-owned (#30561). Residual fork composition carries FunctionBodyDomain in query keys/range warming and preserves whole-root symbolic correlation by disabling continuations for assumptions or uninhabited splits. This belongs to existing overload-body, saved-guard and initial-binding owners.",
+      "detail": "CheckpointBoundary, masks, continuation loop and sparse-path/invalidation tests are upstream-owned (#30561). Residual fork composition carries FunctionBodyDomain in query keys/range warming and preserves whole-root symbolic correlation by disabling continuations for assumptions or uninhabited splits. This belongs to existing overload-body, saved-guard and initial-binding owners. Current forward hunks additionally cover: dictionary-comprehension-body-domain-propagation. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
       "hunks": [
         {
           "anchor": "@@ -598,9 +598,11 @@ fn accumulate_constraint<'db>(",
@@ -192,7 +212,9 @@ export const ruffForwardAudit = {
           "newStart": 598,
           "sha256": "bc6784a5773bbaf075615e8719c8346c206882eac7164591e14fe8c2458bed42",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L598"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L598"
         },
         {
           "anchor": "@@ -643,7 +645,7 @@ fn analyze_non_terminal_calls_up_to_predicate<'db>(",
@@ -200,7 +222,9 @@ export const ruffForwardAudit = {
           "newStart": 645,
           "sha256": "df40ff2b90be5fe5c8376d4c7b7b24135b6dfb6366f166deb97a3685b7de9d49",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L645"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L645"
         },
         {
           "anchor": "@@ -654,7 +656,7 @@ fn analyze_non_terminal_calls_up_to_predicate<'db>(",
@@ -208,7 +232,9 @@ export const ruffForwardAudit = {
           "newStart": 656,
           "sha256": "0432118eecb4b61b48bd1c440796657515c06daaed245856d6a72048133cd65f",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L656"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L656"
         },
         {
           "anchor": "@@ -664,7 +666,7 @@ fn analyze_non_terminal_calls_up_to_predicate<'db>(",
@@ -216,7 +242,9 @@ export const ruffForwardAudit = {
           "newStart": 666,
           "sha256": "ccd08b858f615fd1ef02bdb53ed8779ef4ebd3c5d197a3c437bfae1051118358",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L666"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L666"
         },
         {
           "anchor": "@@ -680,8 +682,6 @@ fn analyze_non_terminal_calls_up_to_predicate<'db>(",
@@ -224,15 +252,29 @@ export const ruffForwardAudit = {
           "newStart": 682,
           "sha256": "7ff09c6fefcdcc1e240566b8f490ceb8d3121ff136f46f54dd8e0afcd4558b53",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L682"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L682"
         },
         {
-          "anchor": "@@ -815,8 +815,7 @@ fn evaluate_reachability_constraint<'db>(",
-          "oldStart": 815,
-          "newStart": 815,
-          "sha256": "e3cc352753f9ca2aba006a42fe44fbbd72d9375280c042ba7ab5caa2b290972b",
-          "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L815"
+          "anchor": "@@ -750,7 +750,7 @@ fn analyze_body_non_terminal_call_range<'db>(",
+          "oldStart": 750,
+          "newStart": 750,
+          "sha256": "9c783f70b013c305f99f44b58f06b8277a523ddd43f1d52688137cdb8a9c03d8",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L750"
+        },
+        {
+          "anchor": "@@ -813,10 +813,9 @@ fn evaluate_reachability_constraint<'db>(",
+          "oldStart": 813,
+          "newStart": 813,
+          "sha256": "85ce19b1b2466b5c24518d4e0f8b5793bae31feb7dc34558afa0480ff4e4b1b1",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L813"
         },
         {
           "anchor": "@@ -826,11 +825,11 @@ fn evaluate_reachability_constraint<'db>(",
@@ -240,7 +282,9 @@ export const ruffForwardAudit = {
           "newStart": 825,
           "sha256": "99ca9ada06e91e881e3f5051e7e6c26ceeb3bdc43b7fd5b812f551908938ecd1",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L825"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L825"
         },
         {
           "anchor": "@@ -875,26 +874,59 @@ fn terminal_reachability(id: ScopedReachabilityConstraintId) -> Option<Truthines",
@@ -248,7 +292,9 @@ export const ruffForwardAudit = {
           "newStart": 874,
           "sha256": "cc96ed1f2b9ae786c962a23d8ac764218b74275463627652f6062b7ebb831e5a",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L874"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L874"
         },
         {
           "anchor": "@@ -931,7 +963,7 @@ impl<'a, 'db> PredicateEvaluator<'a, 'db> {",
@@ -256,7 +302,9 @@ export const ruffForwardAudit = {
           "newStart": 963,
           "sha256": "146d6be835d4212a65deeb55b90dd0356ad7dfcff1227452f7ce52263a601fdc",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L963"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L963"
         },
         {
           "anchor": "@@ -939,31 +971,20 @@ impl<'a, 'db> PredicateEvaluator<'a, 'db> {",
@@ -264,7 +312,9 @@ export const ruffForwardAudit = {
           "newStart": 971,
           "sha256": "505d4a8730c4f051dff66e9881630357fe3fa96a4651f54b2915bc84a6031c2c",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L971"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L971"
         },
         {
           "anchor": "@@ -973,7 +994,7 @@ fn evaluate_reachability_path<'db>(",
@@ -272,15 +322,19 @@ export const ruffForwardAudit = {
           "newStart": 994,
           "sha256": "ee6b03fc016c8af1df848b3b81a25571d935c2f0d3c50143f7337e75374f94ad",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L994"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L994"
         },
         {
           "anchor": "@@ -986,112 +1007,101 @@ fn evaluate_reachability_path<'db>(",
           "oldStart": 986,
           "newStart": 1007,
-          "sha256": "48dea1faecd669d619f0d7f0916d159c288dbc8eb36bddbb769cfa4c33b5fd11",
-          "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L1007"
+          "sha256": "11ebce2cf27661e3d1aaf2407ab5d61df677a361f4304cad336c695592340375",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked. This merged hunk also retains previously attributed checkpoint/reachability mechanics; it is not an independent new contribution.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L1007"
         },
         {
           "anchor": "@@ -1120,16 +1130,17 @@ impl<'db> ReachabilityConstraintsExtension<'db> for ReachabilityConstraints {",
@@ -288,31 +342,99 @@ export const ruffForwardAudit = {
           "newStart": 1130,
           "sha256": "e3a57253698db6b8c79479909c6213aeb796d15f91e9637b6dda0504dc7a3042",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L1130"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L1130"
         },
         {
-          "anchor": "@@ -2744,11 +2755,11 @@ pub(crate) fn refine_initial_binding_reachability<'db>(",
+          "anchor": "@@ -1312,7 +1323,7 @@ fn evaluate_body_projected_narrowing_checkpoint<'db>(",
+          "oldStart": 1312,
+          "newStart": 1323,
+          "sha256": "514e1a6934659216717761c01de19ab83ad2f592356238f7bf0ecaab167f7515",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L1323"
+        },
+        {
+          "anchor": "@@ -1691,7 +1702,7 @@ impl<'a, 'db> NarrowingProjector<'a, 'db> {",
+          "oldStart": 1691,
+          "newStart": 1702,
+          "sha256": "cf68cb486fc0fea0180e9e6ba5babe7933c97570f64dfb9960ba08d5c57dea7c",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L1702"
+        },
+        {
+          "anchor": "@@ -2126,7 +2137,7 @@ fn analyze_body_non_terminal_call<'db>(",
+          "oldStart": 2126,
+          "newStart": 2137,
+          "sha256": "8ecfc7c79aedd8e251b0d48e397c20e14850e214b28e809a7ab282bfc5a385f2",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L2137"
+        },
+        {
+          "anchor": "@@ -2341,7 +2352,7 @@ fn analyze_single_in_domain<'db>(",
+          "oldStart": 2341,
+          "newStart": 2352,
+          "sha256": "ef0fe5443c26d100879427543f330652838fbf0aa5647a684c4ed7430792dbd7",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L2352"
+        },
+        {
+          "anchor": "@@ -2452,10 +2463,11 @@ pub(crate) fn is_range_reachable_in_domain<'db>(",
+          "oldStart": 2452,
+          "newStart": 2463,
+          "sha256": "2cac325dbb4c99601f75af9cb7621e58dafbe295ed5b36804056ec915addee57",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L2463"
+        },
+        {
+          "anchor": "@@ -2482,17 +2494,12 @@ pub(crate) fn is_end_of_scope_reachable_in_domain<'db>(",
+          "oldStart": 2482,
+          "newStart": 2494,
+          "sha256": "ce2b88c176020c0a2db4981125514bccb8f2f163901ecf802f56d396f6317371",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L2494"
+        },
+        {
+          "anchor": "@@ -2744,11 +2751,11 @@ pub(crate) fn refine_initial_binding_reachability<'db>(",
           "oldStart": 2744,
-          "newStart": 2755,
-          "sha256": "1c837a4b50927a242611e355f161ce0c0e5dc0333f6f3ca04d97ca9d0e9723af",
+          "newStart": 2751,
+          "sha256": "b5ee3cd3497a49d112f1d1085a9b98675ffe78aa1d3b7fa86cd83ba1e45624c8",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L2755"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L2751"
         },
         {
-          "anchor": "@@ -2964,6 +2975,42 @@ mod tests {",
+          "anchor": "@@ -2964,6 +2971,42 @@ mod tests {",
           "oldStart": 2964,
-          "newStart": 2975,
-          "sha256": "8a154f7348ee33ec948d0a00e263836b9e6409a792af4c96e70a2f8550f80385",
+          "newStart": 2971,
+          "sha256": "d0de960ac142a86ba8d89e26659b434ad5db2805765c3049dae4ea4d2b0dd435",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L2975"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L2971"
         },
         {
-          "anchor": "@@ -3069,9 +3116,11 @@ class TargetB:",
+          "anchor": "@@ -3069,9 +3112,11 @@ class TargetB:",
           "oldStart": 3069,
-          "newStart": 3116,
-          "sha256": "d4af77ea9efdfb06bc21e7d6e6ac2f3e8939e42ef591a79ddc45ec57724a70ff",
+          "newStart": 3112,
+          "sha256": "df033ce560ade4a29bb015cf65c74248ad1f2aef0d1976ae601cc393b3f6c63b",
           "classification": "upstream-checkpoints-with-fork-domains",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/reachability.rs#L3116"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/reachability.rs#L3112"
         }
       ]
     },
@@ -330,7 +452,9 @@ export const ruffForwardAudit = {
           "newStart": 525,
           "sha256": "3628c18a19d8e4f83287e5cd9787f1f0966d862b2effb9d2fedfa10381fecf76",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types.rs#L525"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types.rs#L525"
         },
         {
           "anchor": "@@ -3569,6 +3597,11 @@ impl<'db> Type<'db> {",
@@ -338,7 +462,9 @@ export const ruffForwardAudit = {
           "newStart": 3597,
           "sha256": "5a88f158fdc3f53439a447e143b9deb7ff0754dcbd90fbd6d92a63762de66955",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types.rs#L3597"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types.rs#L3597"
         }
       ]
     },
@@ -356,7 +482,9 @@ export const ruffForwardAudit = {
           "newStart": 6,
           "sha256": "2d2d4fa3b6ec4a3538ce2fc6a4429e2c7490f3989e0580b029a9bcb7cdf2b777",
           "classification": "provisional-return-structure",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/ambiguous.rs#L6"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/ambiguous.rs#L6"
         },
         {
           "anchor": "@@ -71,6 +72,36 @@ impl<'db> AmbiguousReturnMerger<'_, 'db> {",
@@ -364,7 +492,9 @@ export const ruffForwardAudit = {
           "newStart": 72,
           "sha256": "a839e0273798ffb279c8f7eb36da7b2084cef5d6bffe3d437975e8b085d7ecef",
           "classification": "provisional-return-structure",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/ambiguous.rs#L72"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/ambiguous.rs#L72"
         },
         {
           "anchor": "@@ -283,3 +314,69 @@ impl<'db> AmbiguousReturnMerger<'_, 'db> {",
@@ -372,7 +502,9 @@ export const ruffForwardAudit = {
           "newStart": 314,
           "sha256": "39ec2b8e17010caa7098f413f891b6317b4d5883c37acbf5e7d54d3c0b00145f",
           "classification": "provisional-return-structure",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/ambiguous.rs#L314"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/ambiguous.rs#L314"
         }
       ]
     },
@@ -390,7 +522,9 @@ export const ruffForwardAudit = {
           "newStart": 23,
           "sha256": "3187596da326572e2ee340a9121d8b61fe24fd6155a3986ddb0ed81662599a4d",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/arguments.rs#L23"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/arguments.rs#L23"
         },
         {
           "anchor": "@@ -303,6 +303,43 @@ impl<'db> VariadicArgument<'db> {",
@@ -398,7 +532,9 @@ export const ruffForwardAudit = {
           "newStart": 303,
           "sha256": "93e32e3430ca126ad79d520ef02f15343944fd836bfad64bdd470753db6b2e88",
           "classification": "upstream-paramspec-suffix-selector",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/arguments.rs#L303"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/arguments.rs#L303"
         },
         {
           "anchor": "@@ -510,6 +547,34 @@ pub(crate) struct UnpackedKeywords<'db> {",
@@ -406,7 +542,9 @@ export const ruffForwardAudit = {
           "newStart": 547,
           "sha256": "ed85f784e4dad9f2579ff3c412ff889f35243488b6c33f5a243823de71b33ae5",
           "classification": "observed-keyword-prefix-exclusions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/arguments.rs#L547"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/arguments.rs#L547"
         },
         {
           "anchor": "@@ -997,10 +1062,18 @@ impl<'a, 'db> CallArguments<'a, 'db> {",
@@ -414,7 +552,9 @@ export const ruffForwardAudit = {
           "newStart": 1062,
           "sha256": "9af6558bdd28c5001975e200c63444c22b327cfaf9570647075588515882e267",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/arguments.rs#L1062"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/arguments.rs#L1062"
         },
         {
           "anchor": "@@ -1072,69 +1145,6 @@ impl<'a, 'db> CallArguments<'a, 'db> {",
@@ -422,7 +562,9 @@ export const ruffForwardAudit = {
           "newStart": 1145,
           "sha256": "05b15a227df2a47c5084a42e8642fb6539266790e54a5fc8f1f185e4af53fac6",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/arguments.rs#L1145"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/arguments.rs#L1145"
         },
         {
           "anchor": "@@ -1417,7 +1427,7 @@ mod tests {",
@@ -430,7 +572,9 @@ export const ruffForwardAudit = {
           "newStart": 1427,
           "sha256": "a5c75d29edd5ccfa244dda12832c6f93e15e8bbb1d44b309c4b821f3bb0311d9",
           "classification": "mechanical-native-test-import",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/arguments.rs#L1427"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/arguments.rs#L1427"
         },
         {
           "anchor": "@@ -1553,7 +1563,11 @@ mod tests {",
@@ -438,17 +582,19 @@ export const ruffForwardAudit = {
           "newStart": 1563,
           "sha256": "4f2873ee958128c489a686d6bcdde055b75d378505379093563e3292a0915ae5",
           "classification": "observed-keyword-prefix-exclusions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/arguments.rs#L1563"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/arguments.rs#L1563"
         }
       ]
     },
     {
       "path": "crates/ty_python_semantic/src/types/call/bind.rs",
       "baseBlob": "4db6067a343e003b929edc772fe15ece48ba62c6",
-      "candidateBlob": "5d8815667249e85be44d6c8701abe2b01a34918b",
+      "candidateBlob": "31fe22b8b9dc95b92b8b281b34e868864eeb2101",
       "frozenCandidateBlob": "4b30c10649898e6da2e4aa6d21d657e97445ca70",
       "classification": "mixed-call-owner",
-      "detail": "Preserves the bounded Lazy expansion precheck, constant TypeIs certification and contextual ParamSpec projection. Upstream #30594 owns shared suffix selection and diagnostic source remapping; fork integration runs the same selector for contextual inference and final checking, removes consumed Observed keyword names and records residual exclusions even when another argument bound the prefix. Independently, keyword mapping keys are validated before Observed.unpack can return early; the unreachable later Observed branch is removed.",
+      "detail": "Preserves the bounded Lazy expansion precheck, constant TypeIs certification and contextual ParamSpec projection. Upstream #30594 owns shared suffix selection and diagnostic source remapping; fork integration runs the same selector for contextual inference and final checking, removes consumed Observed keyword names and records residual exclusions even when another argument bound the prefix. Independently, keyword mapping keys are validated before Observed.unpack can return early; the unreachable later Observed branch is removed. Current forward hunks additionally cover: sibling-dependent-empty-getattr-context-replay. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
       "hunks": [
         {
           "anchor": "@@ -74,7 +74,6 @@ use crate::types::infer::{TypeContextKind, original_class_type};",
@@ -456,7 +602,9 @@ export const ruffForwardAudit = {
           "newStart": 74,
           "sha256": "59cf32b7586173f7baa5bb55c38f717aad825cab855da1e2ff655c3f5fd0aa66",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L74"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L74"
         },
         {
           "anchor": "@@ -96,12 +95,12 @@ use crate::types::visitor::{",
@@ -464,7 +612,9 @@ export const ruffForwardAudit = {
           "newStart": 95,
           "sha256": "5368d187e149cc49af5475dc860e28ae12538a5fcaa16701095c5d194cc8e882",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L95"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L95"
         },
         {
           "anchor": "@@ -2045,6 +2044,7 @@ impl<'db> Bindings<'db> {",
@@ -472,7 +622,9 @@ export const ruffForwardAudit = {
           "newStart": 2044,
           "sha256": "4e86e4d90a107c941e5adbedcd8ea066357028a7200fbe8b84f28039bb8e8d80",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L2044"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L2044"
         },
         {
           "anchor": "@@ -2057,19 +2057,40 @@ impl<'db> Bindings<'db> {",
@@ -480,7 +632,9 @@ export const ruffForwardAudit = {
           "newStart": 2057,
           "sha256": "41bcaa6765ebf4a592d1a4ab4b81be42519b304a763f750db1bfd9b95502ff06",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L2057"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L2057"
         },
         {
           "anchor": "@@ -2094,6 +2115,7 @@ impl<'db> Bindings<'db> {",
@@ -488,7 +642,9 @@ export const ruffForwardAudit = {
           "newStart": 2115,
           "sha256": "12368d2ff3a2a30fc7b9d27a6f92d2eb677e4f41b8f220e5125c8b1dca43f250",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L2115"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L2115"
         },
         {
           "anchor": "@@ -2104,6 +2126,7 @@ impl<'db> Bindings<'db> {",
@@ -496,7 +652,9 @@ export const ruffForwardAudit = {
           "newStart": 2126,
           "sha256": "abda90d433bccfb17b6ef3fc838ea50f9e23ff78d1db04da9b2eb43e1f45c313",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L2126"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L2126"
         },
         {
           "anchor": "@@ -2111,6 +2134,7 @@ impl<'db> Bindings<'db> {",
@@ -504,7 +662,9 @@ export const ruffForwardAudit = {
           "newStart": 2134,
           "sha256": "b54a0262e93db4210e69b2395ab898dda9a66480ec0bbbcfa49b9a7121d72e65",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L2134"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L2134"
         },
         {
           "anchor": "@@ -4385,6 +4409,12 @@ impl<'db> CallableBinding<'db> {",
@@ -512,7 +672,9 @@ export const ruffForwardAudit = {
           "newStart": 4409,
           "sha256": "13b07ed833c495c057fb99612cd0764a7a05a1401005d3c9fae261279a2d25c9",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L4409"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L4409"
         },
         {
           "anchor": "@@ -4408,15 +4438,18 @@ impl<'db> CallableBinding<'db> {",
@@ -520,7 +682,9 @@ export const ruffForwardAudit = {
           "newStart": 4438,
           "sha256": "2e5b4be8b1f3e6427668ccd84aaf0bbb67a7f9a04e2fe25524156c1717b0cac6",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L4438"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L4438"
         },
         {
           "anchor": "@@ -4845,8 +4878,8 @@ impl<'db> CallableBinding<'db> {",
@@ -528,7 +692,9 @@ export const ruffForwardAudit = {
           "newStart": 4878,
           "sha256": "cea2bfa4c523af686095e3da2cbd0b20c36144b29a25356ce635f23a2b4c0c82",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L4878"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L4878"
         },
         {
           "anchor": "@@ -4893,7 +4926,13 @@ impl<'db> CallableBinding<'db> {",
@@ -536,7 +702,9 @@ export const ruffForwardAudit = {
           "newStart": 4926,
           "sha256": "36d1bb01294044109e20505779eebfaca0772d8faf37dba5a5ae2dc54ae1b0b2",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L4926"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L4926"
         },
         {
           "anchor": "@@ -5316,7 +5355,10 @@ impl<'db> CallableBinding<'db> {",
@@ -544,7 +712,9 @@ export const ruffForwardAudit = {
           "newStart": 5355,
           "sha256": "969882b17173d94fab97f2d9bf6be666991d035fefb7da849a683359e965b305",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L5355"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L5355"
         },
         {
           "anchor": "@@ -5326,10 +5368,9 @@ impl<'db> CallableBinding<'db> {",
@@ -552,7 +722,9 @@ export const ruffForwardAudit = {
           "newStart": 5368,
           "sha256": "6be43bb4bdcd504e37b55e4bc3fa81002f4fba92d08fdc679281aeb0081d7adc",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L5368"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L5368"
         },
         {
           "anchor": "@@ -5338,19 +5379,47 @@ impl<'db> CallableBinding<'db> {",
@@ -560,7 +732,9 @@ export const ruffForwardAudit = {
           "newStart": 5379,
           "sha256": "5667a44fc8817baef255293d6c213910de4f48e65c1c159c479a09b66f4814df",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L5379"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L5379"
         },
         {
           "anchor": "@@ -6865,7 +6934,13 @@ fn inferred_parameter_specialization<'db>(",
@@ -568,7 +742,9 @@ export const ruffForwardAudit = {
           "newStart": 6934,
           "sha256": "d31aef48caddd226bb43259da921e0ef8761edac3b86615beea62d2378af8fe3",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L6934"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L6934"
         },
         {
           "anchor": "@@ -7073,29 +7148,6 @@ impl<'a, 'db> CallInference<'a, 'db> {",
@@ -576,7 +752,9 @@ export const ruffForwardAudit = {
           "newStart": 7148,
           "sha256": "07fb54d074b27a058c46e1d7088a9e8c0efc4ea7b36f3cbab5b2e7b7554fd39e",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L7148"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L7148"
         },
         {
           "anchor": "@@ -7139,8 +7191,11 @@ impl<'db> ArgumentTypeChecker<'_, 'db> {",
@@ -584,7 +762,9 @@ export const ruffForwardAudit = {
           "newStart": 7191,
           "sha256": "7b021c80166efdcdc2840eb89f6a52422a0c35c2f355e6ce83c82f637b65b7c2",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L7191"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L7191"
         },
         {
           "anchor": "@@ -7740,14 +7795,11 @@ impl<'db> CallInference<'_, 'db> {",
@@ -592,7 +772,9 @@ export const ruffForwardAudit = {
           "newStart": 7795,
           "sha256": "8e947bab8fdefb869375483a8845f52d8d2bf719e8f1594cee03363659208269",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L7795"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L7795"
         },
         {
           "anchor": "@@ -8011,7 +8063,6 @@ impl<'db> CallInference<'_, 'db> {",
@@ -600,7 +782,9 @@ export const ruffForwardAudit = {
           "newStart": 8063,
           "sha256": "20ab6867b7ed3bd0d150e9bb5028fef5db1a712cdbbe7565a608fbeaf6bce69a",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L8063"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L8063"
         },
         {
           "anchor": "@@ -8177,7 +8228,6 @@ impl<'db> CallInference<'_, 'db> {",
@@ -608,7 +792,9 @@ export const ruffForwardAudit = {
           "newStart": 8228,
           "sha256": "d60c42868b4385c0d2e72581ec07f37cc531fa0a4a3e0fd90abe627adcf03bd3",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L8228"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L8228"
         },
         {
           "anchor": "@@ -8185,6 +8235,10 @@ impl<'db> CallInference<'_, 'db> {",
@@ -616,7 +802,9 @@ export const ruffForwardAudit = {
           "newStart": 8235,
           "sha256": "cb287a84083efe961eaef879753288d809e6d4ce03b9c12cee89ecf36e1b43e4",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L8235"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L8235"
         },
         {
           "anchor": "@@ -8636,12 +8690,7 @@ impl<'db> CallInference<'_, 'db> {",
@@ -624,7 +812,9 @@ export const ruffForwardAudit = {
           "newStart": 8690,
           "sha256": "2d64189172569e5079f98ac563ae7da153db0a4e2557183cd2f5d504fd6c4f27",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L8690"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L8690"
         },
         {
           "anchor": "@@ -8757,14 +8806,8 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -632,7 +822,9 @@ export const ruffForwardAudit = {
           "newStart": 8806,
           "sha256": "84a0d0a3ebdb6d1714d3ec520f87eb4149054fdf469ec2d5567eb5e55d51de57",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L8806"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L8806"
         },
         {
           "anchor": "@@ -8891,50 +8934,8 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -640,7 +832,9 @@ export const ruffForwardAudit = {
           "newStart": 8934,
           "sha256": "be300e531b7c597543e6fbc37a37b47ca2f5533a1306ce44f03b3af07ae936ee",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L8934"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L8934"
         },
         {
           "anchor": "@@ -8955,7 +8956,6 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -648,7 +842,9 @@ export const ruffForwardAudit = {
           "newStart": 8956,
           "sha256": "d9b75d2f5c16776e3cfe45558ae129ff1c9d17e5864f976a437d8f03a6caa846",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L8956"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L8956"
         },
         {
           "anchor": "@@ -8988,7 +8988,7 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -656,7 +852,9 @@ export const ruffForwardAudit = {
           "newStart": 8988,
           "sha256": "872d2b791173df6f84744bec4dc77ad1bf37a216c06c2e92e66f04fd9282a275",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L8988"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L8988"
         },
         {
           "anchor": "@@ -9010,8 +9010,7 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -664,7 +862,9 @@ export const ruffForwardAudit = {
           "newStart": 9010,
           "sha256": "3c67d831af990996d6692b5b24b3cf60495725d1c0ab069b76dd30736604fa8c",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9010"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9010"
         },
         {
           "anchor": "@@ -9022,13 +9021,11 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -672,7 +872,9 @@ export const ruffForwardAudit = {
           "newStart": 9021,
           "sha256": "d80ba63cccf316a99b8af8586d1ad05610f3f8c148896c578c9a9349be71e786",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9021"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9021"
         },
         {
           "anchor": "@@ -9050,23 +9047,8 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -680,7 +882,9 @@ export const ruffForwardAudit = {
           "newStart": 9047,
           "sha256": "8c3832ea964f1b68db7095c357823dd9819b9376a7f0f6f21afb95b4a29b9a4a",
           "classification": "upstream-selector-with-observed-keyword-exclusions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9047"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9047"
         },
         {
           "anchor": "@@ -9091,7 +9073,6 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -688,7 +892,9 @@ export const ruffForwardAudit = {
           "newStart": 9073,
           "sha256": "8584fc40008bc3881336e822b6a2c52842df2c40ca550aa64204b15b9f7f108e",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9073"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9073"
         },
         {
           "anchor": "@@ -9109,21 +9090,15 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -696,7 +902,9 @@ export const ruffForwardAudit = {
           "newStart": 9090,
           "sha256": "598f6228aa25a1e4d2db7795cc099f0f2c467617b600c2d23945f69e26461aaf",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9090"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9090"
         },
         {
           "anchor": "@@ -9172,12 +9147,11 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -704,7 +912,9 @@ export const ruffForwardAudit = {
           "newStart": 9147,
           "sha256": "acae7e0bd4128bde1bd6029581ff82d0f38a89152f039408d4e24167570248c1",
           "classification": "mixed-upstream-selector-and-key-validation-plumbing",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9147"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9147"
         },
         {
           "anchor": "@@ -9199,7 +9173,7 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -712,7 +922,9 @@ export const ruffForwardAudit = {
           "newStart": 9173,
           "sha256": "bb6dad8283a93388447542572c2a28cbd0f354f71f11174955e893e1fa24fde5",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9173"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9173"
         },
         {
           "anchor": "@@ -9212,9 +9186,23 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -720,7 +932,9 @@ export const ruffForwardAudit = {
           "newStart": 9186,
           "sha256": "307b9f26c64ce9724ccd5b51288b1d15da702f38eec7b5ea01ecff0846aa7b14",
           "classification": "observed-keyword-key-validation",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9186"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9186"
         },
         {
           "anchor": "@@ -9223,42 +9211,10 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -728,7 +942,9 @@ export const ruffForwardAudit = {
           "newStart": 9211,
           "sha256": "945f69ae3584e94bf0b55f98510e678959b5fafd9c1bd46df355db279c31d313",
           "classification": "observed-keyword-key-validation",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9211"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9211"
         },
         {
           "anchor": "@@ -9286,7 +9242,7 @@ impl<'a, 'db> ArgumentTypeChecker<'a, 'db> {",
@@ -736,7 +952,9 @@ export const ruffForwardAudit = {
           "newStart": 9242,
           "sha256": "e3c6564ff84d147828103cc830070c48bdef253c702f9fa59bb1ad57e78f4b08",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9242"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9242"
         },
         {
           "anchor": "@@ -9594,6 +9550,81 @@ impl<'db> ArgumentTypeContext<'db> {",
@@ -744,95 +962,149 @@ export const ruffForwardAudit = {
           "newStart": 9550,
           "sha256": "809a75fea69e3b6de52fad0ca5aba78c8ec8d7349a6347e4a7e52cb26c290d30",
           "classification": "upstream-selector-with-observed-keyword-exclusions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9550"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9550"
         },
         {
-          "anchor": "@@ -9989,40 +10020,6 @@ impl<'db> Binding<'db> {",
+          "anchor": "@@ -9843,15 +9874,13 @@ impl<'db> Binding<'db> {",
+          "oldStart": 9843,
+          "newStart": 9874,
+          "sha256": "90d0efcb349a561085de99f4d70a5e1292a0b2507401c80fc26a108ef691bd2d",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9874"
+        },
+        {
+          "anchor": "@@ -9862,9 +9891,19 @@ impl<'db> Binding<'db> {",
+          "oldStart": 9862,
+          "newStart": 9891,
+          "sha256": "3585c5b5c7bd296ed621457b076f07e4fc5b702651942de48b52afe05b89d255",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9891"
+        },
+        {
+          "anchor": "@@ -9892,7 +9931,7 @@ impl<'db> Binding<'db> {",
+          "oldStart": 9892,
+          "newStart": 9931,
+          "sha256": "ab90b7b0f5aa54c6bf740de5c71726858d2cdf27a87ac33c07c069916bebc956",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9931"
+        },
+        {
+          "anchor": "@@ -9989,40 +10028,6 @@ impl<'db> Binding<'db> {",
           "oldStart": 9989,
-          "newStart": 10020,
-          "sha256": "564efda5b205db83c98bbd08f20843b7732dcf64453a8ffc059f72649d587d0d",
+          "newStart": 10028,
+          "sha256": "c264dc2cdb6bb570a5fc378bed2d7bd493fb12e310c3fb7809934497f0e9cce5",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L10020"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L10028"
         },
         {
-          "anchor": "@@ -10062,17 +10059,17 @@ impl<'db> Binding<'db> {",
+          "anchor": "@@ -10062,17 +10067,17 @@ impl<'db> Binding<'db> {",
           "oldStart": 10062,
-          "newStart": 10059,
-          "sha256": "47079993d85b8db2a3baf6a5419b911c552ce36530d4a866a187655c9e5db6ce",
+          "newStart": 10067,
+          "sha256": "a64f6a54f4bbf731ffd458649a184d1872637f3bc7401b46b31d496869838f5c",
           "classification": "upstream-selector-with-observed-keyword-exclusions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L10059"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L10067"
         },
         {
-          "anchor": "@@ -10108,11 +10105,10 @@ impl<'db> Binding<'db> {",
+          "anchor": "@@ -10108,11 +10113,10 @@ impl<'db> Binding<'db> {",
           "oldStart": 10108,
-          "newStart": 10105,
-          "sha256": "224031201dd9616effd86ef0367eda8feabc29fa2073a4b8a4c753d3c2e28522",
+          "newStart": 10113,
+          "sha256": "efdb9aa162d240b2a348b9132592269a19bac77ac475917cfe3a5a6bdf758c73",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L10105"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L10113"
         },
         {
-          "anchor": "@@ -10304,7 +10300,7 @@ impl<'db> Binding<'db> {",
+          "anchor": "@@ -10304,7 +10308,7 @@ impl<'db> Binding<'db> {",
           "oldStart": 10304,
-          "newStart": 10300,
-          "sha256": "7e5a8030327de8d1555c2d3fee2ab0a36681d370aee9f9ecfc780b3104e3d684",
+          "newStart": 10308,
+          "sha256": "ebef51be4b8ac65de4d671a50d6fd72748d18d0ae9480da0f963622978710686",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L10300"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L10308"
         },
         {
-          "anchor": "@@ -10315,7 +10311,6 @@ impl<'db> Binding<'db> {",
+          "anchor": "@@ -10315,7 +10319,6 @@ impl<'db> Binding<'db> {",
           "oldStart": 10315,
-          "newStart": 10311,
-          "sha256": "e8a92f9c8b09aedf38eb749af8674f7e015246c6dc75f21939547b685796b1d7",
+          "newStart": 10319,
+          "sha256": "8262b6131b8814dde4f387038664c8d494802db1bcf0e07ef563bd73e4afe42e",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L10311"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L10319"
         },
         {
-          "anchor": "@@ -10459,7 +10454,7 @@ impl<'db> Binding<'db> {",
+          "anchor": "@@ -10459,7 +10462,7 @@ impl<'db> Binding<'db> {",
           "oldStart": 10459,
-          "newStart": 10454,
-          "sha256": "7ca1bbf34c463e4c872a6ba770c1dfb72598e5ab58de16ce033b0431bec7dd3a",
+          "newStart": 10462,
+          "sha256": "9368162378ff86ef535fdea723780d967a246240e036562e66a72fe7eeddbee4",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L10454"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L10462"
         },
         {
-          "anchor": "@@ -10524,7 +10519,6 @@ impl<'db> Binding<'db> {",
+          "anchor": "@@ -10524,7 +10527,6 @@ impl<'db> Binding<'db> {",
           "oldStart": 10524,
-          "newStart": 10519,
-          "sha256": "b91b29c887c3ad50c836d8f58d7933e601e9898a3a7636ed3224254183578a68",
+          "newStart": 10527,
+          "sha256": "bb288edae28b4db453b86bc5915b096ba6aabc3b41755b3e91fc722117063dc3",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L10519"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L10527"
         },
         {
-          "anchor": "@@ -10540,22 +10534,26 @@ impl<'db> Binding<'db> {",
+          "anchor": "@@ -10540,22 +10542,26 @@ impl<'db> Binding<'db> {",
           "oldStart": 10540,
-          "newStart": 10534,
-          "sha256": "14ada3ca32949ff801b1fd17a5e4f28e7ea744fa50baf4157ab1065b1e0f0e4a",
+          "newStart": 10542,
+          "sha256": "495989ba8bef68830220c221290294ece97456832475617ae68298efd5936424",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L10534"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L10542"
         },
         {
-          "anchor": "@@ -11774,23 +11772,8 @@ impl BindingError<'_> {",
+          "anchor": "@@ -11774,23 +11780,8 @@ impl BindingError<'_> {",
           "oldStart": 11774,
-          "newStart": 11772,
-          "sha256": "dd4916b628f0e30c7aca031bdc77a1000cd329e95d3fdf0aac40ec64e4326fb8",
+          "newStart": 11780,
+          "sha256": "b300899d74f394eeed47aa05b9759ab04506e2fc54ebc204d34f83a87acd88b4",
           "classification": "upstream-paramspec-selector-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L11772"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L11780"
         },
         {
-          "anchor": "@@ -13037,9 +13020,191 @@ mod tests {",
+          "anchor": "@@ -13037,9 +13028,191 @@ mod tests {",
           "oldStart": 13037,
-          "newStart": 13020,
-          "sha256": "17b70caaeadf21baab42af1d7b1111ecabc10952141d8d6a08da460af4e26649",
+          "newStart": 13028,
+          "sha256": "c1b3ad29a6bc2cf9c3e50f7213a8de8e25d1bcf90a7860b6d10a29969c0e729f",
           "classification": "observed-keyword-prefix-and-existing-typeis-regressions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L13020"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L13028"
         },
         {
-          "anchor": "@@ -13104,7 +13269,6 @@ mod tests {",
+          "anchor": "@@ -13104,7 +13277,6 @@ mod tests {",
           "oldStart": 13104,
-          "newStart": 13269,
-          "sha256": "ae17fec2e99600657dfeacba23bc977dc9a4a376638f5d166837095bc7bd97aa",
+          "newStart": 13277,
+          "sha256": "7f83262fe402f03059b79fc7f5fc1d5923a70a57d0872ba55035fd58eb4b2385",
           "classification": "mixed-call-owner",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L13269"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L13277"
         }
       ]
     },
@@ -850,7 +1122,9 @@ export const ruffForwardAudit = {
           "newStart": 42,
           "sha256": "97dfa36b98b6dfa21d0598aea5051844aff2046c5b0db2a224fc90bafe5b7312",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/checked.rs#L42"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/checked.rs#L42"
         },
         {
           "anchor": "@@ -58,7 +60,7 @@ pub struct CheckedCall<'a, 'db> {",
@@ -858,7 +1132,29 @@ export const ruffForwardAudit = {
           "newStart": 60,
           "sha256": "a82194dfef854ebc47c3b16a3e6a73b97e3ccd11ff24f5f9809e2448295a02a5",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/checked.rs#L60"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/checked.rs#L60"
+        }
+      ]
+    },
+    {
+      "path": "crates/ty_python_semantic/src/types/class/known.rs",
+      "baseBlob": "027a99994525fe77c1a278ababd8c81ab74a13fb",
+      "candidateBlob": "a76fc3f7584a46c88c6266464087cb4d9a04fb59",
+      "frozenCandidateBlob": "da0c93f2a063d833fa113a3494afbba32db12d35",
+      "classification": "exact-immutable-builtin-truthiness",
+      "detail": "Names immutable builtin families whose truth value is stable. Callers must separately prove exact runtime identity; final custom subclasses are not included. Current forward hunks additionally cover: exact-immutable-builtin-truthiness. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
+      "hunks": [
+        {
+          "anchor": "@@ -315,6 +315,24 @@ impl KnownClass {",
+          "oldStart": 315,
+          "newStart": 315,
+          "sha256": "5fe3c6fb8ddc732ed992b4a6c086b4fbee17a0728ae1f3a2103130b2604a9527",
+          "classification": "exact-immutable-builtin-truthiness",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Known builtin stability is separate from exact runtime-class proof; only both truthiness exclusions plus a proven exact immutable builtin simplify to Never. Open/custom/stateful classes remain inhabited.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/class/known.rs#L315"
         }
       ]
     },
@@ -876,7 +1172,9 @@ export const ruffForwardAudit = {
           "newStart": 97,
           "sha256": "ef1283ddafde204e9ae65b23d9ec4f15fc2f8e1ac34c7535130c0d8e5d088267",
           "classification": "receiver-obligation-lifecycle",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints.rs#L97"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints.rs#L97"
         },
         {
           "anchor": "@@ -306,21 +305,6 @@ impl<'db> OwnedConstraintSet<'db> {",
@@ -884,7 +1182,9 @@ export const ruffForwardAudit = {
           "newStart": 305,
           "sha256": "75708f3cef0573aab7e3c0c163215e6cde426d4d073dae9bee8c9d0140f6aa46",
           "classification": "receiver-obligation-lifecycle",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints.rs#L305"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints.rs#L305"
         },
         {
           "anchor": "@@ -340,24 +324,6 @@ impl<'db> OwnedConstraintSet<'db> {",
@@ -892,7 +1192,9 @@ export const ruffForwardAudit = {
           "newStart": 324,
           "sha256": "0815748085890f36044a8e93030e7f379d9d0909f3cc7e0594d8a0659e36885c",
           "classification": "receiver-obligation-lifecycle",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints.rs#L324"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints.rs#L324"
         },
         {
           "anchor": "@@ -1332,19 +1298,6 @@ impl<'db> ConstraintSetBuilder<'db> {",
@@ -900,7 +1202,9 @@ export const ruffForwardAudit = {
           "newStart": 1298,
           "sha256": "66c427bd29fdcfc06136cf60bd439ff18f894c8727ad46a0d9f6b04bbc5f9b94",
           "classification": "receiver-obligation-lifecycle",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints.rs#L1298"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints.rs#L1298"
         },
         {
           "anchor": "@@ -5761,6 +5714,7 @@ mod tests {",
@@ -908,7 +1212,9 @@ export const ruffForwardAudit = {
           "newStart": 5714,
           "sha256": "e959a44d938417d5564cb39b079ec1b42e34010130d70cb97a89a951020f5cf9",
           "classification": "receiver-obligation-lifecycle",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints.rs#L5714"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints.rs#L5714"
         },
         {
           "anchor": "@@ -6774,7 +6728,12 @@ mod tests {",
@@ -916,7 +1222,9 @@ export const ruffForwardAudit = {
           "newStart": 6728,
           "sha256": "9db65476ee0a6eecefbcc3d152a154d2c8cd03b87cf4b817c5d0cf47ed07aef1",
           "classification": "receiver-obligation-lifecycle",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints.rs#L6728"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints.rs#L6728"
         }
       ]
     },
@@ -934,7 +1242,9 @@ export const ruffForwardAudit = {
           "newStart": 1430,
           "sha256": "73f76fe154364f4a6ba377e593e15f4988291ca7258031d4176cd2f79e9782f3",
           "classification": "native-test-mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/paths.rs#L1430"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/paths.rs#L1430"
         },
         {
           "anchor": "@@ -1583,13 +1587,20 @@ mod tests {",
@@ -942,7 +1252,9 @@ export const ruffForwardAudit = {
           "newStart": 1587,
           "sha256": "6bc3194ac20c28383684a07f9ae55add87e1e7a73c71d01a7ca91f187f08b717",
           "classification": "native-test-mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/paths.rs#L1587"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/paths.rs#L1587"
         },
         {
           "anchor": "@@ -1731,20 +1742,22 @@ mod tests {",
@@ -950,7 +1262,9 @@ export const ruffForwardAudit = {
           "newStart": 1742,
           "sha256": "4960cb036bcbc488b597833b7d93eee393830682cf3f0989d94a68ea1bfbec7d",
           "classification": "native-test-mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/paths.rs#L1742"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/paths.rs#L1742"
         }
       ]
     },
@@ -968,7 +1282,9 @@ export const ruffForwardAudit = {
           "newStart": 149,
           "sha256": "5c8c5b8960e72c964a03ae03f9f04590916bba34b09ac5859d06a9e4e4527735",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/projection.rs#L149"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/projection.rs#L149"
         },
         {
           "anchor": "@@ -220,15 +227,18 @@ impl<'db> ConstraintSet<'db, '_> {",
@@ -976,7 +1292,9 @@ export const ruffForwardAudit = {
           "newStart": 227,
           "sha256": "ffc3d35a232234a91fabd11850a93f41b8a66c0c9ba8a7c9098a988f154ecfe7",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/projection.rs#L227"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/projection.rs#L227"
         }
       ]
     },
@@ -994,7 +1312,9 @@ export const ruffForwardAudit = {
           "newStart": 4,
           "sha256": "2ea06e1e81fc0e69d1509bb265dac2350ca8f858ced6bcad00e9e1a5d692de69",
           "classification": "closed-filter-union-resolution",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/resolution.rs#L4"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/resolution.rs#L4"
         },
         {
           "anchor": "@@ -13,8 +13,8 @@ use crate::types::signatures::{Signature, walk_signature};",
@@ -1002,7 +1322,9 @@ export const ruffForwardAudit = {
           "newStart": 13,
           "sha256": "b153ff4f95b78bbfe73f3157276b8704f96eb83d4be85a3c178b639943f2a02c",
           "classification": "closed-filter-union-resolution",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/resolution.rs#L13"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/resolution.rs#L13"
         },
         {
           "anchor": "@@ -58,12 +58,13 @@ pub(crate) fn resolve_merged_solution<'db>(",
@@ -1010,7 +1332,9 @@ export const ruffForwardAudit = {
           "newStart": 58,
           "sha256": "3787bfc3242c0488ef1cc779d0cc2caa4e399355f8ca909c8a26ee700f3b7c42",
           "classification": "closed-filter-union-resolution",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/resolution.rs#L58"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/resolution.rs#L58"
         },
         {
           "anchor": "@@ -190,29 +191,118 @@ impl<'a, 'db> Resolver<'a, 'db> {",
@@ -1018,7 +1342,9 @@ export const ruffForwardAudit = {
           "newStart": 191,
           "sha256": "dadc47186a8899863e85a756feead2c0be9111a13b7cfb1a88cfa19b90162420",
           "classification": "closed-filter-union-resolution",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/resolution.rs#L191"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/resolution.rs#L191"
         },
         {
           "anchor": "@@ -344,14 +434,15 @@ mod tests {",
@@ -1026,7 +1352,9 @@ export const ruffForwardAudit = {
           "newStart": 434,
           "sha256": "e2f72fe84163bbf70dbf266d13723a2fd4565cee4462daac9873735bff776a5e",
           "classification": "closed-filter-union-resolution",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/resolution.rs#L434"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/resolution.rs#L434"
         },
         {
           "anchor": "@@ -425,6 +516,467 @@ mod tests {",
@@ -1034,7 +1362,9 @@ export const ruffForwardAudit = {
           "newStart": 516,
           "sha256": "6bbee995eb384691bda99db3a590e12087972d59fb035ae8f09960955315e931",
           "classification": "closed-filter-union-resolution",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/resolution.rs#L516"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/resolution.rs#L516"
         }
       ]
     },
@@ -1052,7 +1382,9 @@ export const ruffForwardAudit = {
           "newStart": 1657,
           "sha256": "4a75f0409172bb0115920414aab5b40806fb02aaebb925b8a78df7bc99f1270d",
           "classification": "fixed-variable-lazy-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1657"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1657"
         },
         {
           "anchor": "@@ -1798,7 +1801,9 @@ impl<'db, L: SolutionLimits> SolutionWalker<'db, L> {",
@@ -1060,7 +1392,9 @@ export const ruffForwardAudit = {
           "newStart": 1801,
           "sha256": "df694125b59a09412995b4206b684d9a35074af8863d434c168b247d42de994e",
           "classification": "fixed-variable-lazy-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1801"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1801"
         }
       ]
     },
@@ -1078,7 +1412,9 @@ export const ruffForwardAudit = {
           "newStart": 537,
           "sha256": "c3b6f36ccccbe7014beccccebf931f4a5ac20b989db491b08e078caddfa291b7",
           "classification": "alias-typevar-bound",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/variables.rs#L537"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/variables.rs#L537"
         }
       ]
     },
@@ -1096,7 +1432,9 @@ export const ruffForwardAudit = {
           "newStart": 142,
           "sha256": "fa2570bbf9fb204b89f82dfa85fd62af7f1b3ef0d5922133dcd74eac6afa1805",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/diagnostic.rs#L142"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/diagnostic.rs#L142"
         },
         {
           "anchor": "@@ -751,10 +759,87 @@ declare_lint! {",
@@ -1104,7 +1442,9 @@ export const ruffForwardAudit = {
           "newStart": 759,
           "sha256": "031bd955ed94cb32a25e30a135839799cebe6584e9e6f3e11c7f4c0dc5872882",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/diagnostic.rs#L759"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/diagnostic.rs#L759"
         },
         {
           "anchor": "@@ -1692,14 +1777,15 @@ enum SharedBodyDiagnostic {",
@@ -1112,7 +1452,9 @@ export const ruffForwardAudit = {
           "newStart": 1777,
           "sha256": "2432a98aa5c98eeefe4aa669ad62233fa9f332ed310585a91d03265c1cbf65d4",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/diagnostic.rs#L1777"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/diagnostic.rs#L1777"
         },
         {
           "anchor": "@@ -1710,7 +1796,7 @@ pub(crate) fn report_mismatched_type_name<'db>(",
@@ -1120,7 +1462,9 @@ export const ruffForwardAudit = {
           "newStart": 1796,
           "sha256": "5fd15a2736d61407df2b9188fb8356cc56815f1fd02f991920792a23a1708c84",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/diagnostic.rs#L1796"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/diagnostic.rs#L1796"
         },
         {
           "anchor": "@@ -1776,6 +1862,10 @@ impl TypeCheckDiagnostics {",
@@ -1128,7 +1472,9 @@ export const ruffForwardAudit = {
           "newStart": 1862,
           "sha256": "aec8db5a460b9a5f588ceaf827c4d3fb2d3042b47c19c5d4b35f6091cad4180b",
           "classification": "mechanical-clippy-qualification",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/diagnostic.rs#L1862"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/diagnostic.rs#L1862"
         },
         {
           "anchor": "@@ -5236,19 +5326,17 @@ pub(crate) fn report_cannot_delete_typed_dict_key<'db>(",
@@ -1136,7 +1482,9 @@ export const ruffForwardAudit = {
           "newStart": 5326,
           "sha256": "820acd9f69097338c5e5000d0525cf2ba2ca489179f41e5d425b10a29f679435",
           "classification": "upstream-expanded-class-base-diagnostic",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/diagnostic.rs#L5326"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/diagnostic.rs#L5326"
         },
         {
           "anchor": "@@ -5259,9 +5347,8 @@ pub(crate) fn report_invalid_type_param_order<'db>(",
@@ -1144,17 +1492,19 @@ export const ruffForwardAudit = {
           "newStart": 5347,
           "sha256": "06f6c481f6c6b04d6392acad28041c2b02a43b53ecaa811112d84847ab9c7384",
           "classification": "upstream-expanded-class-base-diagnostic",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/diagnostic.rs#L5347"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/diagnostic.rs#L5347"
         }
       ]
     },
     {
       "path": "crates/ty_python_semantic/src/types/dictionary/contents.rs",
       "baseBlob": "0000000000000000000000000000000000000000",
-      "candidateBlob": "ed6f914e3d86995f4e604c9ba6f6624fbdc7141e",
+      "candidateBlob": "f2dae47eace1122d52e881e45d37c4a1e6bb2fb2",
       "frozenCandidateBlob": "ac931070ff697e48567e61c3c541844c51b62d75",
       "classification": "captured-keyword-key-iteration",
-      "detail": "Keep captured keyword dictionary identity when all direct uses only iterate immutable keys; other argument/callee mentions retain exposure. Adds Salsa lint justification. Fresh argument and frozen exported-field recovery admit Add only when both cached operand types have exact builtin-string runtime classes. Existing has_exact_runtime_class excludes open str and custom subclasses; child traversal still rejects calls, assignment expressions and other operators. Class finality is a semantic query, not a query-free purity assertion.",
+      "detail": "Keep captured keyword dictionary identity when all direct uses only iterate immutable keys; other argument/callee mentions retain exposure. Adds Salsa lint justification. Fresh argument and frozen exported-field recovery admit Add only when both cached operand types have exact builtin-string runtime classes. Existing has_exact_runtime_class excludes open str and custom subclasses; child traversal still rejects calls, assignment expressions and other operators. Class finality is a semantic query, not a query-free purity assertion. Current forward hunks additionally cover: dictionary-comprehension-body-domain-propagation. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
       "hunks": [
         {
           "anchor": "@@ -26,7 +26,7 @@ use crate::Db;",
@@ -1162,7 +1512,39 @@ export const ruffForwardAudit = {
           "newStart": 26,
           "sha256": "7a385a17b3c59417752ff72e3b07e9f4cbca1c4f6fac2eadb439d6ae6cf06f1e",
           "classification": "sealed-builtin-string-add-recovery",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L26"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L26"
+        },
+        {
+          "anchor": "@@ -607,7 +607,7 @@ fn definition_contents_in_domain<'db>(",
+          "oldStart": 607,
+          "newStart": 607,
+          "sha256": "c41457bb644e5e07e57eab4401ac1a9f4cd76a9243e412de03bc0ca9da79b119",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L607"
+        },
+        {
+          "anchor": "@@ -624,7 +624,7 @@ fn infer_definition_contents<'db>(",
+          "oldStart": 624,
+          "newStart": 624,
+          "sha256": "7a3ceca40c51538a51327bb607bb19c1d4441ba53a66e9cecfcdc75a64ffa1e3",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L624"
+        },
+        {
+          "anchor": "@@ -994,7 +994,7 @@ fn initial_contents<'db>(",
+          "oldStart": 994,
+          "newStart": 994,
+          "sha256": "695fe91c9b059d8b373205f77850a4a98687b0bbaefd8c50295af1b58db7d42b",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L994"
         },
         {
           "anchor": "@@ -1137,6 +1137,10 @@ fn frozen_export_contents<'db>(",
@@ -1170,7 +1552,9 @@ export const ruffForwardAudit = {
           "newStart": 1137,
           "sha256": "7bef3b65afd1b4538edf0eedac5dfb649b3d2c9b111c03db30c0bba63a048c7f",
           "classification": "captured-keyword-key-iteration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1137"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1137"
         },
         {
           "anchor": "@@ -1188,15 +1192,18 @@ fn frozen_exported_field_contents<'db>(",
@@ -1178,7 +1562,9 @@ export const ruffForwardAudit = {
           "newStart": 1192,
           "sha256": "6de8edff886557560a6b9cb3bef39366d9286eac96cc17c0b9e93d805320d9da",
           "classification": "sealed-builtin-string-add-recovery",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1192"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1192"
         },
         {
           "anchor": "@@ -1246,7 +1253,12 @@ fn frozen_exported_field_contents<'db>(",
@@ -1186,7 +1572,9 @@ export const ruffForwardAudit = {
           "newStart": 1253,
           "sha256": "0d414ce91b5bbd8c55267a672f9ed538658189aebc5bb991fcceda0205cd897e",
           "classification": "sealed-builtin-string-add-recovery",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1253"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1253"
         },
         {
           "anchor": "@@ -1255,10 +1267,39 @@ fn inert_field_argument(expression: &ast::Expr) -> bool {",
@@ -1194,7 +1582,19 @@ export const ruffForwardAudit = {
           "newStart": 1267,
           "sha256": "e56340a93871570f15e05c406bb87122ed12dde527ffeb72de6708da60bc55e0",
           "classification": "sealed-builtin-string-add-recovery",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1267"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1267"
+        },
+        {
+          "anchor": "@@ -1583,7 +1624,7 @@ fn operation_contents<'db>(",
+          "oldStart": 1583,
+          "newStart": 1624,
+          "sha256": "a5996912b9286944413ff937a68c9a84bfe10ef2b3e146dd3a28c323c5d24e90",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1624"
         },
         {
           "anchor": "@@ -1594,6 +1635,37 @@ fn operation_contents<'db>(",
@@ -1202,7 +1602,19 @@ export const ruffForwardAudit = {
           "newStart": 1635,
           "sha256": "63fdb6721fdc7b0691ccf5f7a28e74d649c0b59789735921469d628b22c75975",
           "classification": "captured-keyword-key-iteration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1635"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1635"
+        },
+        {
+          "anchor": "@@ -1755,7 +1827,7 @@ fn mapping_transfer<'db>(",
+          "oldStart": 1755,
+          "newStart": 1827,
+          "sha256": "51a6ac9c23c3cfb150fdded3eaeb42aaa236137a98db917d35e6f2ce8d5da12f",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1827"
         },
         {
           "anchor": "@@ -1913,18 +1985,12 @@ fn mapping_transfer<'db>(",
@@ -1210,7 +1622,9 @@ export const ruffForwardAudit = {
           "newStart": 1985,
           "sha256": "3817639a8f6d9e809b6e6120f30df408f2e661c40f2c24d931fd209a626831bd",
           "classification": "captured-keyword-key-iteration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1985"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1985"
         },
         {
           "anchor": "@@ -2603,8 +2669,11 @@ pub(crate) fn needs_call_snapshot<'db>(",
@@ -1218,7 +1632,9 @@ export const ruffForwardAudit = {
           "newStart": 2669,
           "sha256": "ce2c08bccfd015331318bedee065b8dd43846008ceddb3aca71f645964a5dfc0",
           "classification": "sealed-builtin-string-add-recovery",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L2669"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L2669"
         },
         {
           "anchor": "@@ -2619,7 +2688,6 @@ pub(crate) fn needs_call_snapshot<'db>(",
@@ -1226,7 +1642,9 @@ export const ruffForwardAudit = {
           "newStart": 2688,
           "sha256": "9b3eb4e80d7bb855faf2ca0edd9be549dad57c0c0090879d873be8b73aad91ef",
           "classification": "sealed-builtin-string-add-recovery",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L2688"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L2688"
         },
         {
           "anchor": "@@ -2922,13 +2990,15 @@ pub(crate) fn fresh_argument_items<'db>(",
@@ -1234,7 +1652,9 @@ export const ruffForwardAudit = {
           "newStart": 2990,
           "sha256": "0aa16d81e7eea46c4d250e5b613786d46d2f84f4a0a21c093178eacba8eadadf",
           "classification": "sealed-builtin-string-add-recovery",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L2990"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L2990"
         }
       ]
     },
@@ -1252,7 +1672,9 @@ export const ruffForwardAudit = {
           "newStart": 177,
           "sha256": "48b7610e3b03d16ffdc56713c9f4103dff8fc95e34271fee33086e3833ccd562",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/records.rs#L177"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/records.rs#L177"
         }
       ]
     },
@@ -1270,7 +1692,9 @@ export const ruffForwardAudit = {
           "newStart": 131,
           "sha256": "1f5554e7dd27cd79b50135b6877ca1c318d1c15379cb50d998e43f93c3bffd71",
           "classification": "lint-policy",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/display.rs#L131"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/display.rs#L131"
         }
       ]
     },
@@ -1288,7 +1712,9 @@ export const ruffForwardAudit = {
           "newStart": 12,
           "sha256": "6615fe3f27b62e1a505f2750fc4f9bc870db55c8fd9e202e6d5642f1620ce902",
           "classification": "mixed-existing-solver-and-upstream-api",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/generics.rs#L12"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/generics.rs#L12"
         },
         {
           "anchor": "@@ -3127,8 +3127,7 @@ impl<'db, 'c> SpecializationBuilder<'db, 'c> {",
@@ -1296,7 +1722,9 @@ export const ruffForwardAudit = {
           "newStart": 3127,
           "sha256": "1577bd513a2b3ea143714d262284b08ce1931bb9bb9aa4222cd5f01277964594",
           "classification": "mixed-existing-solver-and-upstream-api",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/generics.rs#L3127"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/generics.rs#L3127"
         },
         {
           "anchor": "@@ -3535,7 +3534,7 @@ impl<'db, 'c> SpecializationBuilder<'db, 'c> {",
@@ -1304,7 +1732,9 @@ export const ruffForwardAudit = {
           "newStart": 3534,
           "sha256": "a1a117c10a3441d9106d8f6f2b565d355771b24d49dd6dea0a20bb47e07e8f7a",
           "classification": "mixed-existing-solver-and-upstream-api",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/generics.rs#L3534"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/generics.rs#L3534"
         },
         {
           "anchor": "@@ -3608,9 +3607,12 @@ impl<'db, 'c> SpecializationBuilder<'db, 'c> {",
@@ -1312,7 +1742,9 @@ export const ruffForwardAudit = {
           "newStart": 3607,
           "sha256": "17b4fddb9e5fb12bf5420adf20e3650453a916c8df559d73d85311117885953b",
           "classification": "mixed-existing-solver-and-upstream-api",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/generics.rs#L3607"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/generics.rs#L3607"
         },
         {
           "anchor": "@@ -3648,7 +3650,6 @@ impl<'db, 'c> SpecializationBuilder<'db, 'c> {",
@@ -1320,7 +1752,9 @@ export const ruffForwardAudit = {
           "newStart": 3650,
           "sha256": "58845bf1e1f2133fd564e26ab86d7986967564d15ac8fc65f12967c63bb62675",
           "classification": "mixed-existing-solver-and-upstream-api",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/generics.rs#L3650"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/generics.rs#L3650"
         },
         {
           "anchor": "@@ -5009,14 +5010,8 @@ impl<'db, 'c> SpecializationBuilder<'db, 'c> {",
@@ -1328,7 +1762,9 @@ export const ruffForwardAudit = {
           "newStart": 5010,
           "sha256": "6ad43c32e497e9adc605d8d58e39ec62968d6e9ce65965d97853d8861192a09a",
           "classification": "mixed-existing-solver-and-upstream-api",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/generics.rs#L5010"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/generics.rs#L5010"
         }
       ]
     },
@@ -1346,7 +1782,9 @@ export const ruffForwardAudit = {
           "newStart": 265,
           "sha256": "7d1c5b32e8c5025c69303de00e29cd58e7a3d219f3845f333c304cce433c4ebc",
           "classification": "collection-context-query-order-regression",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs#L265"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs#L265"
         },
         {
           "anchor": "@@ -356,13 +465,27 @@ mod tests {",
@@ -1354,7 +1792,9 @@ export const ruffForwardAudit = {
           "newStart": 465,
           "sha256": "65faa5a5461aa9c29c9c4c2a3231c8c3a7fc64a1dc4b73035c81f42856975c07",
           "classification": "checked-write-controls",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs#L465"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs#L465"
         },
         {
           "anchor": "@@ -380,8 +503,157 @@ mod tests {",
@@ -1362,7 +1802,9 @@ export const ruffForwardAudit = {
           "newStart": 503,
           "sha256": "72b6ac59b0dfbdc2457225d1fa7d0c5888bbd30bd3f370543edfa98ef3de2281",
           "classification": "checked-write-controls",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs#L503"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs#L503"
         },
         {
           "anchor": "@@ -433,10 +705,7 @@ mod tests {",
@@ -1370,259 +1812,729 @@ export const ruffForwardAudit = {
           "newStart": 705,
           "sha256": "ebcf2e4cb0b21cf581c6bd658e9d7e0e420908b66c094171506cf8019a6e04cf",
           "classification": "checked-write-controls",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs#L705"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/ide_support/unreachable_code.rs#L705"
+        }
+      ]
+    },
+    {
+      "path": "crates/ty_python_semantic/src/types/infer.rs",
+      "baseBlob": "e89d3937c3778b94e6aba663e84b7cdc92e26c9e",
+      "candidateBlob": "5c0f11102d29947d81b58786d0e335164a042721",
+      "frozenCandidateBlob": "7017a7ac52794c398805f43b180bf50e21c58bca",
+      "classification": "dictionary-comprehension-body-domain-propagation",
+      "detail": "Routes scope, definition, expression, statement and unpack inference through a domain-keyed owner only for lexically contained dictionary comprehensions. Ordinary inference remains the fallback outside that domain. Current forward hunks additionally cover: dictionary-comprehension-body-domain-propagation. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
+      "hunks": [
+        {
+          "anchor": "@@ -653,7 +653,7 @@ pub(crate) fn infer_predicate_truthiness<'db>(",
+          "oldStart": 653,
+          "newStart": 653,
+          "sha256": "82923418ceffdecce006c84ad7e028cf9c0c40f84999befbd38bed04091597c1",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer.rs#L653"
+        },
+        {
+          "anchor": "@@ -831,13 +831,39 @@ pub(super) fn infer_statement_types<'db>(",
+          "oldStart": 831,
+          "newStart": 831,
+          "sha256": "01c91c7bf3c4fb81abdb54520bbd86b44167116af677680d4d8a9dd835bcf6d5",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer.rs#L831"
+        },
+        {
+          "anchor": "@@ -850,7 +876,7 @@ pub(crate) fn infer_expression_with_body_domain<'db>(",
+          "oldStart": 850,
+          "newStart": 876,
+          "sha256": "d412e8e341f7f65e2cb9d549f2bd5c345f8a366ca10f38e00d89480c4008cc20",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer.rs#L876"
+        },
+        {
+          "anchor": "@@ -872,7 +898,7 @@ pub(crate) fn infer_statement_with_body_domain<'db>(",
+          "oldStart": 872,
+          "newStart": 898,
+          "sha256": "7ae404b671b2bb36461548c14da069ad22f158f1bf5d08eda4661eb92cb8c302",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer.rs#L898"
+        },
+        {
+          "anchor": "@@ -977,7 +1003,7 @@ impl<'db> InferExpression<'db> {",
+          "oldStart": 977,
+          "newStart": 1003,
+          "sha256": "1bdd4c3c698278c208d06b90083ce7585a1051ee6dd054ccca7399687ed4d176",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked. SalsaValue derive supports the new domain-keyed scope query input; it is API plumbing, not separate inference behavior.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer.rs#L1003"
+        },
+        {
+          "anchor": "@@ -1026,6 +1052,14 @@ impl<'db> InferScope<'db> {",
+          "oldStart": 1026,
+          "newStart": 1052,
+          "sha256": "6f9f6a565f648848aa7bf6e5faa95b3600060f68b479e10b4f7d46704e35ad83",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer.rs#L1052"
+        },
+        {
+          "anchor": "@@ -1037,7 +1071,8 @@ pub(super) fn infer_unpack_types<'db>(db: &'db dyn Db, unpack: Unpack<'db>) -> U",
+          "oldStart": 1037,
+          "newStart": 1071,
+          "sha256": "5e4ad76053702fce1bfae261bc7a38747dc7b1c76f3097e9273a53ece434fed3",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer.rs#L1071"
         }
       ]
     },
     {
       "path": "crates/ty_python_semantic/src/types/infer/body_domain.rs",
       "baseBlob": "0000000000000000000000000000000000000000",
-      "candidateBlob": "ee2df50eabd0760333685bc8fd09e8c860bb8e9d",
+      "candidateBlob": "de9b6e432dcd521ffd977e255b1d2e3b4eacbd63",
       "frozenCandidateBlob": "78adfbd099d048a14a51e6c7dd58cdc9bc01ae12",
       "classification": "body-domain-checkpoint-regression",
-      "detail": "Retain prior mechanical cleanups and strengthen the terminal-call domain test with a saved Boolean and 32 calls; assert that a body-domain reachability checkpoint actually executes.",
+      "detail": "Retain prior mechanical cleanups and strengthen the terminal-call domain test with a saved Boolean and 32 calls; assert that a body-domain reachability checkpoint actually executes. Current forward hunks additionally cover: dictionary-comprehension-body-domain-propagation. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
       "hunks": [
         {
-          "anchor": "@@ -412,7 +412,10 @@ fn prepare_body_domain<'db>(",
+          "anchor": "@@ -1,16 +1,16 @@",
+          "oldStart": 1,
+          "newStart": 1,
+          "sha256": "17b42a637412ca5c1c348e991cd744fa224db5bc616c394f056c6b08bd5f6220",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1"
+        },
+        {
+          "anchor": "@@ -175,11 +175,31 @@ impl<'db> OverloadBodyView<'db> {",
+          "oldStart": 175,
+          "newStart": 175,
+          "sha256": "42c68baa9a8afb4a04bbcf6fa824297d24baa90642ad890188e0287108eba120",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L175"
+        },
+        {
+          "anchor": "@@ -187,7 +207,10 @@ impl<'db> OverloadBodyView<'db> {",
+          "oldStart": 187,
+          "newStart": 207,
+          "sha256": "c00991a74dbec1fbab3b4034c3c98f1d65150c88b6a11c0c79d46a4b0dc35d58",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L207"
+        },
+        {
+          "anchor": "@@ -201,10 +224,16 @@ impl<'db> OverloadBodyView<'db> {",
+          "oldStart": 201,
+          "newStart": 224,
+          "sha256": "2ac95a05d0c7de8f3d5cc960454cc06eea9d25e1c72910ee69e7eff13eb53ebc",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L224"
+        },
+        {
+          "anchor": "@@ -269,6 +298,25 @@ impl<'db> FunctionBodyDomain<'db> {",
+          "oldStart": 269,
+          "newStart": 298,
+          "sha256": "24759674dd40a52d0c7389a34111a622773478fc1092ceebf32e128ef3a11884",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L298"
+        },
+        {
+          "anchor": "@@ -412,7 +460,10 @@ fn prepare_body_domain<'db>(",
           "oldStart": 412,
-          "newStart": 412,
-          "sha256": "8d5d2971769181c0890d35520d88c046b51307fd72eb92e4763209fecdfd6a1b",
+          "newStart": 460,
+          "sha256": "193c13f62446636bece7054094040c636f4250bf12c529743a28d2573fec4fec",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/body_domain.rs#L412"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L460"
         },
         {
-          "anchor": "@@ -435,6 +438,12 @@ fn prepare_body_domain<'db>(",
-          "oldStart": 435,
-          "newStart": 438,
-          "sha256": "1e68e27d7fec3b650f58399125c336be1c0a67c233d70c4ca4955b3f16c0c3f2",
-          "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/body_domain.rs#L438"
+          "anchor": "@@ -421,10 +472,18 @@ fn prepare_body_domain<'db>(",
+          "oldStart": 421,
+          "newStart": 472,
+          "sha256": "27b565bae215921acfd2b8c5a6914ce394f1307ac0ad78ea7a3c8ed9e0177dbc",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L472"
         },
         {
-          "anchor": "@@ -444,13 +453,7 @@ fn project_body_parameters<'db>(",
+          "anchor": "@@ -432,7 +491,24 @@ fn prepare_body_domain<'db>(",
+          "oldStart": 432,
+          "newStart": 491,
+          "sha256": "ab711adc4939fcfa4ed2d49c58a08244f7e464063cb90f796a6cc1774a06fd34",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L491"
+        },
+        {
+          "anchor": "@@ -444,13 +520,7 @@ fn project_body_parameters<'db>(",
           "oldStart": 444,
-          "newStart": 453,
-          "sha256": "07ecd7f65d538e7614c65b13d93c99ef05ed306a3a0688207cc1194bf0b6bbe6",
+          "newStart": 520,
+          "sha256": "57d6a2b6efbda825cb3824b16c877b80dbbc39cae1d9633837dcadf772c3b2f4",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/body_domain.rs#L453"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L520"
         },
         {
-          "anchor": "@@ -635,7 +638,10 @@ fn project_body_parameters<'db>(",
+          "anchor": "@@ -635,7 +705,10 @@ fn project_body_parameters<'db>(",
           "oldStart": 635,
-          "newStart": 638,
-          "sha256": "d51e0afdcab658f252b1863b4f87ececb3bff40a38528222ac00a9a78fdaf4df",
+          "newStart": 705,
+          "sha256": "2f3e05abdc8d3978a87365ed0d8edf210c34ef26539c9cc6ecf272e07c84f402",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/body_domain.rs#L638"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L705"
         },
         {
-          "anchor": "@@ -2412,7 +2418,10 @@ mod tests {",
+          "anchor": "@@ -644,6 +717,7 @@ fn supported_body(",
+          "oldStart": 644,
+          "newStart": 717,
+          "sha256": "03d23c2d0ceee5d586e28cbe1e910105f43e01818c6d6899ee5ba36cf5ee3adc",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L717"
+        },
+        {
+          "anchor": "@@ -653,7 +727,7 @@ fn supported_body(",
+          "oldStart": 653,
+          "newStart": 727,
+          "sha256": "ec3532abf506196a15728bcb8241c5aed9dc63c7e6eaa75758e1506abf30204e",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L727"
+        },
+        {
+          "anchor": "@@ -799,11 +873,33 @@ fn supported_body(",
+          "oldStart": 799,
+          "newStart": 873,
+          "sha256": "26dd1dbed99605e5d2bb11eecfe182187d1c91f78bfb7c82cd40c6178fa051dd",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L873"
+        },
+        {
+          "anchor": "@@ -815,22 +911,32 @@ fn supported_body(",
+          "oldStart": 815,
+          "newStart": 911,
+          "sha256": "534d73f741fdab636c4ef85ec1e538c8ee8c4bcb6aa9237ce4ac0d6c8b0fa604",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L911"
+        },
+        {
+          "anchor": "@@ -852,9 +958,88 @@ fn supported_body(",
+          "oldStart": 852,
+          "newStart": 958,
+          "sha256": "fb6ff24a40b8122426a54632006e5e9d232477d36eb4f6ba02793f98a9bcdcde",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L958"
+        },
+        {
+          "anchor": "@@ -868,46 +1053,49 @@ fn supported_body(",
+          "oldStart": 868,
+          "newStart": 1053,
+          "sha256": "22d097ab4e391c3fe0eca5006323321da71f7584d817cbef27325529ce90cb0d",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1053"
+        },
+        {
+          "anchor": "@@ -928,8 +1116,8 @@ fn supported_body(",
+          "oldStart": 928,
+          "newStart": 1116,
+          "sha256": "ba5e0dc59af2ee32f3ed2a5f76fda3af1d2f3b02c3e4ea90fd46cef21405d6d9",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1116"
+        },
+        {
+          "anchor": "@@ -941,12 +1129,10 @@ fn supported_body(",
+          "oldStart": 941,
+          "newStart": 1129,
+          "sha256": "a13ba7a5ff4f46551437d02b375c6d66e148572020d64a8cfcec9a628c6ddb35",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1129"
+        },
+        {
+          "anchor": "@@ -954,19 +1140,21 @@ fn supported_body(",
+          "oldStart": 954,
+          "newStart": 1140,
+          "sha256": "dbb994f78248975c08153a2e9816e69641e56ce387e691bdffbd6ab94a39b381",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1140"
+        },
+        {
+          "anchor": "@@ -1052,7 +1240,7 @@ fn supported_body(",
+          "oldStart": 1052,
+          "newStart": 1240,
+          "sha256": "874b3074df4e2ef44b4ddefa3b043fc70e7cb9cac6510377fbdb8ce0525b5146",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1240"
+        },
+        {
+          "anchor": "@@ -1061,15 +1249,50 @@ fn supported_body(",
+          "oldStart": 1061,
+          "newStart": 1249,
+          "sha256": "4da99d1a353d348a41654c86f8b7737c2f992a3a6b870cae90c42c1f428f3fd5",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1249"
+        },
+        {
+          "anchor": "@@ -1161,6 +1384,84 @@ mod tests {",
+          "oldStart": 1161,
+          "newStart": 1384,
+          "sha256": "e8adc885de57a25f0b819cde8296c686d25d6a42e6806e0e5af10e61135bd3ba",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked. Native regressions cover expression-scope views, nested/order/incremental domains, wrong key/value diagnostics and unsupported mutation/shadowing/custom-method cases.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1384"
+        },
+        {
+          "anchor": "@@ -1711,6 +2012,66 @@ mod tests {",
+          "oldStart": 1711,
+          "newStart": 2012,
+          "sha256": "9a7af856057d99282acd2dd65ecbae58cdc6279fccaf3b659f01213858f69706",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked. Native regressions cover expression-scope views, nested/order/incremental domains, wrong key/value diagnostics and unsupported mutation/shadowing/custom-method cases.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L2012"
+        },
+        {
+          "anchor": "@@ -1741,6 +2102,28 @@ mod tests {",
+          "oldStart": 1741,
+          "newStart": 2102,
+          "sha256": "43c0f829d2d9bb3b25e85f11b2d8eee07db86364127d0f333485a51fa0ab3da8",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked. Native regressions cover expression-scope views, nested/order/incremental domains, wrong key/value diagnostics and unsupported mutation/shadowing/custom-method cases.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L2102"
+        },
+        {
+          "anchor": "@@ -1852,6 +2235,25 @@ mod tests {",
+          "oldStart": 1852,
+          "newStart": 2235,
+          "sha256": "13902f9b43fecddf7470b5bc6635cdd4ab52ab7b072921236973f5831f32cfec",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked. Native regressions cover expression-scope views, nested/order/incremental domains, wrong key/value diagnostics and unsupported mutation/shadowing/custom-method cases.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L2235"
+        },
+        {
+          "anchor": "@@ -2412,7 +2814,10 @@ mod tests {",
           "oldStart": 2412,
-          "newStart": 2418,
-          "sha256": "5d738f63a0c4a2613bd32f68d24bb06b0fc07c6347d1848a011d858e1e24684c",
+          "newStart": 2814,
+          "sha256": "8a622220f84c746930a8e7746ed5f5561c2e94e276ef3893b3de31cdbc449ec8",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/body_domain.rs#L2418"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L2814"
         },
         {
-          "anchor": "@@ -2750,20 +2759,12 @@ mod tests {",
+          "anchor": "@@ -2750,20 +3155,12 @@ mod tests {",
           "oldStart": 2750,
-          "newStart": 2759,
-          "sha256": "92cb75bbd48d3feb98dc564bac857e6f5a35b0c2e1db1b9dbd6f0ed507a38d6c",
+          "newStart": 3155,
+          "sha256": "f77bf6f0ad4cdf2428387d1694733082e229c4630a0de93042d6e90edceacd59",
           "classification": "body-domain-checkpoint-regression",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/body_domain.rs#L2759"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L3155"
         },
         {
-          "anchor": "@@ -2774,6 +2775,17 @@ mod tests {",
+          "anchor": "@@ -2774,6 +3171,17 @@ mod tests {",
           "oldStart": 2774,
-          "newStart": 2775,
-          "sha256": "1874b8f758551525dc7aeb16d4bcb373917fdaefe93bd781f5ab197f1b32ab1c",
+          "newStart": 3171,
+          "sha256": "b4d941d9b0758d1cadf29352c86bbc91e12667e30af2a10feac31903bc3071b9",
           "classification": "body-domain-checkpoint-regression",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/body_domain.rs#L2775"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L3171"
         }
       ]
     },
     {
       "path": "crates/ty_python_semantic/src/types/infer/builder.rs",
       "baseBlob": "32dea63315b3e56f71b7630c37d323edbfd5a16e",
-      "candidateBlob": "795fab436cc389ba619fd5ce98865206f84b826a",
+      "candidateBlob": "fbd17433ac43b904172d5ddc25298b9fc1bd2524",
       "frozenCandidateBlob": "c92d970edcc3aea8a3b2fd02fd2b6c4b8376b9ad",
       "classification": "mixed-inference-context-owners",
-      "detail": "Commit one lambda inference when all actual TypeContexts including kind agree; retain default plus every raw/ParamSpec key. Separate cached API and lint-policy migration hunks. Upstream factory-name inference and constructor-specific diagnostics are composed with the existing shared-argument-context change. Empty collections prefer complete, static invariant contexts agreed by their later consumers; conditional specializations of caller variables are not substitutes for those contexts. Comparison inference also consults the native type-tag impossibility owner for either operand order before ordinary comparison inference; it reuses already inferred operand types. Fresh mapping recovery receives cached expression types for exact builtin-string operand checks; no new operand inference is performed.",
+      "detail": "Commit one lambda inference when all actual TypeContexts including kind agree; retain default plus every raw/ParamSpec key. Separate cached API and lint-policy migration hunks. Upstream factory-name inference and constructor-specific diagnostics are composed with the existing shared-argument-context change. Empty collections prefer complete, static invariant contexts agreed by their later consumers; conditional specializations of caller variables are not substitutes for those contexts. Comparison inference also consults the native type-tag impossibility owner for either operand order before ordinary comparison inference; it reuses already inferred operand types. Fresh mapping recovery receives cached expression types for exact builtin-string operand checks; no new operand inference is performed. Current forward hunks additionally cover: dictionary-comprehension-body-domain-propagation, sibling-dependent-empty-getattr-context-replay. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
       "hunks": [
         {
-          "anchor": "@@ -80,10 +80,11 @@ use crate::types::diagnostic::{",
+          "anchor": "@@ -34,7 +34,8 @@ use super::{",
+          "oldStart": 34,
+          "newStart": 34,
+          "sha256": "6bbea1cc490173b63ded3834d6f4bff81fbaf197f8b7538739e7c75a13973716",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L34"
+        },
+        {
+          "anchor": "@@ -80,10 +81,11 @@ use crate::types::diagnostic::{",
           "oldStart": 80,
-          "newStart": 80,
-          "sha256": "c155a3b04f527ef8c38a915aeaf60310e2c54d8ce5ddc247b4c00f6906f16511",
+          "newStart": 81,
+          "sha256": "945f7e4b1f4b0a9e4eec2e30b85e576038ecfd0587b281a08274c51135b958e7",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L80"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L81"
         },
         {
-          "anchor": "@@ -3895,6 +3896,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -3895,6 +3897,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 3895,
-          "newStart": 3896,
-          "sha256": "4764ce4bda3a80c9e6af3c88c874f476759ed60278cde84132aa4f213b070e86",
+          "newStart": 3897,
+          "sha256": "31a993ed868e339a600b5d10fa3d1b7253abd85c00d005d264790f4bbd34c5c8",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L3896"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L3897"
         },
         {
-          "anchor": "@@ -3926,13 +3928,19 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -3926,13 +3929,19 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 3926,
-          "newStart": 3928,
-          "sha256": "cb7db287f763d7557ce880cbb36d6ec295e956e140a8d45cce9ca59ec64d056b",
+          "newStart": 3929,
+          "sha256": "a5c522b4422a255d1aab70e102333a49b2e26b31e79f4a00dfef0d0f7a2ba4ad",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L3928"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L3929"
         },
         {
-          "anchor": "@@ -3945,13 +3953,14 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -3945,13 +3954,14 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 3945,
-          "newStart": 3953,
-          "sha256": "761ffdfb101cc7672ee14f9a3b1c82f2c7a7e253935fc265624119f0424d6597",
+          "newStart": 3954,
+          "sha256": "6fe1a118e4ba5835547435e7c256b12d0f0c7202fdf9305aebe0e6f981bd9428",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L3953"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L3954"
         },
         {
-          "anchor": "@@ -3960,7 +3969,10 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -3960,7 +3970,10 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 3960,
-          "newStart": 3969,
-          "sha256": "e5254223a694a7fe0aa524a4094cec92d690dc50637bc9295f8748b39768dc1e",
+          "newStart": 3970,
+          "sha256": "78912cae92add3ff14c63bae301d667d26a16f38be609ef1da6226b0d87aa62e",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L3969"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L3970"
         },
         {
-          "anchor": "@@ -4312,6 +4324,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -4312,6 +4325,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 4312,
-          "newStart": 4324,
-          "sha256": "4623e3d2aea55b299ed2f1bd156a512498fd0182a4f3724a3b91ab740e5e1db4",
+          "newStart": 4325,
+          "sha256": "958bc0ae9b19f10f49fde26e306d668614cc26860713e7adadc30c105270dbd5",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L4324"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L4325"
         },
         {
-          "anchor": "@@ -4343,13 +4356,19 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -4343,13 +4357,19 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 4343,
-          "newStart": 4356,
-          "sha256": "ce23efd30306ebc0cf8a1bf5601e501aac01ded4f94d28c6590f9a36fb2b4b3f",
+          "newStart": 4357,
+          "sha256": "aee3abef28008d49c361265f06cac7bda5d0f992e24f1eaa38541cf399269f89",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L4356"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L4357"
         },
         {
-          "anchor": "@@ -4362,13 +4381,14 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -4362,13 +4382,14 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 4362,
-          "newStart": 4381,
-          "sha256": "dc1ed6b18528645a518dc53e88af762914e658ac3421977dd9e58515f8356682",
+          "newStart": 4382,
+          "sha256": "d22d414fabbe87070e332071494bb1e285763c1eb1d5448c5477b98d3bdf2e86",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L4381"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L4382"
         },
         {
-          "anchor": "@@ -4379,7 +4399,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -4379,7 +4400,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 4379,
-          "newStart": 4399,
-          "sha256": "9bf438687c88c67a43ac88f2f58fd7ec40ff6f328bffebde5ca7a2907024fdb8",
+          "newStart": 4400,
+          "sha256": "463e5025224ccb2419c8d7f703cd49012f5ebf8038f15d10deef69134bf57a5e",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L4399"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L4400"
         },
         {
-          "anchor": "@@ -6402,10 +6422,10 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -6293,12 +6314,36 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 6293,
+          "newStart": 6314,
+          "sha256": "a4e64f3ce26e5b9485b8534a43489c2e4b2941b960c901b887b52bc7d4e792db",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6314"
+        },
+        {
+          "anchor": "@@ -6365,6 +6410,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 6365,
+          "newStart": 6410,
+          "sha256": "1400b8aed877a015aa87c15bfc1b3e2f4e3eecccf111dbcb8f76e3b2eff8cb70",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6410"
+        },
+        {
+          "anchor": "@@ -6402,10 +6448,10 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 6402,
-          "newStart": 6422,
-          "sha256": "d61a659fc8fdd1f37d6d8e0255ed5272c23df26e090a76877abda78182acaf88",
+          "newStart": 6448,
+          "sha256": "114f4b01f1b630db5b1ec8dcbb378258fbb727a240052e6e5e38d3b3971e2c41",
           "classification": "shared-actual-argument-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L6422"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6448"
         },
         {
-          "anchor": "@@ -7011,6 +7031,38 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -6637,6 +6683,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 6637,
+          "newStart": 6683,
+          "sha256": "962dfe51846559e0da63efd775a27774967f475c21e1e93c605e21d4e0ef409a",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6683"
+        },
+        {
+          "anchor": "@@ -6691,7 +6738,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 6691,
+          "newStart": 6738,
+          "sha256": "3f56b2cf1bf7d47c4ebfc2014b25a18a89f9c9e4a3d1ea10a7dc613e718c7f62",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6738"
+        },
+        {
+          "anchor": "@@ -6707,9 +6754,9 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 6707,
+          "newStart": 6754,
+          "sha256": "5b356d37cc687270722c76390ad900a9758ece4613b84151877c677ec20fd8b0",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6754"
+        },
+        {
+          "anchor": "@@ -6851,6 +6898,14 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 6851,
+          "newStart": 6898,
+          "sha256": "d54749efe02666cb0d8c6f9b84b46204f41bf4cf5b3745e9ff4e2bb684d27f0b",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6898"
+        },
+        {
+          "anchor": "@@ -6906,11 +6961,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 6906,
+          "newStart": 6961,
+          "sha256": "ca1bd20a57c5a20ec06fdf40cd0fb0d86810c63153fd5a0d912d800946802f10",
+          "classification": "sibling-dependent-empty-getattr-context-replay",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Shared matched builtin default eligibility marks only fresh empty nonspread defaults, includes them in bounded context convergence, and preserves existing finite lookup/final validation.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6961"
+        },
+        {
+          "anchor": "@@ -7011,6 +7062,38 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 7011,
-          "newStart": 7031,
-          "sha256": "d84c7b230fa2c86d53ca672ed70acee7d25ae0485fbcae17d9d33ae06b21c320",
+          "newStart": 7062,
+          "sha256": "99970cd2659b96081061e356feb5bfefe815e2605e7e9c5b9e54f52fd53956cf",
           "classification": "shared-actual-argument-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L7031"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L7062"
         },
         {
-          "anchor": "@@ -8736,6 +8788,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -8736,6 +8819,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 8736,
-          "newStart": 8788,
-          "sha256": "eba6c11b2380ef1484b67128a834a474d85d73bdee85e9dd022caa396413e6f4",
-          "classification": "complete-later-collection-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L8788"
-        },
-        {
-          "anchor": "@@ -8748,6 +8801,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
-          "oldStart": 8748,
-          "newStart": 8801,
-          "sha256": "7a45474cdbfdb4f773cb0993ad03242113eb32a0af1b549329888128f8ea7c47",
-          "classification": "complete-later-collection-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L8801"
-        },
-        {
-          "anchor": "@@ -8756,6 +8810,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
-          "oldStart": 8756,
-          "newStart": 8810,
-          "sha256": "6f3bdfc31a29cd0f3a14f09501af85b2705542d0b7fe043d0f0faf060b0b2d2b",
-          "classification": "complete-later-collection-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L8810"
-        },
-        {
-          "anchor": "@@ -8764,6 +8819,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
-          "oldStart": 8764,
           "newStart": 8819,
-          "sha256": "8c993152ddb3bd903616dd658aa73ef6182e0ee87ac2f3b97a244a25f5ae1951",
+          "sha256": "8dd81d82fc25eb97d8439931962f71eb43987eb1f092d6baa919b13821eebcea",
           "classification": "complete-later-collection-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L8819"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L8819"
         },
         {
-          "anchor": "@@ -8859,9 +8915,9 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -8748,6 +8832,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 8748,
+          "newStart": 8832,
+          "sha256": "034b329e571f0e3f5937a8a225a498bcf9afbd9bf8ecca8abd6e63bfb46c2f3e",
+          "classification": "complete-later-collection-context",
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L8832"
+        },
+        {
+          "anchor": "@@ -8756,6 +8841,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 8756,
+          "newStart": 8841,
+          "sha256": "a46089a2c7c67a96142de26a7faf37141f054dd9193de256d5168b5f30d99afa",
+          "classification": "complete-later-collection-context",
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L8841"
+        },
+        {
+          "anchor": "@@ -8764,6 +8850,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 8764,
+          "newStart": 8850,
+          "sha256": "185b15334dd970ea02b1934bb04f4a75c9021658c10abfead1435868f320bb1e",
+          "classification": "complete-later-collection-context",
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L8850"
+        },
+        {
+          "anchor": "@@ -8859,9 +8946,9 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 8859,
-          "newStart": 8915,
-          "sha256": "4c77f80aa4694d9c9a7a725994d920022659ab3e852ed50380f6bedc6e8fd04b",
+          "newStart": 8946,
+          "sha256": "53aa88a0a59c0132c54d9b4463798b7566cb2d740d7b3453546409e2e741d539",
           "classification": "complete-later-collection-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L8915"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L8946"
         },
         {
-          "anchor": "@@ -9000,6 +9056,8 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -9000,6 +9087,8 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 9000,
-          "newStart": 9056,
-          "sha256": "a2c201d7181ae0247414346e0684a790e5175e87efdb0b1b9b912350219e0a83",
+          "newStart": 9087,
+          "sha256": "3b02a3608fd0ad5ab197a3729b5d18649a9bb82cfd8609359472df9b538a9cb9",
           "classification": "complete-later-collection-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L9056"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L9087"
         },
         {
-          "anchor": "@@ -9065,8 +9123,69 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -9065,8 +9154,69 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 9065,
-          "newStart": 9123,
-          "sha256": "e2edbae040a5a796a22603c703ed7c3380ac0439558d64eb17ad219795c290d7",
+          "newStart": 9154,
+          "sha256": "b412eeba9e7b7186bcf2553da2ce423a40961b44877d33c05ea3269af8966234",
           "classification": "complete-later-collection-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L9123"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L9154"
         },
         {
-          "anchor": "@@ -9100,6 +9219,15 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -9100,6 +9250,15 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 9100,
-          "newStart": 9219,
-          "sha256": "007035c5dfd33e63c98b3f1dda8d11e0dd8e0c1e47df26a3caad00d0d5fcca9d",
+          "newStart": 9250,
+          "sha256": "c296a239a46da7ce1411759bc90ff77c7f92e119dd3397edeef0fff7a3f1363f",
           "classification": "complete-later-collection-context",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L9219"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L9250"
         },
         {
-          "anchor": "@@ -10235,6 +10363,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -9407,7 +9566,12 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 9407,
+          "newStart": 9566,
+          "sha256": "77468a6964e6b0b494195f51428e96b8cc1d5266e413ee9fa7f6537b78617d46",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L9566"
+        },
+        {
+          "anchor": "@@ -9687,8 +9851,12 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 9687,
+          "newStart": 9851,
+          "sha256": "eef2f4c579ca2af77c26c0cf7122fa3b97694e75e081ec6ac0c19d36c472227f",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L9851"
+        },
+        {
+          "anchor": "@@ -9737,7 +9905,12 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 9737,
+          "newStart": 9905,
+          "sha256": "16c4ac2c03080299dbec6c6132db1eb2fd8c4ac4b9fefc02323c995ed553aef9",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L9905"
+        },
+        {
+          "anchor": "@@ -9760,7 +9933,8 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "oldStart": 9760,
+          "newStart": 9933,
+          "sha256": "28a0b3da7a75d2a63247826a5596a7bd4b7ceed18e839e92365c58e69e5ad4e4",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L9933"
+        },
+        {
+          "anchor": "@@ -10235,6 +10409,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 10235,
-          "newStart": 10363,
-          "sha256": "ca5ea267c0a594a73758c528eec85aa26fe7038b01f76d304e40df4dcb596d03",
+          "newStart": 10409,
+          "sha256": "9892454d9e38c5c0075be9c52595be2af276a19303cc1a1a3fc1ab58aba5b8a6",
           "classification": "cached-string-operands-for-fresh-mapping-recovery",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L10363"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L10409"
         },
         {
-          "anchor": "@@ -11739,6 +11868,10 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -11739,6 +11914,10 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 11739,
-          "newStart": 11868,
-          "sha256": "f5b3bb0a586140c46eb55a78051869d250439a08596d92b4a22364876e7b7c2f",
+          "newStart": 11914,
+          "sha256": "54bb202fec2462471e124cd80fbd3d7590c853c5240e6ca5bd9763591faa604b",
           "classification": "mechanical-clippy-qualification",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L11868"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L11914"
         },
         {
-          "anchor": "@@ -13574,7 +13707,34 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
+          "anchor": "@@ -13574,7 +13753,34 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
           "oldStart": 13574,
-          "newStart": 13707,
-          "sha256": "265fd6debc3185411aba33810eedf4b33f19ccc717c25a0f8ae04a5e3733662c",
+          "newStart": 13753,
+          "sha256": "7a6bd33aeca34568398d303904b1a90954b54595bc7ff4dc5760a15b4a144289",
           "classification": "native-type-tag-impossibility-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L13707"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L13753"
         }
       ]
     },
@@ -1640,7 +2552,9 @@ export const ruffForwardAudit = {
           "newStart": 13,
           "sha256": "2c0a4526aa02164ef8dcce5d24648f7d75e083fc9cefebbfc5bf76b5722c661c",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L13"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L13"
         },
         {
           "anchor": "@@ -361,15 +362,17 @@ impl<'db> TypeInferenceBuilder<'db, '_> {",
@@ -1648,7 +2562,9 @@ export const ruffForwardAudit = {
           "newStart": 362,
           "sha256": "76ebba6405f741fd18943dcce43cab49dc23d2457d7995e166aafc3b168e3889",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L362"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L362"
         },
         {
           "anchor": "@@ -388,13 +391,6 @@ impl<'db> TypeInferenceBuilder<'db, '_> {",
@@ -1656,7 +2572,9 @@ export const ruffForwardAudit = {
           "newStart": 391,
           "sha256": "d9ae9341b7329879faea336e27afd8052612be296417f9452e1e1d6597f3cdea",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L391"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L391"
         },
         {
           "anchor": "@@ -417,24 +413,19 @@ impl<'db> TypeInferenceBuilder<'db, '_> {",
@@ -1664,7 +2582,9 @@ export const ruffForwardAudit = {
           "newStart": 413,
           "sha256": "9604af10deda2b8cb1f411bd915a70115883da164d80aa203d4aa7e6cd5d604b",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L413"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L413"
         },
         {
           "anchor": "@@ -448,7 +439,7 @@ impl<'db> TypeInferenceBuilder<'db, '_> {",
@@ -1672,7 +2592,9 @@ export const ruffForwardAudit = {
           "newStart": 439,
           "sha256": "f6044baa7b200ddbb6a34d79a528bd43b93ed63895d17680f418c57c298da36c",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L439"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L439"
         },
         {
           "anchor": "@@ -468,14 +459,14 @@ impl<'db> TypeInferenceBuilder<'db, '_> {",
@@ -1680,7 +2602,9 @@ export const ruffForwardAudit = {
           "newStart": 459,
           "sha256": "ca2f5c9a6f32bd4371559663ea02e4c4f157ced1b7ec238928f49f814c55d0ae",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L459"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/enum_call.rs#L459"
         }
       ]
     },
@@ -1698,7 +2622,9 @@ export const ruffForwardAudit = {
           "newStart": 321,
           "sha256": "90ca043ef47cece793da5c1a54004bfe7028d2106d6a15b65339078f42d658e9",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/function.rs#L321"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/function.rs#L321"
         }
       ]
     },
@@ -1716,7 +2642,9 @@ export const ruffForwardAudit = {
           "newStart": 168,
           "sha256": "16b9f1942d576b4d0fe19df08b860a2b8d119b5ea7f1c1ad69bde2dd2b22e37e",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/paramspec_validation.rs#L168"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/paramspec_validation.rs#L168"
         }
       ]
     },
@@ -1734,7 +2662,9 @@ export const ruffForwardAudit = {
           "newStart": 172,
           "sha256": "ee501454085f8011877bc2865331231869d2251e05c3b08471a90abc1541361e",
           "classification": "checked-write-evidence",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/subscript.rs#L172"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/subscript.rs#L172"
         },
         {
           "anchor": "@@ -1894,14 +1893,14 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {",
@@ -1742,7 +2672,9 @@ export const ruffForwardAudit = {
           "newStart": 1893,
           "sha256": "c62f25a5b51b7a10c6d17397852fb598ace597a0d645ce7543bf49926de8dfb2",
           "classification": "checked-write-evidence",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/subscript.rs#L1893"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/subscript.rs#L1893"
         }
       ]
     },
@@ -1760,7 +2692,9 @@ export const ruffForwardAudit = {
           "newStart": 9,
           "sha256": "15952774f2f97de47bed86e00123055b81bbe3569856fa256ee6ee8c631b71ac",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/typed_dict.rs#L9"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/typed_dict.rs#L9"
         },
         {
           "anchor": "@@ -267,11 +267,13 @@ impl<'db> TypeInferenceBuilder<'db, '_> {",
@@ -1768,7 +2702,9 @@ export const ruffForwardAudit = {
           "newStart": 267,
           "sha256": "35e447fed33be9b21d3c6b00c5775d0f03b32a4b131220f96a9d4c524bd5c559",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/typed_dict.rs#L267"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/typed_dict.rs#L267"
         },
         {
           "anchor": "@@ -281,12 +283,16 @@ impl<'db> TypeInferenceBuilder<'db, '_> {",
@@ -1776,7 +2712,9 @@ export const ruffForwardAudit = {
           "newStart": 283,
           "sha256": "48d9e71b89b63d3233ac958582887b3ad1f7c0f6b04e26b23d739649ac8ecffc",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/typed_dict.rs#L283"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/typed_dict.rs#L283"
         }
       ]
     },
@@ -1794,7 +2732,9 @@ export const ruffForwardAudit = {
           "newStart": 23,
           "sha256": "6a05be00e39ff1f589b2ddbd466a15148e1da07b2d982301b6382f3d4994ec36",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/loop_bindings.rs#L23"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/loop_bindings.rs#L23"
         },
         {
           "anchor": "@@ -393,9 +392,8 @@ def select(rows: list[tuple[bool, list[str], str]]) -> str:",
@@ -1802,17 +2742,19 @@ export const ruffForwardAudit = {
           "newStart": 392,
           "sha256": "505698a91a28d3cceb33591241d5c88ab0fa679b637dfa8671929efe1429f98c",
           "classification": "mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/loop_bindings.rs#L392"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/loop_bindings.rs#L392"
         }
       ]
     },
     {
       "path": "crates/ty_python_semantic/src/types/narrow.rs",
       "baseBlob": "3dd831e5e7b940678f33a4d575a049dbe925e1e6",
-      "candidateBlob": "3bf2efca53638be3ef9be2b21b6387bc8c528b3f",
+      "candidateBlob": "f08f563acd3b82a1f0bc238ad8df1f4bd2d9d9a4",
       "frozenCandidateBlob": "13df5517f618d3a15adac07c05f2755cac9742cb",
       "classification": "native-type-tag-impossibility-proof",
-      "detail": "A registered native type-tag test can prove only impossible Eq/NotEq comparisons: cached operand evidence must be an exact builtin string, the subject static and determinate, and disjointness must be completely proved within the existing bound. Overlapping, opaque, growing or unsupported cases retain ordinary comparison behavior. Starred type-test subjects are declined; exact Python class comparisons are not folded.",
+      "detail": "A registered native type-tag test can prove only impossible Eq/NotEq comparisons: cached operand evidence must be an exact builtin string, the subject static and determinate, and disjointness must be completely proved within the existing bound. Overlapping, opaque, growing or unsupported cases retain ordinary comparison behavior. Starred type-test subjects are declined; exact Python class comparisons are not folded. Current forward hunks additionally cover: dictionary-comprehension-body-domain-propagation. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
       "hunks": [
         {
           "anchor": "@@ -52,7 +52,7 @@ use ruff_python_ast::helpers::any_over_expr;",
@@ -1820,7 +2762,9 @@ export const ruffForwardAudit = {
           "newStart": 52,
           "sha256": "3a0a8fbc1a97cd1b2812b39b36965fa62fc2dfd5da9b2f5c1fb1b5a772155fd2",
           "classification": "native-type-tag-impossibility-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/narrow.rs#L52"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L52"
         },
         {
           "anchor": "@@ -60,6 +60,7 @@ use super::equality::{",
@@ -1828,7 +2772,29 @@ export const ruffForwardAudit = {
           "newStart": 60,
           "sha256": "ad4cc16b9c12cdb5ff17998b6ee4f370d49a2a884d479cfacde18a75b8bb9ae4",
           "classification": "native-type-tag-impossibility-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/narrow.rs#L60"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L60"
+        },
+        {
+          "anchor": "@@ -100,7 +101,7 @@ pub(crate) fn infer_narrowing_constraints<'db>(",
+          "oldStart": 100,
+          "newStart": 101,
+          "sha256": "82df0c775bb2d8cfa3313a247e89f7293d209179d317c3183bbe8c71a78c04c5",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L101"
+        },
+        {
+          "anchor": "@@ -125,7 +126,7 @@ pub(crate) fn infer_narrowing_constraints<'db>(",
+          "oldStart": 125,
+          "newStart": 126,
+          "sha256": "2de5e3ba06adb1b9d86d6a62d4035bde670d7c2911fe661b09ea87cd91bc4786",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L126"
         },
         {
           "anchor": "@@ -181,6 +182,9 @@ impl<'db, 'ast> RuntimeTypeTest<'db, 'ast> {",
@@ -1836,7 +2802,9 @@ export const ruffForwardAudit = {
           "newStart": 182,
           "sha256": "9ea99589f93b60d4739f9c28aca06029f6dbf2552cc6c624710df2595d523abe",
           "classification": "native-type-tag-impossibility-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/narrow.rs#L182"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L182"
         },
         {
           "anchor": "@@ -263,6 +267,75 @@ impl<'db, 'ast> RuntimeTypeTest<'db, 'ast> {",
@@ -1844,7 +2812,29 @@ export const ruffForwardAudit = {
           "newStart": 267,
           "sha256": "339b7968445207909994414a5939c8a852bbfeb51e96319f7542b44c56d1e870",
           "classification": "native-type-tag-impossibility-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/narrow.rs#L267"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L267"
+        },
+        {
+          "anchor": "@@ -4367,7 +4440,12 @@ impl<'db> NarrowingConstraintsBuilder<'db, '_> {",
+          "oldStart": 4367,
+          "newStart": 4440,
+          "sha256": "771ec0e79b04f2898887ab4d4a104c9a5b4473832d3fa499d39c79f538981f37",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L4440"
+        },
+        {
+          "anchor": "@@ -4377,6 +4455,7 @@ impl<'db> NarrowingConstraintsBuilder<'db, '_> {",
+          "oldStart": 4377,
+          "newStart": 4455,
+          "sha256": "b632980cb05d2c183497766e6695f6bedeba874bf521dbfd75cd5d911aed5d54",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L4455"
         }
       ]
     },
@@ -1862,7 +2852,9 @@ export const ruffForwardAudit = {
           "newStart": 152,
           "sha256": "c9cfa74fc8fcbf52dcb3b657beaa42e964d652dea70f07628d6985468c8fd44c",
           "classification": "identity-preserving-noop",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/newtype.rs#L152"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/newtype.rs#L152"
         }
       ]
     },
@@ -1880,7 +2872,9 @@ export const ruffForwardAudit = {
           "newStart": 3255,
           "sha256": "a299a12ecbbb4fcbfe877e4cdc8ccc7298a98f7f73f3f8146d2497134ec1877a",
           "classification": "native-test-mechanical",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/source_tests.rs#L3255"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/source_tests.rs#L3255"
         }
       ]
     },
@@ -1898,7 +2892,9 @@ export const ruffForwardAudit = {
           "newStart": 70,
           "sha256": "3476a3ec023e2205f72b98f9e3040e2d237d9d3d29870ae83ac1e9dfb46eb88b",
           "classification": "canonical-diagnostic-fixtures",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L70"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L70"
         },
         {
           "anchor": "@@ -88,31 +94,63 @@ Literal[float]",
@@ -1906,7 +2902,9 @@ export const ruffForwardAudit = {
           "newStart": 94,
           "sha256": "1c495e5e819404b940e741eab1459b51e13ff4b6f4a9df9e842e0e65ce148aea",
           "classification": "canonical-diagnostic-fixtures",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L94"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L94"
         },
         {
           "anchor": "@@ -121,8 +159,14 @@ Literal[float]",
@@ -1914,7 +2912,9 @@ export const ruffForwardAudit = {
           "newStart": 159,
           "sha256": "d64441e58dd7f64adaded3dd5d2af0a26b4b3dc4c8401a4be262e54da356745c",
           "classification": "canonical-diagnostic-fixtures",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L159"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L159"
         },
         {
           "anchor": "@@ -509,6 +553,68 @@ fn supplied_instance_refinement_preserves_storage_and_nominal_behavior() -> anyh",
@@ -1922,7 +2922,9 @@ export const ruffForwardAudit = {
           "newStart": 553,
           "sha256": "ded38a283c13509550eaf92c5e9490b654760e8ebc8eafcec523f43a04c42e54",
           "classification": "finite-provided-storage-receiver-regression",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L553"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L553"
         },
         {
           "anchor": "@@ -1844,7 +1950,7 @@ consume(target, consumed=1, required=1)",
@@ -1930,7 +2932,9 @@ export const ruffForwardAudit = {
           "newStart": 1950,
           "sha256": "36409e6ff52818ab9d0914b8ce38bb7e833b0a41f88b0843edabc7f2ef65bb63",
           "classification": "canonical-diagnostic-fixtures",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L1950"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L1950"
         },
         {
           "anchor": "@@ -2610,7 +2716,7 @@ if False:",
@@ -1938,7 +2942,9 @@ export const ruffForwardAudit = {
           "newStart": 2716,
           "sha256": "5de4392bdeabb121d85a360382f290f084bff3fc8bef0bdaedee50a5caa0f45d",
           "classification": "canonical-diagnostic-fixtures",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L2716"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L2716"
         },
         {
           "anchor": "@@ -3087,6 +3193,115 @@ fn runtime_type_test<'db>(",
@@ -1946,7 +2952,9 @@ export const ruffForwardAudit = {
           "newStart": 3193,
           "sha256": "422fbef5a849f9b89f27293aa866445d56b965ba73a243b907d49dbd15b0b17f",
           "classification": "native-type-tag-regression-controls",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L3193"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L3193"
         },
         {
           "anchor": "@@ -3733,25 +3948,25 @@ target: Target | None",
@@ -1954,7 +2962,9 @@ export const ruffForwardAudit = {
           "newStart": 3948,
           "sha256": "44da6ec9247f2481dc68f8be8568ba89603a3fe477477f9180c006e5c0ea0179",
           "classification": "canonical-diagnostic-fixtures",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L3948"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L3948"
         },
         {
           "anchor": "@@ -3763,13 +3978,14 @@ target: Target | None",
@@ -1962,7 +2972,9 @@ export const ruffForwardAudit = {
           "newStart": 3978,
           "sha256": "300c0c9b9809b0aaf5eb2df4acee6ddfa562ff0d2a1ffb344916926e42485a41",
           "classification": "canonical-diagnostic-fixtures",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L3978"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L3978"
         },
         {
           "anchor": "@@ -3817,7 +4033,7 @@ def use() -> str:",
@@ -1970,7 +2982,9 @@ export const ruffForwardAudit = {
           "newStart": 4033,
           "sha256": "2e1cfe87ad416febdd0ecbea79e4023f5e700e2392ad4eae124aea3f50989e22",
           "classification": "canonical-diagnostic-fixtures",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L4033"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L4033"
         },
         {
           "anchor": "@@ -4101,6 +4317,82 @@ def use() -> None:",
@@ -1978,7 +2992,9 @@ export const ruffForwardAudit = {
           "newStart": 4317,
           "sha256": "038dd968c8a9f9a4a630faa5bd7da2402726a480141854e8721b43055fc1e7a7",
           "classification": "dictionary-after-arguments-snapshot-regressions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L4317"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L4317"
         },
         {
           "anchor": "@@ -4168,7 +4460,7 @@ fn dictionary_observations_preserve_first_entries() -> anyhow::Result<()> {",
@@ -1986,7 +3002,9 @@ export const ruffForwardAudit = {
           "newStart": 4460,
           "sha256": "8fde72d9d288f30f00dc233c667fbc759cc13e6f5960924654521cc4e73b2166",
           "classification": "dictionary-after-arguments-snapshot-regressions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L4460"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L4460"
         },
         {
           "anchor": "@@ -4208,7 +4500,7 @@ fn dictionary_observations_preserve_first_entries() -> anyhow::Result<()> {",
@@ -1994,7 +3012,9 @@ export const ruffForwardAudit = {
           "newStart": 4500,
           "sha256": "21234f70dfa3e4e3d33e7c8bef01893189314bb7cfa8522475a1027c795514be",
           "classification": "dictionary-after-arguments-snapshot-regressions",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L4500"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L4500"
         }
       ]
     },
@@ -2012,7 +3032,9 @@ export const ruffForwardAudit = {
           "newStart": 317,
           "sha256": "92fce7ca77ac0e1b6a0e0a545e6f7de066d57c07a62550091cf4f44473fdc4bc",
           "classification": "upstream-cached-relation-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/relation.rs#L317"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/relation.rs#L317"
         },
         {
           "anchor": "@@ -645,76 +650,89 @@ impl<'db> Type<'db> {",
@@ -2020,7 +3042,9 @@ export const ruffForwardAudit = {
           "newStart": 650,
           "sha256": "e3924291c5751f4f5e42d9d31e0fdc260184443e7d6d4572a9cc4ee9f14b6bc4",
           "classification": "upstream-cached-relation-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/relation.rs#L650"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/relation.rs#L650"
         },
         {
           "anchor": "@@ -738,69 +756,106 @@ impl<'db> Type<'db> {",
@@ -2028,7 +3052,9 @@ export const ruffForwardAudit = {
           "newStart": 756,
           "sha256": "516de38f8f4e977a4ca6e96d01fd640bb539648c3f5c09367eebb183e242a789",
           "classification": "upstream-cached-relation-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/relation.rs#L756"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/relation.rs#L756"
         },
         {
           "anchor": "@@ -810,7 +865,7 @@ impl<'db> Type<'db> {",
@@ -2036,7 +3062,39 @@ export const ruffForwardAudit = {
           "newStart": 865,
           "sha256": "2f542b985cf795dadaeb18c1dee78d1742e2b6ea6d80056662108d49072309bf",
           "classification": "upstream-cached-relation-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/relation.rs#L865"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/relation.rs#L865"
+        }
+      ]
+    },
+    {
+      "path": "crates/ty_python_semantic/src/types/set_theoretic/builder.rs",
+      "baseBlob": "a00edc198ff679577ffd262656569c997c242705",
+      "candidateBlob": "521949ad583d4f56edc45b1dcf8286ac11602378",
+      "frozenCandidateBlob": "a00edc198ff679577ffd262656569c997c242705",
+      "classification": "exact-immutable-builtin-truthiness",
+      "detail": "Simplifies both AlwaysTruthy and AlwaysFalsy exclusions to Never only with a positive stable builtin and existing exact-runtime-class proof. Mutable/stateful and open classes are retained. Current forward hunks additionally cover: exact-immutable-builtin-truthiness. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
+      "hunks": [
+        {
+          "anchor": "@@ -45,6 +45,7 @@ use std::ops::ControlFlow;",
+          "oldStart": 45,
+          "newStart": 45,
+          "sha256": "7e7e364f9bc189ea10bad777bc19ef4db1b473ee32f6a0e4d52f2de36eaa3a9d",
+          "classification": "exact-immutable-builtin-truthiness",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Known builtin stability is separate from exact runtime-class proof; only both truthiness exclusions plus a proven exact immutable builtin simplify to Never. Open/custom/stateful classes remain inhabited.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/set_theoretic/builder.rs#L45"
+        },
+        {
+          "anchor": "@@ -2656,6 +2657,30 @@ impl<'db> InnerIntersectionBuilder<'db> {",
+          "oldStart": 2656,
+          "newStart": 2657,
+          "sha256": "fb5d096f748e4bfd9362319cce98c2a588cbc5a04d36a541bf4dab17b25d42cc",
+          "classification": "exact-immutable-builtin-truthiness",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Known builtin stability is separate from exact runtime-class proof; only both truthiness exclusions plus a proven exact immutable builtin simplify to Never. Open/custom/stateful classes remain inhabited.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/set_theoretic/builder.rs#L2657"
         }
       ]
     },
@@ -2054,7 +3112,9 @@ export const ruffForwardAudit = {
           "newStart": 142,
           "sha256": "b27709ba0ea5646ea3516e75cccd2588dab5ab363cb96029b809ceee68749d9c",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L142"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L142"
         },
         {
           "anchor": "@@ -388,7 +378,6 @@ impl<'db> CallableSignature<'db> {",
@@ -2062,7 +3122,9 @@ export const ruffForwardAudit = {
           "newStart": 378,
           "sha256": "4c9e8e4fe8b96e1bb1df4330189ca341b6dbd3caf06c48c6272715cdce8d7369",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L378"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L378"
         },
         {
           "anchor": "@@ -420,8 +409,6 @@ impl<'db> CallableSignature<'db> {",
@@ -2070,7 +3132,9 @@ export const ruffForwardAudit = {
           "newStart": 409,
           "sha256": "88a20c8eff7ef3eb57c5a47f00d86d777168e9db3dd76cac806e767ea47191d5",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L409"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L409"
         },
         {
           "anchor": "@@ -833,17 +820,15 @@ impl<'db> SignatureExtras<'db> {",
@@ -2078,7 +3142,9 @@ export const ruffForwardAudit = {
           "newStart": 820,
           "sha256": "5941307c81c6ca761668925fbbb25bf27b0414ca92f6f62b8a89df9240267a5e",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L820"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L820"
         },
         {
           "anchor": "@@ -856,7 +841,7 @@ impl<'db> ReceiverConstraints<'db> {",
@@ -2086,7 +3152,9 @@ export const ruffForwardAudit = {
           "newStart": 841,
           "sha256": "25349d39bec04ee01434b9e26414686d9ffa19b06a45bf62d5505dee585e9c2f",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L841"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L841"
         },
         {
           "anchor": "@@ -865,19 +850,11 @@ impl<'db> ReceiverConstraints<'db> {",
@@ -2094,7 +3162,9 @@ export const ruffForwardAudit = {
           "newStart": 850,
           "sha256": "4243e74a219cec719428e3e89795bec7c8c96bd1087d3006b8473961f45c0174",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L850"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L850"
         },
         {
           "anchor": "@@ -888,29 +865,64 @@ impl<'db> ReceiverConstraints<'db> {",
@@ -2102,7 +3172,9 @@ export const ruffForwardAudit = {
           "newStart": 865,
           "sha256": "8bf23904f23036c913f2b2c710a00c82e9af8a3d827c042e5b4acc7f5aeefe83",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L865"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L865"
         },
         {
           "anchor": "@@ -961,8 +973,8 @@ impl<'db> SignatureRelationKey<'db> {",
@@ -2110,7 +3182,9 @@ export const ruffForwardAudit = {
           "newStart": 973,
           "sha256": "5d8aa6503ddd0f519e60d95f8dc1eb6cf0692a05c4dc7423e88636b441322e3f",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L973"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L973"
         },
         {
           "anchor": "@@ -976,6 +988,9 @@ fn visit_type_arguments<'db>(",
@@ -2118,7 +3192,9 @@ export const ruffForwardAudit = {
           "newStart": 988,
           "sha256": "2cf950b7d34bb49287d15c30c230e0c24f953b9cb78cbcf72a0ca054e25785cc",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L988"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L988"
         },
         {
           "anchor": "@@ -1088,6 +1103,12 @@ fn receiver_arguments_decrease<'db>(",
@@ -2126,7 +3202,9 @@ export const ruffForwardAudit = {
           "newStart": 1103,
           "sha256": "7226c4dd60022b3bd8286b5e18df18711b0380ac9da03fc8d668697c6f027d8a",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L1103"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L1103"
         },
         {
           "anchor": "@@ -2041,7 +2062,7 @@ impl<'db> Signature<'db> {",
@@ -2134,7 +3212,9 @@ export const ruffForwardAudit = {
           "newStart": 2062,
           "sha256": "7854d10232011e2c8e2dd369c316173ae00bae67e17884d0c6f2f9d12f5e7997",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L2062"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L2062"
         },
         {
           "anchor": "@@ -2071,24 +2092,14 @@ impl<'db> Signature<'db> {",
@@ -2142,7 +3222,9 @@ export const ruffForwardAudit = {
           "newStart": 2092,
           "sha256": "be8e04b509d055b69ac138c7fdfeec5c400945c42612cbe6ee2687fab21437a4",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L2092"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L2092"
         },
         {
           "anchor": "@@ -2173,7 +2184,8 @@ impl<'db> Signature<'db> {",
@@ -2150,7 +3232,9 @@ export const ruffForwardAudit = {
           "newStart": 2184,
           "sha256": "f5df4078c677b4bfcf27301a1bd45c61db1942354e2fe1188756ab74d44d7e99",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L2184"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L2184"
         },
         {
           "anchor": "@@ -2499,7 +2511,6 @@ impl<'db> Signature<'db> {",
@@ -2158,7 +3242,9 @@ export const ruffForwardAudit = {
           "newStart": 2511,
           "sha256": "e026bb5d1571d649f23d418c8af7582cfc5d680edd1f0895073a38ee3ff7483a",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L2511"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L2511"
         },
         {
           "anchor": "@@ -2510,10 +2521,9 @@ impl<'db> Signature<'db> {",
@@ -2166,7 +3252,9 @@ export const ruffForwardAudit = {
           "newStart": 2521,
           "sha256": "e019c35ce439025706a2798d25fa1f8365f3de0d5b4aa7153b78ddfc9c8108af",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L2521"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L2521"
         },
         {
           "anchor": "@@ -2560,12 +2570,7 @@ impl<'db> Signature<'db> {",
@@ -2174,7 +3262,9 @@ export const ruffForwardAudit = {
           "newStart": 2570,
           "sha256": "c57631004a029570f3d81821201bdcc10bd8d69ae16044ee86d17d1b42077a73",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L2570"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L2570"
         },
         {
           "anchor": "@@ -2585,34 +2590,8 @@ impl<'db> Signature<'db> {",
@@ -2182,7 +3272,9 @@ export const ruffForwardAudit = {
           "newStart": 2590,
           "sha256": "903604317bb2bb896058f06bcc6793e638e3ed035544c3e19ece3e16a307b308",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L2590"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L2590"
         },
         {
           "anchor": "@@ -3711,7 +3690,7 @@ impl<'c, 'db> TypeRelationChecker<'_, 'c, 'db> {",
@@ -2190,7 +3282,9 @@ export const ruffForwardAudit = {
           "newStart": 3690,
           "sha256": "7cad0ca4b027337ba1525da1b5629f6a7835bab45c4c753b397677c9753ebb70",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L3690"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L3690"
         },
         {
           "anchor": "@@ -3809,6 +3788,15 @@ impl<'c, 'db> TypeRelationChecker<'_, 'c, 'db> {",
@@ -2198,7 +3292,9 @@ export const ruffForwardAudit = {
           "newStart": 3788,
           "sha256": "0ab2de4024a5c478da542d5dc7be6bfa72f0e674fe1a127dafca40d2581cfb23",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L3788"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L3788"
         },
         {
           "anchor": "@@ -8392,7 +8380,8 @@ mod tests {",
@@ -2206,7 +3302,9 @@ export const ruffForwardAudit = {
           "newStart": 8380,
           "sha256": "f88bf4d290b7b63a1b2f2ea9b24ea86b9698de27501e4b01f987a051b1af28be",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L8380"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L8380"
         },
         {
           "anchor": "@@ -8449,16 +8438,38 @@ mod tests {",
@@ -2214,7 +3312,9 @@ export const ruffForwardAudit = {
           "newStart": 8438,
           "sha256": "fbf1b7c19d44f9380419d13e84517296040eac62e3f9542f1c248b4d8f66eb48",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L8438"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L8438"
         },
         {
           "anchor": "@@ -9065,28 +9076,21 @@ mod tests {",
@@ -2222,7 +3322,9 @@ export const ruffForwardAudit = {
           "newStart": 9076,
           "sha256": "18a4670a0f0adc6e9ba05d2aeba1e577075e933d709a737ef9c119808eb843d1",
           "classification": "receiver-and-callback-proof",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L9076"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L9076"
         }
       ]
     },
@@ -2240,7 +3342,9 @@ export const ruffForwardAudit = {
           "newStart": 11,
           "sha256": "5fd9a29e7aa4491db85b8f37b5f278ee1fcd5650cfa146db08cd21b312e57bf0",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/type_alias.rs#L11"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/type_alias.rs#L11"
         },
         {
           "anchor": "@@ -311,9 +312,12 @@ impl<'db> PEP695TypeAliasType<'db> {",
@@ -2248,25 +3352,69 @@ export const ruffForwardAudit = {
           "newStart": 312,
           "sha256": "4ed9875145ac2b7b640f086e5c2776ef314d5ee1cfa8eac4e45cbb1810a14632",
           "classification": "upstream-api-migration",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/type_alias.rs#L312"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/type_alias.rs#L312"
         }
       ]
     },
     {
       "path": "crates/ty_python_semantic/src/types/unpacker.rs",
       "baseBlob": "1f02d1f51258ed2aa6aae4af06fd3d29c6640f08",
-      "candidateBlob": "b9f137ebfadee4483690cd5300c74ce1d8afdf98",
+      "candidateBlob": "6367fdeb22350d7ca89748569b214d300f0f833a",
       "frozenCandidateBlob": "85f71d7657b716228248734eacce1bbc5b5365a0",
       "classification": "reviewed-comment-only",
-      "detail": "Anchor explanation at list/dict precision guard; tuples retain inferred widening above64 entries.",
+      "detail": "Anchor explanation at list/dict precision guard; tuples retain inferred widening above64 entries. Current forward hunks additionally cover: dictionary-comprehension-body-domain-propagation, recursive-unpack-indeterminate-marker-classification. See each exact hunk review note; file-level ownership is mixed, not an independent PR claim.",
       "hunks": [
         {
-          "anchor": "@@ -137,10 +137,9 @@ impl<'db, 'ast> Unpacker<'db, 'ast> {",
+          "anchor": "@@ -11,16 +11,16 @@ use ruff_python_ast::{self as ast, AnyNodeRef};",
+          "oldStart": 11,
+          "newStart": 11,
+          "sha256": "6b74fc4c05dc0ba090e12e8b464b6e39f0a767a0c1abc3b8547d2f7fee460551",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/unpacker.rs#L11"
+        },
+        {
+          "anchor": "@@ -74,6 +74,12 @@ impl<'db, 'ast> Unpacker<'db, 'ast> {",
+          "oldStart": 74,
+          "newStart": 74,
+          "sha256": "1a07a9fb53e903c2b05b67d284ca210bc2a8a9dbcb2cbb4b7c259d990c3ab36e",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/unpacker.rs#L74"
+        },
+        {
+          "anchor": "@@ -90,10 +96,11 @@ impl<'db, 'ast> Unpacker<'db, 'ast> {",
+          "oldStart": 90,
+          "newStart": 96,
+          "sha256": "2ea97f818b873077258c5c135dbe0ab7fbbb217f3c2aad9bc015d14a7695c254",
+          "classification": "dictionary-comprehension-body-domain-propagation",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Domain remains keyed to one declared overload; lexical DictComp children carry scope/definition/unpack/reachability/storage identity. Other captures/comprehensions remain unsupported; preflight and per-domain method admission, shadowing/mutation refusal and cycle normalization remain checked.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/unpacker.rs#L96"
+        },
+        {
+          "anchor": "@@ -137,10 +144,9 @@ impl<'db, 'ast> Unpacker<'db, 'ast> {",
           "oldStart": 137,
-          "newStart": 137,
-          "sha256": "d4d9e2a92319206dd5d95b19cad3f975cee4efe937825d0358b329e14fea16b7",
+          "newStart": 144,
+          "sha256": "edfb4cf2deab216df0502ecc03cdca44def47a9b24be1c15d368a3f8d6486bdc",
           "classification": "reviewed-comment-only",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/unpacker.rs#L137"
+          "attribution": "exact-body-shifted-anchor",
+          "reviewNote": "Every context/addition/deletion line is identical to the prior reviewed hunk; only line-number anchor changed.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/unpacker.rs#L144"
+        },
+        {
+          "anchor": "@@ -325,11 +331,8 @@ impl<'db, 'ast> Unpacker<'db, 'ast> {",
+          "oldStart": 325,
+          "newStart": 331,
+          "sha256": "228989346db73b872936f4e88abe2840e79d87659abc1d7d77fb5a48b20241aa",
+          "classification": "recursive-unpack-indeterminate-marker-classification",
+          "attribution": "explicit-current-source-review",
+          "reviewNote": "Reuses has_indeterminate_inference to allow settled exact recursive aliases while refusing growing aliases and actual provisional/divergent markers; retains existing correlated-row projection.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/unpacker.rs#L331"
         }
       ]
     },
@@ -2284,7 +3432,9 @@ export const ruffForwardAudit = {
           "newStart": 184,
           "sha256": "039df67fd905b1e0424cb5c35bc319d1e21512c5802c09afc4bc8f4fb8cf20ad",
           "classification": "test-settings-layout",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_test/src/db.rs#L184"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_test/src/db.rs#L184"
         },
         {
           "anchor": "@@ -226,7 +227,7 @@ fn file_settings(db: &dyn SemanticDb, file: File) -> FileSettings {",
@@ -2292,7 +3442,9 @@ export const ruffForwardAudit = {
           "newStart": 227,
           "sha256": "eaf664f1b9d1415a612b01d60828742791d38bc03a58913d901c9b2249817c2b",
           "classification": "test-settings-layout",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_test/src/db.rs#L227"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_test/src/db.rs#L227"
         },
         {
           "anchor": "@@ -238,7 +239,7 @@ enum FileSettings {",
@@ -2300,7 +3452,9 @@ export const ruffForwardAudit = {
           "newStart": 239,
           "sha256": "7589d334c3d323949f573b96f9b48a7fcceb0e0a72c1625534c826b7e9d149ce",
           "classification": "test-settings-layout",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_test/src/db.rs#L239"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_test/src/db.rs#L239"
         },
         {
           "anchor": "@@ -247,14 +248,22 @@ impl FileSettings {",
@@ -2308,7 +3462,9 @@ export const ruffForwardAudit = {
           "newStart": 248,
           "sha256": "f192398e34790ef520584ac754f621d3c2f4c8126f4382813f3f5cd1e252c1bf",
           "classification": "test-settings-layout",
-          "source": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_test/src/db.rs#L248"
+          "attribution": "exact-whole-hunk",
+          "reviewNote": "Byte-identical prior reviewed hunk, including its anchor.",
+          "source": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_test/src/db.rs#L248"
         }
       ]
     }
@@ -2317,13 +3473,14 @@ export const ruffForwardAudit = {
   "upstreamReady": false,
   "limits": [
     "Frozen historical inventories, including the 169-unit/939-hunk solver record, remain unchanged. Exact blob-pair reuse is source evidence, not runtime proof; an absent base file is a stable input, not a nonzero blob match.",
-    "These 43 runtime/API paths have forward producer-family source attribution; mixed-path hunks are not independent PR units. The newly changed LiteralString fixture is supporting regression evidence.",
+    "These 46 runtime/API paths have forward producer-family source attribution; mixed-path hunks are not independent PR units. Markdown fixtures are supporting regression evidence.",
     "The pinned validation checkpoint includes upstream #30594 and #30630 migrations plus fork observed-keyword and native type-tag corrections. Upstream-owned suffix selection is not a new fork contribution.",
     "Runtime qualification and the final default-branch promotion must follow authoritative writer receipts. This source audit launches no builds or tests and makes no full-fork qualification claim.",
     "Previously open upstream-overlap gates remain open, especially PR27665/29553/29681/23937/27661/29555. Titles/body searches are not source-diff equivalence.",
     "The generic-target quantifier candidate is not present. Its strict finite/nested Result controls and the existing upstream existential-binder proposal remain a separate investigation.",
     "No upstream submission approval or independent PR count is asserted. Historical native Markdown and community qualification receipts apply only to their exact recorded revisions.",
-    "The d10 checkpoint adds shared argument mapping snapshots and exact builtin-string Add recovery. This inventory provides source evidence only; native/host qualification belongs to separate immutable receipts."
+    "The d10 checkpoint adds shared argument mapping snapshots and exact builtin-string Add recovery. This inventory provides source evidence only; native/host qualification belongs to separate immutable receipts.",
+    "The ec5 checkpoint adds four source-review families: empty getattr context replay, recursive unpack marker classification, dictionary-comprehension body domains, and exact immutable truthiness. Standalone feature/Core gates are separate evidence; actual with_cfg still reports two errors. This audit grants no runtime or upstream readiness."
   ],
   "forwardReviewUnits": [
     {
@@ -2334,7 +3491,7 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "call/ambiguous.rs",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/ambiguous.rs#L18",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/ambiguous.rs#L18",
           "blob": "36154f80fcd011cc7d5d8e9b0649f475b6546770"
         }
       ],
@@ -2351,7 +3508,7 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "infer/builder/subscript.rs",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder/subscript.rs#L1896",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder/subscript.rs#L1896",
           "blob": "7d83cf9a1fc9141ba992ced7baca5fa170fcda48"
         }
       ],
@@ -2368,7 +3525,7 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "constraints/resolution.rs",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/constraints/resolution.rs#L190",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/constraints/resolution.rs#L190",
           "blob": "1692aa7e20f3b53295b3e6036a472ba3439cc748"
         }
       ],
@@ -2385,8 +3542,8 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "infer/builder.rs",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L7034",
-          "blob": "795fab436cc389ba619fd5ce98865206f84b826a"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L7065",
+          "blob": "fbd17433ac43b904172d5ddc25298b9fc1bd2524"
         }
       ],
       "independentPullRequestClaim": false,
@@ -2402,18 +3559,18 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "dictionary/contents.rs",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1639",
-          "blob": "ed6f914e3d86995f4e604c9ba6f6624fbdc7141e"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1639",
+          "blob": "f2dae47eace1122d52e881e45d37c4a1e6bb2fb2"
         },
         {
           "label": "Observed keyword-prefix exclusions",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/arguments.rs#L551",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/arguments.rs#L551",
           "blob": "cf2920e169c2e6c1df554fa3489f0708fc04a73b"
         },
         {
           "label": "Shared selector integrated with observed keywords",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9567",
-          "blob": "5d8815667249e85be44d6c8701abe2b01a34918b"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9567",
+          "blob": "31fe22b8b9dc95b92b8b281b34e868864eeb2101"
         }
       ],
       "independentPullRequestClaim": false,
@@ -2429,12 +3586,12 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "signatures.rs",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/signatures.rs#L868",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/signatures.rs#L868",
           "blob": "20b04c92596f6b650b21bd0496a0569e39727bee"
         },
         {
           "label": "Nested provided storage regression",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L557",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L557",
           "blob": "92d24415701b0c5d89140ad2a4d4864b570c4440"
         }
       ],
@@ -2451,8 +3608,8 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "call/bind.rs",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L5400",
-          "blob": "5d8815667249e85be44d6c8701abe2b01a34918b"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L5400",
+          "blob": "31fe22b8b9dc95b92b8b281b34e868864eeb2101"
         }
       ],
       "independentPullRequestClaim": false,
@@ -2468,8 +3625,8 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "call/bind.rs",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L4442",
-          "blob": "5d8815667249e85be44d6c8701abe2b01a34918b"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L4442",
+          "blob": "31fe22b8b9dc95b92b8b281b34e868864eeb2101"
         }
       ],
       "independentPullRequestClaim": false,
@@ -2485,8 +3642,8 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "Complete later collection context",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L9128",
-          "blob": "795fab436cc389ba619fd5ce98865206f84b826a"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L9159",
+          "blob": "fbd17433ac43b904172d5ddc25298b9fc1bd2524"
         }
       ],
       "trackerParent": "ty-collection-use-inference",
@@ -2502,17 +3659,17 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "Validate keys before the unpack early return",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/call/bind.rs#L9190",
-          "blob": "5d8815667249e85be44d6c8701abe2b01a34918b"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9190",
+          "blob": "31fe22b8b9dc95b92b8b281b34e868864eeb2101"
         },
         {
           "label": "Existing nested non-string key rejection",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/resources/mdtest/call/local_dictionary_unpacking.md#L206",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/resources/mdtest/call/local_dictionary_unpacking.md#L206",
           "blob": "0e05200de1756e67995e1e5bdde514127b60d357"
         },
         {
           "label": "Existing copied non-string key rejection",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/resources/mdtest/call/local_dictionary_unpacking.md#L328",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/resources/mdtest/call/local_dictionary_unpacking.md#L328",
           "blob": "0e05200de1756e67995e1e5bdde514127b60d357"
         }
       ],
@@ -2529,17 +3686,17 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "Bounded native tag impossibility owner",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/narrow.rs#L272",
-          "blob": "3bf2efca53638be3ef9be2b21b6387bc8c528b3f"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/narrow.rs#L272",
+          "blob": "f08f563acd3b82a1f0bc238ad8df1f4bd2d9d9a4"
         },
         {
           "label": "Comparison inference consumes cached operands",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/infer/builder.rs#L13710",
-          "blob": "795fab436cc389ba619fd5ce98865206f84b826a"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L13756",
+          "blob": "fbd17433ac43b904172d5ddc25298b9fc1bd2524"
         },
         {
           "label": "Positive and fail-closed native contract controls",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L3197",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L3197",
           "blob": "92d24415701b0c5d89140ad2a4d4864b570c4440"
         }
       ],
@@ -2556,12 +3713,12 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "Shared after-all-arguments recorder",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_core/src/builder/dictionary_contents.rs#L474",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_core/src/builder/dictionary_contents.rs#L474",
           "blob": "9bf157bf4d035a9b7b886f07235ba2fa7dbc100c"
         },
         {
           "label": "Mutation, rebinding and ordinary/named controls",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/provided/tests.rs#L4321",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/provided/tests.rs#L4321",
           "blob": "92d24415701b0c5d89140ad2a4d4864b570c4440"
         }
       ],
@@ -2578,21 +3735,119 @@ export const ruffForwardAudit = {
       "evidence": [
         {
           "label": "Exact builtin identity plus existing runtime-class proof",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1289",
-          "blob": "ed6f914e3d86995f4e604c9ba6f6624fbdc7141e"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1289",
+          "blob": "f2dae47eace1122d52e881e45d37c4a1e6bb2fb2"
         },
         {
           "label": "Operand proof and recursive child traversal",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1256",
-          "blob": "ed6f914e3d86995f4e604c9ba6f6624fbdc7141e"
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/dictionary/contents.rs#L1256",
+          "blob": "f2dae47eace1122d52e881e45d37c4a1e6bb2fb2"
         },
         {
           "label": "Ordinary/final subclasses do not satisfy LiteralString",
-          "url": "https://github.com/tamird/ruff/blob/d10bc8c773bffee1be039574aab09559870a7e3e/crates/ty_python_semantic/resources/mdtest/annotations/literal_string.md#L425",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/resources/mdtest/annotations/literal_string.md#L425",
           "blob": "a9eb51fe99ae9060fc347f156842c8f2eee75d09"
         }
       ],
       "trackerParent": "ty-dictionary-flow",
+      "independentPullRequestClaim": false,
+      "runtimeQualifiedByThisAudit": false,
+      "upstreamReady": false
+    },
+    {
+      "id": "sibling-dependent-empty-getattr-context-replay",
+      "title": "Replay fresh empty getattr defaults after sibling inference",
+      "classification": "Fork inference scheduling fix; upstream reproduction and extraction remain separate.",
+      "nextAction": "Compare with upstream call-context inference; retain builtin and empty-literal guards, bounded replay and heterogeneous defaults.",
+      "evidence": [
+        {
+          "label": "Shared matched builtin default eligibility",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/call/bind.rs#L9878",
+          "blob": "31fe22b8b9dc95b92b8b281b34e868864eeb2101"
+        },
+        {
+          "label": "Sibling-dependent replay and bounded context equality",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/builder.rs#L6319",
+          "blob": "fbd17433ac43b904172d5ddc25298b9fc1bd2524"
+        }
+      ],
+      "trackerParent": "ty-contextual-empty",
+      "independentPullRequestClaim": false,
+      "runtimeQualifiedByThisAudit": false,
+      "upstreamReady": false
+    },
+    {
+      "id": "recursive-unpack-indeterminate-marker-classification",
+      "title": "Keep settled recursive payloads during unpack narrowing",
+      "classification": "Uses the existing indeterminate-inference check so settled recursive aliases retain their payload types.",
+      "nextAction": "Compare upstream behavior before extracting; preserve refusal of incomplete inference and growing aliases.",
+      "evidence": [
+        {
+          "label": "Existing indeterminate marker predicate",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/unpacker.rs#L335",
+          "blob": "6367fdeb22350d7ca89748569b214d300f0f833a"
+        },
+        {
+          "label": "Recursive payload remains visible after tuple unpacking",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/resources/mdtest/narrow/complex_target.md#L321",
+          "blob": "aa2d371873e958cd9fc86a19e1168f546ff6bc1b"
+        }
+      ],
+      "trackerParent": "ty-boolean-payload-tuples",
+      "independentPullRequestClaim": false,
+      "runtimeQualifiedByThisAudit": false,
+      "upstreamReady": false
+    },
+    {
+      "id": "dictionary-comprehension-body-domain-propagation",
+      "title": "Carry checked overload domains through dictionary comprehensions",
+      "classification": "Host API support for checked overload bodies in dictionary comprehensions; with_cfg still needs a fix.",
+      "nextAction": "Fix admission of the actual with_cfg dictionary union; preserve strictness, expression-scope reachability and refusal of mutation and custom methods.",
+      "evidence": [
+        {
+          "label": "Lexical dictionary comprehension scope boundary",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L302",
+          "blob": "de9b6e432dcd521ffd977e255b1d2e3b4eacbd63"
+        },
+        {
+          "label": "Per-domain scope and callback-input native controls",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer/body_domain.rs#L1388",
+          "blob": "de9b6e432dcd521ffd977e255b1d2e3b4eacbd63"
+        },
+        {
+          "label": "Domain-keyed scope query routing",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/infer.rs#L834",
+          "blob": "5c0f11102d29947d81b58786d0e335164a042721"
+        }
+      ],
+      "trackerParent": "ty-overload-bodies",
+      "independentPullRequestClaim": false,
+      "runtimeQualifiedByThisAudit": false,
+      "upstreamReady": false
+    },
+    {
+      "id": "exact-immutable-builtin-truthiness",
+      "title": "Eliminate contradictory truthiness for exact immutable builtins",
+      "classification": "Intersection simplification for exact immutable builtin instances.",
+      "nextAction": "Reproduce the range case on current upstream; keep open and stateful subclasses conservative.",
+      "evidence": [
+        {
+          "label": "Stable builtin taxonomy",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/class/known.rs#L321",
+          "blob": "a76fc3f7584a46c88c6266464087cb4d9a04fb59"
+        },
+        {
+          "label": "Exact immutable intersection simplification",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/src/types/set_theoretic/builder.rs#L2660",
+          "blob": "521949ad583d4f56edc45b1dcf8286ac11602378"
+        },
+        {
+          "label": "Open int subclass behavior remains conservative",
+          "url": "https://github.com/tamird/ruff/blob/ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805/crates/ty_python_semantic/resources/mdtest/narrow/truthiness.md#L217",
+          "blob": "d0e432143af7e6691ca5fa4c28b904962df6e84c"
+        }
+      ],
+      "trackerParent": "ty-saved-tag-narrowing",
       "independentPullRequestClaim": false,
       "runtimeQualifiedByThisAudit": false,
       "upstreamReady": false
@@ -5292,13 +6547,13 @@ export const ruffForwardAudit = {
       "oldMode": "100644",
       "newMode": "100644",
       "baseBlob": "e6ccb65c6311c1e95f9a1e7ff4d0b21648bdd3ca",
-      "candidateBlob": "621fe37dc2eaad6f821673f7614718d874321410",
+      "candidateBlob": "aa2d371873e958cd9fc86a19e1168f546ff6bc1b",
       "status": "M",
       "frozenRecord": [],
       "frozenRole": "supporting-tests",
-      "sameCandidateBlobAsFrozen": true,
+      "sameCandidateBlobAsFrozen": false,
       "sameBaseBlobAsFrozen": true,
-      "semanticReuse": "exact-net-hunk-inputs",
+      "semanticReuse": "requires-forward-source-review",
       "frozenBaseBlob": "e6ccb65c6311c1e95f9a1e7ff4d0b21648bdd3ca",
       "frozenCandidateBlob": "621fe37dc2eaad6f821673f7614718d874321410",
       "disposition": "supporting-tests"
@@ -5366,6 +6621,22 @@ export const ruffForwardAudit = {
       "frozenBaseBlob": "ebc36be1c589f76c07d29066e14b8fc3167799bf",
       "frozenCandidateBlob": "1870fcab39d8ab700cab7ff1d1abe85c4fec3717",
       "disposition": "supporting-tests"
+    },
+    {
+      "path": "crates/ty_python_semantic/resources/mdtest/narrow/truthiness.md",
+      "frozenBaseBlob": "86f3835e50ff9fa88cf70f2633c49e015d1093c9",
+      "frozenCandidateBlob": "86f3835e50ff9fa88cf70f2633c49e015d1093c9",
+      "frozenRecord": [],
+      "frozenRole": null,
+      "disposition": "supporting-test",
+      "oldMode": "100644",
+      "newMode": "100644",
+      "baseBlob": "86f3835e50ff9fa88cf70f2633c49e015d1093c9",
+      "candidateBlob": "d0e432143af7e6691ca5fa4c28b904962df6e84c",
+      "status": "M",
+      "sameCandidateBlobAsFrozen": false,
+      "sameBaseBlobAsFrozen": true,
+      "semanticReuse": "requires-forward-source-review"
     },
     {
       "path": "crates/ty_python_semantic/resources/mdtest/narrow/type.md",
@@ -5750,7 +7021,7 @@ export const ruffForwardAudit = {
       "oldMode": "100644",
       "newMode": "100644",
       "baseBlob": "7e393e2dd00031305c9af916e293a9b537bf9a16",
-      "candidateBlob": "a4a81d1a3622d51edbfce94efd3ffad5762fe23e",
+      "candidateBlob": "5cee94701c3a2d6ba041310aa9862f24d7a98fe9",
       "status": "M",
       "frozenRecord": [
         "semantic-flow-consumers-hunk-inventory-dfe98a7d.json"
@@ -5964,7 +7235,7 @@ export const ruffForwardAudit = {
       "oldMode": "100644",
       "newMode": "100644",
       "baseBlob": "4db6067a343e003b929edc772fe15ece48ba62c6",
-      "candidateBlob": "5d8815667249e85be44d6c8701abe2b01a34918b",
+      "candidateBlob": "31fe22b8b9dc95b92b8b281b34e868864eeb2101",
       "status": "M",
       "frozenRecord": [
         "solver-hunk-inventory-7120f37e.json (reuse/forward limits recorded in class-call-context inventory)"
@@ -6074,18 +7345,18 @@ export const ruffForwardAudit = {
       "oldMode": "100644",
       "newMode": "100644",
       "baseBlob": "027a99994525fe77c1a278ababd8c81ab74a13fb",
-      "candidateBlob": "da0c93f2a063d833fa113a3494afbba32db12d35",
+      "candidateBlob": "a76fc3f7584a46c88c6266464087cb4d9a04fb59",
       "status": "M",
       "frozenRecord": [
         "class-call-context-hunk-inventory-dfe98a7d.json"
       ],
       "frozenRole": "runtime-or-public-api-needs-hunk-review",
-      "sameCandidateBlobAsFrozen": true,
+      "sameCandidateBlobAsFrozen": false,
       "sameBaseBlobAsFrozen": true,
-      "semanticReuse": "exact-net-hunk-inputs",
+      "semanticReuse": "requires-forward-source-review",
       "frozenBaseBlob": "027a99994525fe77c1a278ababd8c81ab74a13fb",
       "frozenCandidateBlob": "da0c93f2a063d833fa113a3494afbba32db12d35",
-      "disposition": "frozen-source-reused"
+      "disposition": "forward-source-attributed"
     },
     {
       "path": "crates/ty_python_semantic/src/types/class/slots.rs",
@@ -6470,7 +7741,7 @@ export const ruffForwardAudit = {
       "oldMode": "000000",
       "newMode": "100644",
       "baseBlob": "0000000000000000000000000000000000000000",
-      "candidateBlob": "ed6f914e3d86995f4e604c9ba6f6624fbdc7141e",
+      "candidateBlob": "f2dae47eace1122d52e881e45d37c4a1e6bb2fb2",
       "status": "A",
       "frozenRecord": [
         "dictionary-transfer-hunk-inventory-dfe98a7d.json"
@@ -6666,25 +7937,25 @@ export const ruffForwardAudit = {
       "oldMode": "100644",
       "newMode": "100644",
       "baseBlob": "e89d3937c3778b94e6aba663e84b7cdc92e26c9e",
-      "candidateBlob": "7017a7ac52794c398805f43b180bf50e21c58bca",
+      "candidateBlob": "5c0f11102d29947d81b58786d0e335164a042721",
       "status": "M",
       "frozenRecord": [
         "inference-editor-producers-hunk-inventory-dfe98a7d.json"
       ],
       "frozenRole": "runtime-or-public-api-needs-hunk-review",
-      "sameCandidateBlobAsFrozen": true,
+      "sameCandidateBlobAsFrozen": false,
       "sameBaseBlobAsFrozen": true,
-      "semanticReuse": "exact-net-hunk-inputs",
+      "semanticReuse": "requires-forward-source-review",
       "frozenBaseBlob": "e89d3937c3778b94e6aba663e84b7cdc92e26c9e",
       "frozenCandidateBlob": "7017a7ac52794c398805f43b180bf50e21c58bca",
-      "disposition": "frozen-source-reused"
+      "disposition": "forward-source-attributed"
     },
     {
       "path": "crates/ty_python_semantic/src/types/infer/body_domain.rs",
       "oldMode": "000000",
       "newMode": "100644",
       "baseBlob": "0000000000000000000000000000000000000000",
-      "candidateBlob": "ee2df50eabd0760333685bc8fd09e8c860bb8e9d",
+      "candidateBlob": "de9b6e432dcd521ffd977e255b1d2e3b4eacbd63",
       "status": "A",
       "frozenRecord": [
         "overload-body-domain-hunk-inventory-dfe98a7d.json"
@@ -6702,7 +7973,7 @@ export const ruffForwardAudit = {
       "oldMode": "100644",
       "newMode": "100644",
       "baseBlob": "32dea63315b3e56f71b7630c37d323edbfd5a16e",
-      "candidateBlob": "795fab436cc389ba619fd5ce98865206f84b826a",
+      "candidateBlob": "fbd17433ac43b904172d5ddc25298b9fc1bd2524",
       "status": "M",
       "frozenRecord": [
         "producer-hunk-inventory-dfe98a7d.json"
@@ -7308,7 +8579,7 @@ export const ruffForwardAudit = {
       "oldMode": "100644",
       "newMode": "100644",
       "baseBlob": "3dd831e5e7b940678f33a4d575a049dbe925e1e6",
-      "candidateBlob": "3bf2efca53638be3ef9be2b21b6387bc8c528b3f",
+      "candidateBlob": "f08f563acd3b82a1f0bc238ad8df1f4bd2d9d9a4",
       "status": "M",
       "frozenRecord": [
         "narrow-loop-proof-hunk-inventory-dfe98a7d.json"
@@ -7458,6 +8729,22 @@ export const ruffForwardAudit = {
       "frozenBaseBlob": "c0ccc097f4dfadcbd8601a0684a0527735e6f5c9",
       "frozenCandidateBlob": "b4fb8ff467cf7de34cd3e7a6fcb9b0b8db46a5f8",
       "disposition": "frozen-source-reused"
+    },
+    {
+      "path": "crates/ty_python_semantic/src/types/set_theoretic/builder.rs",
+      "frozenBaseBlob": "a00edc198ff679577ffd262656569c997c242705",
+      "frozenCandidateBlob": "a00edc198ff679577ffd262656569c997c242705",
+      "frozenRecord": [],
+      "frozenRole": null,
+      "disposition": "forward-source-attributed",
+      "oldMode": "100644",
+      "newMode": "100644",
+      "baseBlob": "a00edc198ff679577ffd262656569c997c242705",
+      "candidateBlob": "521949ad583d4f56edc45b1dcf8286ac11602378",
+      "status": "M",
+      "sameCandidateBlobAsFrozen": false,
+      "sameBaseBlobAsFrozen": true,
+      "semanticReuse": "requires-forward-source-review"
     },
     {
       "path": "crates/ty_python_semantic/src/types/signatures.rs",
@@ -7704,7 +8991,7 @@ export const ruffForwardAudit = {
       "oldMode": "100644",
       "newMode": "100644",
       "baseBlob": "1f02d1f51258ed2aa6aae4af06fd3d29c6640f08",
-      "candidateBlob": "b9f137ebfadee4483690cd5300c74ce1d8afdf98",
+      "candidateBlob": "6367fdeb22350d7ca89748569b214d300f0f833a",
       "status": "M",
       "frozenRecord": [
         "collection-inference-consumers-hunk-inventory-dfe98a7d.json"
@@ -7912,5 +9199,5 @@ export const ruffForwardAudit = {
       "disposition": "supporting-infrastructure"
     }
   ],
-  "sourceCommand": "git diff --raw --no-abbrev --no-renames 36f64044cb7af6a6590426c776b66f8926130d87 d10bc8c773bffee1be039574aab09559870a7e3e"
+  "sourceCommand": "git diff --raw --no-abbrev --no-renames 36f64044cb7af6a6590426c776b66f8926130d87 ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805"
 };
