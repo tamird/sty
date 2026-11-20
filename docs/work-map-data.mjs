@@ -50,31 +50,31 @@ export const upstream = [
   {
     "id": "call-completion-key-lifetime",
     "ref": "upstream/retain-call-completion-keys",
-    "title": "Keep call-completion keys with their semantic index",
-    "state": "Revising after Tamir review",
-    "source": "e5a7691b85136a48afabc3debb0f24a606360bc2",
-    "summary": "Unrelated file edits can collect interned call-completion keys and invalidate an unchanged file's semantic index. Track the keys as outputs of that index instead. Isolated from the Starlark fork; not submitted upstream.",
-    "qualifiedBase": "c8ba04dc06caf4370d494870145c4f92356f1222",
-    "qualifiedHead": "e5a7691b85136a48afabc3debb0f24a606360bc2",
-    "qualifiedURL": "https://github.com/tamird/ruff/commit/e5a7691b85136a48afabc3debb0f24a606360bc2",
+    "title": "Retain call-completion query keys",
+    "state": "Awaiting Tamir review",
+    "source": "f5cc765eda272e3c46e62cbbf93653bc48d6a95e",
+    "summary": "Unrelated project edits can collect interned call keys and rerun an unchanged file's semantic index. Track these keys as outputs of that index. One isolated commit; not submitted upstream.",
+    "qualifiedBase": "e905eb561c7248cbaf4ec54f8eaf3dfab83d6b23",
+    "qualifiedHead": "f5cc765eda272e3c46e62cbbf93653bc48d6a95e",
+    "qualifiedURL": "https://github.com/tamird/ruff/compare/e905eb561c7248cbaf4ec54f8eaf3dfab83d6b23...f5cc765eda272e3c46e62cbbf93653bc48d6a95e",
     "qualification": {
-      "summary": "Earlier qualification established the isolated lifetime correction and failure on its c8ba04dc base. Tamir requested a smaller incrementality test and performance comparison with the original interning optimization; these revisions are under qualification. The current branch is historical evidence, not a renewed submission proposal.",
+      "summary": "The maintained regression fails three times on the baseline and passes three times with the fix. Core, semantic and IDE suites, all 533 default native Markdown/inventory actions, hooks, formatting and strict Clippy pass. The smaller test uses the existing query-event helpers and a LOW-durability project root. All five original repeated-call benchmarks ran four times per phase; comparisons within CPU models found no material regression. Mixed hardware and small per-model samples limit the performance conclusion; network-backed Markdown cases were not enabled.",
       "evidence": [
         {
-          "label": "Recorded c8ba04dc base without the fix: regression fails",
-          "url": "https://app.buildbuddy.io/invocation/99ff6389-01e2-4222-b4ad-3d8c9652ea6c"
+          "label": "Review the revised single commit",
+          "url": "https://github.com/tamird/ruff/commit/f5cc765eda272e3c46e62cbbf93653bc48d6a95e"
         },
         {
-          "label": "Isolated upstream qualification: tests, Clippy and formatting",
-          "url": "https://app.buildbuddy.io/invocation/0701c93d-8e67-460a-914a-e3ea70179aa5"
+          "label": "Matched baseline and complete functional qualification",
+          "url": "https://app.buildbuddy.io/invocation/1e98da07-c0a4-4ec7-bfa3-30f51a281f29"
         },
         {
-          "label": "Review the complete isolated change",
-          "url": "https://github.com/tamird/ruff/compare/c8ba04dc06caf4370d494870145c4f92356f1222...e5a7691b85136a48afabc3debb0f24a606360bc2"
+          "label": "Original repeated-call benchmarks with profiling code generation",
+          "url": "https://app.buildbuddy.io/invocation/9a013a63-e833-4f89-9470-35264ab4d88b"
         }
       ]
     },
-    "nextAction": "Minimize the LOW-durability cache regression with before-fails/after-passes evidence, use the existing query-event assertion helpers, and qualify the tracked replacement against upstream repeated-statement-call benchmarks. Present the revised, qualified contribution to Tamir."
+    "nextAction": "Tamir: review the revised single commit and decide whether to submit upstream."
   },
   {
     "id": "destructured-list-elements",

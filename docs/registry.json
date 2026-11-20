@@ -750,31 +750,35 @@
       "id": "branch:call-completion-key-lifetime",
       "type": "branch",
       "repo": "tamird/ruff",
-      "title": "Keep call-completion keys with their semantic index",
+      "title": "Retain call-completion query keys",
       "group": "ty",
-      "status": "Revising after Tamir review",
+      "status": "Awaiting Tamir review",
       "ref": "upstream/retain-call-completion-keys",
-      "head": "e5a7691b85136a48afabc3debb0f24a606360bc2",
-      "url": "https://github.com/tamird/ruff/commit/e5a7691b85136a48afabc3debb0f24a606360bc2",
-      "summary": "Unrelated file edits can collect interned call-completion keys and invalidate an unchanged file's semantic index. Track the keys as outputs of that index instead. Isolated from the Starlark fork; not submitted upstream.\n\nEarlier qualification established the isolated lifetime correction and failure on its c8ba04dc base. Tamir requested a smaller incrementality test and performance comparison with the original interning optimization; these revisions are under qualification. The current branch is historical evidence, not a renewed submission proposal.\n\nTamir must approve before any upstream submission.",
+      "head": "f5cc765eda272e3c46e62cbbf93653bc48d6a95e",
+      "url": "https://github.com/tamird/ruff/compare/e905eb561c7248cbaf4ec54f8eaf3dfab83d6b23...f5cc765eda272e3c46e62cbbf93653bc48d6a95e",
+      "summary": "Unrelated project edits can collect interned call keys and rerun an unchanged file's semantic index. Track these keys as outputs of that index. One isolated commit; not submitted upstream.\n\nThe maintained regression fails three times on the baseline and passes three times with the fix. Core, semantic and IDE suites, all 533 default native Markdown/inventory actions, hooks, formatting and strict Clippy pass. The smaller test uses the existing query-event helpers and a LOW-durability project root. All five original repeated-call benchmarks ran four times per phase; comparisons within CPU models found no material regression. Mixed hardware and small per-model samples limit the performance conclusion; network-backed Markdown cases were not enabled.\n\nTamir must approve before any upstream submission.",
       "evidence": [
         {
-          "label": "Recorded c8ba04dc base without the fix: regression fails",
-          "url": "https://app.buildbuddy.io/invocation/99ff6389-01e2-4222-b4ad-3d8c9652ea6c"
+          "label": "Review the revised single commit",
+          "url": "https://github.com/tamird/ruff/commit/f5cc765eda272e3c46e62cbbf93653bc48d6a95e"
         },
         {
-          "label": "Isolated upstream qualification: tests, Clippy and formatting",
-          "url": "https://app.buildbuddy.io/invocation/0701c93d-8e67-460a-914a-e3ea70179aa5"
+          "label": "Matched baseline and complete functional qualification",
+          "url": "https://app.buildbuddy.io/invocation/1e98da07-c0a4-4ec7-bfa3-30f51a281f29"
         },
         {
-          "label": "Review the complete isolated change",
-          "url": "https://github.com/tamird/ruff/compare/c8ba04dc06caf4370d494870145c4f92356f1222...e5a7691b85136a48afabc3debb0f24a606360bc2"
+          "label": "Original repeated-call benchmarks with profiling code generation",
+          "url": "https://app.buildbuddy.io/invocation/9a013a63-e833-4f89-9470-35264ab4d88b"
         }
       ],
-      "followup": {
-        "owner": "Agent",
-        "sourceHead": "e5a7691b85136a48afabc3debb0f24a606360bc2",
-        "nextAction": "Minimize the LOW-durability cache regression with before-fails/after-passes evidence, use the existing query-event assertion helpers, and qualify the tracked replacement against upstream repeated-statement-call benchmarks. Present the revised, qualified contribution to Tamir."
+      "contributorReview": {
+        "kind": "proposal",
+        "status": "pending",
+        "title": "Review qualified ty proposal",
+        "summary": "Review the published change and decide whether to submit upstream. Qualification is recorded in the item details. Nothing has been submitted upstream.",
+        "head": "f5cc765eda272e3c46e62cbbf93653bc48d6a95e",
+        "baseHead": "e905eb561c7248cbaf4ec54f8eaf3dfab83d6b23",
+        "url": "https://github.com/tamird/ruff/compare/e905eb561c7248cbaf4ec54f8eaf3dfab83d6b23...f5cc765eda272e3c46e62cbbf93653bc48d6a95e"
       }
     },
     {
@@ -798,11 +802,6 @@
           "url": "https://app.buildbuddy.io/invocation/3e27961a-71f9-4e9f-abd3-526529ae6c41"
         }
       ],
-      "followup": {
-        "owner": "Agent",
-        "sourceHead": "a24a7bbed0e37f6e388fbdb85d9ab3bbedc0ee9b",
-        "nextAction": "Tamir: review the revised single commit before upstream submission. The shared helper excludes tuple expressions because their inferred type already applies literal widening; re-reading their elements would bypass that policy."
-      },
       "contributorReview": {
         "kind": "proposal",
         "status": "pending",

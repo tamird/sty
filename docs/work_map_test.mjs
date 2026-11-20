@@ -198,6 +198,7 @@ for (const item of upstream) {
   if (item.state !== 'Awaiting Tamir review') continue;
   const node = nodes.find(node => node.id === `branch:${item.id}`);
   assert.equal(node.ref, item.ref, 'Each proposal needs its own published branch');
+  assert.equal(node.followup, undefined, 'Qualified proposals need one contributor decision, without a duplicate agent task');
   assert.equal(node.contributorReview.head, item.qualifiedHead);
   assert.equal(node.contributorReview.url, item.qualifiedURL);
   assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
