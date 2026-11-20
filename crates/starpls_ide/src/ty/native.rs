@@ -1343,7 +1343,7 @@ fn declarations(
             names.extend(["__getitem__", "__contains__"]);
             writeln!(
                 body,
-                "        def __getitem__(self, key: {toolchain_key}) -> _starpls_typing.Any: ..."
+                "        def __getitem__(self, key: {toolchain_key}) -> _starpls_types.ToolchainInfo | None: ..."
             )?;
             writeln!(
                 body,
@@ -4616,6 +4616,12 @@ def optional(c: ctx[object, object], key: Label) -> DefaultInfo:
 
 def own(c: ctx[object, object], key: Label) -> object:
     return c.toolchains[key].custom_tool
+
+def guarded_own(c: ctx[object, object], key: Label) -> object:
+    toolchain = c.toolchains[key]
+    if toolchain == None:
+        return None
+    return toolchain.custom_tool
 "#;
         let file = analysis
             .open_document(
@@ -4639,6 +4645,7 @@ def own(c: ctx[object, object], key: Label) -> object:
                 ("invalid-explicit-return", "providers[DefaultInfo]"),
                 ("invalid-argument-type", "providers"),
                 ("not-subscriptable", "c.rule.toolchains[key][DefaultInfo]"),
+                ("missing-attribute", "c.toolchains[key].custom_tool"),
             ],
         );
         let label_source = "def label(c: ctx[object, object], key: Label) -> Label | None:\n    resolved = c.rule.toolchains[key]\n    return None if resolved == None else resolved.label\n";
@@ -10594,6 +10601,10 @@ def shadowed() -> Configured: ...
     toolchains["//:toolchain"]
     toolchains[Label("//:toolchain")]
     toolchains[key]
+    optional: ToolchainInfo | None = toolchains["//:toolchain"]
+    if optional != None:
+        resolved: ToolchainInfo = optional
+        resolved
     available: bool = "//:toolchain" in toolchains
     info: ToolchainInfo = platform_common.ToolchainInfo(tool=1, files=[])
     info.tool
@@ -10634,6 +10645,8 @@ def shadowed() -> Configured: ...
             "_wrong: str = rule_ctx.exec_groups['test']; _wrong",
             "toolchains[42]",
             "42 in toolchains",
+            "_wrong: ToolchainInfo = toolchains['//:toolchain']; _wrong",
+            "_wrong: CcInfo = toolchains['//:toolchain']; _wrong",
             "platform_common.ToolchainInfo(42)",
             "platform_common.TemplateVariableInfo()",
             "platform_common.TemplateVariableInfo({1: 'value'})",
