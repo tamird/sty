@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-20T16:18:20Z",
+    "updatedAt": "2026-11-20T16:28:00Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -83,18 +83,19 @@
           "revision": "e4834aead5bc48b7c7417aead547da164558b043",
           "planned": 20,
           "executed": 19,
-          "strictZeroErrorPasses": 6,
+          "strictZeroErrorPasses": 7,
           "advisoryCompletions": 6,
-          "failures": 7,
+          "failures": 6,
           "requiredSkipped": 1,
           "published": false,
-          "scope": "All twenty canonical workflow selections on this exact Sty revision were accounted for: nineteen executed and one required LLVM check was skipped. Six strict selections have complete nonempty zero-error coverage; six advisory completions retain errors. Skylib and rules_cc refreshes are published; the other six projects still have strict typing failures.",
-          "assembledFromLatestProjectRuns": false,
+          "scope": "Latest project runs account for all twenty canonical workflow selections on this Sty revision: nineteen executed and one required LLVM check was skipped. Seven strict selections have complete nonempty zero-error coverage; six advisory completions retain errors. Skylib, rules_cc and runfiles refreshes are published; the other five projects still have strict typing failures. Runfiles was rerun after declaring its contributor weight accumulator.",
+          "assembledFromLatestProjectRuns": true,
           "publishedProjects": [
             "bazel-skylib",
-            "rules_cc"
+            "rules_cc",
+            "rules_runfiles_group"
           ],
-          "remainingProjects": 6
+          "remainingProjects": 5
         }
       },
       "pathAudit": {
@@ -354,18 +355,18 @@
       "group": "community",
       "status": "draft",
       "url": "https://github.com/bazel-contrib/rules_runfiles_group/pull/23",
-      "head": "0f3a7b23dd0624aeac263f5328b494a37fba5d9c",
-      "summary": "Provider fields and generic handle types shared by materialize, transform and merge callbacks.\n\nRecorded checks: Local e4834aea qualification: 32 root files with eleven errors; 37 example files pass.\n\nKeep generic provider and callback relationships while fixing the remaining errors.",
+      "head": "4a04f1add870aa292ed0ec5cde448d1c0ac799aa",
+      "summary": "Provider fields and generic handle types shared by materialize, transform and merge callbacks.\n\nRecorded checks: e4834aea qualification: 32 root files and 37 example files, zero strict errors. Complete advisory checks retain 646 root and 354 example errors.\n\nPublished refresh declares the contributor weight accumulator and preserves generic provider and callback relationships. Native matrix and sty CI are running.",
       "evidence": [
         {
           "label": "Latest canonical workflow qualification",
-          "url": "https://app.buildbuddy.io/invocation/b2f203ed-e46e-4223-8219-537e5748b661"
+          "url": "https://app.buildbuddy.io/invocation/f805ea87-8742-41e6-8d4b-bf4e7ad28161"
         }
       ],
       "followup": {
         "owner": "Agent",
-        "sourceHead": "0f3a7b23dd0624aeac263f5328b494a37fba5d9c",
-        "nextAction": "Resolve eleven strict typing errors"
+        "sourceHead": "4a04f1add870aa292ed0ec5cde448d1c0ac799aa",
+        "nextAction": "Follow refreshed-head CI"
       }
     },
     {
@@ -1045,7 +1046,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1060,7 +1061,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1075,7 +1076,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1090,7 +1091,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1105,7 +1106,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1121,7 +1122,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python bugfix candidate. Exclude NotImplemented from the assigned result and try ordinary or reflected binary dispatch. Preserve aliases and any ordinary return alternatives. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; qualify reflected overloads, mixed returns, conditional in-place methods and unsupported operands.",
       "findings": [
@@ -1149,7 +1150,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
       "findings": [
@@ -1177,7 +1178,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
       "findings": [
@@ -1205,7 +1206,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Fork correction qualified; upstream extraction pending. The published checker retains complete later contexts for empty dictionaries, lists and sets. Skylib root and Gazelle checks now pass. Thirty native cases and incremental query-order controls cover generic keys, aliases, conflicting consumers and invalid writes; current-upstream extraction and overlap review remain open.",
       "nextStep": "Reduce the correction on current upstream and compare with ibraheemdev’s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
       "findings": [
@@ -1273,7 +1274,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
       "findings": [
@@ -1301,7 +1302,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python bugfix candidate. Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
       "findings": [
@@ -1359,7 +1360,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python bugfix candidate. Group keys that share value types and requiredness, retaining large literal-key groups instead of merging incompatible get overloads. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; cover required and optional keys, key unions, missing keys, defaults and large schemas.",
       "findings": [
@@ -1387,7 +1388,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement / host API candidate. Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
       "findings": [
@@ -1415,7 +1416,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
       "findings": [
@@ -1443,7 +1444,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python bugfix candidate. Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
       "findings": [
@@ -1471,7 +1472,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Host API design. Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
       "findings": [
@@ -1499,7 +1500,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -1578,7 +1579,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -1793,7 +1794,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -1918,7 +1919,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting.",
       "nextStep": "Reproduce each surviving behavior on current ty; split independent fixes and qualify their solver/semantic suites before requesting Tamir review.",
       "findings": [
@@ -2276,7 +2277,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Preserve overload signatures while checking implementation bodies and projected callback signatures.",
       "nextStep": "Reproduce the Python behavior against current ty. Separately resolve LLVM exec_test's explicit versus omitted inner_data contract: its draft overloads are rejected by sty's one-signature rule. Preserve callback-data and default-list negative cases; do not treat Python overload analysis as an available Starlark contract.",
       "findings": [
@@ -2330,7 +2331,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
       "nextStep": "Extract Python-meaningful regressions; qualify narrowing stability across mutation and keep Starlark tag interpretation in the host adapter.",
       "findings": [
@@ -2371,7 +2372,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream.",
       "nextStep": "Subtract the already merged empty-peer fix, reproduce remaining cases on current ty, and qualify mutable escape/default/argument boundaries.",
       "findings": [
@@ -2417,7 +2418,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2467,7 +2468,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2499,7 +2500,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2550,7 +2551,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2600,7 +2601,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2732,7 +2733,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2755,7 +2756,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
       "nextStep": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
       "findings": [
@@ -2778,7 +2779,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
       "nextStep": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
       "findings": [
@@ -2801,7 +2802,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
       "nextStep": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
       "findings": [
@@ -2841,7 +2842,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
       "nextStep": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
       "findings": [
@@ -2869,7 +2870,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
       "nextStep": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix.",
       "findings": [
@@ -2892,7 +2893,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
       "nextStep": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change.",
       "findings": [
@@ -2947,7 +2948,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Upstream reproduced; fix not qualified. Structural comparison accepts Result[str] as Result[int] when a generic first_or method returns its payload or a caller-supplied fallback. The same false acceptance occurs with nested recursive payloads. Direct recursive payload comparison rejects correctly. Baseline and deferred-receiver experiments agree in both generic syntaxes, so this is a separate signature-comparison defect.",
       "nextStep": "Reconcile existing upstream reports #2924 and #2323, binder PR #29027 and the closed higher-rank attempt #26638 before preparing feedback or extracting another binder implementation. Keep the scoped-binder prerequisite under ty-scoped-witness-proofs. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review.",
       "findings": [],
@@ -2989,9 +2990,9 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
-      "summary": "Reconciliation in progress. Sty e4834aead5 pins Ruff 7ee1132fd1 on upstream d8c6e237e7; eight sty targets and the frozen optimized Linux build pass. All eight community projects were rerun: six strict zero-error selections, six advisory completions with findings, seven failures and one required skipped check. Skylib and rules_cc PRs are refreshed; six projects still need repairs. The full Markdown run completed with 506 passing and 32 failing fixtures.",
-      "nextStep": "Repair the six remaining community projects without weakening contracts: complete repository-rule dictionary recovery, checked overload contracts, toolchain lookup and remaining collection/type-declaration gaps. Publish each qualified refresh, reconcile the 32 failing Markdown fixtures, and revise the two upstream proposals against Tamir’s review.",
+      "updatedAt": "2026-11-20T16:28:00Z",
+      "summary": "Reconciliation in progress. Sty e4834aead5 pins Ruff 7ee1132fd1 on upstream d8c6e237e7; eight sty targets and the frozen optimized Linux build pass. Latest runs across all eight community projects account for seven strict zero-error selections, six advisory completions with findings, six failures and one required skipped check. Skylib, rules_cc and runfiles PRs are refreshed; five projects still need repairs. The full Markdown run completed with 506 passing and 32 failing fixtures.",
+      "nextStep": "Repair the five remaining community projects without weakening contracts: complete repository-rule dictionary recovery, checked overload contracts, toolchain lookup and remaining collection/type-declaration gaps. Publish each qualified refresh, reconcile the 32 failing Markdown fixtures, and finish the cache proposal revision. The unpacking proposal awaits Tamir review.",
       "findings": [
         {
           "text": "[ty] Accept immediately guarded dictionary reads — crates/ty_python_semantic/resources/mdtest/narrow/conditionals/in.md, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/infer/builder/subscript.rs, crates/ty_python_semantic/src/types/subscript.rs",
@@ -3073,7 +3074,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Track specialized bounds in TypeVar identity while preserving materialized views and exact ParamSpec components.",
       "nextStep": "Reduce domain identity and substitution cases; qualify captured binders and compare upstream #29555.",
       "findings": [
@@ -3163,7 +3164,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python solver design. Keep local binders, declared domains and correlated witnesses together through inference, replay and bounded proof. Unknown proofs remain incomplete.",
       "nextStep": "Compare upstream PR #29027 before extracting the binder representation. Reduce the remaining quantified-domain, witness-correlation and budget differences for design review.",
       "findings": [
@@ -3979,7 +3980,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python bugfix candidate. A sibling branch can negate a rolled-back consequence while its antecedents still hold. Retriggering cached rules detects the conflict.",
       "nextStep": "Reproduce against clean upstream and qualify both single and pair implication regressions.",
       "findings": [
@@ -4017,7 +4018,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python bugfix candidate. Exhausted generic witness proof must remain unknown instead of producing an upper-bound violation.",
       "nextStep": "Qualify the native exhausted-witness regression and reduce a Python diagnostic example.",
       "findings": [
@@ -4055,7 +4056,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Preserve strict callable relations while solving finite source domains, covering union inputs and comparing nested protocol receivers.",
       "nextStep": "Reduce strict callable cases; qualify domain replay and receiver progress against upstream #29555.",
       "findings": [
@@ -4141,7 +4142,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Specialize generic implementation inputs before declaration coverage checks. Broader implementation return annotations are permitted; body checking has a separate owner.",
       "nextStep": "Correct the invalid nullable-return assertion, then qualify generic declaration consistency.",
       "findings": [
@@ -4193,7 +4194,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Preserve callable-local binders under outer substitution and project captured callback variables before they reach ordinary results.",
       "nextStep": "Reconcile binder ownership with upstream #29553 and #29555; qualify partial and captured-return cases.",
       "findings": [
@@ -4269,7 +4270,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python bugfix candidate. Keep overload expansion available when some generic specialization accepts an argument, including provisional arity mismatches.",
       "nextStep": "Qualify the bound-method starred-union fixture and reduce the generic expansion precheck.",
       "findings": [
@@ -4307,7 +4308,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Python enhancement candidate. Use finite member facts for getattr results and fresh empty defaults. Immutable storage guarantees have a separate host contract.",
       "nextStep": "Reduce ordinary Python lookup cases; compare collection context with upstream #27665.",
       "findings": [
@@ -4373,7 +4374,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Host API design. Distinguish accepted keyword parameters from received keyword dictionaries, then verify complete ParamSpec witnesses against the original call relation.",
       "nextStep": "Specify host annotation and capture semantics before proposing shared solver APIs.",
       "findings": [
@@ -4469,7 +4470,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T16:18:20Z",
+      "updatedAt": "2026-11-20T16:28:00Z",
       "summary": "Host API design. Keep source definitions or ranges through parameter specialization, default presentation and hidden internal keyword handling.",
       "nextStep": "Review the public source-location contract and qualify navigation and signature presentation.",
       "findings": [
