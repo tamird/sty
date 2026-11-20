@@ -959,6 +959,74 @@ mod tests {
     }
 
     #[test]
+    fn checked_overload_interfaces_select_body_diagnostics() {
+        let contract = "@overload\ndef choose(*, text: Literal[True]) -> str: ...\n@overload\ndef choose(*, text: Literal[False]) -> int: ...\ndef choose(*, text: bool) -> str | int: ...\n";
+        for (name, body, selected, local_sources, all_sources, expected) in [
+            (
+                "selected-source",
+                "def choose(*, text):\n    if text:\n        return 42\n    return 42\n",
+                vec!["defs.bzl"],
+                false,
+                false,
+                "invalid-explicit-return",
+            ),
+            (
+                "local-interface-sources",
+                "def choose(*, text):\n    if text:\n        return 42\n    return 42\n",
+                vec!["defs.bzli", "caller.bzl"],
+                true,
+                false,
+                "invalid-explicit-return",
+            ),
+            (
+                "all-interface-sources",
+                "def choose(*, text):\n    if text:\n        return 42\n    return 42\n",
+                vec!["defs.bzli", "caller.bzl"],
+                false,
+                true,
+                "invalid-explicit-return",
+            ),
+            (
+                "unsupported-source-domain",
+                "def choose(*, text):\n    for value in ['value']:\n        if text:\n            return value\n    return 42\n",
+                vec!["caller.bzl"],
+                true,
+                false,
+                "unverified-overload",
+            ),
+        ] {
+            let mut checker = local_checker_with_options(
+                &format!("checked-overload-{name}"),
+                &[
+                    ("defs.bzl", body),
+                    ("defs.bzli", contract),
+                    ("caller.bzl", "load(':defs.bzl', 'choose')\ntext: str = choose(text=True)\nnumber: int = choose(text=False)\n"),
+                ],
+                CheckCommand {
+                    paths: selected.into_iter().map(str::to_owned).collect(),
+                    check_local_interface_sources: local_sources,
+                    check_interface_sources: all_sources,
+                    ..Default::default()
+                },
+            );
+            let report_path = checker.bazel_info.workspace.join("coverage.json");
+            assert_eq!(
+                checker.report_diagnostics_to(Some(&report_path), &mut Vec::new(), &mut Vec::new()).unwrap(),
+                ExitCode::FAILURE,
+                "{name}",
+            );
+            let result = checker.check_files().unwrap();
+            let snapshot = checker.analysis.snapshot();
+            let diagnostics: Vec<_> = result.diagnostics.iter().flat_map(|(file, diagnostics)| {
+                let basename = snapshot.path(*file).file_name().unwrap().to_str().unwrap();
+                diagnostics.iter().map(move |diagnostic| (basename, diagnostic.id().as_str()))
+            }).collect();
+            assert_eq!(diagnostics, [("defs.bzl", expected)], "{name}");
+            std::fs::remove_dir_all(checker.bazel_info.workspace).unwrap();
+        }
+    }
+
+    #[test]
     fn adjacent_interface_checks_callers_and_selected_implementations() {
         for (name, selected, config, expected) in [
             (
@@ -1726,7 +1794,7 @@ missing-type-argument = "error"
 [[overrides]]
 include = ["defs.bzl"]
 [overrides.rules]
-invalid-return-type = "warn"
+invalid-explicit-return = "warn"
 missing-type-argument = "ignore"
 
 [[overrides]]

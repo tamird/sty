@@ -198,7 +198,7 @@ impl Validator<'_> {
         self.error(range, "This syntax is not supported in Starlark");
     }
 
-    /// A Starlark interface exposes one declaration per function in each scope.
+    /// Ordinary declarations are unique; overload arms may share their name.
     fn reject_duplicate_functions(&mut self, body: &[Stmt]) {
         let mut names = HashSet::new();
         for statement in body {
@@ -206,7 +206,14 @@ impl Validator<'_> {
                 continue;
             };
             let owner = function.node_index().load();
-            if !self.excluded.contains(&owner) && !names.insert(&function.name.id) {
+            let overload = match function.decorator_list.as_slice() {
+                [decorator] => decorator
+                    .expression
+                    .as_name_expr()
+                    .is_some_and(|name| name.id == "overload"),
+                _ => false,
+            };
+            if !self.excluded.contains(&owner) && !overload && !names.insert(&function.name.id) {
                 self.error(
                     function.name.range(),
                     format!("Function `{}` is already declared", function.name.id),
@@ -383,8 +390,9 @@ impl Validator<'_> {
                 let supported_decorators = match decorator_list.as_slice() {
                     [] => true,
                     [decorator] => decorator.expression.as_name_expr().is_some_and(|name| {
-                        self.in_interface_class
-                            && matches!(name.id.as_str(), "property" | "type_check_only")
+                        (self.annotation_mode == AnnotationMode::Interface && name.id == "overload")
+                            || (self.in_interface_class
+                                && matches!(name.id.as_str(), "property" | "type_check_only"))
                     }),
                     _ => false,
                 };
@@ -397,26 +405,16 @@ impl Validator<'_> {
                     || (native_type_params && self.annotation_mode != AnnotationMode::Interface)
                     || (self.annotation_mode == AnnotationMode::Disabled && returns.is_some());
                 if invalid_header {
-                    if let Some(decorator) = decorator_list.iter().find(|decorator| {
-                        self.annotation_mode == AnnotationMode::Interface
-                            && decorator
-                                .expression
-                                .as_name_expr()
-                                .is_some_and(|name| name.id == "overload")
-                    }) {
-                        self.error(decorator.range(), "Declare one signature per function; Starlark interfaces do not support @overload");
-                    } else {
-                        self.error(
-                            *range,
-                            if self.annotation_mode == AnnotationMode::Interface {
-                                "Async functions and these decorators are not supported in type interfaces"
-                            } else if self.annotation_mode != AnnotationMode::Disabled {
-                                "Async functions, decorators, and type parameters are not supported in Starlark"
-                            } else {
-                                "Function annotations and decorators are not supported in Starlark"
-                            },
-                        );
-                    }
+                    self.error(
+                        *range,
+                        if self.annotation_mode == AnnotationMode::Interface {
+                            "Async functions and these decorators are not supported in type interfaces"
+                        } else if self.annotation_mode != AnnotationMode::Disabled {
+                            "Async functions, decorators, and type parameters are not supported in Starlark"
+                        } else {
+                            "Function annotations and decorators are not supported in Starlark"
+                        },
+                    );
                 }
                 let invalid_positional_only = self.annotation_mode != AnnotationMode::Interface
                     && self.reject_positional_only(parameters);
@@ -911,8 +909,8 @@ mod tests {
             ("def f(value: int, /, *, flag: bool = ...) -> int: ...", true),
             ("value: lambda arg, /: arg", false),
             ("def f[T](value: T) -> T: ...", true),
-            ("@overload\ndef f(value: int) -> int: ...", false),
-            ("class P(Protocol):\n    @overload\n    def f(self) -> int: ...", false),
+            ("@overload\ndef f(value: int) -> int: ...", true),
+            ("class P(Protocol):\n    @overload\n    def f(self) -> int: ...", true),
             ("@overload()\ndef f(value: int) -> int: ...", false),
             ("def f(x: int) -> int: ...\ndef f(x: str) -> str: ...", false),
             ("class P(Protocol):\n    def f(self) -> int: ...\n    def f(self) -> str: ...", false),

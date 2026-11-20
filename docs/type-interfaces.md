@@ -170,8 +170,41 @@ def is_list(value: object) -> TypeIs[Top[list[Unknown]]]: ...
 Elements of an otherwise unknown list can be read as `object`; adding an element
 requires knowing that the list's element type accepts it.
 
-A function has one signature. A generic signature can relate a parameter to
-the result, for example `def first[T](items: list[T]) -> T: ...`.
+A generic signature can relate a parameter to the result, for example
+`def first[T](items: list[T]) -> T: ...`.
+
+### Checked overloads
+
+A companion can describe different results for different inputs with `@overload`.
+The family must end with one ordinary declaration that annotates every parameter
+and the return type:
+
+```starlark
+@overload
+def choose(*, text: Literal[True]) -> str: ...
+@overload
+def choose(*, text: Literal[False]) -> int: ...
+def choose(*, text: bool) -> str | int: ...
+```
+
+The source still defines `choose` once. Its parameter names, kinds and defaults
+must match the final declaration. Callers use the overload arms; the final
+signature does not add another accepted call.
+
+When checking the implementation, sty checks its body separately for each arm.
+Returning `42` in the `text=True` branch is an error even though `42` fits the
+final union return. The same arm-specific facts drive `non-static-type` checks.
+Source annotations and shared default values retain their ordinary checks;
+a default is not allocated again for each arm.
+
+Unsupported or incomplete body analysis reports `unverified-overload` as an
+error. For example, loops and nested function definitions are not supported by this
+analysis. A failed check can retain declared types for error recovery; it does
+not verify the implementation. `explicit-any` and `non-static-type` retain their configured severities.
+
+Check implementations explicitly with `--check-local-interface-sources` or
+`--check-interface-sources`, or select their source files. Checking only callers
+does not audit an implementation.
 
 ### Shared declarations
 
