@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-20T22:32:05Z",
+    "updatedAt": "2026-11-20T22:52:40Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -274,7 +274,7 @@
       "status": "draft",
       "url": "https://github.com/bazelbuild/rules_cc/pull/940",
       "head": "ac7c8bd8ec0af475ccf4dd65b2b58806f19ef696",
-      "summary": "C++ toolchain providers, helper constructors and macro contracts.\n\nRecorded checks: 1ec32e3 qualification: 134 strict files, zero errors; 285 advisory files retain 37,444 errors.\n\nChecker update published; GitHub reports the branch mergeable. CI is still being assessed.",
+      "summary": "C++ toolchain providers, helper constructors and macro contracts.\n\nRecorded checks: 1ec32e3 qualification: 134 strict files, zero errors; 285 advisory files retain 37,444 errors.\n\nPublished-head Sty CI passes. GitHub reports the branch mergeable; native Buildkite remains pending.",
       "evidence": [
         {
           "label": "rules_cc #960",
@@ -367,7 +367,7 @@
       "status": "draft",
       "url": "https://github.com/fmeum/with_cfg.bzl/pull/269",
       "head": "52365fcdb3cf36149ee0937fb0b812968e4cb56f",
-      "summary": "Settings, selectors, frontend rules, argument rewriting and provider contracts.\n\nRecorded checks: 1ec32e3 qualification: 20 root files with two errors; two example files pass. Native suites pass in fastbuild and opt.\n\nDictionary-union admission and a fork-only constrained callback rejection remain. The callback reproduction passes on official ty.",
+      "summary": "Settings, selectors, frontend rules, argument rewriting and provider contracts.\n\nRecorded checks: 1ec32e3 qualification: 20 root files with two errors; two example files pass. Native suites pass in fastbuild and opt.\n\nValidation branch 1a2b930 clears both original errors on the same 20 source files. One strict generic callback-certification error remains; the published engine still has the original two errors.",
       "evidence": [
         {
           "label": "1ec32e3 canonical qualification",
@@ -390,7 +390,7 @@
       "status": "draft",
       "url": "https://github.com/bazel-contrib/rules_runfiles_group/pull/23",
       "head": "28fa82186d7fb3100941304ad7dfabd33f2596b9",
-      "summary": "Provider fields and generic handle types shared by materialize, transform and merge callbacks.\n\nRecorded checks: 1ec32e3 qualification: 32 root and 37 example files, zero strict errors. Advisory checks retain 646 root and 344 example errors.\n\nChecker update published; GitHub reports the branch mergeable. CI is still being assessed.",
+      "summary": "Provider fields and generic handle types shared by materialize, transform and merge callbacks.\n\nRecorded checks: 1ec32e3 qualification: 32 root and 37 example files, zero strict errors. Advisory checks retain 646 root and 344 example errors.\n\nPublished-head Sty and all five native CI jobs pass. GitHub reports the branch mergeable.",
       "evidence": [
         {
           "label": "1ec32e3 canonical qualification",
@@ -400,7 +400,7 @@
       "followup": {
         "owner": "Agent",
         "sourceHead": "28fa82186d7fb3100941304ad7dfabd33f2596b9",
-        "nextAction": "Follow published-head CI"
+        "nextAction": "Await maintainer review"
       }
     },
     {
@@ -413,7 +413,7 @@
       "status": "draft",
       "url": "https://github.com/hermeticbuild/rules_rs/pull/306",
       "head": "2b8f319b4719f161dcdf1ef33ff9c5d78f365de9",
-      "summary": "Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.\n\nRecorded checks: 1ec32e3 qualification: 36 root and four fixture files, zero errors; the previous 29 errors are gone. Both retained Cargo tests pass. Formatting has no diffs; 148 inherited lint warnings retain exit 1.\n\nRebased source and generated contracts are published. GitHub now reports the branch mergeable; CI is running. Two unnecessary tests were removed.",
+      "summary": "Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.\n\nRecorded checks: 1ec32e3 qualification: 36 root and four fixture files, zero errors; the previous 29 errors are gone. Both retained Cargo tests pass. Formatting has no diffs; 148 inherited lint warnings retain exit 1.\n\nRebased source and generated contracts are published. GitHub reports the branch mergeable; Sty CI passes and the broader native matrix is still running. Two unnecessary tests were removed.",
       "evidence": [
         {
           "label": "1ec32e3 canonical qualification",
@@ -598,7 +598,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32381",
-      "summary": "Skylib collections.uniq preserves element types but must reject nested unhashable inputs. Bound syntax is rejected; do not equate an unconstrained generic with a safe dictionary key.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "Skylib collections.uniq preserves element types but must reject nested unhashable inputs. Bound syntax is rejected; do not equate an unconstrained generic with a safe dictionary key.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32379",
@@ -609,7 +610,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32379",
-      "summary": "Skylib types.is_string and types.is_list need caller narrowing that preserves list element types. A boolean return alone does not supply this contract.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "Skylib types.is_string and types.is_list need caller narrowing that preserves list element types. A boolean return alone does not supply this contract.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32377",
@@ -620,7 +622,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32377",
-      "summary": "DirectoryInfo helpers cannot load their calling provider module only for annotations without a cycle; moving a provider changes its defining-label identity.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "DirectoryInfo helpers cannot load their calling provider module only for annotations without a cycle; moving a provider changes its defining-label identity.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32370",
@@ -631,7 +634,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32370",
-      "summary": "A helper requiring readable ctx.file or bazel_module fields cannot accept the real host object through an open struct contract. Distinct from rule callback inference.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "A helper requiring readable ctx.file or bazel_module fields cannot accept the real host object through an open struct contract. Distinct from rule callback inference.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32369",
@@ -642,7 +646,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32369",
-      "summary": "The native checker accepts assigning attr.bool() to str and reading misspelled ctx.attr fields. Infer callback context from the declaration instead of repeating its schema.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "The native checker accepts assigning attr.bool() to str and reading misspelled ctx.attr fields. Infer callback context from the declaration instead of repeating its schema.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32343",
@@ -653,7 +658,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32343",
-      "summary": "Ordinary **kwargs wrappers hide required-argument and value-type errors. sty prototypes Unpack[KeywordArgs[callee]]; symbolic macro inherit_attrs is a different mechanism.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "Ordinary **kwargs wrappers hide required-argument and value-type errors. sty prototypes Unpack[KeywordArgs[callee]]; symbolic macro inherit_attrs is a different mechanism.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32311",
@@ -664,7 +670,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32311",
-      "summary": "repository_ctx.path() values cannot be named as path or Path in native annotations.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "repository_ctx.path() values cannot be named as path or Path in native annotations.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32207",
@@ -675,7 +682,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32207",
-      "summary": "Native provider(fields=...) assigns Any to fields and misses wrong returns. sty accepts source field comments and companion provider contracts.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "Native provider(fields=...) assigns Any to fields and misses wrong returns. sty accepts source field comments and companion provider contracts.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32104",
@@ -686,7 +694,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32104",
-      "summary": "platforms_contrib accepts x86-64 levels v1–v4, but native annotations cannot express Literal strings and reject v5 statically.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "platforms_contrib accepts x86-64 levels v1–v4, but native annotations cannot express Literal strings and reject v5 statically.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32086",
@@ -697,7 +706,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32086",
-      "summary": "The native checker rejects the public analysis-test result constructor as a type.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "The native checker rejects the public analysis-test result constructor as a type.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32085",
@@ -708,7 +718,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32085",
-      "summary": "list[struct] admits ctx.outputs although analysis rejects it as a provider. Provider constructors and provider instances need distinct contracts.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "list[struct] admits ctx.outputs although analysis rejects it as a provider. Provider constructors and provider instances need distinct contracts.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32059",
@@ -719,7 +730,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32059",
-      "summary": "OutputGroupInfo iterates keys and is accepted by native visibility but rejected at a Collection annotation. Starlark #318 already merged the collection distinction.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "OutputGroupInfo iterates keys and is accepted by native visibility but rejected at a Collection annotation. Starlark #318 already merged the collection distinction.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32044",
@@ -730,7 +742,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32044",
-      "summary": "A recursive Json alias cannot resolve its own list/dictionary references in the native checker.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "A recursive Json alias cannot resolve its own list/dictionary references in the native checker.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32024",
@@ -741,7 +754,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32024",
-      "summary": "Native dynamic annotation checking rejects dependency and source-file Targets. Disabling dynamic checking makes the reproduced analysis succeed; this is separate from static inference.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "Native dynamic annotation checking rejects dependency and source-file Targets. Disabling dynamic checking makes the reproduced analysis succeed; this is separate from static inference.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32022",
@@ -752,7 +766,13 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32022",
-      "summary": "The native checker still treats a guarded list[str] as list[str] | None. This blocks using native annotations throughout the netrc parser, not its current type-comment fix.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "The native checker still treats a guarded list[str] as list[str] | None. This blocks using native annotations throughout the netrc parser, not its current type-comment fix.\n\nThe current prerelease still reproduces this report. Prepare a concise confirmation for Tamir review; nothing has been posted.\n\nRetested 2026-11-20: official Bazel 10.0.0rc4 rejects the original guarded for-loop under --experimental_starlark_type_checking; the same module loads without that flag. Bazel 9.3.3 accepts both commands, which does not establish a fix in the newer checker.",
+      "evidence": [
+        {
+          "label": "Current Bazel reproduction",
+          "url": "https://app.buildbuddy.io/invocation/4549ead0-7c3d-441e-98d9-2334aa8ba52a"
+        }
+      ]
     },
     {
       "id": "issue:bazelbuild/bazel:32021",
@@ -763,7 +783,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32021",
-      "summary": "Bare depset is accepted, but depset[str] is rejected as a nullary type constructor; collection payload contracts need parameterization.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "Bare depset is accepted, but depset[str] is rejected as a nullary type constructor; collection payload contracts need parameterization.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "issue:bazelbuild/bazel:32020",
@@ -774,7 +795,8 @@
       "group": "bazel",
       "status": "Feedback filed",
       "url": "https://github.com/bazelbuild/bazel/issues/32020",
-      "summary": "Ctx exists for rule callbacks, while module_ctx and repository_ctx are absent from the native annotation environment.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
+      "summary": "Ctx exists for rule callbacks, while module_ctx and repository_ctx are absent from the native annotation environment.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel.",
+      "evidence": []
     },
     {
       "id": "branch:call-completion-key-lifetime",
@@ -1075,7 +1097,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1090,7 +1112,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1105,7 +1127,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1120,7 +1142,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1135,7 +1157,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1151,7 +1173,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python bugfix candidate. Exclude NotImplemented from the assigned result and try ordinary or reflected binary dispatch. Preserve aliases and any ordinary return alternatives. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; qualify reflected overloads, mixed returns, conditional in-place methods and unsupported operands.",
       "findings": [
@@ -1179,7 +1201,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
       "findings": [
@@ -1207,7 +1229,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
       "findings": [
@@ -1252,7 +1274,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Fork correction qualified; upstream extraction pending. The published checker retains complete later contexts for empty dictionaries, lists and sets. Skylib root and Gazelle checks now pass. Thirty native cases and incremental query-order controls cover generic keys, aliases, conflicting consumers and invalid writes; current-upstream extraction and overlap review remain open.",
       "nextStep": "Reduce the correction on current upstream and compare with ibraheemdev’s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
       "findings": [
@@ -1320,7 +1342,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
       "findings": [
@@ -1348,7 +1370,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python bugfix candidate. Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
       "findings": [
@@ -1406,7 +1428,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python bugfix candidate. Group keys that share value types and requiredness, retaining large literal-key groups instead of merging incompatible get overloads. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; cover required and optional keys, key unions, missing keys, defaults and large schemas.",
       "findings": [
@@ -1434,7 +1456,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement / host API candidate. Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
       "findings": [
@@ -1462,7 +1484,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
       "findings": [
@@ -1490,7 +1512,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python bugfix candidate. Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
       "findings": [
@@ -1518,7 +1540,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Host API design. Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
       "findings": [
@@ -1546,7 +1568,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -1625,7 +1647,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -1840,7 +1862,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -2036,7 +2058,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting.",
       "nextStep": "Reproduce each surviving behavior on current ty; split independent fixes and qualify their solver/semantic suites before requesting Tamir review.",
       "findings": [
@@ -2394,7 +2416,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Sty now pairs overloaded interfaces with checked source bodies and uses the same finite domains for strictness. General Python body-domain analysis still needs an upstream split and review.",
       "nextStep": "Repair with_cfg dictionary-union admission and the fork-only generic callback rejection; compare the remaining body-domain APIs with upstream.",
       "findings": [
@@ -2474,9 +2496,9 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
-      "nextStep": "Tamir review: exact immutable truthiness is qualified on official f31dd86f in a one-commit fork branch. Related #27106 may remove guards this proof uses; composition is untested. Astral requires human-authored PR prose. Remaining saved-tag mechanisms still need reconciliation.",
+      "nextStep": "Qualify the combined policy: preserve individual guards for exact immutable builtins, remove other residual guards as #27106 proposes, and eliminate contradictory immutable branches. The standalone commit passes but composing unmodified #27106 reproduces the range false positive. Rewrite the comments and present the revised commit after qualification. Remaining saved-tag mechanisms still need reconciliation.",
       "findings": [
         {
           "text": "[ty] Narrow through saved runtime type tests — crates/ty_python_core/src/builder.rs, crates/ty_python_core/src/use_def.rs, crates/ty_python_semantic/resources/mdtest/narrow/type.md, crates/ty_python_semantic/src/types/ide_support/unused_bindings.rs, crates/ty_python_semantic/src/types/narrow.rs, crates/ty_python_semantic/src/types/provided/tests.rs",
@@ -2552,7 +2574,7 @@
       ],
       "evidence": [
         {
-          "label": "Qualified upstream review commit",
+          "label": "Earlier standalone review commit; combined proposal in progress",
           "url": "https://github.com/tamird/ruff/commit/a95b138703ae5a05fa0212a8f8dc6506e58be5cc"
         },
         {
@@ -2560,8 +2582,12 @@
           "url": "https://app.buildbuddy.io/invocation/f2220608-b748-4af2-8b82-ecd4f5d98750"
         },
         {
-          "label": "Related residual-truthiness proposal; composition untested",
+          "label": "Related proposal drops required truthiness guards",
           "url": "https://github.com/astral-sh/ruff/pull/27106"
+        },
+        {
+          "label": "Composition check reproduces range | str false positive",
+          "url": "https://app.buildbuddy.io/invocation/a35b07c9-e754-4b32-a922-9afd35d10364"
         }
       ]
     },
@@ -2572,7 +2598,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream.",
       "nextStep": "Subtract the already merged empty-peer fix, reproduce remaining cases on current ty, and qualify mutable escape/default/argument boundaries.",
       "findings": [
@@ -2635,7 +2661,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2685,7 +2711,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2717,7 +2743,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2768,7 +2794,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2818,7 +2844,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2950,7 +2976,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -2973,7 +2999,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
       "nextStep": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
       "findings": [
@@ -2996,7 +3022,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
       "nextStep": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
       "findings": [
@@ -3019,7 +3045,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
       "nextStep": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
       "findings": [
@@ -3059,7 +3085,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
       "nextStep": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
       "findings": [
@@ -3087,7 +3113,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
       "nextStep": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix.",
       "findings": [
@@ -3110,7 +3136,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
       "nextStep": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change.",
       "findings": [
@@ -3165,7 +3191,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Upstream reproduced; fix not qualified. Structural comparison accepts Result[str] as Result[int] when a generic first_or method returns its payload or a caller-supplied fallback. The same false acceptance occurs with nested recursive payloads. Direct recursive payload comparison rejects correctly. Baseline and deferred-receiver experiments agree in both generic syntaxes, so this is a separate signature-comparison defect.",
       "nextStep": "Reconcile existing upstream reports #2924 and #2323, binder PR #29027 and the closed higher-rank attempt #26638 before preparing feedback or extracting another binder implementation. Keep the scoped-binder prerequisite under ty-scoped-witness-proofs. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review.",
       "findings": [],
@@ -3207,7 +3233,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Reconciliation in progress. Sty cd09583e pins Ruff d10bc8c7 on upstream 36f64044; eight native targets and the frozen optimized build pass. The current full Markdown run has 507 passing and 31 failing fixtures, with complete inventory and no newly failing files. Four community refreshes are published on this engine. All twenty selections are accounted for: nine strict passes, six advisory completions, four failures and one required skipped check.",
       "nextStep": "Rebase the next qualified bundle onto official 7d1b1355. Follow CI on five published community refreshes; repair LLVM dependency contracts, with_cfg inference and Apple toolchain fields. Present the qualified immutable-truthiness proposal for Tamir review, including overlap with upstream #27106.",
       "findings": [
@@ -3291,7 +3317,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Track specialized bounds in TypeVar identity while preserving materialized views and exact ParamSpec components.",
       "nextStep": "Reduce domain identity and substitution cases; qualify captured binders and compare upstream #29555.",
       "findings": [
@@ -3381,7 +3407,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python solver design. Keep local binders, declared domains and correlated witnesses together through inference, replay and bounded proof. Unknown proofs remain incomplete.",
       "nextStep": "Compare upstream PR #29027 before extracting the binder representation. Reduce the remaining quantified-domain, witness-correlation and budget differences for design review.",
       "findings": [
@@ -4197,7 +4223,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python bugfix candidate. A sibling branch can negate a rolled-back consequence while its antecedents still hold. Retriggering cached rules detects the conflict.",
       "nextStep": "Reproduce against clean upstream and qualify both single and pair implication regressions.",
       "findings": [
@@ -4235,7 +4261,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python bugfix candidate. Exhausted generic witness proof must remain unknown instead of producing an upper-bound violation.",
       "nextStep": "Qualify the native exhausted-witness regression and reduce a Python diagnostic example.",
       "findings": [
@@ -4273,7 +4299,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Preserve strict callable relations while solving finite source domains, covering union inputs and comparing nested protocol receivers.",
       "nextStep": "Reduce strict callable cases; qualify domain replay and receiver progress against upstream #29555.",
       "findings": [
@@ -4359,7 +4385,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Specialize generic implementation inputs before declaration coverage checks. Broader implementation return annotations are permitted; body checking has a separate owner.",
       "nextStep": "Correct the invalid nullable-return assertion, then qualify generic declaration consistency.",
       "findings": [
@@ -4411,7 +4437,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Preserve callable-local binders under outer substitution and project captured callback variables before they reach ordinary results.",
       "nextStep": "Reconcile binder ownership with upstream #29553 and #29555; qualify partial and captured-return cases.",
       "findings": [
@@ -4487,7 +4513,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python bugfix candidate. Keep overload expansion available when some generic specialization accepts an argument, including provisional arity mismatches.",
       "nextStep": "Qualify the bound-method starred-union fixture and reduce the generic expansion precheck.",
       "findings": [
@@ -4525,7 +4551,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Python enhancement candidate. Use finite member facts for getattr results and fresh empty defaults. Immutable storage guarantees have a separate host contract.",
       "nextStep": "Reduce ordinary Python lookup cases; compare collection context with upstream #27665.",
       "findings": [
@@ -4591,7 +4617,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Host API design. Distinguish accepted keyword parameters from received keyword dictionaries, then verify complete ParamSpec witnesses against the original call relation.",
       "nextStep": "Specify host annotation and capture semantics before proposing shared solver APIs.",
       "findings": [
@@ -4687,7 +4713,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-20T22:32:05Z",
+      "updatedAt": "2026-11-20T22:52:40Z",
       "summary": "Host API design. Keep source definitions or ranges through parameter specialization, default presentation and hidden internal keyword handling.",
       "nextStep": "Review the public source-location contract and qualify navigation and signature presentation.",
       "findings": [
