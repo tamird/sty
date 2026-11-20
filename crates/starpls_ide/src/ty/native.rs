@@ -4646,7 +4646,7 @@ def guarded_own(c: ctx[object, object], key: Label) -> object:
                 ("invalid-explicit-return", "providers[DefaultInfo]"),
                 ("invalid-argument-type", "providers"),
                 ("not-subscriptable", "c.rule.toolchains[key][DefaultInfo]"),
-                ("missing-attribute", "c.toolchains[key].custom_tool"),
+                ("missing-union-attribute", "c.toolchains[key].custom_tool"),
             ],
         );
         let label_source = "def label(c: ctx[object, object], key: Label) -> Label | None:\n    resolved = c.rule.toolchains[key]\n    return None if resolved == None else resolved.label\n";
