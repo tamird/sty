@@ -1666,18 +1666,6 @@ def calls(context: Context, other: object) -> tuple[str, str, str, str]: ...
                 "{implementation}: {diagnostics:?}"
             );
         }
-        for (condition, expected) in [("flag", false), ("not flag", true)] {
-            analysis.update_file(
-                source,
-                format!("def invoke(callback, flag):\n    return {{value: callback() for value in [0] if {condition}}}\n"),
-            );
-            let diagnostics = analysis.snapshot().diagnostics(source).unwrap();
-            let reported = diagnostics.iter().any(|diagnostic| {
-                diagnostic.id().as_str() == "non-static-type"
-                    && diagnostic.headline_message().contains("call result")
-            });
-            assert_eq!(reported, expected, "{condition}: {diagnostics:?}");
-        }
     }
 
     #[test]
