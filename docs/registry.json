@@ -424,17 +424,25 @@
       "status": "open",
       "url": "https://github.com/bazel-contrib/bazel_features/pull/158",
       "head": "f125ddab72c0826f78f79b1fea9c5652ed177afe",
-      "summary": "Feature compatibility declarations checked against implementations.\n\nRecorded checks: cd09583e qualification: eleven strict files, zero errors. The advisory BCR check completes with 22 errors; canonical native tests pass.\n\nPublished refresh fixes repository-rule recovery and retains matching stubs for the Bazel 7.1 consumer.",
+      "summary": "Feature compatibility declarations checked against implementations.\n\nRecorded checks: cd09583e qualification: eleven strict files, zero errors. The advisory BCR check completes with 22 errors; canonical native tests pass.\n\nRemote strict and native checks pass. GitHub workflows require maintainer approval; Tamir has read-only upstream access.",
       "evidence": [
         {
           "label": "Latest canonical workflow qualification",
           "url": "https://app.buildbuddy.io/invocation/97b4a449-9b42-43b8-97aa-a800f89026af"
+        },
+        {
+          "label": "CI awaiting maintainer approval",
+          "url": "https://github.com/bazel-contrib/bazel_features/actions/runs/44800640617"
+        },
+        {
+          "label": "Sty CI awaiting maintainer approval",
+          "url": "https://github.com/bazel-contrib/bazel_features/actions/runs/44800640585"
         }
       ],
       "followup": {
         "owner": "Agent",
         "sourceHead": "f125ddab72c0826f78f79b1fea9c5652ed177afe",
-        "nextAction": "Follow refreshed-head CI"
+        "nextAction": "Await maintainer approval for CI"
       }
     },
     {
