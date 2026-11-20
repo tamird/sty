@@ -6,12 +6,13 @@ import { runInNewContext } from 'node:vm';
 import { createHash } from 'node:crypto';
 import { generated, observations } from './generate-registry.mjs';
 import { checkProviderIntegration } from './github-provider-test.mjs';
-import { buildRegistry, validateForkAudit, validateSolverInventory } from './tracker-data.mjs';
+import { buildRegistry, validateForkAudit, validateSolverInventory, validateForwardAudit } from './tracker-data.mjs';
 import { registeredPRs } from './github-provider.mjs';
 import { ruffForkAudit } from './ruff-fork-audit.mjs';
 import * as records from './work-map-data.mjs';
 const { goals, projects, additionalProjects, relatedChanges, languageWork, bazelFeedback, bazelFeedbackObservedAt, tyWork, upstream } = records;
 const { solverInventory } = records;
+const { ruffForwardAudit } = records;
 
 function unique(values, label) {
   assert.equal(new Set(values).size, values.length, `${label} must be unique`);
@@ -22,6 +23,32 @@ unique(projects.map(project => `${project.repo}#${project.number}`), 'Project PR
 unique(upstream.map(item => item.id), 'Upstream IDs');
 unique(upstream.filter(item => item.number).map(item => item.number), 'Upstream PRs');
 unique(tyWork.map(item => item.id), 'ty task IDs');
+
+validateForwardAudit(ruffForwardAudit, tyWork);
+assert.equal(ruffForwardAudit.manifest.length, 310);
+assert.equal(ruffForwardAudit.files.length, 33);
+assert.equal(ruffForwardAudit.counts.forwardHunks, 133);
+assert.equal(ruffForwardAudit.forwardReviewUnits.length, 8);
+const missingForwardPath = structuredClone(ruffForwardAudit);
+missingForwardPath.manifest.pop();
+assert.throws(() => validateForwardAudit(missingForwardPath, tyWork), /Incomplete forward path inventory/);
+const alteredForwardBlob = structuredClone(ruffForwardAudit);
+alteredForwardBlob.manifest[0].candidateBlob = '1'.repeat(40);
+assert.throws(() => validateForwardAudit(alteredForwardBlob, tyWork), /manifest digest/);
+const missingForwardAttribution = structuredClone(ruffForwardAudit);
+missingForwardAttribution.files.pop();
+assert.throws(() => validateForwardAudit(missingForwardAttribution, tyWork), /Incomplete forward Rust source coverage/);
+const detachedForwardUnit = structuredClone(ruffForwardAudit);
+detachedForwardUnit.forwardReviewUnits[0].trackerParent = 'unregistered';
+assert.throws(() => validateForwardAudit(detachedForwardUnit, tyWork), /Invalid forward producer family/);
+const unprovenForwardQualification = structuredClone(ruffForwardAudit);
+unprovenForwardQualification.runtimeQualifiedByThisAudit = true;
+assert.throws(() => validateForwardAudit(unprovenForwardQualification, tyWork), /Invalid forward source inventory/);
+for (const unit of ruffForwardAudit.forwardReviewUnits) {
+  const task = generated.registry.investigations.find(item => item.id === `investigation:${unit.trackerParent}`);
+  assert.ok(task.findings.some(finding => finding.forwardSourceInventory && finding.sourceInventory && finding.text.includes(unit.title) &&
+    finding.evidence.some(source => source.url === unit.evidence[0].url)), `Missing forward producer: ${unit.id}`);
+}
 
 validateSolverInventory(solverInventory, tyWork);
 assert.equal(solverInventory.coverage.runtimeOrMixedHunks, 939);
@@ -113,7 +140,7 @@ for (const asset of ['app.js', 'draft.js', 'draft-reader.js']) {
   assert.equal(syntax.status, 0, syntax.stderr);
 }
 for (const [name, expected] of [['registry.json', generated.registry], ['github-status.json', generated.snapshot],
-  ['ruff-fork-audit.json', generated.audit]]) {
+  ['ruff-fork-audit.json', generated.audit], ['ruff-forward-audit.json', ruffForwardAudit]]) {
   const actual = JSON.parse(readFileSync(new URL(name, import.meta.url), 'utf8'));
   assert.deepEqual(actual, expected, `Regenerate ${name} with bazel run //docs:generate_registry -- --write`);
 }

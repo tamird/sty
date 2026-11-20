@@ -1,10 +1,12 @@
 import { validateObservations } from './github-provider.mjs';
+import { createHash } from 'node:crypto';
 
 // Adapt sty's canonical records to the existing gVisor tracker schema.
 export function buildRegistry({ projects, additionalProjects, upstream, goals, bazelFeedback,
-  relatedChanges, languageWork, tyWork = [], inventory = {}, ruffForkAudit, solverInventory }, updatedAt) {
+  relatedChanges, languageWork, tyWork = [], inventory = {}, ruffForkAudit, solverInventory, ruffForwardAudit }, updatedAt) {
   validateForkAudit(ruffForkAudit, tyWork);
   validateSolverInventory(solverInventory, tyWork);
+  validateForwardAudit(ruffForwardAudit, tyWork);
   const repo = 'astral-sh/ruff';
   const community = [...projects, ...additionalProjects];
   const repositories = Object.fromEntries([repo, 'tamird/ruff', 'bazelbuild/bazel',
@@ -70,6 +72,9 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
         forward: { upstreamBase: solverInventory.forward.upstreamBase,
           revision: solverInventory.forward.apiCorrectionRevision, qualified: solverInventory.forward.qualified },
         limits: solverInventory.limits },
+      forwardAudit: { base: ruffForwardAudit.currentBase, revision: ruffForwardAudit.currentCandidate,
+        counts: ruffForwardAudit.counts, runtimeQualified: false, upstreamReady: false,
+        url: 'https://tamird.github.io/sty/ruff-forward-audit.json', limits: ruffForwardAudit.limits },
     } },
     groups: [{ id: 'community', label: 'Community type checking' }, { id: 'ty', label: 'Upstream ty' },
       { id: 'bazel', label: 'Bazel feedback' }, { id: 'language', label: 'Starlark specification' }],
@@ -85,11 +90,77 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
         .concat(solverInventory.units.filter(unit => unit.trackerParent === item.id).map(unit => ({
           text: `${unit.title}. ${unit.detail} Next: ${unit.nextAction}`,
           evidence: unit.evidence, sourceInventory: true,
+        }))).concat(ruffForwardAudit.forwardReviewUnits.filter(unit => unit.trackerParent === item.id).map(unit => ({
+          text: `${unit.title}. ${unit.classification} Next: ${unit.nextAction}`,
+          evidence: unit.evidence, sourceInventory: true, forwardSourceInventory: true,
         }))),
       evidence: item.evidence || [],
     }))),
   };
   return registry;
+}
+
+export function validateForwardAudit(audit, mechanisms) {
+  if (audit?.schema !== 1 || audit.runtimeQualifiedByThisAudit !== false || audit.upstreamReady !== false ||
+      !Array.isArray(audit.manifest) || !Array.isArray(audit.files) || !Array.isArray(audit.forwardReviewUnits))
+    throw new Error('Invalid forward source inventory');
+  const sha = /^[a-f0-9]{40}$/;
+  for (const ref of [audit.currentBase, audit.currentCandidate, audit.frozenBase, audit.frozenCandidate])
+    if (!sha.test(ref)) throw new Error('Invalid forward source revision');
+  const paths = new Map(audit.manifest.map(row => [row.path, row]));
+  if (paths.size !== audit.manifest.length || paths.size !== audit.counts.netPaths)
+    throw new Error('Incomplete forward path inventory');
+  let raw = '';
+  const reused = new Set();
+  for (const row of audit.manifest) {
+    if (!row.path || /[\t\n\0]/.test(row.path) || !row.disposition ||
+        ![row.baseBlob, row.candidateBlob, row.frozenBaseBlob, row.frozenCandidateBlob].every(blob => sha.test(blob)) ||
+        !/^[0-7]{6}$/.test(row.oldMode) || !/^[0-7]{6}$/.test(row.newMode) || !['A', 'M', 'D'].includes(row.status))
+      throw new Error(`Invalid forward source path: ${row.path}`);
+    raw += `:${row.oldMode} ${row.newMode} ${row.baseBlob} ${row.candidateBlob} ${row.status}\t${row.path}\n`;
+    if (row.baseBlob === row.frozenBaseBlob && row.candidateBlob === row.frozenCandidateBlob) reused.add(row.path);
+  }
+  if (createHash('sha256').update(raw).digest('hex') !== audit.rawManifestSHA256 ||
+      reused.size !== audit.counts.exactFrozenBlobPairs)
+    throw new Error('Forward source manifest digest or frozen reuse mismatch');
+  const rustPaths = [...paths.keys()].filter(path => path.includes('/src/') && path.endsWith('.rs'));
+  const changed = new Set(rustPaths.filter(path => !reused.has(path)));
+  if (rustPaths.length !== audit.counts.rustSourcePaths ||
+      rustPaths.filter(path => reused.has(path)).length !== audit.counts.exactFrozenRustSourceBlobPairs ||
+      changed.size !== audit.counts.changedRustSourcePaths || audit.files.length !== changed.size)
+    throw new Error('Incomplete forward Rust source coverage');
+  const reviewed = new Set();
+  let hunks = 0;
+  for (const row of audit.files) {
+    const source = paths.get(row.path);
+    if (!changed.has(row.path) || reviewed.has(row.path) || row.candidateBlob !== source.candidateBlob ||
+        !row.classification || !row.detail || !row.hunks.length)
+      throw new Error(`Invalid forward source attribution: ${row.path}`);
+    reviewed.add(row.path);
+    for (const hunk of row.hunks) {
+      if (!/^[a-f0-9]{64}$/.test(hunk.sha256) || !hunk.classification ||
+          hunk.source !== `https://github.com/tamird/ruff/blob/${audit.currentCandidate}/${row.path}#L${hunk.newStart}`)
+        throw new Error(`Invalid forward source hunk: ${row.path}`);
+      hunks++;
+    }
+  }
+  if (hunks !== audit.counts.forwardHunks) throw new Error('Incomplete forward hunk inventory');
+  if (audit.forwardReviewUnits.length !== audit.counts.forwardProducerFamilies)
+    throw new Error('Incomplete forward producer inventory');
+  const parents = new Set(mechanisms.map(item => item.id)), units = new Set();
+  for (const unit of audit.forwardReviewUnits) {
+    if (units.has(unit.id) || !parents.has(unit.trackerParent) || !unit.title || !unit.classification ||
+        !unit.nextAction || !unit.evidence.length || unit.runtimeQualifiedByThisAudit !== false ||
+        unit.upstreamReady !== false || unit.independentPullRequestClaim !== false)
+      throw new Error(`Invalid forward producer family: ${unit.id}`);
+    units.add(unit.id);
+    for (const evidence of unit.evidence) {
+      const prefix = `https://github.com/tamird/ruff/blob/${audit.currentCandidate}/`;
+      const path = evidence.url.startsWith(prefix) ? evidence.url.slice(prefix.length).split('#')[0] : '';
+      if (!paths.has(path) || evidence.blob !== paths.get(path).candidateBlob)
+        throw new Error(`Unproven forward source evidence: ${unit.id}`);
+    }
+  }
 }
 
 // A source review unit must remain attached to an actionable task and its frozen

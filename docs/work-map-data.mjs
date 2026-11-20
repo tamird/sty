@@ -1,9 +1,11 @@
 export { ruffForkAudit } from './ruff-fork-audit.mjs';
 import { solverInventory } from './solver-inventory.mjs';
 export { solverInventory };
+import { ruffForwardAudit } from './ruff-forward-audit.mjs';
+export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-20T10:46:18Z';
+export const reviewedAt = '2026-11-20T12:37:57Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Resolve helper and tag follow-ups",repo:"bazelbuild/bazel-skylib",number:641,head:"baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"Fork PR #1: root and Gazelle sty checks passed. Upstream head has a successful CLA check.",followup:"Includes open fixes #643 and #647. Native build_test tag handling is tracked separately in #644.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']]},
@@ -1511,10 +1513,32 @@ const reviewedTyWork = [
     "nextAction": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change."
   },
   {
+    "id": "ty-generic-method-target-variables",
+    "title": "Reject incompatible payloads behind generic methods",
+    "state": "Upstream reproduced; fix not qualified",
+    "summary": "Structural comparison accepts Result[str] as Result[int] when a generic first_or method returns its payload or a caller-supplied fallback. The same false acceptance occurs with nested recursive payloads. Direct recursive payload comparison rejects correctly. Baseline and deferred-receiver experiments agree in both generic syntaxes, so this is a separate signature-comparison defect.",
+    "sources": [],
+    "evidence": [
+      {
+        "label": "Pristine upstream aee01ae4: all four strict regressions fail",
+        "url": "https://app.buildbuddy.io/invocation/c9bd6662-24de-4657-a240-8790f755e77b"
+      },
+      {
+        "label": "Baseline and receiver candidate: all 12 causal comparisons",
+        "url": "https://app.buildbuddy.io/invocation/66c01da1-5560-4a0c-8a22-54ed5b51477e"
+      },
+      {
+        "label": "Published generic Result and recursive factory definitions",
+        "url": "https://github.com/tamird/ruff/blob/f9d7ec289b4b428a8994181d3c117477a8709f03/crates/ty_python_semantic/resources/mdtest/generics/legacy/functions.md#L6310"
+      }
+    ],
+    "nextAction": "Extract the scoped-binder prerequisite under ty-scoped-witness-proofs before implementing the method-comparison fix. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review."
+  },
+  {
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "Sty main uses f9d7ec289b, including the contextual-inference cohort and Bazel port rebased onto cbcf8663796. All eight sty targets and a frozen optimized Linux build pass. Selected Ruff units, Clippy, formatting and fixture gates pass. All eight community root checks still fail; draft overload contracts and mutable-container inference remain blockers. Full mdtest still aborts in the recursive-protocol factory case; generic ParamSpec return inference remains open.",
+    "summary": "Sty main uses dc1bef61da, rebased onto upstream aee01ae4cc. All eight sty targets and the frozen optimized Linux build pass. Deferred receiver checking fixes the recursive-protocol factory abort; finite provided-field descent preserves rejection of nested mutable provider keys. rules_cc passed its corrected declaration check; seven other community roots remain incomplete. The latest 20-check matrix on Sty 1df698ce19 has five strict zero-error passes, one completed advisory check, thirteen failures and one required check skipped. Advisory completion does not mean zero errors. Full Markdown qualification, collection inference, checked overload contracts and generic-method soundness remain open.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1529,6 +1553,10 @@ const reviewedTyWork = [
     ],
     "evidence": [
       {
+        "label": "Current 310-path inventory: 33 forward Rust source paths",
+        "url": "https://tamird.github.io/sty/ruff-forward-audit.json"
+      },
+      {
         "label": "Fork comparison from recorded base",
         "url": "https://github.com/tamird/ruff/compare/d63450150b...352ce32f76a8416551cb72d66dfa4f6d75a7c7e9"
       },
@@ -1542,11 +1570,11 @@ const reviewedTyWork = [
       },
       {
         "label": "Rebased checker: all eight Bazel targets pass",
-        "url": "https://app.buildbuddy.io/invocation/62cf257d-3522-4365-8e12-fc23a37767ec"
+        "url": "https://app.buildbuddy.io/invocation/23d3cd64-eee7-495c-803e-69fc6ab5405a"
       },
       {
         "label": "Normal lock: frozen optimized Linux build passes",
-        "url": "https://app.buildbuddy.io/invocation/0a5dd442-a071-4359-872c-3c645a5c2200"
+        "url": "https://app.buildbuddy.io/invocation/87162ef1-b58c-400f-b781-313babbde626"
       },
       {
         "label": "Published contextual inference and Bazel checkpoint",
@@ -1558,43 +1586,43 @@ const reviewedTyWork = [
       },
       {
         "label": "Community qualification: Skylib dictionary merge failures",
-        "url": "https://app.buildbuddy.io/invocation/8becd2c4-f749-453a-95ce-9044e319f343"
+        "url": "https://app.buildbuddy.io/invocation/c175dee3-4fe2-47c6-a895-c5c57dd42ba1"
       },
       {
-        "label": "Community qualification: C++ declarations",
-        "url": "https://app.buildbuddy.io/invocation/f90ba2b1-3dbc-4eae-ba5c-e5686023b39b"
+        "label": "rules_cc: 134 strict files, zero errors; advisory errors remain",
+        "url": "https://app.buildbuddy.io/invocation/89a76599-19da-41e9-8e2d-09c834dbb943"
       },
       {
         "label": "Community qualification: LLVM wrapper and Apple declarations",
-        "url": "https://app.buildbuddy.io/invocation/5f7f7f51-1c9b-4175-9551-e030df04ce06"
+        "url": "https://app.buildbuddy.io/invocation/0df627b8-198d-4079-82ea-97e02d87b463"
       },
       {
         "label": "Community qualification: with_cfg overloads and Rust declarations",
-        "url": "https://app.buildbuddy.io/invocation/49687cef-19d7-4b8a-baae-13b5a489847d"
+        "url": "https://app.buildbuddy.io/invocation/7793a07d-15c4-4fd0-8500-d24f593d6274"
       },
       {
         "label": "Community qualification: runfiles inference and feature helpers",
-        "url": "https://app.buildbuddy.io/invocation/3e94318f-7025-419b-9b2d-ddcdcf87dc56"
+        "url": "https://app.buildbuddy.io/invocation/b1b369d7-d91c-4a38-b33f-6b5a8f46d866"
       },
       {
-        "label": "Aborting recursive-protocol factory regression",
+        "label": "Original recursive-protocol factory regression, now passes",
         "url": "https://github.com/tamird/ruff/blob/7ef19c19dfc64da53d2d2172e256630a6230a618/crates/ty_python_semantic/resources/mdtest/generics/legacy/functions.md#L6310"
       }
     ],
-    "nextAction": "Fix the eight community root checks without weakening their contracts: reconcile unsupported overloads, repair container inference, and refresh declaration annotations. Repair recursive-protocol receiver-proof ownership, finish Markdown qualification, and isolate the remaining Python fixes against upstream."
+    "nextAction": "Finish the seven remaining community root checks without weakening contracts: repair collection inference, resolve checked overload contracts and type toolchain lookup. Publish the qualified workflow refreshes when GitHub workflow access is available. Complete per-file Markdown qualification and isolate Python fixes against upstream."
   }
 ];
 
 export const tyWork = [...reviewedTyWork, ...solverInventory.tasks];
 
 export const inventory = {
-  "pinnedFork": "f9d7ec289b4b428a8994181d3c117477a8709f03",
-  "forkBase": "cbcf8663796a051518ecbefc560987523fe8b2d6",
-  "upstreamAudited": "cbcf8663796a051518ecbefc560987523fe8b2d6",
-  "divergentCommits": 23,
-  "userAuthoredCommits": 23,
+  "pinnedFork": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
+  "forkBase": "aee01ae4ccec82b01a4db6cf22c5461b4fcf8c3a",
+  "upstreamAudited": "aee01ae4ccec82b01a4db6cf22c5461b4fcf8c3a",
+  "divergentCommits": 26,
+  "userAuthoredCommits": 26,
   "upstreamAuthoredPicks": 0,
-  "status": "sty default refreshed to the qualified inference checkpoint; community refresh under qualification",
+  "status": "sty default uses the rebased receiver checkpoint; community refresh under qualification",
   "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
   "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
   "sourceReviewComplete": false,
@@ -1605,8 +1633,8 @@ export const inventory = {
     "runtimePathsWithSourceRecords": 142,
     "solverHunksAttributed": 939,
     "solverReviewUnits": 169,
-    "forwardCandidate": "9e0685ba54a37b374b62477ca3f65c821f983a22",
-    "forwardBase": "c8ba04dc06caf4370d494870145c4f92356f1222",
+    "forwardCandidate": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
+    "forwardBase": "aee01ae4ccec82b01a4db6cf22c5461b4fcf8c3a",
     "url": "https://tamird.github.io/sty/ruff-source-audit.json",
     "qualified": false
   },
@@ -1621,24 +1649,35 @@ export const inventory = {
     "upstreamAuthoredPicks": 12
   },
   "publishedRuffCheckpoint": {
-    "revision": "f9d7ec289b4b428a8994181d3c117477a8709f03",
-    "sourceRevision": "f939e2535d016a48509fe728d733dc62de8d3abf",
-    "url": "https://github.com/tamird/ruff/commit/f9d7ec289b4b428a8994181d3c117477a8709f03",
-    "selectedTestsURL": "https://app.buildbuddy.io/invocation/a674c5a2-bfbf-4776-a144-88555680bd8e",
-    "testScope": "Core 101, semantic 897 (35 ignored), IDE 1979, strict transitive Clippy, formatting, symlink discovery control and required changed-file hooks. External attrs smoke passed separately; full Markdown and external suites remain unqualified.",
+    "revision": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
+    "sourceRevision": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
+    "url": "https://github.com/tamird/ruff/commit/dc1bef61daccdfc88706b0ad99f527bf55533a59",
+    "selectedTestsURL": "https://app.buildbuddy.io/invocation/26de154f-87ca-4288-807f-c5d7de8f1fc3",
+    "testScope": "Core 101, semantic 898 (35 ignored), IDE 1979, strict transitive Clippy, formatting, changed-file hooks and five selected Markdown fixture gates pass. Full Markdown remains incomplete; individual fixture results retain their exact source scopes.",
     "fullMarkdownQualified": false,
     "styIntegrationQualified": true
   },
   "currentSty": {
-    "revision": "2ea96cfeda771b57c7cbf6f686734cef5bdc66e5",
-    "url": "https://github.com/tamird/sty/commit/2ea96cfeda771b57c7cbf6f686734cef5bdc66e5",
-    "ruffRevision": "f9d7ec289b4b428a8994181d3c117477a8709f03",
-    "testScope": "All 8 Bazel test targets and the optimized Linux executable passed with frozen dependency locks at the inference checkpoint.",
-    "testsURL": "https://app.buildbuddy.io/invocation/1a3e2cc5-8d80-45ad-b3fe-061372c1e77f",
-    "frozenBuildURL": "https://app.buildbuddy.io/invocation/8c64e18a-4c1c-434f-8cf2-7ea2e6a97cd9",
+    "revision": "1df698ce19af5eacd5761e9958a406a3114ec3de",
+    "url": "https://github.com/tamird/sty/commit/1df698ce19af5eacd5761e9958a406a3114ec3de",
+    "ruffRevision": "dc1bef61daccdfc88706b0ad99f527bf55533a59",
+    "testScope": "All eight Bazel test targets, including the unchanged nested provider-key negative, and the optimized Linux executable pass with frozen dependency locks.",
+    "testsURL": "https://app.buildbuddy.io/invocation/23d3cd64-eee7-495c-803e-69fc6ab5405a",
+    "frozenBuildURL": "https://app.buildbuddy.io/invocation/87162ef1-b58c-400f-b781-313babbde626",
     "communityWorkflowExecutionsPlanned": 20,
     "communityRefreshPublished": false,
     "runtimeCorpusQualified": false,
-    "fullRuffMarkdownQualified": false
+    "fullRuffMarkdownQualified": false,
+    "communityQualification": {
+      "revision": "1df698ce19af5eacd5761e9958a406a3114ec3de",
+      "planned": 20,
+      "executed": 19,
+      "strictZeroErrorPasses": 5,
+      "advisoryCompletions": 1,
+      "failures": 13,
+      "requiredSkipped": 1,
+      "published": false,
+      "scope": "Canonical workflow selections; broader advisory findings remain errors. LLVM example checks lack completed coverage; a skipped check is not a pass. GitHub workflow publication remains blocked by existing credential access."
+    }
   }
 };

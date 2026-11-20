@@ -11,7 +11,7 @@ if (process.argv.includes('--write')) {
   const directory = process.env.BUILD_WORKSPACE_DIRECTORY;
   if (!directory) throw new Error('Run with bazel run //docs:generate_registry -- --write');
   for (const [name, value] of [['registry.json', generated.registry], ['github-status.json', generated.snapshot],
-    ['ruff-fork-audit.json', generated.audit]]) {
+    ['ruff-fork-audit.json', generated.audit], ['ruff-forward-audit.json', records.ruffForwardAudit]]) {
     writeFileSync(join(directory, 'docs', name), JSON.stringify(value, null, 2) + '\n');
   }
 }

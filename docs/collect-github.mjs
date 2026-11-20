@@ -7,7 +7,7 @@ import * as records from './work-map-data.mjs';
 
 const workspace = process.env.BUILD_WORKSPACE_DIRECTORY;
 if (!workspace) throw new Error('Run with bazel run //docs:collect_github');
-const sources = ['work-map-data.mjs', 'ruff-fork-audit.mjs', 'solver-inventory.mjs', 'tracker-data.mjs']
+const sources = ['work-map-data.mjs', 'ruff-fork-audit.mjs', 'ruff-forward-audit.mjs', 'solver-inventory.mjs', 'tracker-data.mjs']
   .map(name => join(workspace, 'docs', name))
   .map(path => [path, readFileSync(path, 'utf8')]);
 const registry = buildRegistry(records, records.reviewedAt);
