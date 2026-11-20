@@ -11,7 +11,7 @@ export const ruffForkAudit = {
   "limits": "All paths in the frozen old-fork diff are represented. Mechanism assignment may be partial; unreconciled source hunks are explicit. This historical manifest does not describe the surviving rebased delta or establish current-upstream bugs or independent PR counts.",
   "currentDeltaAudit": {
     "state": "pending",
-    "reason": "This historical 250-path manifest is preserved separately. The frozen 231-path source checkpoint attributes 939 solver hunks to 169 review units; the current ruff-forward-audit.json covers all 313 rebased paths and attributes the 42 changed Rust src paths. Selected native gates and Sty integration pass at f6c888b5, but full Markdown, community qualification, upstream overlap review and isolated contributions remain incomplete. Source coverage does not establish upstream readiness."
+    "reason": "This historical 250-path manifest is preserved separately. The frozen 231-path source checkpoint attributes 939 solver hunks to 169 review units; the current ruff-forward-audit.json covers all 314 rebased paths and attributes the 43 changed Rust src paths. Selected native gates and Sty integration pass at d10bc8c7, but full Markdown, community qualification, upstream overlap review and isolated contributions remain incomplete. Source coverage does not establish upstream readiness."
   },
   "manifest": [
     {
