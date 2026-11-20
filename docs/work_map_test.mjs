@@ -4,10 +4,14 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { createHash } from 'node:crypto';
-import { generated } from './generate-registry.mjs';
-import { validateForkAudit } from './tracker-data.mjs';
+import { generated, observations } from './generate-registry.mjs';
+import { checkProviderIntegration } from './github-provider-test.mjs';
+import { buildRegistry, validateForkAudit, validateSolverInventory } from './tracker-data.mjs';
+import { registeredPRs } from './github-provider.mjs';
 import { ruffForkAudit } from './ruff-fork-audit.mjs';
-import { goals, projects, additionalProjects, relatedChanges, languageWork, bazelFeedback, bazelFeedbackObservedAt, tyWork, upstream } from './work-map-data.mjs';
+import * as records from './work-map-data.mjs';
+const { goals, projects, additionalProjects, relatedChanges, languageWork, bazelFeedback, bazelFeedbackObservedAt, tyWork, upstream } = records;
+const { solverInventory } = records;
 
 function unique(values, label) {
   assert.equal(new Set(values).size, values.length, `${label} must be unique`);
@@ -17,6 +21,55 @@ unique(goals.map(goal => goal.id), 'Goal IDs');
 unique(projects.map(project => `${project.repo}#${project.number}`), 'Project PRs');
 unique(upstream.map(item => item.id), 'Upstream IDs');
 unique(upstream.filter(item => item.number).map(item => item.number), 'Upstream PRs');
+unique(tyWork.map(item => item.id), 'ty task IDs');
+
+validateSolverInventory(solverInventory, tyWork);
+assert.equal(solverInventory.coverage.runtimeOrMixedHunks, 939);
+assert.equal(solverInventory.units.length, 169);
+assert.equal(solverInventory.frozen.indexDigest, '3079cbd8391602919f08654ec210ad9dbad6a6c1eba3e0b4ef6c8ec21a33ac8b');
+const missingSolverUnit = structuredClone(solverInventory);
+missingSolverUnit.units.pop();
+assert.throws(() => validateSolverInventory(missingSolverUnit, tyWork), /Incomplete solver source inventory/);
+const detachedSolverUnit = structuredClone(solverInventory);
+detachedSolverUnit.units[0].trackerParent = 'not-registered';
+assert.throws(() => validateSolverInventory(detachedSolverUnit, tyWork), /Invalid solver source unit/);
+const falselyQualified = structuredClone(solverInventory);
+falselyQualified.units[0].qualified = true;
+assert.throws(() => validateSolverInventory(falselyQualified, tyWork), /Invalid solver source unit/);
+for (const unit of solverInventory.units) {
+  const task = generated.registry.investigations.find(item => item.id === `investigation:${unit.trackerParent}`);
+  assert.ok(task.findings.some(finding => finding.text.includes(unit.detail) &&
+    finding.evidence.some(source => source.url === unit.evidence[0].url)), `Missing source finding: ${unit.id}`);
+}
+
+const sourceAudit = JSON.parse(readFileSync(new URL('./ruff-source-audit.json', import.meta.url), 'utf8'));
+assert.equal(sourceAudit.candidate, solverInventory.frozen.revision);
+assert.equal(sourceAudit.base, solverInventory.frozen.base);
+assert.equal(sourceAudit.rows.length, 231);
+unique(sourceAudit.rows.map(row => row.path), 'Frozen rebased source paths');
+const runtimeRows = sourceAudit.rows.filter(row => row.role === 'runtime-or-public-api');
+assert.equal(runtimeRows.length, 142);
+assert.ok(runtimeRows.every(row => row.sourceAttribution &&
+  row.sourceURL === `https://github.com/tamird/ruff/blob/${sourceAudit.candidate}/${row.path}`));
+assert.equal(sourceAudit.solverHunks.revision, solverInventory.frozen.hunkRevision);
+const historicalHunks = sourceAudit.solverHunks.rows;
+unique(historicalHunks.map(row => row.id), 'Historical solver hunk identities');
+assert.deepEqual(new Set(historicalHunks.map(row => row.id)),
+  new Set(solverInventory.units.flatMap(unit => unit.hunkIds)), 'Every frozen solver hunk needs semantic attribution');
+for (const hunk of historicalHunks) {
+  assert.match(hunk.patchSHA256, /^[a-f0-9]{64}$/);
+  assert.equal(hunk.sourceURL,
+    `https://github.com/tamird/ruff/blob/${sourceAudit.solverHunks.revision}/${hunk.path}#L${hunk.newStart}`);
+}
+
+// Capture follows registrations that have not yet been written to registry.json.
+const removed = upstream.find(item => item.number).number;
+const changedRecords = { ...records, upstream: upstream.filter(item => item.number !== removed).concat({
+  id: 'new-capture-target', title: 'Newly registered PR', number: 999999, state: 'Related upstream work',
+}) };
+const captureTargets = registeredPRs(buildRegistry(changedRecords, records.reviewedAt));
+assert.ok(captureTargets.some(item => item.repo === 'astral-sh/ruff' && item.number === 999999));
+assert.ok(!captureTargets.some(item => item.repo === 'astral-sh/ruff' && item.number === removed));
 
 for (const project of projects) {
   assert.match(project.repo, /^[\w.-]+\/[\w.-]+$/);
@@ -35,6 +88,7 @@ for (const item of upstream) {
     assert.match(item.merge, /^[a-f0-9]{10,40}$/);
   }
   if (item.state === 'Awaiting Tamir review') {
+    assert.ok(item.ref, `Review request ${item.id} needs its published branch`);
     assert.match(item.qualifiedHead, /^[a-f0-9]{40}$/);
     const reviewURL = new URL(item.qualifiedURL);
     assert.equal(reviewURL.protocol, 'https:');
@@ -68,10 +122,17 @@ for (const [name, expected] of [['registry.json', generated.registry], ['github-
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 assert.ok(source.endsWith('start();\n'));
 const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
-({ validateRegistry, validateSnapshot, attentionReasons, historical, citationURL, status,
+({ validateRegistry, validateSnapshot, attentionReasons, historical, citationURL, status, checkInfo, checksPassed, effectiveReviewDecision, withConflictResult, mergeProviderPRs,
+  recheck(pr, result) {
+    const id = prIdentity(pr);
+    conflictResults.set(id, result);
+    try { return withConflictResult(pr); }
+    finally { conflictResults.delete(id); }
+  },
   load(data, snapshot) {
     registry = data;
-    model = { ...data, nodes: registryNodes(data) };
+    liveSnapshot = snapshot;
+    model = { ...data, nodes: mergeProviderPRs(data, snapshot).nodes };
     for (const node of model.nodes) node.workStates = stateRecords(snapshot, node);
     return model.nodes;
   }
@@ -81,14 +142,18 @@ tracker.validateSnapshot(generated.snapshot, generated.registry);
 const nodes = tracker.load(generated.registry, generated.snapshot);
 assert.equal(nodes.filter(node => node.group === 'community').length, projects.length + additionalProjects.length + relatedChanges.length);
 assert.equal(generated.registry.investigations.length, goals.length + tyWork.length);
-assert.equal(generated.snapshot.prs.length, 0, 'Do not invent provider-level check or review evidence');
+assert.deepEqual(generated.snapshot.prs, observations.prs, 'Provider records must come from saved observations');
+await checkProviderIntegration(tracker, generated.registry, generated.snapshot);
 assert.ok(generated.registry.edges.every(edge => edge.type === 'includes'), 'Related links do not establish blocking dependencies');
 for (const item of [...projects, ...additionalProjects]) {
   const node = nodes.find(node => node.repo === item.repo && node.number === item.number);
   assert.equal(node.followup.sourceHead, item.head);
   assert.equal(node.followup.nextAction, item.nextAction);
-  assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
-  assert.equal(node.github, undefined, 'Curated check prose must not become an effective approval');
+  const observed = observations.prs.find(row => row.repo === item.repo && row.number === item.number);
+  assert.equal(Boolean(node.github), Boolean(observed), 'Curated prose must not manufacture provider observations');
+  if (!observed || observed.head === item.head && !['closed', 'merged'].includes(observed.status))
+    assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
+  else assert.ok(!tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'), 'Recorded follow-ups belong to their source head');
 }
 for (const item of upstream) {
   if (item.state === 'Merged') assert.ok(tracker.historical(nodes.find(node => node.number === item.number)));
@@ -99,6 +164,7 @@ for (const item of upstream) {
   }
   if (item.state !== 'Awaiting Tamir review') continue;
   const node = nodes.find(node => node.id === `branch:${item.id}`);
+  assert.equal(node.ref, item.ref, 'Each proposal needs its own published branch');
   assert.equal(node.contributorReview.head, item.qualifiedHead);
   assert.equal(node.contributorReview.url, item.qualifiedURL);
   assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
@@ -139,7 +205,8 @@ for (const item of tyWork) {
 const invalidGroup = structuredClone(generated.registry);
 invalidGroup.investigations.find(item => item.task).group = 'unknown';
 assert.throws(() => tracker.validateRegistry(invalidGroup), /Invalid investigation group/);
-assert.ok(generated.registry.meta.inventory.status.includes('progress'));
+assert.equal(generated.registry.meta.inventory.sourceReview.qualified, false);
+assert.equal(generated.registry.meta.inventory.sourceReview.runtimePathsWithSourceRecords, runtimeRows.length);
 assert.ok(languageWork.some(item => item.number === 318 && item.state === 'merged'));
 
 // Freeze the independently captured scope, then exercise curation failures at the

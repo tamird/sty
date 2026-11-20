@@ -1603,10 +1603,19 @@ function drawInvestigations() {
       appendSettledPublications(card, node);
       appendHumanAction(card, node);
     }
-    if (item.findings.length) card.append(element("h3", "", "Findings"));
-    for (const finding of item.findings) {
+    const appendFinding = (parent, finding) => {
       const section = element("section", "investigation-finding"); section.append(element("p", "", finding.text));
-      section.append(investigationEvidence(finding.evidence)); card.append(section);
+      section.append(investigationEvidence(finding.evidence)); parent.append(section);
+    };
+    const findings = item.findings.filter(finding => !finding.sourceInventory);
+    if (findings.length) card.append(element("h3", "", "Findings"));
+    for (const finding of findings) appendFinding(card, finding);
+    const sourceFindings = item.findings.filter(finding => finding.sourceInventory);
+    if (sourceFindings.length) {
+      const section = element("details", "investigation-comparison");
+      section.append(element("summary", "", `${sourceFindings.length} source review units`));
+      for (const finding of sourceFindings) appendFinding(section, finding);
+      card.append(section);
     }
     const check = liveSnapshot?.defaultBranchChecks?.[item.id];
     if (check) {
@@ -2303,28 +2312,18 @@ function attachReviewRequests(requests, nodes, ids) {
   }
 }
 
-function applyLive(snapshot, nextRegistry = registry) {
-  const focusedInvestigation = view === "investigations" ? document.activeElement?.closest(".investigation-card")?.id : null;
-  liveSnapshot = snapshot;
-  const notice = $("outreach-pause");
-  notice.textContent = outreachPauseNotice(snapshot);
-  notice.hidden = !notice.textContent;
-  const scrollPositions = ["table-pane", "investigations-pane", "details"].map((id) => ({ id, top: $(id).scrollTop, left: $(id).scrollLeft }));
-  const openSections = new Set([...$("details").querySelectorAll(".check-details[open], .curated-notes[open]")].map((section) => section.dataset.pr));
-  registry = nextRegistry;
-  updateRegistryControls();
+function mergeProviderPRs(nextRegistry, snapshot, prs = [...snapshot.prs, ...(snapshot.resolved || [])]) {
   const mergedURLs = snapshot.mergedOnly && new Set(snapshot.prs.map(pr => pr.url));
-  const nodes = registryNodes(registry).map(node => {
+  const nodes = registryNodes(nextRegistry).map(node => {
     if (node.type === "pr" && mergedURLs && mergedURLs.has(node.url)) node = { ...node, status: "merged" };
-    return { ...node, workStates: stateRecords(snapshot, node) };
+    return { ...node };
   }), ids = new Map(nodes.map((node) => [node.id, node])), aliases = new Map();
-  for (const original of mergedURLs ? [] : [...snapshot.prs, ...(snapshot.resolved || [])]) {
-    const pr = withConflictResult(original);
-    const id = prIdentity(pr), existing = ids.get(id);
+  for (const pr of mergedURLs ? [] : prs) {
+    const id = prIdentity(pr, nextRegistry), existing = ids.get(id);
     const branch = pr.ref && pr.headRepo ? nodes.find((node) => node.type === "branch" && node.ref === pr.ref && node.repo === pr.headRepo) : null;
-    const node = { ...existing, id, type: "pr", number: pr.number, repo: prRepo(pr), title: pr.title, url: pr.url,
+    const node = { ...existing, id, type: "pr", number: pr.number, repo: prRepo(pr, nextRegistry), title: pr.title, url: pr.url,
       status: pr.status, updatedAt: pr.updatedAt, ref: pr.ref || existing?.ref, group: existing?.group || branch?.group || "new",
-      workStates: stateRecords(snapshot, { ...existing, id, type: "pr", github: pr }), github: pr.head ? pr : existing?.github };
+      github: pr.head ? pr : existing?.github };
     if (branch && ["open", "draft", "merged"].includes(pr.status)) {
       aliases.set(branch.id, id); node.promotedFrom = branch.ref; node.summary ||= branch.summary;
       // A branch's last published revision can also be the starting point of
@@ -2338,6 +2337,22 @@ function applyLive(snapshot, nextRegistry = registry) {
     }
     if (existing) Object.assign(existing, node); else { nodes.push(node); ids.set(id, node); }
   }
+  return { nodes, ids, aliases };
+}
+
+function applyLive(snapshot, nextRegistry = registry) {
+  const focusedInvestigation = view === "investigations" ? document.activeElement?.closest(".investigation-card")?.id : null;
+  liveSnapshot = snapshot;
+  const notice = $("outreach-pause");
+  notice.textContent = outreachPauseNotice(snapshot);
+  notice.hidden = !notice.textContent;
+  const scrollPositions = ["table-pane", "investigations-pane", "details"].map((id) => ({ id, top: $(id).scrollTop, left: $(id).scrollLeft }));
+  const openSections = new Set([...$("details").querySelectorAll(".check-details[open], .curated-notes[open]")].map((section) => section.dataset.pr));
+  registry = nextRegistry;
+  updateRegistryControls();
+  const providers = [...snapshot.prs, ...(snapshot.resolved || [])].map(withConflictResult);
+  const { nodes, ids, aliases } = mergeProviderPRs(registry, snapshot, providers);
+  for (const node of nodes) node.workStates = stateRecords(snapshot, node);
   attachReviewFollowups(snapshot, nodes, ids);
   attachReviewRequests(snapshot.incomingReviewRequests || [], nodes, ids);
   for (const node of nodes) if (snapshot.issues?.[node.id]) Object.assign(node, snapshot.issues[node.id]);

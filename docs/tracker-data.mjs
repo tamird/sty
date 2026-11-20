@@ -1,7 +1,10 @@
+import { validateObservations } from './github-provider.mjs';
+
 // Adapt sty's canonical records to the existing gVisor tracker schema.
-export function buildTracker({ projects, additionalProjects, upstream, goals, bazelFeedback,
-  bazelFeedbackObservedAt, relatedChanges, languageWork, tyWork = [], inventory = {}, ruffForkAudit }, updatedAt) {
+export function buildRegistry({ projects, additionalProjects, upstream, goals, bazelFeedback,
+  relatedChanges, languageWork, tyWork = [], inventory = {}, ruffForkAudit, solverInventory }, updatedAt) {
   validateForkAudit(ruffForkAudit, tyWork);
+  validateSolverInventory(solverInventory, tyWork);
   const repo = 'astral-sh/ruff';
   const community = [...projects, ...additionalProjects];
   const repositories = Object.fromEntries([repo, 'tamird/ruff', 'bazelbuild/bazel',
@@ -36,14 +39,14 @@ export function buildTracker({ projects, additionalProjects, upstream, goals, ba
       nodes.push({ id: identity(repo, item.number), type: 'pr', repo, number: item.number,
         title: item.title, group: 'ty', status: item.state === 'Merged' ? 'merged' : 'open',
         url: `https://github.com/${repo}/pull/${item.number}`,
-        summary: `${item.state}. ${item.author === 'zsol' ? 'Zsol contribution; use as an upstream template.' : 'Related upstream work; inspect before proposing overlapping changes.'}`,
+        summary: item.summary || `${item.state}. ${item.author === 'zsol' ? 'Zsol contribution; use as an upstream template.' : 'Related upstream work; inspect before proposing overlapping changes.'}`,
         evidence: item.merge ? [{ label: 'Upstream merge', url: `https://github.com/${repo}/commit/${item.merge}` }] : [],
       });
       continue;
     }
     const node = { id: `branch:${item.id}`, type: 'branch', repo: 'tamird/ruff',
       title: item.title, group: 'ty', status: item.state,
-      ref: 'upstream/destructured-list-elements', head: item.qualifiedHead, url: item.qualifiedURL,
+      ref: item.ref, head: item.qualifiedHead, url: item.qualifiedURL,
       summary: `${item.summary}\n\n${item.qualification?.summary || ''}\n\nTamir must approve before any upstream submission.`,
       evidence: item.qualification?.evidence || [],
     };
@@ -63,6 +66,10 @@ export function buildTracker({ projects, additionalProjects, upstream, goals, ba
           .map(state => [state, ruffForkAudit.coverage.filter(item => item.reconciliation === state).length])),
         currentDeltaAudit: ruffForkAudit.currentDeltaAudit,
         url: 'https://tamird.github.io/sty/ruff-fork-audit.json' },
+      solverAudit: { frozen: solverInventory.frozen, coverage: solverInventory.coverage,
+        forward: { upstreamBase: solverInventory.forward.upstreamBase,
+          revision: solverInventory.forward.apiCorrectionRevision, qualified: solverInventory.forward.qualified },
+        limits: solverInventory.limits },
     } },
     groups: [{ id: 'community', label: 'Community type checking' }, { id: 'ty', label: 'Upstream ty' },
       { id: 'bazel', label: 'Bazel feedback' }, { id: 'language', label: 'Starlark specification' }],
@@ -74,14 +81,47 @@ export function buildTracker({ projects, additionalProjects, upstream, goals, ba
       group: 'ty', owner: 'Agent', task: true, status: 'active', updatedAt,
       summary: `${item.state}. ${item.summary}`, nextStep: item.nextAction,
       findings: item.sources.map(source => ({ text: source.detail + (source.paths?.length ? ` — ${source.paths.join(', ')}` : ''),
-        evidence: [{ label: source.commit, url: `https://github.com/tamird/ruff/commit/${source.commit}` }] })),
+        evidence: [{ label: source.commit, url: `https://github.com/tamird/ruff/commit/${source.commit}` }] }))
+        .concat(solverInventory.units.filter(unit => unit.trackerParent === item.id).map(unit => ({
+          text: `${unit.title}. ${unit.detail} Next: ${unit.nextAction}`,
+          evidence: unit.evidence, sourceInventory: true,
+        }))),
       evidence: item.evidence || [],
     }))),
   };
-  // The recovered records do not contain provider-level review/check receipts.
-  // Leave those attributes absent rather than inventing complete GitHub data.
+  return registry;
+}
+
+// A source review unit must remain attached to an actionable task and its frozen
+// source. It cannot acquire qualification merely by appearing in the inventory.
+export function validateSolverInventory(audit, mechanisms) {
+  if (audit?.schemaVersion !== 1 || !Array.isArray(audit.units) ||
+      audit.units.length !== audit.coverage.reviewUnits) throw new Error('Incomplete solver source inventory');
+  const known = new Set(mechanisms.map(item => item.id));
+  const seen = new Set(), hunks = new Set();
+  for (const unit of audit.units) {
+    if (seen.has(unit.id) || !known.has(unit.trackerParent) || !unit.title || !unit.detail ||
+        !unit.nextAction || unit.sourceReviewed !== true || unit.qualified !== false ||
+        !unit.evidence.length || !unit.hunkIds.length ||
+        unit.evidence.some(source => !source.url.startsWith(`https://github.com/tamird/ruff/blob/${audit.frozen.revision}/`)))
+      throw new Error(`Invalid solver source unit: ${unit.id}`);
+    seen.add(unit.id);
+    for (const hunk of unit.hunkIds) hunks.add(hunk);
+  }
+  if (hunks.size !== audit.coverage.runtimeOrMixedHunks || audit.coverage.runtimeQualified !== false ||
+      audit.coverage.upstreamReady !== false || audit.coverage.isPullRequestCount !== false)
+    throw new Error('Unproven solver qualification or incomplete hunk attribution');
+}
+
+export function buildTracker(records, updatedAt, observations) {
+  const registry = buildRegistry(records, updatedAt);
+  const { repo, repositories } = registry.meta;
+  const { bazelFeedback, bazelFeedbackObservedAt, ruffForkAudit } = records;
+  validateObservations(observations, registry);
+  const checkedAt = [bazelFeedbackObservedAt, observations.checkedAt].filter(Boolean)
+    .sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1);
   const snapshot = { schema: 1, repo, owner: 'tamird', registryDate: updatedAt,
-    checkedAt: updatedAt, repositories, prs: [], issues: Object.fromEntries(bazelFeedback.map(item => [
+    checkedAt, repositories, prs: observations.prs, issues: Object.fromEntries(bazelFeedback.map(item => [
       `issue:bazelbuild/bazel:${item.number}`, { githubState: item.state, updatedAt: item.updatedAt,
         githubURL: `https://github.com/bazelbuild/bazel/issues/${item.number}`, checkedAt: bazelFeedbackObservedAt },
     ])) };

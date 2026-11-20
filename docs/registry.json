@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-19T23:07:10Z",
+    "updatedAt": "2026-11-20T06:21:38Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -25,8 +25,23 @@
       "divergentCommits": 495,
       "userAuthoredCommits": 483,
       "upstreamAuthoredPicks": 12,
-      "status": "Reconciliation in progress",
-      "scope": "All 17 user-authored Bazel typing issues were reconciled with GitHub. Ruff units group current mechanisms; the 495-commit history includes removed proof machinery and upstream picks, and has not yet been fully reduced to surviving current-upstream contributions. Source-history counts are not pending PR counts.",
+      "status": "Frozen source audit complete; runtime qualification incomplete",
+      "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+      "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
+      "sourceReviewComplete": false,
+      "sourceReview": {
+        "candidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "base": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
+        "changedPaths": 231,
+        "runtimePathsWithSourceRecords": 142,
+        "solverHunksAttributed": 939,
+        "solverReviewUnits": 169,
+        "forwardCandidate": "9e0685ba54a37b374b62477ca3f65c821f983a22",
+        "forwardBase": "c8ba04dc06caf4370d494870145c4f92356f1222",
+        "url": "https://tamird.github.io/sty/ruff-source-audit.json",
+        "qualified": false
+      },
+      "scope": "All 17 user-authored Bazel typing issues have dated GitHub receipts. Ruff's frozen source audit and forward reconciliation enumerate surviving mechanisms; reduced upstream reproductions, runtime qualification and remaining overlap review are incomplete. Historical commit counts and source review units are not pending PR counts.",
       "qualification": "Every new upstream proposal needs a current-upstream reproduction, focused negative/positive cases, relevant full qualification and Tamir approval. Existing merged templates, in-review PRs, host extension design and remaining Python fixes are distinct.",
       "pathAudit": {
         "scope": "old-fork-path-audit",
@@ -42,9 +57,42 @@
         },
         "currentDeltaAudit": {
           "state": "pending",
-          "reason": "The rebase onto the frozen upstream comparison revision is unfinished. Audit its qualified resulting tree separately; do not substitute the mutable worktree for either immutable input."
+          "reason": "The source checkpoint dfe98a7d has records for all 142 runtime/API paths in its 231-path delta, including semantic attribution of 939 solver hunks to 169 review units. Forward review separates upstream c8ba04dc changes from fork changes through 9e0685ba; the newer fixture correction is 312f9613. Constructor and collection regressions still block runtime qualification. The Bazel port remains uncommitted. This historical 250-path manifest is preserved separately; source review does not establish qualified upstream contributions."
         },
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
+      },
+      "solverAudit": {
+        "frozen": {
+          "revision": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+          "base": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
+          "hunkRevision": "7120f37ed86689328b61ec7a00f2fe8d4d378ccd",
+          "indexDigest": "3079cbd8391602919f08654ec210ad9dbad6a6c1eba3e0b4ef6c8ec21a33ac8b",
+          "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+          "baseUrl": "https://github.com/astral-sh/ruff/commit/6b5b5eca948c05261a3909e78133884cd9e61c9e"
+        },
+        "coverage": {
+          "runtimeOrMixedHunks": 939,
+          "reviewedRuntimeOrMixedHunks": 939,
+          "reviewUnits": 169,
+          "reviewedSourceFiles": 18,
+          "sourceHunkAttributionComplete": true,
+          "runtimeQualified": false,
+          "upstreamReady": false,
+          "isPullRequestCount": false,
+          "detail": "939 runtime or mixed hunks have source attribution across 169 review units. Regression assertion review is partial; runtime qualification and contribution approval remain open."
+        },
+        "forward": {
+          "upstreamBase": "c8ba04dc06caf4370d494870145c4f92356f1222",
+          "revision": "9e0685ba54a37b374b62477ca3f65c821f983a22",
+          "qualified": false
+        },
+        "limits": [
+          "Hunk IDs refer to the frozen 7120 review ledger; source anchors are translated to the frozen dfe revision.",
+          "Source review covers runtime and mixed solver hunks; complete test and snapshot review remains open.",
+          "Upstream #29553 still needs remaining per-type migration and fixture review.",
+          "The 44 and 9e forward records identify source ownership and API changes; they do not establish runtime qualification.",
+          "Existing tracker parents retain ownership. The eleven task records subdivide reviewed mechanisms without committing to a PR count."
+        ]
       }
     }
   },
@@ -584,6 +632,41 @@
       "summary": "Ctx exists for rule callbacks, while module_ctx and repository_ctx are absent from the native annotation environment.\n\nRetest the published reproduction on current Bazel before proposing follow-up feedback.\n\nThe issue is open; its original reproduction has not been rerun against current Bazel."
     },
     {
+      "id": "branch:call-completion-key-lifetime",
+      "type": "branch",
+      "repo": "tamird/ruff",
+      "title": "Keep call-completion keys with their semantic index",
+      "group": "ty",
+      "status": "Awaiting Tamir review",
+      "ref": "upstream/retain-call-completion-keys",
+      "head": "e5a7691b85136a48afabc3debb0f24a606360bc2",
+      "url": "https://github.com/tamird/ruff/commit/e5a7691b85136a48afabc3debb0f24a606360bc2",
+      "summary": "Unrelated file edits can collect interned call-completion keys and invalidate an unchanged file's semantic index. Track the keys as outputs of that index instead. Isolated from the Starlark fork; not submitted upstream.\n\nThe regression fails on the current c8ba04dc upstream base without the fix, and the isolated fix passes on that same base. The isolated fix passed the selected parser, core, semantic, IDE and external mdtest suites, workspace Clippy, formatting and required repository hooks on Ruff's pinned Rust 1.100 toolchain. The exact published revision passed without generated source changes. The regression also verifies invalidation after the indexed file changes. No quantitative memory or runtime improvement has been measured.\n\nTamir must approve before any upstream submission.",
+      "evidence": [
+        {
+          "label": "Current upstream without the fix: regression fails",
+          "url": "https://app.buildbuddy.io/invocation/99ff6389-01e2-4222-b4ad-3d8c9652ea6c"
+        },
+        {
+          "label": "Isolated upstream qualification: tests, Clippy and formatting",
+          "url": "https://app.buildbuddy.io/invocation/0701c93d-8e67-460a-914a-e3ea70179aa5"
+        },
+        {
+          "label": "Review the complete isolated change",
+          "url": "https://github.com/tamird/ruff/compare/c8ba04dc06caf4370d494870145c4f92356f1222...e5a7691b85136a48afabc3debb0f24a606360bc2"
+        }
+      ],
+      "contributorReview": {
+        "kind": "proposal",
+        "status": "pending",
+        "title": "Review qualified ty proposal",
+        "summary": "Review the published change and decide whether to submit upstream. Qualification is recorded in the item details. Nothing has been submitted upstream.",
+        "head": "e5a7691b85136a48afabc3debb0f24a606360bc2",
+        "baseHead": "c8ba04dc06caf4370d494870145c4f92356f1222",
+        "url": "https://github.com/tamird/ruff/commit/e5a7691b85136a48afabc3debb0f24a606360bc2"
+      }
+    },
+    {
       "id": "branch:destructured-list-elements",
       "type": "branch",
       "repo": "tamird/ruff",
@@ -621,6 +704,78 @@
         "baseHead": "912ba68f546006f42264c43180c9ce83a76b87cd",
         "url": "https://github.com/tamird/ruff/compare/912ba68f546006f42264c43180c9ce83a76b87cd...4cde8277a76d0f4c050b8fe3ff1a1a3bc13f842f"
       }
+    },
+    {
+      "id": "pr:27665",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 27665,
+      "title": "Collect type context from function calls during full-scope bidirectional inference",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/27665",
+      "summary": "Existing collection-context implementation overlaps the fork: identity-specialized collection calls, sibling constraints, original overload filtering and protection against self-feedback. Reconcile later refinements with this PR before proposing additions.",
+      "evidence": []
+    },
+    {
+      "id": "pr:29553",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29553,
+      "title": "Stabilize lambda inference with finite signatures",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/29553",
+      "summary": "Stabilizes lambda identity and signature inference. Compare this work before extracting contextual lambda and callback changes; source overlap is still being reviewed.",
+      "evidence": []
+    },
+    {
+      "id": "pr:29681",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29681,
+      "title": "Respect declared dictionary value types when narrowing keys",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/29681",
+      "summary": "Preserves declared dictionary value types using annotated-assignment rules. Related to observation policy; it does not establish that the fork's snapshot and transfer implementation is already upstream.",
+      "evidence": []
+    },
+    {
+      "id": "pr:23937",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 23937,
+      "title": "Support narrowing with aliased conditional expressions",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/23937",
+      "summary": "Handles cross-scope and chained condition aliases through structural places and reassignment snapshots. Reconcile with the fork's saved member, key and call histories; these implementations are not equivalent.",
+      "evidence": []
+    },
+    {
+      "id": "pr:27661",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 27661,
+      "title": "Resolve deferred references from current and future bindings",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/27661",
+      "summary": "Resolves deferred annotations from current and future bindings. Compare with host source/stub and foreign annotation changes before proposing overlapping lookup work.",
+      "evidence": []
+    },
+    {
+      "id": "pr:29555",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 29555,
+      "title": "Experiment with generic FunctionType inference",
+      "group": "ty",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/29555",
+      "summary": "Experiments with generic FunctionType and MethodType. Compare the callable representation and ParamSpec requirements before extracting related function and method changes.",
+      "evidence": []
     },
     {
       "id": "pr:29138",
@@ -771,7 +926,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "evidence": [
         {
           "label": "sty source",
@@ -786,7 +941,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "evidence": [
         {
           "label": "sty source",
@@ -801,7 +956,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "evidence": [
         {
           "label": "sty source",
@@ -816,7 +971,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "evidence": [
         {
           "label": "sty source",
@@ -831,7 +986,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "evidence": [
         {
           "label": "sty source",
@@ -841,13 +996,355 @@
       "findings": []
     },
     {
+      "id": "investigation:ty-inplace-notimplemented",
+      "title": "Fall back when an in-place operator returns NotImplemented",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python bugfix candidate. Exclude NotImplemented from the assigned result and try ordinary or reflected binary dispatch. Preserve aliases and any ordinary return alternatives. Extraction and runtime qualification remain incomplete.",
+      "nextStep": "Reproduce on upstream; qualify reflected overloads, mixed returns, conditional in-place methods and unsupported operands.",
+      "findings": [
+        {
+          "text": "Treat NotImplemented from in-place operations as binary fallback — crates/ty_python_semantic/src/types/infer/builder.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L5354"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-protocol-collection-context",
+      "title": "Use nongeneric protocols as collection literal context",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
+      "nextStep": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
+      "findings": [
+        {
+          "text": "Use nongeneric protocol members as collection literal context — crates/ty_python_semantic/src/types/infer/builder.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L7197"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-boolean-payload-tuples",
+      "title": "Retain Boolean tags alongside tuple payloads",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
+      "nextStep": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
+      "findings": [
+        {
+          "text": "Retain tag/payload relationships when forming tuples from passive locals — crates/ty_python_semantic/src/types/infer/builder.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L8099"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-collection-use-inference",
+      "title": "Reconcile collection-use inference with upstream #27665",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Overlaps upstream review; fork regression. Three current native regressions lose dictionary value evidence or diagnostics: grouped.get(key, []), a get/write cycle, and a missing member on the inferred list. Future-use constraints must preserve evidence independently of query order. Extraction and runtime qualification remain incomplete.",
+      "nextStep": "Compare later fork refinements with #27665; restore collection precision and diagnostics before proposing additions to that existing workstream.",
+      "findings": [
+        {
+          "text": "Infer one tracked collection argument from sibling call constraints without self-feedback — crates/ty_python_semantic/src/types/infer/builder.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Existing collection-context workstream #27665",
+          "url": "https://github.com/astral-sh/ruff/pull/27665"
+        },
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L10413"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-operator-context",
+      "title": "Use expected types when inferring operator calls",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+      "nextStep": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
+      "findings": [
+        {
+          "text": "Contextual inference at the actual selected binary operator call — crates/ty_python_semantic/src/types/call.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call.rs#L235"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-constructor-class-arguments",
+      "title": "Keep explicit constructor type arguments fixed",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python bugfix candidate. Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+      "nextStep": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
+      "findings": [
+        {
+          "text": "Keep explicit constructor class arguments fixed — crates/ty_python_semantic/src/types/call/bind/constructor.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Infer only class arguments owned by this constructor call. ConstructorBinding tracks inferable class context separately from result type. Explicit class arguments remain fixed even when caller TypeVars occur in them; overriding instance with fixed TypeVar/intersection clears stale inferable class context. Partial specialization only produces placeholders for actually inferable class binders. Next: Already attributed in class-call-context dfe inventory. Retain explicit generic constructor and caller-bound-TypeVar tests before extraction.",
+          "evidence": [
+            {
+              "label": "types/call/bind/constructor.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind/constructor.rs#L55"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Record constructor stages discarded before requirements were retained. has_omitted_stage records lost downstream stages when mapping bindings. Checked input evidence cannot claim complete argument requirements if a constructor stage was omitted. Next: Verify two-stage new/init negative evidence cases.",
+          "evidence": [
+            {
+              "label": "types/call/bind/constructor.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind/constructor.rs#L62"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Projection enum import and instance-type visibility. Support APIs for explicit inferable constructor context and argument projection. Next: Carry with owning behavior.",
+          "evidence": [
+            {
+              "label": "types/call/bind/constructor.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind/constructor.rs#L8"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind/constructor.rs#L52"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-typed-dict-key-groups",
+      "title": "Group TypedDict.get keys without losing literals",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python bugfix candidate. Group keys that share value types and requiredness, retaining large literal-key groups instead of merging incompatible get overloads. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+      "nextStep": "Reproduce on upstream; cover required and optional keys, key unions, missing keys, defaults and large schemas.",
+      "findings": [
+        {
+          "text": "Preserve precise get results for unions of equivalent literal keys — crates/ty_python_semantic/src/types/class/typed_dict.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/typed_dict.rs#L391"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-typed-dict-views",
+      "title": "Derive TypedDict views from dictionary declarations",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement / host API candidate. Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+      "nextStep": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
+      "findings": [
+        {
+          "text": "Derive TypedDict items/keys/values from configured dict declarations — crates/ty_python_semantic/src/types/class/typed_dict.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/typed_dict.rs#L6"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-typed-dict-merge",
+      "title": "Preserve overwrite direction in TypedDict merges",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+      "nextStep": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
+      "findings": [
+        {
+          "text": "Preserve merge direction, schema values and fresh dictionary results — crates/ty_python_semantic/src/types/class/typed_dict.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/typed_dict.rs#L6"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-known-generic-subclass",
+      "title": "Specialize known generic subclasses before checking them",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python bugfix candidate. Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+      "nextStep": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
+      "findings": [
+        {
+          "text": "Use default specialization for known generic subclass checks — crates/ty_python_semantic/src/types/class/known.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/known.rs#L1518"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-factory-instance-storage",
+      "title": "Separate factory instance fields from class descriptors",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Host API design. Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+      "nextStep": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
+      "findings": [
+        {
+          "text": "Separate factory-supplied immutable instance storage from class descriptors — crates/ty_python_semantic/src/types/class/dynamic_literal.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "label": "Reviewed implementation",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/dynamic_literal.rs#L3"
+        }
+      ]
+    },
+    {
       "id": "investigation:ty-host-parser",
       "title": "Host parser and semantic file identity",
       "group": "ty",
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -895,6 +1392,26 @@
               "url": "https://github.com/tamird/ruff/commit/5ec8d1ed1b58f5b57b990daed5a1176130809e4f"
             }
           ]
+        },
+        {
+          "text": "Use executed source implementation for deprecation and runtime diagnostics. When callable source identity differs from external signature owner, find the source implementation for deprecation and implementation-related diagnostics instead of donor declaration. Next: Keep donor public signature separate from executed defaults/body and source diagnostic locations.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L3817"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Resolve native and detached signature annotations from their actual owner. Signature annotation lookup selects PEP695 parameter scope or deferred function inference using function definition, avoiding detached-node index lookup. SourceAnnotation supplies return/parameter type and flags; external generic contexts retain donor ownership when native PEP695 context is absent. Next: Reuse parser/consumer design ownership and native-over-donor precedence tests.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L80"
+            }
+          ],
+          "sourceInventory": true
         }
       ],
       "evidence": []
@@ -906,7 +1423,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -945,6 +1462,166 @@
               "url": "https://github.com/tamird/ruff/commit/45c16c583a0ac6042b0bf49b1296b3bdac746713"
             }
           ]
+        },
+        {
+          "text": "Compose generic contexts across semantic namespaces. Generic context merge compares resolver/platform programs with semantic namespaces cleared. Individual TypeVars retain definition/binding identity. Next: Review shared-support-file identity with host API design.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L498"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expose specialization construction to embedded consumers. GenericContext.specialize and Specialization.types become public. Documentation removes references to absent helpers. Next: Minimize supported public constructor/accessor contract during host API review.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L1007"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expose strict subtype, equivalence, disjointness and pure redundancy queries. Public subtype API documents all-materializations semantics; pure redundancy preserves both materialization bounds and explicitly does not certify inference completeness. Equivalence/disjointness visibility changes expose existing relations. Next: Agree minimal public relation surface and avoid treating reflexive unresolved redundancy as a proof of completeness.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L406"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Check supplied storage on the complete receiver before splitting intersections. Provided-instance targets first check nominal base and supplied field contracts on the entire source receiver. A constituent may provide immutable storage and another may narrow it. Bound TypeVars remain on their specialized bound/constraint path. Next: Require host contract tests for intersection storage plus value narrowing.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L2741"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expose per-source checked argument/formal pairs conservatively. input_types specializes/rematches selected overloads, retains alternatives separately and includes downstream constructors. Decline expansion snapshots, incomplete/gradual/ParamSpec signatures, failed matching or unmapped inputs. Actual type uses same expected-type key as contextual inference. Next: API review and native positive/decline cases before host consumers rely on full coverage.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L1094"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Combine supplied getter presence and immutable storage across all viable domains. Supplied getter return/presence contracts refine selected overloads with ordinary error recovery. Immutable storage requires agreement of every matching domain before equal-result pruning; expansion/recovery cannot certify it. Absent yields KNOWN_ABSENT, partial presence remains possibly undefined. Next: Review whole-overload-family proof including ambiguous gradual arguments and expansion.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L1299"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Refine only overload bindings whose snapshots remain complete. Single signatures retain error-recovery bindings. Multiple expansion cases are eligible only with one unique selected overload per successful case; reused overload specializations or limit-reached expansion decline. Recompute expanded/ambiguous returns after application refinement. Equal supplied results collapse only when complete static nonpredicate and all matching declarations agree. Next: Need selected-overload reuse, recovery, gradual ambiguity and every-case result fixtures. Distinguish precise native results from host hook admission.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L4991"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Derive fresh factory keyword context from expected immutable fields. One-signature host-marked keyword factory can derive per-field expected types from readonly protocol properties or guaranteed immutable nominal fields instead of one shared generic value formal. Next: Require host API proof of storage/readonly contracts and independent fields with different types.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L10249"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Supply contextual unannotated parameter views without changing declarations. with_inferred_parameter_context maps only ordinary inferred parameters with canonical source definitions. Authored/native/external annotations, variadics, defaults and return remain; resulting view does not certify that callers inhabit that domain. Next: Require explicit host domain guarantee at consumer.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L3257"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Represent incomplete parameter descriptions separately from gradual types. Incomplete rows admit ordinary per-row call checks but cannot prove unseen required input domains in strict callable relations. Incomplete survives prefix/transformation/ParamSpec expansion, and materialization uses conservative global bounds rather than erasing unknown shape through value mapping. Next: Public constructor requires normalized standard rows. Test missing unseen required inputs, bottom/top and mixed gradual parameters before API proposal.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L4530"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expose minimal signature and parameter constructors/accessors. Visibility and must_use changes expose normalized signature creation, parameter rows, kinds/names/default presence, generic flag, and immutable return/parameter transformations. Constructors share one initialization helper. Next: Review minimal stable surface rather than mechanically exposing every internal.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L1199"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expose matched call facts without requesting enclosing completed inference. CheckedCall holds original AST/source file, current argument and child type facts, binding errors and return. Context providers may receive provisional checks; final result providers receive completed call checks. Applications inspect read-only; native refinements alone mutate result. Next: Full file already reviewed in class-call-context inventory.",
+          "evidence": [
+            {
+              "label": "types/call/checked.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/checked.rs#L1"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Distinguish omitted, definitely supplied and indeterminate matched parameters. Parameter lookup uses exact matcher mapping including synthetic receiver offset. Multiple source suppliers, starred positional unpacking, optional unpacked keys or missing types are indeterminate. Definite unpacked keyword values have no individual AST expression. Next: Keep optional pack, duplicate supplier, synthetic receiver and omitted default negative cases.",
+          "evidence": [
+            {
+              "label": "types/call/checked.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/checked.rs#L1"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Distinguish dictionary child evaluation from call-time argument observation. dictionary_items observes when a child was evaluated; dictionary_argument observes after all arguments evaluate, selecting actual/unpacked keyword access. Optional/residual entries do not prove key presence; receiver dictionaries and ambiguous variadic key names decline. TypedDict fallback preserves source range. Next: Tests must demonstrate later argument mutation changes call-time snapshot without rewriting child-time observation.",
+          "evidence": [
+            {
+              "label": "types/call/checked.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/checked.rs#L1"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Infer one anchored detached annotation only during final refinement. infer_annotation_at delegates an optional provider with a canonical child expression owner and at most one same-file detached range. Provisional checks have no provider and return None. Next: Retain anchor identity, diagnostics and provisional absence tests.",
+          "evidence": [
+            {
+              "label": "types/call/checked.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/checked.rs#L1"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retain complete original keyword node for native diagnostics. argument_node returns complete keyword including its name, not only value expression. Native static_assert keyword fixture checks secondary annotation range over condition=False. Next: Run the native keyword diagnostic regression and check upstream source-range behavior.",
+          "evidence": [
+            {
+              "label": "types/call/checked.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/checked.rs#L1"
+            }
+          ],
+          "sourceInventory": true
         }
       ],
       "evidence": [
@@ -961,7 +1638,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -1000,6 +1677,56 @@
               "url": "https://github.com/tamird/ruff/commit/352ce32f76a8416551cb72d66dfa4f6d75a7c7e9"
             }
           ]
+        },
+        {
+          "text": "Combine successful keyword sources without dictionary overlay semantics. collect_keyword_items combines observed keyword sources. Named-key collisions decline metadata and leave diagnostics to ordinary matching; required named entries constrain residual collisions on successful paths. Optional entries combine residual value types. The combined synthetic evidence cannot claim runtime first-entry order. Next: Extract with duplicate explicit/unpacked/optional/open keyword source cases and negative diagnostic preservation.",
+          "evidence": [
+            {
+              "label": "types/call/arguments.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/arguments.rs#L36"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Keep optional observed keys from suppressing later possible pack values. Parameter metadata distinguishes may-be-matched from skip_unknown_keywords. Required/optional/unspecified presence is carried through assignment and MatchedParameter. Later unknown packs still check parameters previously touched only by optional keys; matching_keyword centralizes named/variadic resolution. Next: Use optional key followed by differently typed residual pack, required slot and duplicate source cases.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L5680"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Report independently replaceable partial keywords by name. Known keyword sources in partial application carry UnpackedKeyword(name) provenance so separate stored keys can be independently overridden even when matching one **kwargs formal. Next: Reduce multiple stored keyword keys with one replacement.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L5913"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Reject unchecked callback keyword surfaces explicitly. If otherwise error-free inference cannot verify a complete keyword ParamSpec witness, add UnverifiedKeywordProjection and report invalid argument type; participates in overload resolution and partial-application filtering. Next: Check budget exhaustion remains an explicit verification failure and ordinary valid calls avoid false errors.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L8996"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Check observed pack entries through matched variadic evidence. Observed keyword packs use already matched per-entry argument evidence during variadic type checking instead of re-deriving one homogeneous mapping value type. Next: Retain mixed per-key value and residual keyword tests.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L9250"
+            }
+          ],
+          "sourceInventory": true
         }
       ],
       "evidence": [
@@ -1024,7 +1751,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting.",
       "nextStep": "Reproduce each surviving behavior on current ty; split independent fixes and qualify their solver/semantic suites before requesting Tamir review.",
       "findings": [
@@ -1063,6 +1790,278 @@
               "url": "https://github.com/tamird/ruff/commit/18bf8b414cd2e2387f4a201cc8681a19211751f6"
             }
           ]
+        },
+        {
+          "text": "Imports, storage size derivation and shared helper plumbing. Imports and storage-size derives support the identified graph and solver mechanisms; no independently claimed Python behavior. Next: Carry only with the owning mechanism.",
+          "evidence": [
+            {
+              "label": "types/constraints/variables.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/variables.rs#L4"
+            },
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L14"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Rename attribute stripping to projection-family base. Calls formerly stripping P.args/P.kwargs now recover the ParamSpec base, covering newly added keyword projections as well. Next: Include the migration with keyword projection design.",
+          "evidence": [
+            {
+              "label": "types/cyclic.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/cyclic.rs#L333"
+            },
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L582"
+            },
+            {
+              "label": "types/typevar.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L1325"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Rename budget-exceeded paths to incomplete paths. Consumer matches the broader Incomplete path state rather than a budget-only label. Next: Include the migration with incomplete-projection behavior.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L5237"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Exclude consumed prefix names from forwarded ParamSpec tails. Prefix projection removes known entries consumed by prefix parameters and separately records their names so an open/residual tail cannot supply them again. P.kwargs and captured keyword argument components share the appropriate consumer. Next: Native residual_keywords_follow_paramspec_projection assertion body read.",
+          "evidence": [
+            {
+              "label": "types/call/arguments.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/arguments.rs#L674"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Use shared dictionary presence enum. Required key booleans become DictionaryItemKind::Required, matching shared observed keyword presence semantics. Next: Carry with keyword observation implementation.",
+          "evidence": [
+            {
+              "label": "types/call/arguments.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/arguments.rs#L916"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Exercise operand preservation, context admission and residual forwarding. The mixed module-boundary hunk adds complete assertion bodies for unspecialized nominal context; literal children retain fixed tuple slots even when source operand is Unknown/Divergent/missing; residual prefix exclusion preserves forwarding type checks. Next: Run the native argument evidence regressions on the proposed source.",
+          "evidence": [
+            {
+              "label": "types/call/arguments.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/arguments.rs#L1410"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Read owned graph source immutably. Marking helpers accept immutable storage after the source-order/snapshot refactor. Next: Keep with ownership refactor.",
+          "evidence": [
+            {
+              "label": "types/constraints/owned.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/owned.rs#L25"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Imports and unchanged redundancy-match formatting. Imports support protocol unions and supplied receivers; redundancy match is only reformatted. Next: Carry with owning change.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L6"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Move atomic-only traversal out of PathAssignments. The prior recursive three-edge visitor panicked on non-atomic nodes. It is removed as quantified-aware traversal moves to solution/walker owners, which remain to be semantically attributed. Removal itself is not proof of equivalent callback/fuel/terminal behavior. Next: Keep unresolved compatibility gate until replacement traversal and ordinary terminal budget behavior are read and qualified.",
+          "evidence": [
+            {
+              "label": "types/constraints/paths.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/paths.rs#L254"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Use relation-capable sequent aliases and trigger tables. Alias/field names, cached relation payload types and return signatures migrate to shared PathSequent. Trigger naming now covers both antecedents and negated consequences. Next: Carry with corresponding proof changes.",
+          "evidence": [
+            {
+              "label": "types/constraints/paths.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/paths.rs#L6"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Imports for scoped proof and residual ownership. Imports only; mechanism ownership is documented separately. Next: Carry with owning implementation.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Do not let nominal FunctionType.__call__ bypass precise callable inputs. Remove a generic gradual FunctionType.__call__ binding when another callable constituent supplies the same function signature. Recognition checks actual known class method and gradual return/parameter surface. Next: Coordinate the generic nominal FunctionType proposal.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L868"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Do not eliminate overloads using unresolved parameter domains. Top-materialized argument overload filtering requires parameter types contain no Divergent before proving assignability. Next: Compare finite-signature lambda foundation and native recursive overload tests before extraction.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L4846"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Preserve explicit TypedDict extra-item call rules after observation. Observed contents refine keys but explicit TypedDict extras remain stricter than ordinary mapping: unknown names require **kwargs and cannot fill required named parameters. Excluded forwarded prefixes are represented as Never residual entries; source field definition locations survive. Next: Separate declared-schema call policy from observed runtime precision.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L6124"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Use domain-aware ParamSpec projections consistently. Domain checks distinguish parameter-signature variables from keyword dictionaries; unpack/type checking/context forwarding accepts P.kwargs or captured argument projections as appropriate. Preserve provisional/final mode through forwarded signature inference. Next: Carry with projection producer.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L275"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Defer recursive generic return inference only on otherwise valid argument evidence. CallInference retains binding error state and permits shared-placeholder return deferral only without binding/specialization/constraint failures; alternate complete solution path explicitly disables deferral. Next: Coordinate #29553 finite lambda source identity and isolate non-host recursive call reproducer.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L7002"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Include synthesized protocol fields in inferred return variance. Return variance traversal explicitly handles protocols without nominal origin by composing structural field variance; named nominal protocols retain specialization traversal. Next: Use a structural callback/interface returned through generic inference.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L8088"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Keep caller receiver and argument domains fixed during callee substitution. Ordinary synthetic bound-method receivers are caller values and are not rewritten by callee inference. Explicit argument substitution preserves retained caller TypeVar domains; constructor receiver templates retain their own inference path. TypeVarTuple evidence uses the same argument-specific mapping. Next: Native bounded caller TypeVar and ordinary receiver vs constructor regressions.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L8430"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expose source-overload and match mapping helpers. Return methods receive db/env arguments; inferable constructor class context records matching owner; selected source overload index and bound receiver match offsets support checked input/editor consumers. Next: Carry with owner contracts.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L346"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Imports for actual call mechanisms. Imports only; no independent semantic claim. Next: Carry with owning units.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L31"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Capture callee Self while retaining the original receiver parameter contract. apply_self_for_call maps exactly the signature-owned Self binder and keeps caller-introduced receiver domains intact. Only remaining parameters/result use captured Self; first parameter remains original for ordinary call checking. Shared apply_self_mapping helper accepts either explicit binder substitution or binding-context mapping. Next: Reduce explicit self annotation, inherited generic receiver and caller Self cases.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L656"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expand resolved ParamSpec rows before checked argument rematching. specialize_for_call applies selected mapping then expands ordinary or keyword-capture variadics into final slots for exact checked input mapping. Next: Keep unsupported/incomplete decline behavior and source argument offsets tested.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L2637"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Share existing positional parameter tuple construction. Move tuple/TypeVarTuple segment construction from callable ParamSpec relation to helper reused by lambda variadic context. Next: Carry with lambda context behavior.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L5454"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Build keyword dictionary shapes from normalized parameter rows. keyword_arguments_type maps defaults to optional key presence, not inserted default values; empty complete rows make a closed empty dictionary. Ordinary open tails become extra items. A symbolic keyword component is a whole dictionary and cannot silently combine with fixed fields; readonly accepted surface and writable captured arguments are distinct. Next: Specify supplied host shape API separately.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L5936"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Share named-or-variadic keyword parameter lookup. matching_keyword factors existing keyword_by_name or keyword_variadic sequence for argument matcher. Next: Carry with matching behavior.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L7106"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Imports for signature source ownership and solver mechanisms. Imports only; no standalone semantic claim. Next: Carry with corresponding changes.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L14"
+            }
+          ],
+          "sourceInventory": true
         }
       ],
       "evidence": []
@@ -1074,7 +2073,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Preserve overload signatures while checking implementation bodies and projected callback signatures.",
       "nextStep": "Reproduce against current upstream; test public overload calls, implementation-body rejection and contextual callbacks independently.",
       "findings": [
@@ -1115,7 +2114,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
       "nextStep": "Extract Python-meaningful regressions; qualify narrowing stability across mutation and keep Starlark tag interpretation in the host adapter.",
       "findings": [
@@ -1156,7 +2155,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream.",
       "nextStep": "Subtract the already merged empty-peer fix, reproduce remaining cases on current ty, and qualify mutable escape/default/argument boundaries.",
       "findings": [
@@ -1202,7 +2201,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1252,7 +2251,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1284,7 +2283,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1314,6 +2313,16 @@
               "url": "https://github.com/tamird/ruff/commit/6ad38a59c6268796d1ed49af724cbc05a101836a"
             }
           ]
+        },
+        {
+          "text": "Apply the host string sequence policy during literal relations. String literal relations first test whether the configured str class has its character Sequence base; unsupported direct sequence fast paths delegate to actual fallback-instance relation rather than unconditionally rejecting. Next: Keep Python default behavior and separately test hosts excluding str from Sequence[str].",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L3145"
+            }
+          ],
+          "sourceInventory": true
         }
       ],
       "evidence": []
@@ -1325,7 +2334,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1375,7 +2384,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1414,6 +2423,76 @@
               "url": "https://github.com/tamird/ruff/commit/815d619e2dea9becd7d42c588653118c97971b99"
             }
           ]
+        },
+        {
+          "text": "Request final argument context for unspecialized nominal union arms. Top-level aliases/unions are inspected for nominal instances containing UnspecializedTypeVar; gradual Any/Unknown and callable alternatives preserve their distinct contextual behavior. Next: Reconcile single-collection contextual replay with existing #27665 and native nominal_union_arguments_need_final_context fixture.",
+          "evidence": [
+            {
+              "label": "types/call/arguments.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/arguments.rs#L750"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retry argument solving after rejected expected-result preferences. Provisional expected context contributes concrete remainder covariantly, permitting unresolved parts to widen. On failure, clear preferred mappings, rebuild argument constraints with empty preferences and reset errors, then solve again; resulting type may still fail outer assignment. Next: Separate native invariant input/result preference regression from host callback policy.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L7845"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Separate argument context caches by evidence source and inference phase. Cache has all-evidence/without-prior-arguments crossed with provisional/final slots. WithoutArguments excludes this call prior specialization but does not claim independence from enclosing inference queries. Final mode replaces unspecialized/provisional values with upper bound or Unknown and skips provisional selected bindings. Next: Qualify finite caller admission and expected-result fallback separately.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L676"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Visit stored alias arguments without forcing alias bodies. Inferable occurrence collection traverses explicit TypeAlias/Recursive argument specializations even when lazy definitions are not visited, preventing skipped contextual replay. Next: Reduce generic alias argument-only occurrence and ensure no unrelated lazy body evaluation.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L9672"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Let sibling evidence refine locally inferable bounded variables. Use upper-bound context immediately only for Self, caller-fixed variables or WithoutArguments source. Locally inferable ordinary bounded variables use provisional specialization so sibling arguments can provide narrower empty-container context first. Next: Coordinate existing proposal and native empty bounded collection cases.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L10283"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Normalize parameter and return types only within compatible signature contexts. Cycle normalization keeps generic context/definition/extras together. Initial placeholder permits first real layout; resolved Unpack TypedDict rows can replace unresolved final kwargs in either direction. Incompatible layouts widen entire signature to no-call/top-return after taint; previously widened top absorbs later changes. Positional-only/variadic names retain previous presentation after taint. Next: Compare upstream #29553 and verify that open keyword rows cannot grow without bound.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L204"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Give lambda fixed inputs and args one consistent positional context. Normalize starred annotations then partition fixed prefix/captured positional segment/keyword tail. Direct homogeneous vararg can pass through. Synthesized starred tuple context requires nondefault positional-only slots, at most one ordinary variadic and complete suffix coverage; keyword-routable/optional ambiguous shapes decline. Next: Coordinate existing finite lambda proposal and compare full variadic contextual fixture cases.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L7035"
+            }
+          ],
+          "sourceInventory": true
         }
       ],
       "evidence": []
@@ -1425,7 +2504,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -1448,7 +2527,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
       "nextStep": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
       "findings": [
@@ -1471,7 +2550,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
       "nextStep": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
       "findings": [
@@ -1494,7 +2573,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
       "nextStep": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
       "findings": [
@@ -1517,7 +2596,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
       "nextStep": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
       "findings": [
@@ -1545,7 +2624,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
       "nextStep": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix.",
       "findings": [
@@ -1568,7 +2647,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
+      "updatedAt": "2026-11-20T06:21:38Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
       "nextStep": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change.",
       "findings": [
@@ -1580,6 +2659,26 @@
               "url": "https://github.com/tamird/ruff/commit/babd7e2affadeb88fd328fd516d43a5e5f232f4c"
             }
           ]
+        },
+        {
+          "text": "Match predicate target arguments using actual selected overload bindings. Record Unmapped, NoTarget and exact source argument index. Include implicit receiver offsets, omission/disagreement and all argument-expansion cases. A target parameter omitted or mapped differently cannot use a default source argument fallback. Next: Extract native keyword/receiver/overload/omitted-target cases.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L3792"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retain TypeIs only if every surviving declaration proves the same predicate. Require one unbound complete non-bottom TypeIs return and a common mapped target. Every TypeIs arm must agree; constant Boolean arms must strictly exclude the opposite target outcome over their top-materialized parameter domain. Next: Reduce mixed Literal[True/False]/TypeIs overload examples.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L5231"
+            }
+          ],
+          "sourceInventory": true
         }
       ],
       "evidence": []
@@ -1591,9 +2690,9 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-19T23:07:10Z",
-      "summary": "Reconciliation in progress. The frozen old-fork diff has an auditable receipt for all 250 changed paths, with blob identities, changed API/test anchors, mechanism mappings and explicit unresolved hunks. Mapping every path does not finish semantic reconciliation or count independent proposals. The current rebase must receive its own surviving-delta audit.",
-      "nextStep": "Reconcile the explicitly unresolved old-fork hunks, then audit every path and mechanism in the qualified rebased tree against current upstream. Subtract landed and superseded implementations before proposing independent changes.",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Reconciliation in progress. The rebased dfe98a7d checkpoint has source records for all 142 runtime/API paths in its 231-path delta. Its solver audit attributes 939 hunks to 169 review units. Forward review separates upstream c8ba04dc work from surviving fork changes. Constructor and collection regressions still block qualification. The historical 250-path receipt remains available separately.",
+      "nextStep": "Fix constructor and collection regressions, qualify the resulting fork, and reconcile later source changes with the frozen inventory. Reduce each surviving Python change against upstream before asking Tamir to approve submission.",
       "findings": [
         {
           "text": "[ty] Accept immediately guarded dictionary reads — crates/ty_python_semantic/resources/mdtest/narrow/conditionals/in.md, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/infer/builder/subscript.rs, crates/ty_python_semantic/src/types/subscript.rs",
@@ -1613,6 +2712,1472 @@
         {
           "label": "All 250 paths: immutable source receipt and coverage",
           "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
+        },
+        {
+          "label": "Rebased checkpoint: all 231 paths and exact source links",
+          "url": "https://tamird.github.io/sty/ruff-source-audit.json"
+        },
+        {
+          "label": "Current checker integration: constructor inference still fails",
+          "url": "https://app.buildbuddy.io/invocation/d52c8c93-0be3-4bf8-8c0e-26b60fce3d46"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-typevar-domain-identity",
+      "title": "Keep specialized TypeVar domains distinct",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Track specialized bounds in TypeVar identity while preserving materialized views and exact ParamSpec components.",
+      "nextStep": "Reduce domain identity and substitution cases; qualify captured binders and compare upstream #29555.",
+      "findings": [
+        {
+          "text": "Keep specialized TypeVar domains distinct — crates/ty_python_semantic/src/types/constraints.rs, crates/ty_python_semantic/src/types/constraints/solutions.rs, crates/ty_python_semantic/src/types/generics.rs, crates/ty_python_semantic/src/types/typevar.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Include specialized canonical domains in bound TypeVar identity. Retain an original declaration and derive canonical identity from its specialized domain, separately from materialized/transposed visible views. No-op/restored mappings preserve identity; staged and direct substitutions agree. Synthetic Self records its original domain to distinguish binders. Next: Extract domain-identity invariants together with retained-domain mapping. Native tests exist.",
+          "evidence": [
+            {
+              "label": "types/typevar.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L1068"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Freshen exact projection scopes without capturing sibling components. Freshening admits either an exact component scope or its base-family scope, updates the specialized domain after freshening, and preserves original/canonical identity when materializing. Next: Include base/args/kwargs/keyword projection independence and captured lazy-domain tests.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L586"
+            },
+            {
+              "label": "types/typevar.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L1672"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Specialize retained TypeVar domains by default. Specialization composition maps retained domains by default. PreserveTypeVarDomains is an explicit opt-out; Partial and Single retain their bounded/dependency-resolution roles. WithBoundVariables forward deltas shadow substitutions inside retained callable binders. Next: Review domain identity and capture-avoiding substitution together, including retained callable binders.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L1440"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Group simple conjunction bounds by canonical stored TypeVar IDs. Fast-path bound maps key by storage TypeVarId rather than possibly distinct bound-view instances, then recover canonical stored data when solving. Next: Test materialized/transposed views of same identity share one bound solver while distinct specialized domains remain distinct.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L4546"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Group candidate bounds by stored logical TypeVar identity. Pending maps use TypeVarId so materialized views of one logical variable share bounds and validity constraints. Solver resolves canonical stored bound data before finishing. Next: Extract with materialized/transposed view identity and distinct specialized domain tests.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L2519"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/typevar.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L1068"
+        },
+        {
+          "label": "types/generics.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L586"
+        },
+        {
+          "label": "types/typevar.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L1672"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-scoped-witness-proofs",
+      "title": "Preserve scoped generic witnesses through inference",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python solver design. Keep local binders, declared domains and correlated witnesses together through inference, replay and bounded proof. Unknown proofs remain incomplete.",
+      "nextStep": "Reduce quantified-domain, witness-correlation and budget cases for upstream design review.",
+      "findings": [
+        {
+          "text": "Preserve scoped generic witnesses through inference — crates/ty_python_semantic/src/types/call/arguments.rs, crates/ty_python_semantic/src/types/constraints.rs, crates/ty_python_semantic/src/types/constraints/owned.rs, crates/ty_python_semantic/src/types/constraints/paths.rs, crates/ty_python_semantic/src/types/constraints/projection.rs, crates/ty_python_semantic/src/types/constraints/resolution.rs, crates/ty_python_semantic/src/types/constraints/sequents.rs, crates/ty_python_semantic/src/types/constraints/solutions.rs, crates/ty_python_semantic/src/types/constraints/support.rs, crates/ty_python_semantic/src/types/constraints/variables.rs, crates/ty_python_semantic/src/types/cyclic.rs, crates/ty_python_semantic/src/types/generics.rs, crates/ty_python_semantic/src/types/relation.rs, crates/ty_python_semantic/src/types/typevar.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Retain quantified local binders in the constraint graph. An existential constraint stores local support, provenance, body and source ordering. Mapping substitutes the body and remaining local TypeVars, then re-quantifies; vacuous quantification is removed when body support has no overlap. Atomic type enumeration intentionally excludes quantified bodies. Next: Extract with quantified/free-variable counterexamples and owned round trips.",
+          "evidence": [
+            {
+              "label": "types/constraints/variables.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/variables.rs#L123"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Inspect mapped atomic roots without loading an entire relation. MappedAtomicConstraint represents mapped lower/upper/equivalence bounds or a borrowed/owned relation. Root-only truth queries inspect cached relation roots without graph traversal; ordinary mapping subsequently loads the atom. Mapping concrete bounds to non-TypeVars produces ordinary assignability relations. Next: Reduce mapped-root proof support against the rebased upstream relation API.",
+          "evidence": [
+            {
+              "label": "types/constraints/variables.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/variables.rs#L222"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Exclude unspecialized context slots from solver evidence. Lower, upper and equivalence constraints reject UnspecializedTypeVar; generic mapping and inference also skip that exact placeholder. This preserves missing evidence rather than defaulting it into a fixed point. Next: Reduce native recursive/contextual-call examples and compare #29553 deferred lambda inputs before proposing a general fix.",
+          "evidence": [
+            {
+              "label": "types/constraints/variables.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/variables.rs#L301"
+            },
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L4050"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Permit repeated relation keys only when context makes bounded progress. ActiveRecursionDetector stores the nearest active context per key. A caller-supplied well-founded progress test may permit re-entry. The entry borrow is released before evaluating progress; unwind restores the previous context rather than deleting an enclosing visit. Next: Review each progress relation for termination and retain re-entrant/unwind regression.",
+          "evidence": [
+            {
+              "label": "types/cyclic.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/cyclic.rs#L1224"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Distinguish finite gradual types from unresolved inference. has_indeterminate_inference delegates to the alias-aware visitor: contextual/divergent placeholders and expanding alias states prevent finite proof; stable Any/Unknown remain admissible. Next: Use finite/recursive alias regressions and no body-forcing benchmark before upstream design review.",
+          "evidence": [
+            {
+              "label": "types/typevar.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L153"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expose nonce increment and remove unused specialization import. Visibility/import adjustments support freshening and domain ownership; they do not independently fix behavior. Next: Carry with owning change.",
+          "evidence": [
+            {
+              "label": "types/typevar.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L20"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Sequence source and target argument materialization explicitly. Refactor check_specialization_pair into separate source/target materialization bindings before check_type_pair; evaluation order is explicit with no new predicate. Next: Carry only if needed by owner borrow/context refactor.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L1860"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Defer only return variables whose arguments are unresolved. A bare divergent actual for a structured formal supplies no argument evidence. If an uninferred ordinary TypeVar occurs in both formal and return, preserve one shared divergent marker. Different markers, materialized fallback, bare-TypeVar formal and independent return variables do not trigger deferral. Next: Compare #29553 finite-lambda foundation, then isolate a native recursive ordinary-call reproducer without host hooks.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L2681"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Resolve dependencies after selecting merged solver evidence. Projection hook distinguishes inferred, override and retained generic variables. Chosen/default types resolve jointly, retaining explicit generic binders and recovering unresolved dependency cycles to unknown. Partial projection substitutes UnspecializedTypeVar for missing/provisional evidence. Original correlated alternatives are unchanged. Next: Extract selected-dependency and retained-binder proof with cycle/outer-scope tests.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L2659"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Share proof resources across native solving and signature completion. One ProjectionBudget is passed into native solution collection and all keyword-completion witnesses. Exhaustion does not restart searches; verified siblings survive as incomplete alternatives. Next: Include calibrated two-witness exhaustion regression.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L3217"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Verify whole ParamSpec signatures inferred from keyword-only evidence. A keyword surface cannot determine positional behavior. Build complete candidate witnesses, verify them against the original joint relation and retain T/P path correlations. Charge TypedDict items. Top/no-call signature is a fallback candidate requiring verification. Unverified families widen merged mappings, rather than narrowing to visited witnesses. Next: Review extension semantics separately from proof infrastructure.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L2885"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Remove solver artifacts before dependency closure. Clean inferable-variable artifacts from projected candidate solutions before dependency resolution so transitive terms cannot manufacture cycles. Next: Reduce with native inference_cleans_merged_types and expanding-cycle cases.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L3052"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Collapse complete equivalent solver alternatives. When every complete nonempty alternative equals the merged mapping, expose Single rather than retaining a redundant alternative family. Incomplete/empty families cannot use this shortcut. Next: Retain native equal-fallback/complete-sibling tests and confirm no loss of caller-visible correlation.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L3684"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Infer structural constraints from fixed bounded TypeVars. For covariant protocol/union formal compared with non-inferable bounded actual TypeVar, use a relation constraint when admissible; unions involving inferable packs retain legacy handling. Next: Produce ordinary Python protocol/bounded-TypeVar regression and confirm free-domain policy.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L4848"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retain correlated alternatives when inferring nominal and generic unions. Use a single constraint relation for multiple generic union elements and nominal actual unions so later arguments/discriminators constrain one solution. Preserve gradual, Self and pack rules; divergent unmaterialized arms may participate without discarding concrete peers. Next: Check #27665 contextual collection overlap and upstream #30483 relation composition before proposing reduced ordinary Python cases.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L4774"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Ignore redundant nominal FunctionType evidence beside callable signatures. When a callable intersection contains an explicit signature component, skip the nominal FunctionType component whose __call__ is only generic function binding evidence. Next: Coordinate #29555 generic FunctionType producer.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L5251"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Collect structural constraints from synthesized protocols. Protocols without a nominal class origin contribute member constraints even in covariant positions; named protocols preserve the prior variance rule. Next: Use ordinary synthesized-callback/protocol regression and inspect #29555 callable owner interactions.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L5428"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Route provided instances and dictionary schemas through relation inference. Provided nominal instances use relation solving; nominal-formal/TypedDict-actual is explicitly admitted, and TypedDict formal dispatch moves before a broad legacy branch. Next: Split host nominal admission from ordinary TypedDict dispatch regression when reducing contributions.",
+          "evidence": [
+            {
+              "label": "types/generics.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/generics.rs#L5578"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Import shared observation and quantified proof support. Imports only; behavioral ownership belongs to separately identified units. Next: Carry only with owning mechanism.",
+          "evidence": [
+            {
+              "label": "types/call/arguments.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/arguments.rs#L2"
+            },
+            {
+              "label": "types/constraints/owned.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/owned.rs#L4"
+            },
+            {
+              "label": "types/constraints/resolution.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/resolution.rs#L5"
+            },
+            {
+              "label": "types/constraints/support.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/support.rs#L8"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Preserve quantified bodies and scoped evidence ordering in owned graphs. Owned graph compaction traverses existential bodies, remaps nested source orders, and visits constraints once per source-order scope rather than globally. Ordering-only constraints sharing live variables remain present. Iterative traversal avoids recursive order-tree growth. Next: Require quantified owned round trips and shared-body ordering tests before extraction.",
+          "evidence": [
+            {
+              "label": "types/constraints/owned.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/owned.rs#L20"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Snapshot one reachable proof graph without builder memo tables. A shared-storage snapshot marks reachable nodes/support/constraints, reads compacted overlays and retains the original complete TypeVar ID table. Shared finish_parts trims rank maps and remaps existential source-order IDs. Next: Extract snapshot and quantifier support against the upstream cache API.",
+          "evidence": [
+            {
+              "label": "types/constraints/owned.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/owned.rs#L44"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Close anchored positive-union dependency cycles symmetrically. Selected merged mappings resolve ordinary dependencies, then flat positive-union cycles collect every reachable closed anchor. X=Y|int,Y=X|str closes both to int|str; X=Y|int,Y=Y stays unresolved because a dependent anchor does not close its unanchored dependency. Structured dependents are retried only after replacement proposals close their dependencies. Next: Retain native merged_union_cycles_collect_every_anchor and require_closed_anchors cases.",
+          "evidence": [
+            {
+              "label": "types/constraints/resolution.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/resolution.rs#L40"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Exclude quantified locals while retaining declaration dependencies. Free-variable collection traverses quantified body and local declaration validation constraints, subtracts locals, then includes outgoing branch support. Memoization is per node and traversal charges shared solution limits. Next: Extract with local-bound dependencies and false ambient-assumption regressions, alongside quantified solver design.",
+          "evidence": [
+            {
+              "label": "types/constraints/support.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/support.rs#L34"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Infer only supported static source-signature variables in strict relations. LazyStatic relation mode admits static unbounded ordinary TypeVars for strict callable comparisons. Non-static operands, bounded/constraint domains and nonordinary TypeVar domains decline rather than using gradual assignability as proof. Next: Compare finite caller admission with upstream #29555.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L213"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Use owned relation results for assignability queries. when_assignable consumer queries the owned constraint relation instead of constructing a private local builder. Prior contextual constructor is removed. Next: Keep upstream #30483 cache changes attributed to upstream while extracting residual consumers.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L589"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Track the full protocol receiver comparison. Checker stores optional source/target protocol comparison identity; constructors initialize none. Producer and member-level consumers are covered separately in instance-schema inventory. Next: Review together with instance-schema full receiver comparison and recursive protocol tests.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L574"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Preserve fixed bounded TypeVars in protocol and protocol-union checks. Protocol targets can compare original bounded TypeVar receivers directly; all-protocol union targets reuse union error-context selection. Assignability through an upper bound first suppresses failed bound diagnostics and retries original receiver only when target refers to that TypeVar through aliases, preserving Self binding. Next: Extract ordinary Python recursive protocol/bounded Self fixtures.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L1510"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Skip redundant FunctionType runtime evidence in callable intersections. Relation intersection dispatch uses the same redundant nominal FunctionType rule as generic inference. Next: Unify with generic consumer extraction.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L1867"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Move existing nominal wrapper rules after supplied-instance admission. GenericAlias, method-wrapper __func__ signature comparison and functools.partial nominal conversion rules move unchanged across the new provided-instance branch. This is dispatch ordering support, not newly implemented wrapper precision. Next: Preserve original wrapper tests and verify the changed ordering.",
+          "evidence": [
+            {
+              "label": "types/relation.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/relation.rs#L2360"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Keep logically equivalent declaration and inferred atoms distinct as evidence. PairEquivalence marks same predicate with distinct provenance as truth-equivalent. Opposite assignments conflict, but neither atom derives call-site inference evidence from a declaration. Next: Include declaration-only vs inferred-solution regression.",
+          "evidence": [
+            {
+              "label": "types/constraints/sequents.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/sequents.rs#L129"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retain shared quantified witnesses in derived consequences. PairRelation retains a complete owned relation plus provenance as a sequent consequence when existential nodes occur; splitting the body into independent atom implications would lose the common witness and its binder scope. Next: Extract with correlated local-witness consequences and negative witness-reuse cases.",
+          "evidence": [
+            {
+              "label": "types/constraints/sequents.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/sequents.rs#L162"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Carry owned consequences and provenance through cached sequents. Sequent becomes generic over relation payload; grouped and pending storage uses the cached payload alias and cloned iteration; display renders equivalence and quantified consequences. Next: Keep only with proof semantics.",
+          "evidence": [
+            {
+              "label": "types/constraints/sequents.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/sequents.rs#L17"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Recognize reflexive TypeVar and extremal-bound truths centrally. Central intrinsic truth test admits bottom lower bounds, top upper bounds, and same-TypeVar range/equivalence. Concrete equivalence stays nonintrinsic. Existing lower/upper checks move to this shared admission. Next: Use native provenance/domain-policy cases.",
+          "evidence": [
+            {
+              "label": "types/constraints/sequents.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/sequents.rs#L585"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Charge witness validation against the same path and type budgets. ProjectionBudget owns one BoundedSolutionLimits and ProjectionTypeBudget; dictionary item counts charge explicitly. Native collection, witness discovery, solving and final validation share remaining resources. Diagnostic evidence and exported types are charged; incomplete witness families cannot certify validated projection. Next: Qualify exhaustion during preprocessing, terminal traversal, witness completion and exported-type accounting.",
+          "evidence": [
+            {
+              "label": "types/constraints/projection.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/projection.rs#L23"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Verify projected candidates against the original joint relation. Fixed caller bindings constrain path discovery and final proof. Full candidate paths must be complete and valid; projection callbacks charge constructed types. Each proposed specialization is checked on the original graph, with rigid unspecialized variables; incomplete/failed fallback proof remains unknown rather than declaring unsatisfiable. Root-only atom proofs do not expand unresolved correlations or quantified nodes. Next: Add minimal ordinary solver proof examples and inspect all candidate validity/quantifier dependencies before upstream design review.",
+          "evidence": [
+            {
+              "label": "types/constraints/projection.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/projection.rs#L172"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Imports for bounded proof and mapping support. Shared budget/proof types and mapping helpers are imported for the identified mechanisms. Next: Carry with owning changes.",
+          "evidence": [
+            {
+              "label": "types/constraints/projection.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/projection.rs#L3"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Carry quantified consequences as whole path continuations. Path state retains activated whole relations, visiting relation guards and originating assignment fuel. Antecedent fuel minima and whole-proof budget pay relation activation cost; consequent atoms continue that chain. Pending relations cannot share plain atomic path cache keys because proof/fuel context is absent. Next: Review with complete witness scope and source-order semantics.",
+          "evidence": [
+            {
+              "label": "types/constraints/paths.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/paths.rs#L64"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Scope path-local quantified TypeVars. PathAssignments stores quantified support initialized empty; with_quantified_typevars temporarily unions local binders then restores enclosing support. The same source hunk also supplies relation/fuel restoration helpers. Next: Include nested binder/ambient-domain regressions.",
+          "evidence": [
+            {
+              "label": "types/constraints/paths.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/paths.rs#L77"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Detect contradictory truth assignments across provenance-equivalent atoms. Equivalent atoms are triggered by either truth value on both sides. PairEquivalence checks conflicts only and does not assign one atom from the other, preserving inference evidence provenance. Next: Extract with provenance-equivalence producer and native equivalent_provenance_conflicts_preserve_evidence fixture.",
+          "evidence": [
+            {
+              "label": "types/constraints/paths.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/paths.rs#L572"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Remove atomic-only projection consequence replay. Atomic projection_source_order replay and per-discovery consequent maps are removed. Replacement quantified graph/source-order ownership is attributed to owned compaction and scoped traversal; no user-facing obsolete policy is established merely by removing the helper. Next: Review replacement convergence/source-order guarantees with owned graph and walker extraction.",
+          "evidence": [
+            {
+              "label": "types/constraints/paths.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/paths.rs#L94"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Quantify domains and ParamSpec families rather than erasing atoms. reduce_inferable constructs a scoped existential with ordinary locals, P.args/P.kwargs and referenced keyword projections. Universal quantification is its negation dual and ranges over declared upper bounds/constraints. A bounded proof collapses established parametric truths to stop equivalent recursive quantifiers growing each iteration. Next: Extract quantified free/local domain examples together.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L875"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Give independent quantified bodies private binder occurrences. Track maximum freshness across local/overlaid tables. Quantify freshens bound locals and all occurrences in body/domain through shared mappings while free identities remain fixed; vacuous binders disappear. Moving storage into the existing builder preserves arenas/memo tables before rebuilt IDs escape. Next: Review freshness arithmetic/overflow and empty-scope invariants with independent copies, lazy domain and nested ParamSpec tests.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L1172"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Rebuild immediate mapped constraints without flattening quantified scopes. Source-order traversal records quantified constraints as units, sorts immediate graph constraints stably and maps each once. Source order is rebuilt from mapped immediate entries, preventing body locals escaping into a parent order. Next: Retain direct/staged mapping and recursive convergence tests.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L976"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Query graph support with a consumer predicate. referenced_typevars collects stored supported TypeVars filtered by caller predicate, used to find missing keyword-surface components. Next: Keep internal unless an external caller requires a stable public API.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L537"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Store quantified source-order scopes alongside atomic entries. SourceOrder::QuantifiedConstraint preserves a body owner; flattened atomic order queries may traverse its body, while immediate mapping keeps the scope unit. Constraint-to-atomic accessors explicitly reject existential variants. Next: Test nested body order and shared atoms.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L1569"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Freshen imported binders only when they collide with destination identities. Loader lazily rebuilds existential nodes after bodies and source-order dependencies. Imported noncolliding local names remain stable through repeated owned round trips; any local colliding with preexisting destination table re-enters capture-avoiding quantify. Provenance can be remapped for the complete imported relation. Next: Require existing quantified owned-loading/copy-independence regressions plus source-order stability. Upstream cached-relation substrate is a separate owner gate.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L1768"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Prove constants from an intrinsically true root only. A root proves a constant when terminal, or its true branch has the expected constant, uncertain branch is false and its atom is intrinsically true. This is sufficient-only and avoids unbounded traversal of mapped relations. Next: Extract with positive and negative root truth cases.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L2702"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Pass original relation and order into scoped solution traversal. Walker receives original node together with source order in ordinary and fast-path satisfiability/candidate collection. Atomic path order initialization also traverses nested existential bodies, deduplicating shared atoms. Next: Replacement walker remains a separate semantic audit gate.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L2739"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retire atom-erasing existential projection and its visitor. Old exists_cache, exists/exists_inner/abstract_inner, generic PathVisitor and individual satisfied-constraint rebuild helper are removed. Their atomic erasure/replay model is replaced by explicit binder-scoped quantification, not an obsolete user-facing host policy. Next: Review replacement semantics and benchmarks.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L1127"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Inspect both lower and upper evidence for provisional context. has_provisional_inference checks evidence_lower and all upper evidence because preliminary lower solving can discard a placeholder still retained above. Next: Reduce with upper-only provisional context cases and compare lambda/collection upstream overlap.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L3705"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retain signed path obligations with private positive witnesses. CandidateResidual stores original signed relation, positive local witnesses, original caller inferables and contextual evidence policy. CandidateSolutions records inferables and whether discovery omitted branches. Ordinary simple conjunction candidates explicitly have no residual. Next: Review negative-scope obligation and local witness closure with source producer before design proposal.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L3927"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Resolve witness dependencies and revalidate each declared domain. Before replay, resolve selected mappings; anchored union closure may propose local witnesses but cannot certify them. Conjoin complete local domain constraints, specialize jointly and refuse unresolved locals still present in support. Charge hidden local types before export. Next: Native existential domain/captured alias tests are prerequisites.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L3994"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Certify selected caller outputs by refuting the original residual obligation. Replay resolves caller bindings, constructs ambient assumptions from free support, quantifies local witness scopes before caller substitution and proves the negative replay unsatisfiable under the originating placeholder policy. Closed caller values can succeed via existence without choosing every local endpoint. Next: Qualify signed obligation replay with rigid outer variables and scoped witnesses.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L4088"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retry local witness inference without a rejected contextual choice. When contextual fixed caller evidence cannot extend to a witness, retry original joint relation without fixing that choice. Require a single complete residual candidate family; do not combine unrelated path endpoints. Negative-only obligations validate callers but cannot infer existential locals. Next: Add reduced context-rejected-but-valid-native-witness example and unrelated-family negative case.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L4088"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Export caller bindings only after complete scoped witness replay. Only complete, valid joint solution with closed declared-domain witness and successful ambient implication replay exports bindings; locals are filtered out. Unknown witness, rejected provisional choice or incomplete family clears caller bindings and returns explicit incomplete. Next: Check no private local leaks into exported call return/context types.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L4088"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Reuse limits across preprocessing, solving and witness validation. SolutionLimits is forwarded through &mut L so nested discovery/replay uses caller counters. The former compute_bounded wrapper is replaced by ProjectionBudget owners; solve/collect receive shared limits and type budget. Next: Qualify bounded witness work and the later ordinary terminal fast path separately.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L4086"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retain complete siblings without treating unvisited witnesses as exhaustive. Collector propagates discovery/solution incompleteness separately for valid and invalid families. A verified residual with no remaining caller bindings is unconstrained. Empty-but-incomplete families remain constrained/incomplete rather than unsatisfiable. Scoped paths discard unvalidated selections; ordinary paths may retain fallback evidence. Next: Test no-valid-path+incomplete, complete sibling and invalid-only cases against call context consumers.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L4744"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Validate chosen fixed TypeVar outputs with captured callable locals in scope. Selected output types, not only original evidence, are checked against declared upper bounds. Complete captured ParamSpecs contribute callable-local generic variables existentially; still-inferable dependencies remain for joint solving. Incomplete ParamSpec inference skips upper validation because ownership is unknown and path already incomplete; deduplicate upper-bound violations. Next: Reduce native callable P/R capture and invalid fixed outer variable regressions.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L4891"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Use static inferred upper context without discarding explicit literal evidence. A structured lower containing only UnspecializedTypeVar placeholders may select one complete static inferred upper as context; genuine gradual/divergent data is excluded. Equivalent static inferred upper bounds carrying explicit literal annotations are retained with the lower to prevent accidental later promotion. Next: Reduce placeholder filling and explicit literal preservation separately; compare upstream #27665 and #30483.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L5161"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Skip unchecked contextual promotion for residual witness paths. Argument-context promotion skips candidates with residual obligations because their proposed specialization requires complete witness replay. Next: Retain a native no-premature-promotion example and compare upstream collection replay proposal.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L4680"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Imports, derives and display storage plumbing. Imports support named mechanisms, redundant exhaustive-pattern attributes disappear and display gets storage for quantified nodes. Next: Carry only with corresponding semantic change.",
+          "evidence": [
+            {
+              "label": "types/constraints.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints.rs#L92"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Distinguish certified, refuted and unresolved paths. Satisfiability and PathIs explicitly represent incomplete proofs. A certified witness settles local existence even if siblings were incomplete; the outer candidate family still records missing coverage. Failed negative-witness search is not automatically unsatisfiable. Next: Extract three-state behavior with real exhausted witness fixtures.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L57"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Memoize ordinary satisfiability only under equivalent declaration context. Proof cache key includes placeholder policy, validation support and actual validation constraints alongside explored node/path. Disable ordinary proof memoization for positive/negative binders, quantified path support, declared constraint selections and relation continuations. False results are cached only when complete; true certified existence may be cached. Next: Review cache eligibility and source-edit lifetime separately from upstream cached type relations #30483. Existing semantic-index tracked-key fix is a different producer.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L221"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Visit whole relation consequences before terminal success or pruning. Pending derived relations run positively with their fuel context and retain witness scopes through original continuation under either outer polarity. They bypass plain path memo/prune callbacks and restore original edge fuel before continuing. Next: Require correlated witness and fuel regression.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L616"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Prune irrelevant subtrees only after a three-state existence proof. Visible inferable support closes over active path and declaration-validation constraints. Irrelevant subtrees are skipped only when certified satisfiable, rejected only when refuted, and mark family incomplete otherwise. Root terminal validation still attributes failures only after no certified path. Next: Review optimization against quantified cross-variable dependencies and ordinary no-quantifier performance.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L384"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Share traversal with explicit memo, prune and terminal callbacks. Atomic traversal separates reusable cache/prune/process callbacks, parameterizes polarity and passes original relation/source-order to the walker. Never-cache/never-prune callbacks serve scopes whose continuations carry extra ownership. Atomic negative traversal delays edge union construction. Next: Verify terminal budgeting and callback ownership through scoped traversal.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L32"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Keep positive witnesses live through the outgoing continuation. Existential holding edge visits outgoing continuation then body positively under private locals and their declarations. Even negated outer nodes do not negate existential body. New derived locals get validations beyond root support; Boolean proof walks logical domains, while candidate inference preserves family/preference selection for later validation. Uncertain positive branch needs no body proof. Next: Use independent and nested quantifier regressions.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L206"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Reject existential existence only after a whole-scope proof. The not-holding branch records a negative scope only when the body is refuted under current outer assumptions. Conditional witness coverage cannot settle Boolean proof. Candidate inference may once exclude known covered witnesses, then must reprove original scope impossible; a second conditional proof stays incomplete. Next: Include conditional Free/Local examples where one witness covers only part of caller domain.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1246"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Distinguish closed quantifiers from ones depending on outer variables. Existential proof computes body-plus-local-declaration support minus locals. With no free support, ordinary domain/existence proof may settle scope. Otherwise collect complete candidate witness families while retaining free variables rigid and tracking new nested locals. Next: Check outer-bound dependency policy and nested witness declarations together.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1338"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Cover an outer path with complete witness conditions. For each candidate, select logical local endpoints where permitted, resolve and validate a whole witness against its full signed relation, then union sufficient witness conditions. Refuting the complement of accumulated coverage proves existence; failing selected choices only returns incomplete, not nonexistence. ParamSpec/tuple packs require witnesses in their own domains. Next: Need reduced multi-witness coverage and rigid-free-variable cases before upstream solver design review.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1456"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Try bounded logical endpoints for local alias cycles. If selected local alias dependencies do not close, try effective lower endpoints only for ordinary local variables with matching selected peers and no chosen finite-domain constraint. The alternate still undergoes full relation/domain replay. Next: Qualify alternate witness replay while preserving ordinary inference defaults.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1564"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Apply logical binder domains separately from inference preferences. Validations.as_constraint_set combines upper bounds conjunctively and finite declared domains disjunctively. from_locals checks only declarations owned by binder; external dependencies remain free under outer validation policy. from_support excludes caller-inferable variables where requested. Next: Review inferred vs declared constraint provenance and free declaration policy tests.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1623"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Route empty validation continuations through the ordinary terminal visitor. Empty constraint lists call visit_node_and_then on ALWAYS_TRUE with callbacks, preserving common terminal behavior instead of directly invoking continuation. Limit errors retain their distinct control-flow wrapper. Next: Reconcile later 44 terminal-budget fix.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1657"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Do not export independent bounds mentioning quantified-away locals. Candidate construction takes explicit inferable and hidden support. Constraints overlapping hidden local support are excluded from independently exported mappings; actual private witness obligations survive in a separate residual. Next: Verify excluded metadata does not remove the full residual relation.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L346"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Preserve signed path and negative scopes for final witness replay. Signed path rebuilds ordered positive/negative atom facts and explicit negative existential scopes. Positive local candidates snapshot that signed path; negative-only candidates retain original logical relation plus negative obligations, avoiding accidental caller restriction from refinement splits. Residual records private locals, caller inferables and evidence policy. Next: Include split-refinement cases where callers satisfy both sides.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L2664"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Exercise real incomplete upper proofs and cumulative witness work. Two complete assertion bodies: fixed upper generic callable comparison reaches real witness exhaustion and produces incomplete empty candidates with no violation; repeated existential proof consumes one temporary-type budget cumulatively, yet an independent true terminal remains certified. Next: Assertions read from source.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L3290"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/constraints/variables.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/variables.rs#L123"
+        },
+        {
+          "label": "types/constraints/variables.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/variables.rs#L222"
+        },
+        {
+          "label": "types/constraints/variables.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/variables.rs#L301"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-cached-implication-conflicts",
+      "title": "Recheck cached implications after branch rollback",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python bugfix candidate. A sibling branch can negate a rolled-back consequence while its antecedents still hold. Retriggering cached rules detects the conflict.",
+      "nextStep": "Reproduce against clean upstream and qualify both single and pair implication regressions.",
+      "findings": [
+        {
+          "text": "Recheck cached implications after branch rollback — crates/ty_python_semantic/src/types/constraints/paths.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Recheck cached implications when a sibling negates their consequence. Single/pair implications register a trigger on false consequences as well as true antecedents. After a sibling branch rolls back a derived assignment, cached rules are rechecked when the consequence is negated, detecting conflict while antecedents remain true. This does not derive inference evidence from provenance-equivalent declarations. Next: Candidate for a reduced independent solver fix. Both complete native assertion bodies were read: single implication T=object⇒str≤T and synthetic pair.",
+          "evidence": [
+            {
+              "label": "types/constraints/paths.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/paths.rs#L615"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/constraints/paths.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/paths.rs#L615"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-incomplete-proof-diagnostics",
+      "title": "Avoid violations from incomplete upper-bound proofs",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python bugfix candidate. Exhausted generic witness proof must remain unknown instead of producing an upper-bound violation.",
+      "nextStep": "Qualify the native exhausted-witness regression and reduce a Python diagnostic example.",
+      "findings": [
+        {
+          "text": "Avoid violations from incomplete upper-bound proofs — crates/ty_python_semantic/src/types/constraints/solutions.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Do not report an upper-bound violation from an incomplete proof. inferred_lower_satisfies_upper_bound returns Option<bool>: Some true/false are proved; None marks unknown. Validation requires Some(true), while failure attribution stops on None to avoid fabricating a diagnostic violation. The real generic callable witness test exhausts temporary-type work and asserts no pending candidate/violation. Next: Qualify the exhausted-witness regression and reduce a Python upper-bound diagnostic example.",
+          "evidence": [
+            {
+              "label": "types/constraints/solutions.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1737"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/constraints/solutions.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/constraints/solutions.rs#L1737"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-bounded-callable-relations",
+      "title": "Check complete generic callable specializations",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Preserve strict callable relations while solving finite source domains, covering union inputs and comparing nested protocol receivers.",
+      "nextStep": "Reduce strict callable cases; qualify domain replay and receiver progress against upstream #29555.",
+      "findings": [
+        {
+          "text": "Check complete generic callable specializations — crates/ty_python_semantic/src/types/signatures.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Continue repeated declarations when finite receiver structure decreases. Recursion context tracks full protocol receiver pair. Explicit argument traversal includes finite aliases, generic arguments, union/intersection components but excludes recursive bodies/bounds/member expansion. Progress requires componentwise containment and at least one strict decrease, or same-origin target protocol requirement count decrease; unrecognized/growing contexts retain declaration approximation. Next: Validate well-foundedness for each progress branch and native nested iterable/protocol mismatch cases.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L961"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Admit only finite complete callable shapes for specialization. Specialization requires standard complete parameters, ordinary generic domains and no receiver constraints/ParamSpec-value shape. Static inference excludes declared domains; bounded/finite-domain path admits fully static or constrained Any forms with explicit domain checks, excluding Self. Next: Qualify finite caller admission for supported and unsupported signature shapes.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L1588"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Cover each explicit union input with a valid source specialization. Unary overload aggregation expands target aliases, excludes generic target signatures, allows each target union member its own source specialization and verifies all overlapping source returns remain safe. This is limited to one required positional input, not arbitrary overload-set combination. Next: Reduce differing source specializations per discriminated input and unsafe overlapping return counterexample.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L3342"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Infer unbounded static source binders while preserving strict relation semantics. Eager subtype/pure-redundancy comparison may enter LazyStatic for supported generic source and nongeneric target. Nested target generics or unsupported signatures decline. Existing LazyStatic is preserved through checker setup. Next: Compare finite caller admission and upstream #29555 nominal generic binding.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L3492"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Replay complete bounded source specialization under the original strict relation. With no ambient inferable variables, source domain solving may propose bindings. Target variables stay rigid; incomplete paths/dependencies decline. Missing optional source slots may retain rigid source variables. Remove generic source context only after specialization, then replay original strict relation after search recursion entry is gone. Only complete rejected family can return false. Next: Extract bounded/finite domain strict callable counterexamples, gradual declarations and incomplete search gates together.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L3775"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L961"
+        },
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L1588"
+        },
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L3342"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-generic-overload-consistency",
+      "title": "Infer implementation types from overload inputs",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Specialize generic implementation inputs before declaration coverage checks. Broader implementation return annotations are permitted; body checking has a separate owner.",
+      "nextStep": "Correct the invalid nullable-return assertion, then qualify generic declaration consistency.",
+      "findings": [
+        {
+          "text": "Infer implementation types from overload inputs — crates/ty_python_semantic/src/types/signatures.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Check generic implementation consistency using complete input-only inference. PrepareOverloadImplementation specializes implementation variables from rigid overload parameter inputs, never promised return/defaults. Generic methods, positional varargs, Self, missing input occurrences, indeterminate replacements, incomplete inference or unresolved remaining binders decline. Nongeneric implementation may compare rigid generic overload inputs within supported shapes. Next: Qualify generic declaration consistency independently of body checking, including fixed inputs and open keyword tails.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L787"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Reject implementation inference that silently drops relevant open keyword evidence. Only paired KeywordParamSpec captures infer tail evidence jointly. Otherwise implementation variables in skipped kwargs or named slots absent from overload fixed surface decline. Coverage then erases overload generic context to keep its variables rigid after implementation specialization. Next: Use fixed-input+open-keyword positive cases and hidden evidence negative cases.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L2868"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L787"
+        },
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L2868"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-returned-callable-binders",
+      "title": "Keep returned callable variables bound",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Preserve callable-local binders under outer substitution and project captured callback variables before they reach ordinary results.",
+      "nextStep": "Reconcile binder ownership with upstream #29553 and #29555; qualify partial and captured-return cases.",
+      "findings": [
+        {
+          "text": "Keep returned callable variables bound — crates/ty_python_semantic/src/types/call/bind.rs, crates/ty_python_semantic/src/types/signatures.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Do not leak callback-local TypeVars into ordinary call results. After applying merged specialization, captured ParamSpec signatures upper-specialize their local binders in ordinary results while returned callable binders remain owned. Callback-local defaults must not choose escaped value types. Next: Native captured callback output/default cases required.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L7392"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Preserve returned callable binders under outer projection. When preserve_callable_binders is set, locally quantified signature variables shadow an outer specialization including nested types, and mapping uses a fresh visitor root to avoid reusing transformation cache entries from the outer mapping. dfe forward changes replace this implementation with WithBoundVariables and must remain attributed. Next: Coordinate generic FunctionType #29555 and finite lambda #29553 binder ownership before extracting capture-avoiding substitution cases.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L468"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Expose declared/defaulted and upper-projected result views separately. Public APIs distinguish declared return, default-specialized return and signature-owned upper projection. Upper projection ignores defaults, preserves captured outer variables and protects binders in returned callable signatures. Next: Native source/default/captured binder examples before public API design review.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L1858"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retain unsolved generic binders in partial callable returns. Promoted partial variables select retained binder when unsolved, promoted override when inferred; other variables use inferred projection. This replaces overloading None/Some with explicit Retain semantics. Next: Extract partial return generic capture examples with unresolved dependencies and defaults.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L2813"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/call/bind.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L7392"
+        },
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L468"
+        },
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L1858"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-generic-call-expansion",
+      "title": "Preserve viable generic argument expansion",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python bugfix candidate. Keep overload expansion available when some generic specialization accepts an argument, including provisional arity mismatches.",
+      "nextStep": "Qualify the bound-method starred-union fixture and reduce the generic expansion precheck.",
+      "findings": [
+        {
+          "text": "Preserve viable generic argument expansion — crates/ty_python_semantic/src/types/call/bind.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Attempt argument expansion when some generic specialization can accept an argument. Expansion precheck changes forall-compatible to not-never-compatible under inferable TypeVars. A nonconstant relation need not be always true to have viable argument expansion; only proven impossibility permits skipping. Next: Reduce ordinary generic-overload union input case and compare upstream baseline.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L4411"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/call/bind.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L4411"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-native-getattr-context",
+      "title": "Infer finite getattr results and empty defaults",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Python enhancement candidate. Use finite member facts for getattr results and fresh empty defaults. Immutable storage guarantees have a separate host contract.",
+      "nextStep": "Reduce ordinary Python lookup cases; compare collection context with upstream #27665.",
+      "findings": [
+        {
+          "text": "Infer finite getattr results and empty defaults — crates/ty_python_semantic/src/types/call/bind.rs, crates/ty_python_semantic/src/types/call/checked.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Infer finite runtime getattr results without hiding descriptor failure. Known getattr resolves literal names/unions through runtime attribute policy, preserves missing alternatives, declines dynamic/indeterminate results and joins explicit default unless immutable storage proves it unreachable. Known hasattr returns true only on error-free immutable stored paths. Next: Split general finite-getattr precision from host immutable-storage default elision. Add descriptors that raise AttributeError and union receiver negative cases.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L2852"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Contextualize a fresh empty getattr default from finite member facts. Only matched builtin getattr third parameter with complete static finite member facts and compatible nominal/protocol collection domains supplies preference context. TypedDict domains are excluded because empty literals may omit required keys. Actual default is still joined after inference. Next: Separate from ordinary lookup precision when reducing.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L9769"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Require applications to establish native getattr operation identity. getattr_return_type declines binding errors/bound receivers and uses already matched object/name/default operands; host chooses actual native operation declaration and contract. Next: Verify the actual native operation declaration in every host caller.",
+          "evidence": [
+            {
+              "label": "types/call/checked.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/checked.rs#L1"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/call/bind.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L2852"
+        },
+        {
+          "label": "types/call/bind.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L9769"
+        },
+        {
+          "label": "types/call/checked.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/checked.rs#L1"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-keyword-paramspec-host",
+      "title": "Define keyword-only ParamSpec host contracts",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Host API design. Distinguish accepted keyword parameters from received keyword dictionaries, then verify complete ParamSpec witnesses against the original call relation.",
+      "nextStep": "Specify host annotation and capture semantics before proposing shared solver APIs.",
+      "findings": [
+        {
+          "text": "Define keyword-only ParamSpec host contracts — crates/ty_python_semantic/src/types/call/arguments.rs, crates/ty_python_semantic/src/types/call/bind.rs, crates/ty_python_semantic/src/types/signatures.rs, crates/ty_python_semantic/src/types/typevar.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Distinguish accepted keyword parameters from received keyword dictionaries. ParamSpecProjection distinguishes ordinary attributes, keyword-parameter surface and captured keyword arguments. Accepted parameters have Mapping[str, object] bounds; runtime captured dictionaries and P.kwargs have dict bounds. Exact component mappings precede base substitution; a base replacement carries its projection onward. Next: Specify KeywordParamSpec host contracts and general ParamSpec component rules separately.",
+          "evidence": [
+            {
+              "label": "types/typevar.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L1100"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Retain optional keys and residual exclusions during argument binding. Observed keyword arguments keep source expression types plus exact snapshot entries and residual tail. Required names, expansion, key lookup and synthetic TypedDict conversion consume this metadata; ordinary source types remain available. Next: Include call-time mutation snapshots and optional/missing/residual examples.",
+          "evidence": [
+            {
+              "label": "types/call/arguments.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/arguments.rs#L201"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Distinguish fixed keyword ParamSpecs from inferable empty captures. Caller-fixed ParamSpec keyword captures may require arguments even with no visible slots. Callee-inferable captures may resolve to empty complete signatures. Missing capture diagnostics keep correct base parameter ownership. Next: Review extension semantics separately from ordinary Python P.args/P.kwargs forwarding.",
+          "evidence": [
+            {
+              "label": "types/call/bind.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L6496"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Substitute captured keyword surfaces without importing positional parameters. ParamSpec mappings project a keyword capture into accepted keyword-only inputs, preserve source receiver contracts and enclosing generic context, and decline unavailable projection. Forwarded ParamSpec helper unifies ordinary args/kwargs and host keyword capture paths. Next: Review KeywordParamSpec host extension independently of ordinary Python ParamSpec fixes.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L332"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Relate finite and symbolic callback keyword remainders. Lazy callable relation captures finite source remainder into readonly accepted-keyword shape, or relates symbolic tails only with equal fixed key sets. Add upper constraints on target keyword-parameter projection; positional behavior remains outside this evidence. Next: Separate host annotation design from general solver support.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L4151"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Construct complete callable witnesses for keyword-only parameter evidence. Keyword projection handles positional-only prefixes and symbolic tails, gradual tails become incomplete keyword descriptions, top projects to Never. Closed TypedDict schema can propose a keyword-only ParamSpec witness; open schema declines. Fixed source names are excluded from remainders. Next: Only a candidate constructor: verify the complete original call relation before exporting inferred ParamSpec.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L6502"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/typevar.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/typevar.rs#L1100"
+        },
+        {
+          "label": "types/call/arguments.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/arguments.rs#L201"
+        },
+        {
+          "label": "types/call/bind.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind.rs#L6496"
+        }
+      ]
+    },
+    {
+      "id": "investigation:ty-parameter-source-provenance",
+      "title": "Preserve synthesized parameter source locations",
+      "group": "ty",
+      "owner": "Agent",
+      "task": true,
+      "status": "active",
+      "updatedAt": "2026-11-20T06:21:38Z",
+      "summary": "Host API design. Keep source definitions or ranges through parameter specialization, default presentation and hidden internal keyword handling.",
+      "nextStep": "Review the public source-location contract and qualify navigation and signature presentation.",
+      "findings": [
+        {
+          "text": "Preserve synthesized parameter source locations — crates/ty_python_semantic/src/types/signatures.rs",
+          "evidence": [
+            {
+              "label": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+              "url": "https://github.com/tamird/ruff/commit/dfe98a7daef8d3e8076f20e55ece2f4a98769331"
+            }
+          ]
+        },
+        {
+          "text": "Preserve synthesized parameter provenance through mappings and expansion. ParameterSource stores canonical Definition inline or shared FileRange for synthesized donor slots. Expansion, specialization, recursive normalization preserve source; definition accessor excludes raw-range sources. This supports navigation without inventing semantic definitions. Next: API design with source-location tests and normal parameter clone/size behavior.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L7183"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Accept internal optional keywords while hiding them from presented signatures. Implicit keyword-only constructor adds optional Unknown default and implicit flag. Call checking and relations still include the parameter; display/index mapping consumes the flag separately. Mapping/cycle normalization preserve flag. Next: Keep internal inputs out of user-visible presentation without changing runtime acceptance.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L7383"
+            }
+          ],
+          "sourceInventory": true
+        },
+        {
+          "text": "Keep inferred default type with its original source expression. ParameterDefault::Source retains FileRange alongside inferred type, participates in direct/eager/mapped type access and recursive normalization, and public default setter accepts inferred/source-backed values. Named parameter raw default inference is split from existing signature cycle-breaking replace-default operation. Next: Preserve actual runtime source defaults vs donor optionality.",
+          "evidence": [
+            {
+              "label": "types/signatures.rs",
+              "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L7531"
+            }
+          ],
+          "sourceInventory": true
+        }
+      ],
+      "evidence": [
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L7183"
+        },
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L7383"
+        },
+        {
+          "label": "types/signatures.rs",
+          "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/signatures.rs#L7531"
         }
       ]
     }

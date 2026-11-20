@@ -1,12 +1,11 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildTracker } from './tracker-data.mjs';
 import * as records from './work-map-data.mjs';
 
-// This is the curation time, not a fresh observation from the GitHub API.
-// Advance it when reviewing records, never merely when rebuilding the site.
-export const reviewedAt = '2026-11-19T23:07:10Z';
-export const generated = buildTracker(records, reviewedAt);
+export const reviewedAt = records.reviewedAt;
+export const observations = JSON.parse(readFileSync(new URL('./github-observations.json', import.meta.url), 'utf8'));
+export const generated = buildTracker(records, reviewedAt, observations);
 
 if (process.argv.includes('--write')) {
   const directory = process.env.BUILD_WORKSPACE_DIRECTORY;

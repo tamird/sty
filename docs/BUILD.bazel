@@ -2,7 +2,14 @@ load("@aspect_rules_js//js:defs.bzl", "js_binary", "js_test")
 
 js_binary(
     name = "generate_registry",
-    data = ["ruff-fork-audit.mjs", "tracker-data.mjs", "work-map-data.mjs"],
+    data = [
+        "github-observations.json",
+        "github-provider.mjs",
+        "ruff-fork-audit.mjs",
+        "solver-inventory.mjs",
+        "tracker-data.mjs",
+        "work-map-data.mjs",
+    ],
     entry_point = "generate-registry.mjs",
 )
 
@@ -14,16 +21,33 @@ js_test(
         "draft.js",
         "draft-reader.js",
         "generate-registry.mjs",
+        "github-observations.json",
+        "github-provider-test.mjs",
+        "github-provider.mjs",
         "github-status.json",
         "icon.svg",
         "index.html",
         "registry.json",
         "ruff-fork-audit.json",
         "ruff-fork-audit.mjs",
+        "ruff-source-audit.json",
+        "solver-inventory.mjs",
         "style.css",
         "tracker-data.mjs",
         "work-map-data.mjs",
         "vendor/markdown-it-15.0.3/markdown-it.min.js",
     ],
     entry_point = "work_map_test.mjs",
+)
+
+js_binary(
+    name = "collect_github",
+    data = [
+        "github-provider.mjs",
+        "ruff-fork-audit.mjs",
+        "solver-inventory.mjs",
+        "tracker-data.mjs",
+        "work-map-data.mjs",
+    ],
+    entry_point = "collect-github.mjs",
 )

@@ -1,4 +1,9 @@
 export { ruffForkAudit } from './ruff-fork-audit.mjs';
+import { solverInventory } from './solver-inventory.mjs';
+export { solverInventory };
+
+// Curation time; collecting provider observations does not advance it.
+export const reviewedAt = '2026-11-20T06:21:38Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Resolve helper and tag follow-ups",repo:"bazelbuild/bazel-skylib",number:641,head:"baac9cc1c57fb2ec3c64a713b1ee9434d02c4685",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"Fork PR #1: root and Gazelle sty checks passed. Upstream head has a successful CLA check.",followup:"Includes open fixes #643 and #647. Native build_test tag handling is tracked separately in #644.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']]},
@@ -41,7 +46,36 @@ export const goals = [
 
 export const upstream = [
   {
+    "id": "call-completion-key-lifetime",
+    "ref": "upstream/retain-call-completion-keys",
+    "title": "Keep call-completion keys with their semantic index",
+    "state": "Awaiting Tamir review",
+    "source": "e5a7691b85136a48afabc3debb0f24a606360bc2",
+    "summary": "Unrelated file edits can collect interned call-completion keys and invalidate an unchanged file's semantic index. Track the keys as outputs of that index instead. Isolated from the Starlark fork; not submitted upstream.",
+    "qualifiedBase": "c8ba04dc06caf4370d494870145c4f92356f1222",
+    "qualifiedHead": "e5a7691b85136a48afabc3debb0f24a606360bc2",
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/e5a7691b85136a48afabc3debb0f24a606360bc2",
+    "qualification": {
+      "summary": "The regression fails on the current c8ba04dc upstream base without the fix, and the isolated fix passes on that same base. The isolated fix passed the selected parser, core, semantic, IDE and external mdtest suites, workspace Clippy, formatting and required repository hooks on Ruff's pinned Rust 1.100 toolchain. The exact published revision passed without generated source changes. The regression also verifies invalidation after the indexed file changes. No quantitative memory or runtime improvement has been measured.",
+      "evidence": [
+        {
+          "label": "Current upstream without the fix: regression fails",
+          "url": "https://app.buildbuddy.io/invocation/99ff6389-01e2-4222-b4ad-3d8c9652ea6c"
+        },
+        {
+          "label": "Isolated upstream qualification: tests, Clippy and formatting",
+          "url": "https://app.buildbuddy.io/invocation/0701c93d-8e67-460a-914a-e3ea70179aa5"
+        },
+        {
+          "label": "Review the complete isolated change",
+          "url": "https://github.com/tamird/ruff/compare/c8ba04dc06caf4370d494870145c4f92356f1222...e5a7691b85136a48afabc3debb0f24a606360bc2"
+        }
+      ]
+    }
+  },
+  {
     "id": "destructured-list-elements",
+    "ref": "upstream/destructured-list-elements",
     "title": "Literal element types in destructured list loops",
     "state": "Awaiting Tamir review",
     "source": "c52778b7343432c867b5325b26fd5da72329b5ca",
@@ -70,6 +104,54 @@ export const upstream = [
         }
       ]
     }
+  },
+  {
+    "id": "related-upstream-27665",
+    "title": "Collect type context from function calls during full-scope bidirectional inference",
+    "number": 27665,
+    "state": "Related upstream work",
+    "author": "ibraheemdev",
+    "summary": "Existing collection-context implementation overlaps the fork: identity-specialized collection calls, sibling constraints, original overload filtering and protection against self-feedback. Reconcile later refinements with this PR before proposing additions."
+  },
+  {
+    "id": "related-upstream-29553",
+    "title": "Stabilize lambda inference with finite signatures",
+    "number": 29553,
+    "state": "Related upstream work",
+    "author": "charliermarsh",
+    "summary": "Stabilizes lambda identity and signature inference. Compare this work before extracting contextual lambda and callback changes; source overlap is still being reviewed."
+  },
+  {
+    "id": "related-upstream-29681",
+    "title": "Respect declared dictionary value types when narrowing keys",
+    "number": 29681,
+    "state": "Related upstream work",
+    "author": "charliermarsh",
+    "summary": "Preserves declared dictionary value types using annotated-assignment rules. Related to observation policy; it does not establish that the fork's snapshot and transfer implementation is already upstream."
+  },
+  {
+    "id": "related-upstream-23937",
+    "title": "Support narrowing with aliased conditional expressions",
+    "number": 23937,
+    "state": "Related upstream work",
+    "author": "mtshiba",
+    "summary": "Handles cross-scope and chained condition aliases through structural places and reassignment snapshots. Reconcile with the fork's saved member, key and call histories; these implementations are not equivalent."
+  },
+  {
+    "id": "related-upstream-27661",
+    "title": "Resolve deferred references from current and future bindings",
+    "number": 27661,
+    "state": "Related upstream work",
+    "author": "carljm",
+    "summary": "Resolves deferred annotations from current and future bindings. Compare with host source/stub and foreign annotation changes before proposing overlapping lookup work."
+  },
+  {
+    "id": "related-upstream-29555",
+    "title": "Experiment with generic FunctionType inference",
+    "number": 29555,
+    "state": "Related upstream work",
+    "author": "carljm",
+    "summary": "Experiments with generic FunctionType and MethodType. Compare the callable representation and ParamSpec requirements before extracting related function and method changes."
   },
   {
     "id": "local-keyword-dicts",
@@ -140,7 +222,7 @@ export const upstream = [
 ];
 
 // Reconciled against user-authored Bazel typing issues; successful API read, not fresh repros.
-export const bazelFeedbackObservedAt = "2026-11-19T21:01:03Z";
+export const bazelFeedbackObservedAt = "2026-11-20T03:00:12Z";
 export const bazelFeedback = [
   {
     "number": 32381,
@@ -385,7 +467,253 @@ export const additionalProjects = [
 ];
 
 // Units are mechanisms to reconcile, not a claim that each historical commit remains needed.
-export const tyWork = [
+const reviewedTyWork = [
+  {
+    "id": "ty-inplace-notimplemented",
+    "title": "Fall back when an in-place operator returns NotImplemented",
+    "state": "Python bugfix candidate",
+    "summary": "Exclude NotImplemented from the assigned result and try ordinary or reflected binary dispatch. Preserve aliases and any ordinary return alternatives. Extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Treat NotImplemented from in-place operations as binary fallback",
+        "paths": [
+          "crates/ty_python_semantic/src/types/infer/builder.rs"
+        ]
+      }
+    ],
+    "nextAction": "Reproduce on upstream; qualify reflected overloads, mixed returns, conditional in-place methods and unsupported operands.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L5354"
+      }
+    ]
+  },
+  {
+    "id": "ty-protocol-collection-context",
+    "title": "Use nongeneric protocols as collection literal context",
+    "state": "Python enhancement candidate",
+    "summary": "Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Use nongeneric protocol members as collection literal context",
+        "paths": [
+          "crates/ty_python_semantic/src/types/infer/builder.rs"
+        ]
+      }
+    ],
+    "nextAction": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L7197"
+      }
+    ]
+  },
+  {
+    "id": "ty-boolean-payload-tuples",
+    "title": "Retain Boolean tags alongside tuple payloads",
+    "state": "Python enhancement candidate",
+    "summary": "Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Retain tag/payload relationships when forming tuples from passive locals",
+        "paths": [
+          "crates/ty_python_semantic/src/types/infer/builder.rs"
+        ]
+      }
+    ],
+    "nextAction": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L8099"
+      }
+    ]
+  },
+  {
+    "id": "ty-collection-use-inference",
+    "title": "Reconcile collection-use inference with upstream #27665",
+    "state": "Overlaps upstream review; fork regression",
+    "summary": "Three current native regressions lose dictionary value evidence or diagnostics: grouped.get(key, []), a get/write cycle, and a missing member on the inferred list. Future-use constraints must preserve evidence independently of query order. Extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Infer one tracked collection argument from sibling call constraints without self-feedback",
+        "paths": [
+          "crates/ty_python_semantic/src/types/infer/builder.rs"
+        ]
+      }
+    ],
+    "nextAction": "Compare later fork refinements with #27665; restore collection precision and diagnostics before proposing additions to that existing workstream.",
+    "evidence": [
+      {
+        "label": "Existing collection-context workstream #27665",
+        "url": "https://github.com/astral-sh/ruff/pull/27665"
+      },
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L10413"
+      }
+    ]
+  },
+  {
+    "id": "ty-operator-context",
+    "title": "Use expected types when inferring operator calls",
+    "state": "Python enhancement candidate",
+    "summary": "Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Contextual inference at the actual selected binary operator call",
+        "paths": [
+          "crates/ty_python_semantic/src/types/call.rs"
+        ]
+      }
+    ],
+    "nextAction": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call.rs#L235"
+      }
+    ]
+  },
+  {
+    "id": "ty-constructor-class-arguments",
+    "title": "Keep explicit constructor type arguments fixed",
+    "state": "Python bugfix candidate",
+    "summary": "Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Keep explicit constructor class arguments fixed",
+        "paths": [
+          "crates/ty_python_semantic/src/types/call/bind/constructor.rs"
+        ]
+      }
+    ],
+    "nextAction": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/call/bind/constructor.rs#L52"
+      }
+    ]
+  },
+  {
+    "id": "ty-typed-dict-key-groups",
+    "title": "Group TypedDict.get keys without losing literals",
+    "state": "Python bugfix candidate",
+    "summary": "Group keys that share value types and requiredness, retaining large literal-key groups instead of merging incompatible get overloads. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Preserve precise get results for unions of equivalent literal keys",
+        "paths": [
+          "crates/ty_python_semantic/src/types/class/typed_dict.rs"
+        ]
+      }
+    ],
+    "nextAction": "Reproduce on upstream; cover required and optional keys, key unions, missing keys, defaults and large schemas.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/typed_dict.rs#L391"
+      }
+    ]
+  },
+  {
+    "id": "ty-typed-dict-views",
+    "title": "Derive TypedDict views from dictionary declarations",
+    "state": "Python enhancement / host API candidate",
+    "summary": "Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Derive TypedDict items/keys/values from configured dict declarations",
+        "paths": [
+          "crates/ty_python_semantic/src/types/class/typed_dict.rs"
+        ]
+      }
+    ],
+    "nextAction": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/typed_dict.rs#L6"
+      }
+    ]
+  },
+  {
+    "id": "ty-typed-dict-merge",
+    "title": "Preserve overwrite direction in TypedDict merges",
+    "state": "Python enhancement candidate",
+    "summary": "Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Preserve merge direction, schema values and fresh dictionary results",
+        "paths": [
+          "crates/ty_python_semantic/src/types/class/typed_dict.rs"
+        ]
+      }
+    ],
+    "nextAction": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/typed_dict.rs#L6"
+      }
+    ]
+  },
+  {
+    "id": "ty-known-generic-subclass",
+    "title": "Specialize known generic subclasses before checking them",
+    "state": "Python bugfix candidate",
+    "summary": "Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Use default specialization for known generic subclass checks",
+        "paths": [
+          "crates/ty_python_semantic/src/types/class/known.rs"
+        ]
+      }
+    ],
+    "nextAction": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/known.rs#L1518"
+      }
+    ]
+  },
+  {
+    "id": "ty-factory-instance-storage",
+    "title": "Separate factory instance fields from class descriptors",
+    "state": "Host API design",
+    "summary": "Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+    "sources": [
+      {
+        "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+        "detail": "Separate factory-supplied immutable instance storage from class descriptors",
+        "paths": [
+          "crates/ty_python_semantic/src/types/class/dynamic_literal.rs"
+        ]
+      }
+    ],
+    "nextAction": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
+    "evidence": [
+      {
+        "label": "Reviewed implementation",
+        "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/dynamic_literal.rs#L3"
+      }
+    ]
+  },
   {
     "id": "ty-host-parser",
     "title": "Host parser and semantic file identity",
@@ -1172,7 +1500,7 @@ export const tyWork = [
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "The frozen old-fork diff has an auditable receipt for all 250 changed paths, with blob identities, changed API/test anchors, mechanism mappings and explicit unresolved hunks. Mapping every path does not finish semantic reconciliation or count independent proposals. The current rebase must receive its own surviving-delta audit.",
+    "summary": "The rebased dfe98a7d checkpoint has source records for all 142 runtime/API paths in its 231-path delta. Its solver audit attributes 939 hunks to 169 review units. Forward review separates upstream c8ba04dc work from surviving fork changes. Constructor and collection regressions still block qualification. The historical 250-path receipt remains available separately.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1193,11 +1521,21 @@ export const tyWork = [
       {
         "label": "All 250 paths: immutable source receipt and coverage",
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
+      },
+      {
+        "label": "Rebased checkpoint: all 231 paths and exact source links",
+        "url": "https://tamird.github.io/sty/ruff-source-audit.json"
+      },
+      {
+        "label": "Current checker integration: constructor inference still fails",
+        "url": "https://app.buildbuddy.io/invocation/d52c8c93-0be3-4bf8-8c0e-26b60fce3d46"
       }
     ],
-    "nextAction": "Reconcile the explicitly unresolved old-fork hunks, then audit every path and mechanism in the qualified rebased tree against current upstream. Subtract landed and superseded implementations before proposing independent changes."
+    "nextAction": "Fix constructor and collection regressions, qualify the resulting fork, and reconcile later source changes with the frozen inventory. Reduce each surviving Python change against upstream before asking Tamir to approve submission."
   }
 ];
+
+export const tyWork = [...reviewedTyWork, ...solverInventory.tasks];
 
 export const inventory = {
   "pinnedFork": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1206,7 +1544,22 @@ export const inventory = {
   "divergentCommits": 495,
   "userAuthoredCommits": 483,
   "upstreamAuthoredPicks": 12,
-  "status": "Reconciliation in progress",
-  "scope": "All 17 user-authored Bazel typing issues were reconciled with GitHub. Ruff units group current mechanisms; the 495-commit history includes removed proof machinery and upstream picks, and has not yet been fully reduced to surviving current-upstream contributions. Source-history counts are not pending PR counts.",
+  "status": "Frozen source audit complete; runtime qualification incomplete",
+  "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+  "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
+  "sourceReviewComplete": false,
+  "sourceReview": {
+    "candidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
+    "base": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
+    "changedPaths": 231,
+    "runtimePathsWithSourceRecords": 142,
+    "solverHunksAttributed": 939,
+    "solverReviewUnits": 169,
+    "forwardCandidate": "9e0685ba54a37b374b62477ca3f65c821f983a22",
+    "forwardBase": "c8ba04dc06caf4370d494870145c4f92356f1222",
+    "url": "https://tamird.github.io/sty/ruff-source-audit.json",
+    "qualified": false
+  },
+  "scope": "All 17 user-authored Bazel typing issues have dated GitHub receipts. Ruff's frozen source audit and forward reconciliation enumerate surviving mechanisms; reduced upstream reproductions, runtime qualification and remaining overlap review are incomplete. Historical commit counts and source review units are not pending PR counts.",
   "qualification": "Every new upstream proposal needs a current-upstream reproduction, focused negative/positive cases, relevant full qualification and Tamir approval. Existing merged templates, in-review PRs, host extension design and remaining Python fixes are distinct."
 };
