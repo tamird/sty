@@ -200,7 +200,8 @@ a default is not allocated again for each arm.
 Unsupported or incomplete body analysis reports `unverified-overload` as an
 error. For example, loops and nested function definitions are not supported by this
 analysis. A failed check can retain declared types for error recovery; it does
-not verify the implementation. `explicit-any` and `non-static-type` retain their configured severities.
+not verify the implementation. `explicit-any` and `non-static-type` retain
+their configured severities.
 
 Check implementations explicitly with `--check-local-interface-sources` or
 `--check-interface-sources`, or select their source files. Checking only callers
