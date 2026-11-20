@@ -34,7 +34,8 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
     id: `issue:bazelbuild/bazel:${item.number}`, type: 'issue', repo: 'bazelbuild/bazel',
     number: item.number, title: item.title, group: 'bazel', status: 'Feedback filed',
     url: `https://github.com/bazelbuild/bazel/issues/${item.number}`,
-    summary: `${item.summary}\n\n${item.nextAction}\n\nThe issue is ${item.state}; its original reproduction has not been rerun against current Bazel.`,
+    summary: `${item.summary}\n\n${item.nextAction}\n\n${item.retest?.summary || `The issue is ${item.state}; its original reproduction has not been rerun against current Bazel.`}`,
+    evidence: item.retest ? [{ label: 'Current Bazel reproduction', url: item.retest.url }] : [],
   });
   for (const item of upstream) {
     if (item.number) {
