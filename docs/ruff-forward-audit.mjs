@@ -5167,7 +5167,7 @@ export const ruffForwardAudit = {
     "Every changed hunk is explicitly reviewed by exact path and whole-hunk SHA. Reuse requires exact whole or body equality, never path/start fallback.",
     "Fresh collection inference reuses prepared argument constraints and at most one completed projection. Scoped constraint order remains part of the cache identity; unsupported pack/legacy calls and incomplete outcomes keep their original handling.",
     "Official proposal ba712 is separately native-qualified and awaiting Tamir review; no upstream submission approval is implied. Related #27665 overlap remains explicit.",
-    "Sty engine 14d05b98 pins 07a and passes all native/optimized and 148 unchanged corpus cases. Community qualification is separate from publication: eight local workflow commits remain unpushed. No all-fork readiness or upstream submission approval is claimed.",
+    "Sty engine 14d05b98 pins 07a and passes all native/optimized and 148 unchanged corpus cases. All eight qualified community workflow updates are published; GitHub CI and reviews remain separate from completed RBE qualification. No all-fork readiness or upstream submission approval is claimed.",
     "Native 43ad results are recorded from the owner receipt, not performed by this audit. The 31 unchanged failed Markdown fixtures remain failures; external-network cases are not covered.",
     "Frozen 169-unit/939-hunk history and 250-path lineage remain unchanged. Rejected global truthiness guard stripping remains absent."
   ],
@@ -11015,7 +11015,7 @@ export const ruffForwardAudit = {
     "pinnedRuff": "07a4f30c36d8f27455d2785f9abef566e0bf3641",
     "auditedCandidate": "07a4f30c36d8f27455d2785f9abef566e0bf3641",
     "candidateIsPinned": true,
-    "detail": "Sty engine 14d05b98 pins Ruff 07a4f30c. All eight native targets, the optimized build and 148 unchanged corpus cases pass. Eight qualified community workflow updates remain local commits because SSH authentication failed and the HTTPS token lacks workflow scope."
+    "detail": "Sty engine 14d05b98 pins Ruff 07a4f30c. All eight native targets, the optimized build and 148 unchanged corpus cases pass. All eight qualified community workflow updates are published; their GitHub CI and review status is tracked separately."
   },
   "upstreamMigrationOwners": [
     {
@@ -11206,7 +11206,7 @@ export const ruffForwardAudit = {
   },
   "qualificationObservation": {
     "candidate": "07a4f30c36d8f27455d2785f9abef566e0bf3641",
-    "status": "Native and Sty integration qualified; community workflow publication blocked by credentials.",
+    "status": "Native and Sty integration qualified; all eight qualified community workflow updates are published. GitHub CI and reviews are tracked separately.",
     "runtimeQualifiedByThisAudit": false,
     "nativeQualificationReportedSeparately": true,
     "invocation": "43ad4d02-b014-4606-b1e5-35fdc81f700a",
@@ -11230,7 +11230,7 @@ export const ruffForwardAudit = {
     "realCorpusFailed": 0,
     "realCorpusFixtureChanges": 0,
     "communityChecksExecuted": 20,
-    "communityRefreshPublished": false
+    "communityRefreshPublished": true
   },
   "upstreamOnlyChanges": [
     {
