@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-20T23:47:40Z';
+export const reviewedAt = '2026-11-21T00:14:50Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Follow published-head CI",repo:"bazelbuild/bazel-skylib",number:641,head:"a5ceab38eb0145c5144d1204def60743d10249fe",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"1ec32e3 qualification: 88 root files and five Gazelle files, zero errors.",followup:"Checker update published; GitHub reports the branch mergeable. CI is still being assessed.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "1ec32e3 canonical qualification", "url": "https://app.buildbuddy.io/invocation/faccc3f0-30e0-4a7a-9491-cb0aa1408b5b"}]},
@@ -51,14 +51,14 @@ export const upstream = [
     "id": "residual-truthiness-guards",
     "ref": "validation/joint-truthiness-guards",
     "title": "Simplify residual truthiness guards",
-    "state": "Qualifying current projects",
+    "state": "Redesign required",
     "source": "7b813717d3098e237cf8beb97eb5f046bf6230bc",
-    "summary": "Extend #27106 by keeping guards for exact immutable values. An empty range cannot become truthy at a later check. Other leftover guards are removed, fixing the string-splitting fallback error. Comments and maintained Markdown cases are revised; nothing has been submitted upstream.",
+    "summary": "Prototype combining #27106 with immutable-value guards. Full qualification found lost predicate and exception-type information. Keep this prototype out of Sty; fix the string-splitting bug at its method-binding owner. Nothing has been submitted upstream.",
     "qualifiedBase": "f31dd86f222f7d978a65cfc453eaf88f11456ed7",
     "qualifiedHead": "7b813717d3098e237cf8beb97eb5f046bf6230bc",
     "qualifiedURL": "https://github.com/tamird/ruff/commit/7b813717d3098e237cf8beb97eb5f046bf6230bc",
     "qualification": {
-      "summary": "Core, semantic and IDE suites, hooks, formatting, strict Clippy and five whole Markdown fixtures pass on RBE. The original string-splitting regression fails on pristine upstream and passes with this change. Fresh current Dulwich/SymPy comparisons are in progress; full Markdown and ecosystem qualification are not claimed.",
+      "summary": "Focused native checks pass, but full default Markdown is 508/532 versus pristine upstream 532/532. Current Dulwich and SymPy checks also add diagnostics. No golden assertions were weakened. Global guard removal is unqualified and will not be promoted.",
       "evidence": [
         {
           "label": "Combined proposal and rewritten comments",
@@ -67,10 +67,22 @@ export const upstream = [
         {
           "label": "Native and five-fixture qualification",
           "url": "https://app.buildbuddy.io/invocation/f2696a7d-6873-472c-8038-ed4b105293d7"
+        },
+        {
+          "label": "Full original default Markdown: 532 pass",
+          "url": "https://app.buildbuddy.io/invocation/6cbb61e0-873f-4c47-9673-fdfba3af5285"
+        },
+        {
+          "label": "Full prototype default Markdown: 24 failures",
+          "url": "https://app.buildbuddy.io/invocation/2cffb9f4-4e6b-48e5-8cb1-305c20ee1651"
+        },
+        {
+          "label": "Current Dulwich and SymPy diagnostic comparison",
+          "url": "https://app.buildbuddy.io/invocation/773c2717-bcbf-47f7-a4a6-11f3aa0bf813"
         }
       ]
     },
-    "nextAction": "Finish the current Dulwich/SymPy comparisons and assess any new diagnostics before recommending an amendment to #27106 for Tamir review."
+    "nextAction": "Fix the original string-splitting bug at method binding while preserving internal guards, negative constraints and inference order. This global-removal prototype is not ready for submission."
   },
   {
     "id": "related-upstream-27106",
@@ -78,7 +90,7 @@ export const upstream = [
     "number": 27106,
     "state": "Related upstream work",
     "author": "carljm",
-    "summary": "Draft simplification proposal. Its unmodified guard removal reintroduces the saved-range false positive. The joint validation branch preserves the needed immutable-value guards; current project comparisons are underway."
+    "summary": "Draft global simplification proposal. Keeping immutable guards fixes the saved-range case, but full qualification still finds lost predicate and exception information. A method-binding fix for the original string-splitting bug is being developed with guards retained."
   },
   {
     "id": "call-completion-key-lifetime",
@@ -1177,12 +1189,12 @@ const reviewedTyWork = [
       }
     ],
     "evidence": [
-      {"label": "Combined truthiness proposal and revised comments", "url": "https://github.com/tamird/ruff/commit/7b813717d3098e237cf8beb97eb5f046bf6230bc"},
+      {"label": "Unqualified global prototype and revised comments", "url": "https://github.com/tamird/ruff/commit/7b813717d3098e237cf8beb97eb5f046bf6230bc"},
       {"label": "Core, semantic, IDE, format, Clippy and four Markdown fixtures pass", "url": "https://app.buildbuddy.io/invocation/f2220608-b748-4af2-8b82-ecd4f5d98750"},
       {"label": "Related proposal drops required truthiness guards", "url": "https://github.com/astral-sh/ruff/pull/27106"},
       {"label": "Composition check reproduces range | str false positive", "url": "https://app.buildbuddy.io/invocation/a35b07c9-e754-4b32-a922-9afd35d10364"}
     ],
-    "nextAction": "The combined truthiness proposal passes native qualification and five whole Markdown fixtures. Finish current-project comparisons before recommending an amendment to #27106. Saved runtime type tests and tagged-union mechanisms still need separate reconciliation."
+    "nextAction": "Reject global guard removal: full upstream Markdown has 24 new failing fixtures and current project checks add diagnostics. Fix the original string-splitting bug without discarding internal guards. Saved runtime type tests and tagged-union mechanisms still need separate reconciliation."
   },
   {
     "id": "ty-contextual-empty",
