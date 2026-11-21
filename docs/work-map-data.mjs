@@ -49,44 +49,36 @@ export const goals = [
 export const upstream = [
   {
     "id": "fresh-collection-callback-context",
-    "ref": "upstream/compatible-fresh-collection-context",
-    "title": "Infer fresh collections from compatible context",
-    "state": "Needs performance correction",
-    "source": "cdc3115850d99ae1b6031d11fe74ab14757b5924",
-    "summary": "Fresh collection arguments lost the literal types required by callbacks. Use sibling arguments as tentative context, and retry ordinary inference when the fresh collection cannot satisfy the hint.",
-    "qualifiedBase": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
-    "qualifiedHead": "cdc3115850d99ae1b6031d11fe74ab14757b5924",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/cd2d973241d7f5bcba588e94cc686d9e356a4621...cdc3115850d99ae1b6031d11fe74ab14757b5924",
+    "ref": "upstream/fresh-collection-context-75fabee2",
+    "title": "Infer fresh collection argument contexts",
+    "state": "Awaiting Tamir review",
+    "source": "ba712134db00258728314f30ae2a70d69de8728d",
+    "summary": "Fresh collection arguments keep literal types supplied by other arguments in generic calls. Incompatible hints fall back to ordinary inference.",
+    "qualifiedBase": "75fabee2e0a069b6bf5a1af4226025afa0324fa5",
+    "qualifiedHead": "ba712134db00258728314f30ae2a70d69de8728d",
+    "qualifiedURL": "https://github.com/tamird/ruff/compare/75fabee2e0a069b6bf5a1af4226025afa0324fa5...ba712134db00258728314f30ae2a70d69de8728d",
     "qualification": {
-      "summary": "Core, semantic, IDE, style and all 532 default Markdown fixtures pass on RBE. The published correction preserves the TypedDict pair case and rejects wrong literals and stored wider lists. Original benchmarks show 63% rejected-hint overhead and 3.12x time for 256 fresh arguments. A local optimization passes correctness checks, but alternating argument types still take 2.94x baseline time. A separate probe proves that hints improve the return type of an already-valid list call; failure-only recovery loses that precision. The contribution remains withheld while constraint reuse is redesigned.",
+      "summary": "Core, semantic and IDE tests, style and all 532 default Markdown cases pass on 75fabee2. Optimized no-LTO stress checks cost 12.0% more for 256 homogeneous arguments, 19.6% for alternating types and 16.2% for 1,500 rejected hints. An earlier cd2d9732 attrs check kept all 45 diagnostics and showed no observed material regression; it exercised only two hint attempts.",
       "evidence": [
         {
-          "label": "Alternating argument types: remaining 2.94x regression",
-          "url": "https://app.buildbuddy.io/invocation/b4717cfa-5be2-4f75-87eb-3fc6aaffe955"
+          "label": "75fabee2: native suites, style and all 532 Markdown cases",
+          "url": "https://app.buildbuddy.io/invocation/0fe3d6a1-9b2c-46d2-b18f-080dd07a501d"
         },
         {
-          "label": "Accepted-call return precision: pristine and corrected",
-          "url": "https://app.buildbuddy.io/invocation/ad881c3d-182a-413a-aefa-c0c971c98513"
+          "label": "75fabee2: four optimized no-LTO stress workloads",
+          "url": "https://app.buildbuddy.io/invocation/7092fd82-a176-46b5-835d-cbb0bbcfee09"
         },
         {
-          "label": "Performance qualification: rejected hints +63%; 256 fresh arguments 3.12x baseline",
-          "url": "https://app.buildbuddy.io/invocation/79d4b854-ca50-4d62-b38c-b874855c14d6"
+          "label": "75fabee2: alternating 256-argument control",
+          "url": "https://app.buildbuddy.io/invocation/6dc7e19e-2db1-4835-b927-8083fc1d1ec7"
         },
         {
-          "label": "Review the corrected contribution",
-          "url": "https://github.com/tamird/ruff/commit/cdc3115850d99ae1b6031d11fe74ab14757b5924"
-        },
-        {
-          "label": "Pristine, withdrawn candidate and correction: same maintained case",
-          "url": "https://app.buildbuddy.io/invocation/f3179888-ca57-46e2-a600-5e26b45b379c"
-        },
-        {
-          "label": "Native suites, style and all 532 default Markdown fixtures",
-          "url": "https://app.buildbuddy.io/invocation/fd1be1f0-630b-439f-b1ab-ae30923ea8fe"
+          "label": "Earlier cd2 base: attrs cold check and unchanged diagnostics",
+          "url": "https://app.buildbuddy.io/invocation/634403bf-91ee-4103-b845-d57d42b61243"
         }
       ]
     },
-    "nextAction": "Prepare call constraints once and reuse equivalent solved constraints; preserve precise returns on valid calls, then requalify before requesting approval."
+    "nextAction": "Tamir: approve this qualified contribution before upstream submission."
   },
   {
     "id": "exception-tuple-alias-projection",
