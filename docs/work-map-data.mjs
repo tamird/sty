@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-21T05:24:31Z';
+export const reviewedAt = '2026-11-21T05:41:30Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/bazel-skylib",number:641,head:"a5ceab38eb0145c5144d1204def60743d10249fe",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"c1f42d68: 88 root files and five Gazelle files pass.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/e4ae24c1-99dd-4335-bf89-61f9190e49bd"}]},
@@ -51,17 +51,21 @@ export const upstream = [
     "id": "fresh-collection-callback-context",
     "ref": "upstream/fresh-collection-callback-context",
     "title": "Infer fresh collections from callbacks",
-    "state": "Awaiting Tamir review",
+    "state": "Requalification failed",
     "source": "5bcaa4407de4a21d5c6df47aac6393c5cd21715f",
     "summary": "A callback requiring list[Literal[\"ok\"]] rejected a fresh [\"ok\"] argument because inference widened it. Infer the fresh collection from the other arguments, for both bounded and unbounded type variables.",
     "qualifiedBase": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
     "qualifiedHead": "5bcaa4407de4a21d5c6df47aac6393c5cd21715f",
     "qualifiedURL": "https://github.com/tamird/ruff/compare/cd2d973241d7f5bcba588e94cc686d9e356a4621...5bcaa4407de4a21d5c6df47aac6393c5cd21715f",
     "qualification": {
-      "summary": "Both bounded and unbounded reproducers fail on pristine cd2 and pass with the fix. The minimal maintained section retains wrong-literal and prebound wider-list rejection. Core 86, semantic 515 (35 ignored), IDE 1964, canonical hooks, formatting, strict Clippy and all 532 default Markdown fixtures pass on RBE. Added solver cost is unmeasured; network-backed cases were not enabled. #27665 remains related stored-collection work.",
+      "summary": "A valid call passing a TypedDict and a fresh dictionary to the same type parameter passes on pristine cd2 but fails on 5bc with missing-key and unknown-key errors. The inferred sibling type is a lower-bound witness, not a required schema for the fresh argument. The correction is pending; this candidate is not ready for upstream review. Earlier native suites, hooks, formatting, strict Clippy and all 532 default Markdown fixtures passed on RBE, but did not cover this regression. Bounded and unbounded callback reproducers pass; wrong-literal and stored wider-list rejection remain covered. Solver cost is unmeasured; network-backed cases were not enabled.",
       "evidence": [
         {
-          "label": "Review the qualified contribution",
+          "label": "Valid dictionary call: pristine passes, candidate fails",
+          "url": "https://app.buildbuddy.io/invocation/d97206f1-d243-4ec6-b85b-533d3f494bf1"
+        },
+        {
+          "label": "Withdrawn candidate",
           "url": "https://github.com/tamird/ruff/commit/5bcaa4407de4a21d5c6df47aac6393c5cd21715f"
         },
         {
@@ -74,7 +78,7 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Tamir: review this qualified contribution before upstream submission."
+    "nextAction": "Correct the shared tentative-context mechanism, preserve valid heterogeneous generic calls and callback rejection cases, and requalify before requesting Tamir review."
   },
   {
     "id": "exception-tuple-alias-projection",
@@ -696,7 +700,7 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Reduce the correction on current upstream and compare with ibraheemdev\u2019s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
+    "nextAction": "Reduce the correction on current upstream and compare with ibraheemdev’s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
     "evidence": [
       {
         "label": "Published collection correction",
@@ -1290,10 +1294,22 @@ const reviewedTyWork = [
       }
     ],
     "evidence": [
-      {"label": "Unqualified global prototype and revised comments", "url": "https://github.com/tamird/ruff/commit/7b813717d3098e237cf8beb97eb5f046bf6230bc"},
-      {"label": "Core, semantic, IDE, format, Clippy and four Markdown fixtures pass", "url": "https://app.buildbuddy.io/invocation/f2220608-b748-4af2-8b82-ecd4f5d98750"},
-      {"label": "Related proposal drops required truthiness guards", "url": "https://github.com/astral-sh/ruff/pull/27106"},
-      {"label": "Composition check reproduces range | str false positive", "url": "https://app.buildbuddy.io/invocation/a35b07c9-e754-4b32-a922-9afd35d10364"}
+      {
+        "label": "Unqualified global prototype and revised comments",
+        "url": "https://github.com/tamird/ruff/commit/7b813717d3098e237cf8beb97eb5f046bf6230bc"
+      },
+      {
+        "label": "Core, semantic, IDE, format, Clippy and four Markdown fixtures pass",
+        "url": "https://app.buildbuddy.io/invocation/f2220608-b748-4af2-8b82-ecd4f5d98750"
+      },
+      {
+        "label": "Related proposal drops required truthiness guards",
+        "url": "https://github.com/astral-sh/ruff/pull/27106"
+      },
+      {
+        "label": "Composition check reproduces range | str false positive",
+        "url": "https://app.buildbuddy.io/invocation/a35b07c9-e754-4b32-a922-9afd35d10364"
+      }
     ],
     "nextAction": "Reject global guard removal: full upstream Markdown has 24 new failing fixtures and current project checks add diagnostics. Fix the original string-splitting bug without discarding internal guards. Saved runtime type tests and tagged-union mechanisms still need separate reconciliation."
   },
@@ -1755,7 +1771,7 @@ const reviewedTyWork = [
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "Published Sty 1ec32e3 pins Ruff ec5ee469; eight native targets and the optimized build pass. All twenty community selections are accounted for: ten strict passes, six advisory completions, three failures and one required skip. Five PR refreshes are published. Full Ruff Markdown has 507 passing and 31 failing fixtures.",
+    "summary": "Published engine c1f42d68 pins Ruff 5cdb4547 on official cd2d9732. Eight native targets, the optimized build and all 148 corpus cases pass on RBE. All 20 community checks executed: 11 strict passes, six advisory completions and three failures. The eight PR refreshes are committed locally; workflow publication is blocked by GitHub credentials. Full Ruff Markdown retains 507 passing and 31 failing fixtures, with no new failing files.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1770,75 +1786,31 @@ const reviewedTyWork = [
     ],
     "evidence": [
       {
-        "label": "Bazel ty executable build targets",
-        "url": "https://github.com/tamird/ruff/commit/d6eb0a2200d6ee50514138455364c59d4ce5dbb3"
+        "label": "Published Sty engine and Ruff pin",
+        "url": "https://github.com/tamird/sty/commit/c1f42d68aa3c9dbec054edb345cfeb8c248bfba5"
       },
       {
-        "label": "Ty CLI build passes with frozen dependencies on RBE",
-        "url": "https://app.buildbuddy.io/invocation/1fe87678-a036-41e9-8f8c-a18c06c4eaed"
+        "label": "Eight native targets and optimized build on RBE",
+        "url": "https://app.buildbuddy.io/invocation/93e85074-4be4-4a6d-94a1-44cfa130677b"
       },
       {
-        "label": "All 538 native Markdown fixtures and inventory executed",
-        "url": "https://app.buildbuddy.io/invocation/a47f9480-276c-484c-81d7-cd0e729f20dd"
+        "label": "Complete Ruff Markdown census: 539 targets executed",
+        "url": "https://app.buildbuddy.io/invocation/302f70a3-5f28-4ae3-9fde-eb31b8cc7ba3"
       },
       {
-        "label": "Current forward inventory and source classifications",
+        "label": "Current source audit, corpus results and community census",
         "url": "https://tamird.github.io/sty/ruff-forward-audit.json"
       },
       {
-        "label": "Fork comparison from recorded base",
-        "url": "https://github.com/tamird/ruff/compare/d63450150b...352ce32f76a8416551cb72d66dfa4f6d75a7c7e9"
+        "label": "Previously skipped LLVM check: 26 errors",
+        "url": "https://app.buildbuddy.io/invocation/97eb25d9-38e6-4ab6-9f89-1547b69bef97"
       },
       {
-        "label": "All 250 paths: immutable source receipt and coverage",
+        "label": "Frozen source receipt and historical coverage",
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
-      },
-      {
-        "label": "Rebased checkpoint: all 231 paths and exact source links",
-        "url": "https://tamird.github.io/sty/ruff-source-audit.json"
-      },
-      {
-        "label": "Rebased checker: all eight Bazel targets pass",
-        "url": "https://app.buildbuddy.io/invocation/bd50beb6-fb14-4912-86cb-8ac3c3c1e3ab"
-      },
-      {
-        "label": "Normal lock: frozen optimized Linux build passes",
-        "url": "https://app.buildbuddy.io/invocation/d7336bc9-08c8-4bb8-a225-38a85f3380f0"
-      },
-      {
-        "label": "Published contextual inference and Bazel checkpoint",
-        "url": "https://github.com/tamird/ruff/compare/7ef19c19dfc64da53d2d2172e256630a6230a618...f9d7ec289b4b428a8994181d3c117477a8709f03"
-      },
-      {
-        "label": "Checkpoint: selected units, strict Clippy and formatting",
-        "url": "https://app.buildbuddy.io/invocation/a674c5a2-bfbf-4776-a144-88555680bd8e"
-      },
-      {
-        "label": "Skylib root and Gazelle: zero errors",
-        "url": "https://app.buildbuddy.io/invocation/efd218b1-74a3-4496-803d-d95d0d2b4318"
-      },
-      {
-        "label": "rules_cc: 134 strict files, zero errors; advisory errors remain",
-        "url": "https://app.buildbuddy.io/invocation/de08db11-49bb-4dbb-a8aa-92b9568b3ffa"
-      },
-      {
-        "label": "LLVM: restored example coverage; strict errors remain",
-        "url": "https://app.buildbuddy.io/invocation/c444ea3d-9da2-4d2a-ad8e-3723c108fd66"
-      },
-      {
-        "label": "Community qualification: with_cfg overloads and Rust declarations",
-        "url": "https://app.buildbuddy.io/invocation/5d137d85-87e6-47d9-af43-5d63a461b436"
-      },
-      {
-        "label": "Community qualification: runfiles inference and feature helpers",
-        "url": "https://app.buildbuddy.io/invocation/b2f203ed-e46e-4223-8219-537e5748b661"
-      },
-      {
-        "label": "Original recursive-protocol factory regression, now passes",
-        "url": "https://github.com/tamird/ruff/blob/7ef19c19dfc64da53d2d2172e256630a6230a618/crates/ty_python_semantic/resources/mdtest/generics/legacy/functions.md#L6310"
       }
     ],
-    "nextAction": "Ruff is rebased onto official 7d1b1355 and Sty main pins the qualified checkpoint. Complete the eight current community workflow matrices, publish their refreshed branches, and qualify the guard-preserving method-binding fix before final upstream review."
+    "nextAction": "Publish the eight qualified community refreshes after GitHub workflow access is restored. Complete the broader collection-inference backport and its upstream requalification before advancing the checker again. Four other isolated ty proposals await Tamir review."
   }
 ];
 
