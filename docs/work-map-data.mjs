@@ -5,17 +5,17 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-21T11:45:50.559123Z';
+export const reviewedAt = '2026-11-21T12:19:30.312894Z';
 
 export const projects = [
- {name:"Bazel Skylib",nextAction:"Review current-head CI before marking the contribution ready.",repo:"bazelbuild/bazel-skylib",number:641,head:"072c61836c80bc0223bf57580fbee320b54a4876",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"43d26607: 88 root files and five Gazelle files pass with zero diagnostics.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/1b7a6368-0d91-4106-b464-6d3321e31310"}]},
- {name:"rules_cc",nextAction:"Review current-head CI and remaining advisory diagnostics.",repo:"bazelbuild/rules_cc",number:940,head:"a18235210121ebfe03552fe1d3571e45d2886dad",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"43d26607: 134 strict files pass. All 286 advisory files complete with 37,502 errors.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/9808b490-354d-40d6-9cd7-3c8820b26fa7"}]},
- {name:"hermetic-llvm",nextAction:"Resolve example and proposed-type errors; verify CI on the generated-stubs repair.",repo:"hermeticbuild/hermetic-llvm",number:835,head:"ea0bdffc1fb8036b47389163bda58302ca58ae39",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"43d26607: 70 released-root files pass; the rules_cc example retains 31 errors. Proposed-types checking retains 26 errors in 64 root files. Advisory checks, native tests and formatter complete.",followup:"The qualified 43d26607 refresh is published. The missing Gazelle stubs target is repaired and its generator check passes on RBE; new-head CI remains separate.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/6ca6a3b0-8ce6-4abe-8d6e-9c494f3d9509"}]},
+ {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"072c61836c80bc0223bf57580fbee320b54a4876",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"43d26607: 88 root files and five Gazelle files pass with zero diagnostics.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/1b7a6368-0d91-4106-b464-6d3321e31310"}]},
+ {name:"rules_cc",nextAction:"Reduce the remaining advisory diagnostics.",repo:"bazelbuild/rules_cc",number:940,head:"a18235210121ebfe03552fe1d3571e45d2886dad",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"43d26607: 134 strict files pass. All 286 advisory files complete with 37,502 errors.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/9808b490-354d-40d6-9cd7-3c8820b26fa7"}]},
+ {name:"hermetic-llvm",nextAction:"Resolve the 31 example and 26 proposed-type errors; the documentation repair passes CI.",repo:"hermeticbuild/hermetic-llvm",number:835,head:"ea0bdffc1fb8036b47389163bda58302ca58ae39",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"43d26607: 70 released-root files pass; the rules_cc example retains 31 errors. Proposed-types checking retains 26 errors in 64 root files. Advisory checks, native tests and formatter complete.",followup:"The qualified 43d26607 refresh is published. The missing Gazelle stubs target is repaired and its generator check passes on RBE; new-head CI remains separate.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/6ca6a3b0-8ce6-4abe-8d6e-9c494f3d9509"}]},
  {name:"apple_support",nextAction:"Resolve the two lipo toolchain-field errors.",repo:"bazelbuild/apple_support",number:668,head:"e7929a0858f6cbbcc366f6fbcce8288720880da6",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"43d26607: All 46 strict files checked; two lipo toolchain-field errors remain. All 76 advisory files complete with 5,994 errors.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/023aa062-3471-4904-9ac0-996fa336df9a"}]},
- {name:"with_cfg.bzl",nextAction:"Review current-head CI and remaining advisory diagnostics.",repo:"fmeum/with_cfg.bzl",number:269,head:"82d8a3e2e0339b3d02d4854bb708568d5699ed67",draft:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"43d26607: 20 root and two example files pass with zero diagnostics. All five native suites pass in fast and optimized configurations.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/097afc2f-0499-4cab-bb62-69b7ca8a3263"}]},
- {name:"rules_runfiles_group",nextAction:"Review current-head CI and remaining advisory diagnostics.",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"4900e8b0d634c9aa86b4ceb319fc302b7b8bcac8",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"43d26607: 32 root and 37 example files pass; advisory checks retain 646 and 344 errors.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/bdbd8054-4b2e-44ce-9ffa-f5d2fbf7001e"}]},
- {name:"rules_rs",nextAction:"Review current-head CI and inherited formatter warnings.",repo:"hermeticbuild/rules_rs",number:306,head:"a94685e9fec7b0cf2549d769f2ec8fe6fc822b0d",draft:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"43d26607: 36 root and four fixture files pass; both Cargo tests pass. Formatter exit 1 retains inherited lint warnings.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/742d96a4-5003-4444-b706-6e5de699ddd0"}]},
- {name:"bazel_features",nextAction:"Verify the published type-checking workflow runs on this head.",repo:"bazel-contrib/bazel_features",number:158,head:"3ebd06b29778a14073ffc96b05cde1ffac974c07",draft:false,summary:"Feature compatibility declarations checked against implementations.",checks:"43d26607: Eleven strict files and native tests pass. Advisory root and BCR checks retain 64 and 22 errors.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/bdbd8054-4b2e-44ce-9ffa-f5d2fbf7001e"}]}
+ {name:"with_cfg.bzl",nextAction:"Reduce the remaining advisory diagnostics.",repo:"fmeum/with_cfg.bzl",number:269,head:"82d8a3e2e0339b3d02d4854bb708568d5699ed67",draft:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"43d26607: 20 root and two example files pass with zero diagnostics. All five native suites pass in fast and optimized configurations.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/097afc2f-0499-4cab-bb62-69b7ca8a3263"}]},
+ {name:"rules_runfiles_group",nextAction:"Reduce the remaining advisory diagnostics.",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"4900e8b0d634c9aa86b4ceb319fc302b7b8bcac8",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"43d26607: 32 root and 37 example files pass; advisory checks retain 646 and 344 errors.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/bdbd8054-4b2e-44ce-9ffa-f5d2fbf7001e"}]},
+ {name:"rules_rs",nextAction:"Investigate inherited formatter warnings from the qualification run; published CI passes.",repo:"hermeticbuild/rules_rs",number:306,head:"a94685e9fec7b0cf2549d769f2ec8fe6fc822b0d",draft:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"43d26607: 36 root and four fixture files pass; both Cargo tests pass. Formatter exit 1 retains inherited lint warnings.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/742d96a4-5003-4444-b706-6e5de699ddd0"}]},
+ {name:"bazel_features",nextAction:"Reduce the remaining root and BCR advisory diagnostics.",repo:"bazel-contrib/bazel_features",number:158,head:"3ebd06b29778a14073ffc96b05cde1ffac974c07",draft:false,summary:"Feature compatibility declarations checked against implementations.",checks:"43d26607: Eleven strict files and native tests pass. Advisory root and BCR checks retain 64 and 22 errors.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/bdbd8054-4b2e-44ce-9ffa-f5d2fbf7001e"}]}
 ];
 
 export const goals = [
@@ -875,6 +875,72 @@ const reviewedTyWork = [
       {
         "label": "Reviewed implementation",
         "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/dynamic_literal.rs#L3"
+      }
+    ]
+  },
+  {
+    "id": "host-buck2-source-modes",
+    "title": "Buck2 file modes and builtin scopes",
+    "state": "Host adaptation not implemented",
+    "summary": "Sty currently selects Standard or Bazel dialects; native annotations and builtin extensions are tied to Bazel. Buck2 needs distinct BUCK, rule-definition and BXL environments. Existing ty parser and supplied-binding hooks are reusable boundaries, not established Buck2 support.",
+    "sources": [],
+    "nextAction": "Separate host file modes and builtin catalog selection from Bazel metadata; qualify native annotations and isolation between Buck2 environments.",
+    "evidence": [
+      {
+        "label": "Current dialect and annotation-mode owner",
+        "url": "https://github.com/tamird/sty/blob/0e6aed3cf87fe18936ee8c36762e8085eb668af3/crates/starpls_common/src/lib.rs#L21"
+      },
+      {
+        "label": "Current Bazel builtin-extension owner",
+        "url": "https://github.com/tamird/sty/blob/0e6aed3cf87fe18936ee8c36762e8085eb668af3/crates/starpls_ide/src/ty/host.rs#L28"
+      },
+      {
+        "label": "Buck2 documents three Starlark environments",
+        "url": "https://buck2.build/docs/api/"
+      }
+    ]
+  },
+  {
+    "id": "host-buck2-loads",
+    "title": "Buck2 cell and data-module loading",
+    "state": "Host adaptation not implemented",
+    "summary": "Reuse Sty\u2019s FileLoader boundary for Buck2 resolution rather than Bazel repository labels. Buck2 cells come from .buckconfig; JSON and TOML can be loaded as modules exporting value. Source lookup, exports and invalidation need the same logical module identity.",
+    "sources": [],
+    "nextAction": "Implement a Buck2 loader using cell-relative identities and explicit data-module exports; qualify cross-cell aliases and edits to loaded data.",
+    "evidence": [
+      {
+        "label": "Existing module-loader interface",
+        "url": "https://github.com/tamird/sty/blob/0e6aed3cf87fe18936ee8c36762e8085eb668af3/crates/starpls_ide/src/lib.rs#L965"
+      },
+      {
+        "label": "Buck2 cells configuration",
+        "url": "https://buck2.build/docs/concepts/buckconfig/#cells"
+      },
+      {
+        "label": "Buck2 JSON and TOML module contracts",
+        "url": "https://buck2.build/docs/users/loading_data/"
+      }
+    ]
+  },
+  {
+    "id": "host-buck2-type-constructors",
+    "title": "Buck2 record and enum contracts",
+    "state": "Host semantics require qualification",
+    "summary": "Buck2 exposes record, field and enum constructors alongside namespaced typing values. Map those values through host-supplied semantic contracts instead of assuming Bazel provider or struct behavior. Documentation differs on using record constructors directly versus .type in annotations; settle that against a pinned runtime.",
+    "sources": [],
+    "nextAction": "Pin the target Buck2/Starlark runtime, establish constructor and annotation behavior, then qualify field defaults, invalid values and nominal type identity.",
+    "evidence": [
+      {
+        "label": "Buck2 record and field API",
+        "url": "https://buck2.build/docs/api/starlark/#record"
+      },
+      {
+        "label": "Starlark Rust annotation and constructor semantics",
+        "url": "https://github.com/meta/starlark-rust/blob/main/docs/types.md"
+      },
+      {
+        "label": "Current Bazel-specific declaration generation",
+        "url": "https://github.com/tamird/sty/blob/0e6aed3cf87fe18936ee8c36762e8085eb668af3/crates/starpls_ide/src/ty/native.rs#L1"
       }
     ]
   },
