@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-21T12:19:30.312894Z';
+export const reviewedAt = '2026-11-21T12:54:41.697542Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"072c61836c80bc0223bf57580fbee320b54a4876",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"43d26607: 88 root files and five Gazelle files pass with zero diagnostics.",followup:"The qualified 43d26607 refresh is published. GitHub CI and review state are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/1b7a6368-0d91-4106-b464-6d3321e31310"}]},
@@ -58,8 +58,16 @@ export const upstream = [
     "qualifiedHead": "cdc3115850d99ae1b6031d11fe74ab14757b5924",
     "qualifiedURL": "https://github.com/tamird/ruff/compare/cd2d973241d7f5bcba588e94cc686d9e356a4621...cdc3115850d99ae1b6031d11fe74ab14757b5924",
     "qualification": {
-      "summary": "The existing dictionary pair case passes on pristine upstream, fails on withdrawn 5bc, and passes with the correction. Fresh callback arguments pass; wrong literals and stored wider lists remain rejected. Core 86, semantic 515 (35 ignored), IDE 1964, canonical hooks, formatting, strict Clippy and all 532 default Markdown fixtures pass on RBE. The dictionary regression adds one call to an existing fixture. Optimized same-worker ABBA benchmarks found 63% overhead for rejected hints and 3.12x baseline time for 256 fresh arguments. Submission readiness and the approval request are withdrawn. Ordinary-first recovery may avoid the cost but has not established equivalent return precision. Network-backed cases were not enabled. #27665 remains related stored-collection work.",
+      "summary": "Core, semantic, IDE, style and all 532 default Markdown fixtures pass on RBE. The published correction preserves the TypedDict pair case and rejects wrong literals and stored wider lists. Original benchmarks show 63% rejected-hint overhead and 3.12x time for 256 fresh arguments. A local optimization passes correctness checks, but alternating argument types still take 2.94x baseline time. A separate probe proves that hints improve the return type of an already-valid list call; failure-only recovery loses that precision. The contribution remains withheld while constraint reuse is redesigned.",
       "evidence": [
+        {
+          "label": "Alternating argument types: remaining 2.94x regression",
+          "url": "https://app.buildbuddy.io/invocation/b4717cfa-5be2-4f75-87eb-3fc6aaffe955"
+        },
+        {
+          "label": "Accepted-call return precision: pristine and corrected",
+          "url": "https://app.buildbuddy.io/invocation/ad881c3d-182a-413a-aefa-c0c971c98513"
+        },
         {
           "label": "Performance qualification: rejected hints +63%; 256 fresh arguments 3.12x baseline",
           "url": "https://app.buildbuddy.io/invocation/79d4b854-ca50-4d62-b38c-b874855c14d6"
@@ -78,7 +86,7 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Resolve the measured inference cost while preserving required return precision, then requalify before requesting approval."
+    "nextAction": "Prepare call constraints once and reuse equivalent solved constraints; preserve precise returns on valid calls, then requalify before requesting approval."
   },
   {
     "id": "exception-tuple-alias-projection",
