@@ -5,17 +5,17 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-21T05:41:30Z';
+export const reviewedAt = '2026-11-21T07:07:06Z';
 
 export const projects = [
- {name:"Bazel Skylib",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/bazel-skylib",number:641,head:"a5ceab38eb0145c5144d1204def60743d10249fe",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"c1f42d68: 88 root files and five Gazelle files pass.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/e4ae24c1-99dd-4335-bf89-61f9190e49bd"}]},
- {name:"rules_cc",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/rules_cc",number:940,head:"ac7c8bd8ec0af475ccf4dd65b2b58806f19ef696",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"c1f42d68: 134 strict files pass. All 285 advisory files complete with 37,444 errors.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/f9e6a721-6e83-4c2e-9df5-03a3efa8ab3b"}]},
- {name:"hermetic-llvm",nextAction:"Restore GitHub SSH access",repo:"hermeticbuild/hermetic-llvm",number:835,head:"53f3ce81e92dd1bffe6100797620b45740795ffd",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"c1f42d68: 70 released-root files pass; the rules_cc example retains 31 errors. The newly executed proposed-types check retains 26 errors in 64 root files. Five advisory checks, native execution tests and formatter complete.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/0aa23121-1fa8-4c14-9fe0-44a93f58c2d7"}, {"label": "Previously skipped proposed-types check: 26 errors", "url": "https://app.buildbuddy.io/invocation/97eb25d9-38e6-4ab6-9f89-1547b69bef97"}]},
- {name:"apple_support",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/apple_support",number:668,head:"6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"c1f42d68: All 46 strict files checked; two lipo toolchain-field errors remain. All 76 advisory files complete with 5,994 errors.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/36a4aa40-f5a0-4de4-bf34-474692970457"}]},
- {name:"with_cfg.bzl",nextAction:"Restore GitHub SSH access",repo:"fmeum/with_cfg.bzl",number:269,head:"52365fcdb3cf36149ee0937fb0b812968e4cb56f",draft:true,blocked:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"c1f42d68: 20 root and two example files pass with zero diagnostics. All five native suites pass in fast and optimized configurations.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/1b94e534-3db2-490b-93df-04fe41b703df"}]},
- {name:"rules_runfiles_group",nextAction:"Restore GitHub SSH access",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"28fa82186d7fb3100941304ad7dfabd33f2596b9",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"c1f42d68: 32 root and 37 example files pass; advisory checks retain 646 and 344 errors.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/4207a340-6518-4c66-9499-7750426eb8f4"}]},
- {name:"rules_rs",nextAction:"Restore GitHub SSH access",repo:"hermeticbuild/rules_rs",number:306,head:"2b8f319b4719f161dcdf1ef33ff9c5d78f365de9",draft:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"c1f42d68: 36 root and four fixture files pass; both retained Cargo tests pass. Formatting has no diffs; inherited lint warnings retain formatter exit 1.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/18bf7bf2-359b-4d86-bc95-1705024b028e"}]},
- {name:"bazel_features",nextAction:"Restore GitHub SSH access",repo:"bazel-contrib/bazel_features",number:158,head:"c4a2668321241937a8ffa47dc1eb78707c0adee1",draft:false,summary:"Feature compatibility declarations checked against implementations.",checks:"c1f42d68: Eleven strict files pass; native tests pass. Advisory root and BCR checks retain 64 and 22 errors.",followup:"Current-engine refresh is committed locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/4207a340-6518-4c66-9499-7750426eb8f4"}]}
+ {name:"Bazel Skylib",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/bazel-skylib",number:641,head:"a5ceab38eb0145c5144d1204def60743d10249fe",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"Previous c1f42d68: 88 root files and five Gazelle files pass.",followup:"43d26607 refresh is committed locally and its workflow checks are running. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "Current c1f42d68 workflow qualification", "url": "https://app.buildbuddy.io/invocation/e4ae24c1-99dd-4335-bf89-61f9190e49bd"}]},
+ {name:"rules_cc",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/rules_cc",number:940,head:"ac7c8bd8ec0af475ccf4dd65b2b58806f19ef696",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"43d26607: 134 strict files pass. All 286 advisory files complete with 37,502 errors.",followup:"43d26607 refresh is committed and checked locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/9808b490-354d-40d6-9cd7-3c8820b26fa7"}]},
+ {name:"hermetic-llvm",nextAction:"Restore GitHub SSH access",repo:"hermeticbuild/hermetic-llvm",number:835,head:"53f3ce81e92dd1bffe6100797620b45740795ffd",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"43d26607: 70 released-root files pass; the rules_cc example retains 31 errors. Proposed-types checking retains 26 errors in 64 root files. Advisory checks, native tests and formatter complete.",followup:"43d26607 refresh is committed and checked locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/6ca6a3b0-8ce6-4abe-8d6e-9c494f3d9509"}]},
+ {name:"apple_support",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/apple_support",number:668,head:"6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"43d26607: All 46 strict files checked; two lipo toolchain-field errors remain. All 76 advisory files complete with 5,994 errors.",followup:"43d26607 refresh is committed and checked locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/023aa062-3471-4904-9ac0-996fa336df9a"}]},
+ {name:"with_cfg.bzl",nextAction:"Restore GitHub SSH access",repo:"fmeum/with_cfg.bzl",number:269,head:"52365fcdb3cf36149ee0937fb0b812968e4cb56f",draft:true,blocked:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"43d26607: 20 root and two example files pass with zero diagnostics. All five native suites pass in fast and optimized configurations.",followup:"43d26607 refresh is committed and checked locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/097afc2f-0499-4cab-bb62-69b7ca8a3263"}]},
+ {name:"rules_runfiles_group",nextAction:"Restore GitHub SSH access",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"28fa82186d7fb3100941304ad7dfabd33f2596b9",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"43d26607: 32 root and 37 example files pass; advisory checks retain 646 and 344 errors.",followup:"43d26607 refresh is committed and checked locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/bdbd8054-4b2e-44ce-9ffa-f5d2fbf7001e"}]},
+ {name:"rules_rs",nextAction:"Restore GitHub SSH access",repo:"hermeticbuild/rules_rs",number:306,head:"2b8f319b4719f161dcdf1ef33ff9c5d78f365de9",draft:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"43d26607: 36 root and four fixture files pass; both Cargo tests pass. Formatter exit 1 retains inherited lint warnings.",followup:"43d26607 refresh is committed and checked locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/742d96a4-5003-4444-b706-6e5de699ddd0"}]},
+ {name:"bazel_features",nextAction:"Restore GitHub SSH access",repo:"bazel-contrib/bazel_features",number:158,head:"c4a2668321241937a8ffa47dc1eb78707c0adee1",draft:false,summary:"Feature compatibility declarations checked against implementations.",checks:"43d26607: Eleven strict files and native tests pass. Advisory root and BCR checks retain 64 and 22 errors.",followup:"43d26607 refresh is committed and checked locally. Publication is blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "Current 43d26607 workflow qualification", "url": "https://app.buildbuddy.io/invocation/bdbd8054-4b2e-44ce-9ffa-f5d2fbf7001e"}]}
 ];
 
 export const goals = [
@@ -49,36 +49,32 @@ export const goals = [
 export const upstream = [
   {
     "id": "fresh-collection-callback-context",
-    "ref": "upstream/fresh-collection-callback-context",
-    "title": "Infer fresh collections from callbacks",
-    "state": "Requalification failed",
-    "source": "5bcaa4407de4a21d5c6df47aac6393c5cd21715f",
-    "summary": "A callback requiring list[Literal[\"ok\"]] rejected a fresh [\"ok\"] argument because inference widened it. Infer the fresh collection from the other arguments, for both bounded and unbounded type variables.",
+    "ref": "upstream/compatible-fresh-collection-context",
+    "title": "Infer fresh collections from compatible context",
+    "state": "Awaiting Tamir review",
+    "source": "cdc3115850d99ae1b6031d11fe74ab14757b5924",
+    "summary": "Fresh collection arguments lost the literal types required by callbacks. Use sibling arguments as tentative context, and retry ordinary inference when the fresh collection cannot satisfy the hint.",
     "qualifiedBase": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
-    "qualifiedHead": "5bcaa4407de4a21d5c6df47aac6393c5cd21715f",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/cd2d973241d7f5bcba588e94cc686d9e356a4621...5bcaa4407de4a21d5c6df47aac6393c5cd21715f",
+    "qualifiedHead": "cdc3115850d99ae1b6031d11fe74ab14757b5924",
+    "qualifiedURL": "https://github.com/tamird/ruff/compare/cd2d973241d7f5bcba588e94cc686d9e356a4621...cdc3115850d99ae1b6031d11fe74ab14757b5924",
     "qualification": {
-      "summary": "A valid call passing a TypedDict and a fresh dictionary to the same type parameter passes on pristine cd2 but fails on 5bc with missing-key and unknown-key errors. The inferred sibling type is a lower-bound witness, not a required schema for the fresh argument. The correction is pending; this candidate is not ready for upstream review. Earlier native suites, hooks, formatting, strict Clippy and all 532 default Markdown fixtures passed on RBE, but did not cover this regression. Bounded and unbounded callback reproducers pass; wrong-literal and stored wider-list rejection remain covered. Solver cost is unmeasured; network-backed cases were not enabled.",
+      "summary": "The existing dictionary pair case passes on pristine upstream, fails on withdrawn 5bc, and passes with the correction. Fresh callback arguments pass; wrong literals and stored wider lists remain rejected. Core 86, semantic 515 (35 ignored), IDE 1964, canonical hooks, formatting, strict Clippy and all 532 default Markdown fixtures pass on RBE. The dictionary regression adds one call to an existing fixture. Solver and tentative-inference cost are unmeasured; network-backed cases were not enabled. #27665 remains related stored-collection work.",
       "evidence": [
         {
-          "label": "Valid dictionary call: pristine passes, candidate fails",
-          "url": "https://app.buildbuddy.io/invocation/d97206f1-d243-4ec6-b85b-533d3f494bf1"
+          "label": "Review the corrected contribution",
+          "url": "https://github.com/tamird/ruff/commit/cdc3115850d99ae1b6031d11fe74ab14757b5924"
         },
         {
-          "label": "Withdrawn candidate",
-          "url": "https://github.com/tamird/ruff/commit/5bcaa4407de4a21d5c6df47aac6393c5cd21715f"
-        },
-        {
-          "label": "Unbounded baseline, candidate and bounded control",
-          "url": "https://app.buildbuddy.io/invocation/0b7472a0-72ab-4abb-b1bd-0e347c3d7049"
+          "label": "Pristine, withdrawn candidate and correction: same maintained case",
+          "url": "https://app.buildbuddy.io/invocation/f3179888-ca57-46e2-a600-5e26b45b379c"
         },
         {
           "label": "Native suites, style and all 532 default Markdown fixtures",
-          "url": "https://app.buildbuddy.io/invocation/c9b1fc71-289c-4cc1-9dbd-7befe14fa45f"
+          "url": "https://app.buildbuddy.io/invocation/fd1be1f0-630b-439f-b1ab-ae30923ea8fe"
         }
       ]
     },
-    "nextAction": "Correct the shared tentative-context mechanism, preserve valid heterogeneous generic calls and callback rejection cases, and requalify before requesting Tamir review."
+    "nextAction": "Tamir: review the corrected contribution before upstream submission."
   },
   {
     "id": "exception-tuple-alias-projection",
@@ -1771,7 +1767,7 @@ const reviewedTyWork = [
     "id": "ty-fork-reconciliation",
     "title": "Reconcile the entire pinned Ruff fork",
     "state": "Reconciliation in progress",
-    "summary": "Published engine c1f42d68 pins Ruff 5cdb4547 on official cd2d9732. Eight native targets, the optimized build and all 148 corpus cases pass on RBE. All 20 community checks executed: 11 strict passes, six advisory completions and three failures. The eight PR refreshes are committed locally; workflow publication is blocked by GitHub credentials. Full Ruff Markdown retains 507 passing and 31 failing fixtures, with no new failing files.",
+    "summary": "Published engine 43d26607 pins Ruff 940e9c43 on official cd2d9732. Eight native targets, the optimized build and all 148 corpus cases pass on RBE. All 20 community checks executed: 11 strict passes, six advisory completions and three existing failures. The eight PR refreshes are committed locally; GitHub credentials block publication. Full Ruff Markdown retains 507 passing and 31 failing fixtures, with all 31 failure bodies unchanged.",
     "sources": [
       {
         "commit": "352ce32f76a8416551cb72d66dfa4f6d75a7c7e9",
@@ -1787,43 +1783,43 @@ const reviewedTyWork = [
     "evidence": [
       {
         "label": "Published Sty engine and Ruff pin",
-        "url": "https://github.com/tamird/sty/commit/c1f42d68aa3c9dbec054edb345cfeb8c248bfba5"
+        "url": "https://github.com/tamird/sty/commit/43d266072decb9efc3cca9ada6f0d7eb4047c2e2"
       },
       {
         "label": "Eight native targets and optimized build on RBE",
-        "url": "https://app.buildbuddy.io/invocation/93e85074-4be4-4a6d-94a1-44cfa130677b"
+        "url": "https://app.buildbuddy.io/invocation/858cd33e-9483-4547-a596-8e5d9026e280"
       },
       {
         "label": "Complete Ruff Markdown census: 539 targets executed",
-        "url": "https://app.buildbuddy.io/invocation/302f70a3-5f28-4ae3-9fde-eb31b8cc7ba3"
+        "url": "https://app.buildbuddy.io/invocation/91010805-fa38-4499-b97c-137628a5ee57"
       },
       {
-        "label": "Current source audit, corpus results and community census",
+        "label": "Current source audit and runtime observations",
         "url": "https://tamird.github.io/sty/ruff-forward-audit.json"
       },
       {
-        "label": "Previously skipped LLVM check: 26 errors",
-        "url": "https://app.buildbuddy.io/invocation/97eb25d9-38e6-4ab6-9f89-1547b69bef97"
+        "label": "All eight LLVM checks executed; two strict failures remain",
+        "url": "https://app.buildbuddy.io/invocation/6ca6a3b0-8ce6-4abe-8d6e-9c494f3d9509"
       },
       {
         "label": "Frozen source receipt and historical coverage",
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Publish the eight qualified community refreshes after GitHub workflow access is restored. Complete the broader collection-inference backport and its upstream requalification before advancing the checker again. Four other isolated ty proposals await Tamir review."
+    "nextAction": "Publish the eight checked community refreshes after GitHub workflow access is restored. Five isolated ty contributions await Tamir review before upstream submission."
   }
 ];
 
 export const tyWork = [...reviewedTyWork, ...solverInventory.tasks];
 
 export const inventory = {
-  "pinnedFork": "5cdb4547e2e2ba2b059abc56ddc245c20675ee4b",
+  "pinnedFork": "940e9c43b2fff543b344863986159b3fda11ae46",
   "forkBase": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
   "upstreamAudited": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
-  "divergentCommits": 51,
-  "userAuthoredCommits": 51,
+  "divergentCommits": 54,
+  "userAuthoredCommits": 54,
   "upstreamAuthoredPicks": 0,
-  "status": "Sty c1f42d68 / Ruff 5cdb4547 is published. Native targets, optimized Linux and 148 real corpus cases pass. All 20 community checks executed: 11 strict zero-error passes, six advisory completions and three failures. Workflow publication remains blocked.",
+  "status": "Sty 43d26607 / Ruff 940e9c43 is published. Native targets, optimized Linux and all 148 real corpus cases pass. All 20 community checks executed: 11 strict zero-error passes, six advisory completions and three existing failures. Workflow publication remains blocked.",
   "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
   "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
   "sourceReviewComplete": false,
@@ -1850,14 +1846,30 @@ export const inventory = {
     "upstreamAuthoredPicks": 12
   },
   "publishedRuffCheckpoint": {
-    "revision": "5cdb4547e2e2ba2b059abc56ddc245c20675ee4b",
-    "sourceRevision": "5cdb4547e2e2ba2b059abc56ddc245c20675ee4b",
-    "url": "https://github.com/tamird/ruff/commit/5cdb4547e2e2ba2b059abc56ddc245c20675ee4b",
-    "selectedTestsURL": "https://app.buildbuddy.io/invocation/302f70a3-5f28-4ae3-9fde-eb31b8cc7ba3",
-    "testScope": "Core 101, semantic 904 (35 ignored), IDE 1979, final focused controls, formatting and strict Clippy pass. The full default census retains the same 31 failed files: 30 full failure bodies are identical, and bidirectional removes six positive/precision failure lines. No new failures. Added inference cost is unmeasured; network-backed cases remain separate.",
+    "revision": "940e9c43b2fff543b344863986159b3fda11ae46",
+    "sourceRevision": "940e9c43b2fff543b344863986159b3fda11ae46",
+    "url": "https://github.com/tamird/ruff/commit/940e9c43b2fff543b344863986159b3fda11ae46",
+    "selectedTestsURL": "https://app.buildbuddy.io/invocation/91010805-fa38-4499-b97c-137628a5ee57",
+    "testScope": "Core 101, semantic 904 (35 ignored), IDE 1979, canonical hooks, formatting and strict Clippy pass. All 539 default Markdown actions executed: 507 fixtures pass, the same 31 fail, and inventory passes. All 31 complete failure bodies match 5cdb after source-proven line shifts and timing/thread normalization. Extra solve/trial-context cost is unmeasured; network-backed cases remain separate.",
     "fullMarkdownQualified": false,
     "styIntegrationQualified": true,
     "markdownResults": {
+      "revision": "940e9c43b2fff543b344863986159b3fda11ae46",
+      "fixtures": 538,
+      "passed": 507,
+      "failed": 31,
+      "inventoryPassed": true,
+      "compiledHarnesses": 1,
+      "actionsCompleted": 539,
+      "url": "https://app.buildbuddy.io/invocation/91010805-fa38-4499-b97c-137628a5ee57",
+      "historical": false,
+      "runtimeParent": "5cdb4547e2e2ba2b059abc56ddc245c20675ee4b",
+      "identicalFullFailureBodies": 31,
+      "improvedFailureBodies": 0,
+      "newFailedFiles": 0,
+      "resolvedFailedFiles": 0
+    },
+    "previousMarkdownResults": {
       "revision": "5cdb4547e2e2ba2b059abc56ddc245c20675ee4b",
       "fixtures": 538,
       "passed": 507,
@@ -1866,39 +1878,27 @@ export const inventory = {
       "compiledHarnesses": 1,
       "actionsCompleted": 539,
       "url": "https://app.buildbuddy.io/invocation/302f70a3-5f28-4ae3-9fde-eb31b8cc7ba3",
-      "historical": false,
+      "historical": true,
       "runtimeParent": "b97cf3304db024069df83b0cc4df54d12a083b72",
       "identicalFullFailureBodies": 30,
       "improvedFailureBodies": 1,
       "newFailedFiles": 0,
       "resolvedFailedFiles": 0
-    },
-    "previousMarkdownResults": {
-      "revision": "b97cf3304db024069df83b0cc4df54d12a083b72",
-      "fixtures": 538,
-      "passed": 507,
-      "failed": 31,
-      "inventoryPassed": true,
-      "compiledHarnesses": 1,
-      "actionsCompleted": 539,
-      "url": "https://app.buildbuddy.io/invocation/cf19c18e-00ef-463b-829f-d15e8c2f2eea",
-      "historical": true,
-      "runtimeParent": "521014044d2578c786fe05ff3a5bf2e1425a2cba"
     }
   },
   "currentSty": {
-    "revision": "c1f42d68aa3c9dbec054edb345cfeb8c248bfba5",
-    "url": "https://github.com/tamird/sty/commit/c1f42d68aa3c9dbec054edb345cfeb8c248bfba5",
-    "ruffRevision": "5cdb4547e2e2ba2b059abc56ddc245c20675ee4b",
+    "revision": "43d266072decb9efc3cca9ada6f0d7eb4047c2e2",
+    "url": "https://github.com/tamird/sty/commit/43d266072decb9efc3cca9ada6f0d7eb4047c2e2",
+    "ruffRevision": "940e9c43b2fff543b344863986159b3fda11ae46",
     "testScope": "All eight native targets and the optimized Linux executable pass on RBE with frozen locks. The separate real-corpus run passes all 148 cases using the reconciled working manifest and exact source bundles.",
-    "testsURL": "https://app.buildbuddy.io/invocation/c760d98c-a19b-4e92-b34d-1ce4d8cb775b",
-    "frozenBuildURL": "https://app.buildbuddy.io/invocation/5531515d-2dc8-4698-a468-05f5e905c174",
+    "testsURL": "https://app.buildbuddy.io/invocation/466657a3-a0b1-469b-9565-221ee24e35c9",
+    "frozenBuildURL": "https://app.buildbuddy.io/invocation/292d84bf-3010-4955-8599-95caa0b0155f",
     "communityWorkflowExecutionsPlanned": 20,
     "communityRefreshPublished": false,
     "runtimeCorpusQualified": true,
     "fullRuffMarkdownQualified": false,
     "communityQualification": {
-      "revision": "c1f42d68aa3c9dbec054edb345cfeb8c248bfba5",
+      "revision": "43d266072decb9efc3cca9ada6f0d7eb4047c2e2",
       "planned": 20,
       "executed": 20,
       "strictZeroErrorPasses": 11,
@@ -1906,7 +1906,7 @@ export const inventory = {
       "failures": 3,
       "requiredSkipped": 0,
       "published": false,
-      "scope": "All 20 current c1f42d68 checks executed. Apple retains two toolchain-field errors; LLVM retains 31 released-example errors and 26 proposed-types errors. The final proposed-types check ran independently after repairing its condition. Eight workflow refreshes are local; publishing requires GitHub workflow access.",
+      "scope": "All 20 current 43d26607 checks executed with complete coverage and verified final source snapshots. Apple retains two toolchain-field errors; LLVM retains 31 released-example errors and 26 proposed-types errors. Native tests pass; rules_rs retains its formatter lint failure. Eight workflow refreshes are committed locally; publication requires GitHub workflow access.",
       "assembledFromLatestProjectRuns": true,
       "publishedProjects": [],
       "remainingProjects": 8,
@@ -1921,64 +1921,84 @@ export const inventory = {
         "with_cfg.bzl"
       ],
       "repairProjects": 2,
-      "publicationBlocker": "GitHub rejects workflow updates with the available HTTPS credential; the SSH agent refuses signing. The eight tested commits are prepared locally."
+      "publicationBlocker": "GitHub rejects workflow updates with the available HTTPS credential; SSH signing remains unavailable. The eight tested commits are prepared locally."
     },
     "defaultCorpusManifestCurrent": false,
     "corpusQualification": {
-      "revision": "c1f42d68aa3c9dbec054edb345cfeb8c248bfba5",
+      "revision": "43d266072decb9efc3cca9ada6f0d7eb4047c2e2",
       "passed": 148,
       "failed": 0,
       "manifestPublished": false,
       "inputsPublished": false,
-      "scope": "Reconciled working manifest; native runner checks exact primary diagnostics, severity counts, coverage and exit. Source commits were transported as verified Git bundles. The default manifest is still the earlier snapshot.",
+      "scope": "All 148 actual cases pass on the qualified engine using verified source bundles and the reconciled working manifest. Five rules_rs cases passed the initial run; its sole expectation correction was rerun separately and still rejects the invalid return. Source commits and the default manifest remain unpublished.",
       "projects": [
         {
           "project": "bazel-skylib",
           "sourceCommit": "903bcc4b5175b7dff751c4ed8f4fecce84634fe4",
           "casesPassed": 8,
-          "url": "https://app.buildbuddy.io/invocation/21582d89-8fa9-4b9f-b775-cb0314d5a7f1"
+          "url": "https://app.buildbuddy.io/invocation/10075a50-0d49-417e-8604-89bf773e47d0"
         },
         {
           "project": "bazel_features",
           "sourceCommit": "657a891ce2224a999dcc766c4acaa0ed328c9dcc",
           "casesPassed": 3,
-          "url": "https://app.buildbuddy.io/invocation/bd35facb-ac15-4821-a121-3eb2a6eb9985"
+          "url": "https://app.buildbuddy.io/invocation/89fee206-2e32-473f-bacf-2e2d6086202b"
         },
         {
           "project": "rules_runfiles_group",
           "sourceCommit": "0501509db0839f5dff9f743d6fc4f45c9c2656ea",
           "casesPassed": 14,
-          "url": "https://app.buildbuddy.io/invocation/d14554c0-b6db-428d-a913-76309fab2890"
+          "url": "https://app.buildbuddy.io/invocation/96bb3788-9fa2-4e81-8a60-e8ccb1882f91"
         },
         {
           "project": "rules_cc",
-          "sourceCommit": "1d98b8afab7fa762defc01c51db4c51f9f13361a",
+          "sourceCommit": "a8ab72427b395721342468c8d64ab14e44482983",
           "casesPassed": 7,
-          "url": "https://app.buildbuddy.io/invocation/3e617ae1-cb31-4aea-99b3-b971e6e3d3a1"
+          "url": "https://app.buildbuddy.io/invocation/735b9d8b-23a9-47f2-9627-7cdaeced00ea"
         },
         {
           "project": "rules_rs",
           "sourceCommit": "fa5b73e2ac1c77470c52e2776034a314803a8029",
           "casesPassed": 6,
-          "url": "https://app.buildbuddy.io/invocation/b68413b2-fa0c-4d88-92dd-439f95a79617"
+          "url": "https://app.buildbuddy.io/invocation/ff800191-87a7-41c6-af0d-b766251af895",
+          "qualificationSources": [
+            {
+              "invocation": "d4ddab5e-b0d6-495e-99d5-eee14f1d7818",
+              "archiveSHA256": "7dbf532a49662930c1d9c65bae628cd1a7ad4a007176ffe7e39c10033a1aa03f",
+              "passedCases": [
+                "bad-call",
+                "bad-dependency-body",
+                "bad-result",
+                "bad-select-body",
+                "positive"
+              ]
+            },
+            {
+              "invocation": "ff800191-87a7-41c6-af0d-b766251af895",
+              "archiveSHA256": "d4b3a3d6afb7e7042a3832d7deddcabf9bf5f091b8e839face044e61196f2f58",
+              "passedCases": [
+                "bad-kind-body"
+              ]
+            }
+          ]
         },
         {
           "project": "with_cfg.bzl",
           "sourceCommit": "cace8639b445a96301d6f010d628fb862504665e",
           "casesPassed": 81,
-          "url": "https://app.buildbuddy.io/invocation/a9864225-d38b-4b25-80bc-b0d42bd1f858"
+          "url": "https://app.buildbuddy.io/invocation/c04fa5b6-a6b5-469d-b963-9419737196ec"
         },
         {
           "project": "apple_support",
           "sourceCommit": "ec0fb009f2e2ddd0199365f6600d28c598d386c9",
           "casesPassed": 11,
-          "url": "https://app.buildbuddy.io/invocation/60b41259-1f41-46bd-ac8d-54bca788300e"
+          "url": "https://app.buildbuddy.io/invocation/34e25fac-4215-4b5d-ae99-889ad0f418e7"
         },
         {
           "project": "hermetic-llvm",
           "sourceCommit": "dd08026d84b8fc4756d7d682858826ef27702fff",
           "casesPassed": 18,
-          "url": "https://app.buildbuddy.io/invocation/dbde4c99-5d4a-452c-9bd2-83dd77dec006"
+          "url": "https://app.buildbuddy.io/invocation/ba54eabb-3f48-43db-8bdb-297f342cc7e5"
         }
       ]
     }
@@ -1988,7 +2008,7 @@ export const inventory = {
     "observedOn": "2026-11-21",
     "rebasePending": false,
     "pendingChanges": [],
-    "scope": "The three listed ty changes are integrated into published b97. Separate source reconciliation and native/Sty checks pass; existing full-Markdown failures remain.",
+    "scope": "The recorded upstream changes are inherited by published 940e. Official main was verified at cd2d9732 during this refresh. Source accounting and runtime proof remain separate; 31 existing fork Markdown fixtures still fail.",
     "integratedChanges": [
       {
         "number": 30641,
