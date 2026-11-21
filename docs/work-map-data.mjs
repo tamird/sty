@@ -1101,7 +1101,7 @@ const reviewedTyWork = [
     "id": "ty-selected-toolchain-fields",
     "title": "Selected toolchain fields and indexed host bounds",
     "state": "Host API design",
-    "summary": "Apple lipo consumers cannot establish fields on a selected ToolchainInfo. Configured checking needs authoritative selected-producer facts and checked producer bodies. A universal source contract requires an enforced type-owned ABI.",
+    "summary": "Apple lipo still lacks a static ToolchainInfo field contract. An RBE aspect/cquery probe follows the selected producer, field shape and configured dependency edge through an --extra_toolchains replacement. Producer bodies remain unchecked.",
     "sources": [
       {
         "commit": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
@@ -1112,8 +1112,12 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Demonstrate selected-toolchain metadata through an aspect, including an --extra_toolchains replacement. Add keyed bounds only after validating each selected producer and preserving its configuration identity. This design is not implemented or runtime-qualified.",
+    "nextAction": "Check selected producer bodies and handle multiple configurations without label-only joins before adding keyed host bounds. Universal source contracts still require an enforced ABI. Sty integration is not implemented.",
     "evidence": [
+      {
+        "label": "Bazel 9.3.1 selected-toolchain replacement probe",
+        "url": "https://app.buildbuddy.io/invocation/d9603257-a7df-4706-a3ce-254d442e9b86"
+      },
       {
         "label": "Bazel 9.3 aspect toolchain access",
         "url": "https://github.com/bazelbuild/bazel/blob/9.3.0/src/main/java/com/google/devtools/build/lib/starlarkbuildapi/platform/ToolchainContextApi.java#L43"
