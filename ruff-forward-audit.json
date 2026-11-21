@@ -4395,8 +4395,8 @@
     "These 51 forward source paths include mixed runtime/API, documentation, migration and maintained tests; source accounting is not an independent PR count.",
     "Only exact whole/body hunk content is reused. Every other hunk has explicit current SHA review; no path or old-start fallback.",
     "The compatible preference/fallback correction extends the existing fresh-collection review family, not a new independent contribution. One call is added to an existing TypedDict pair case.",
-    "Related #27665 owns stored full-scope feedback. Corrected official extraction cdc3115850 passes native/style and all 532 default Markdown fixtures, and awaits Tamir review. Rejected official 5bc remains preserved as counterexample evidence.",
-    "Published engine 43d26607 pins 940e and passes native, optimized Linux and all 148 actual corpus cases. Community workflow qualification for this engine remains in progress; source accounting is not runtime proof.",
+    "Related #27665 owns stored full-scope feedback. Corrected official extraction cdc3115850 passes native/style and all 532 default Markdown fixtures, but fails performance qualification: rejected hints cost +63% and 256 fresh arguments take 3.12x baseline in the optimized same-worker benchmark. Its approval request is withdrawn. Rejected official 5bc remains preserved as counterexample evidence.",
+    "Published engine 43d26607 pins 940e and passes native, optimized Linux and all 148 actual corpus cases. All 20 community workflow checks executed and all eight qualified refreshes are published; source accounting is not runtime proof.",
     "The native receipt retains 31 preexisting failed Markdown fixtures, no external-network gate, and unmeasured extra solve/trial-context cost. It is not full-fork or upstream readiness.",
     "Frozen 169-unit/939-hunk solver and 250-path lineage remain unchanged. Rejected global truthiness stripping remains absent. No upstream submission or default promotion is approved by this source audit."
   ],
