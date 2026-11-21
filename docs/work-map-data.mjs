@@ -58,11 +58,15 @@ export const upstream = [
     "qualifiedHead": "ba712134db00258728314f30ae2a70d69de8728d",
     "qualifiedURL": "https://github.com/tamird/ruff/compare/75fabee2e0a069b6bf5a1af4226025afa0324fa5...ba712134db00258728314f30ae2a70d69de8728d",
     "qualification": {
-      "summary": "Core, semantic and IDE tests, style and all 532 default Markdown cases pass on 75fabee2. Optimized no-LTO stress checks cost 12.0% more for 256 homogeneous arguments, 19.6% for alternating types and 16.2% for 1,500 rejected hints. An earlier cd2d9732 attrs check kept all 45 diagnostics and showed no observed material regression; it exercised only two hint attempts.",
+      "summary": "Core, semantic and IDE tests, style and all 532 default Markdown cases pass on 75fabee2. Current-parent attrs checks used same-worker ABBA with 30 samples per phase: 405.077 to 415.182 ms (+2.495%), with all 45 diagnostics byte-identical. This is one maintained workload; three untimed helper entries do not prove projection reuse, benefit or broad performance neutrality. Optimized no-LTO stress checks cost 12.0% more for 256 homogeneous arguments, 19.6% for alternating types and 16.2% for 1,500 rejected hints. Both focused lambda probes are rejected by parent and proposal: the same-key pair has the identical int.lower error; the callback-list variant changes invalid-argument-type to a missing-attribute error inside the lambda. Neither demonstrates a newly rejected valid call or broadly resolves the speculative-diagnostics question. The earlier cd2 attrs evidence is historical and exercised only two hint attempts.",
       "evidence": [
         {
           "label": "75fabee2: native suites, style and all 532 Markdown cases",
           "url": "https://app.buildbuddy.io/invocation/0fe3d6a1-9b2c-46d2-b18f-080dd07a501d"
+        },
+        {
+          "label": "Current 75f parent versus ba712: attrs ABBA and identical 45 diagnostics",
+          "url": "https://app.buildbuddy.io/invocation/f0f911a0-d824-4172-8334-e7705a4f238f"
         },
         {
           "label": "75fabee2: four optimized no-LTO stress workloads",
@@ -73,12 +77,20 @@ export const upstream = [
           "url": "https://app.buildbuddy.io/invocation/6dc7e19e-2db1-4835-b927-8083fc1d1ec7"
         },
         {
+          "label": "Same-key TypedDict lambda: identical rejection on parent and proposal",
+          "url": "https://app.buildbuddy.io/invocation/aa34b3ee-ca23-4175-86b8-222152944556"
+        },
+        {
+          "label": "Callback-list lambda: both revisions reject with different diagnostics",
+          "url": "https://app.buildbuddy.io/invocation/454468bc-85ff-46e5-ad86-5dbd9d332c7d"
+        },
+        {
           "label": "Earlier cd2 base: attrs cold check and unchanged diagnostics",
           "url": "https://app.buildbuddy.io/invocation/634403bf-91ee-4103-b845-d57d42b61243"
         }
       ]
     },
-    "nextAction": "Tamir: approve this qualified contribution before upstream submission."
+    "nextAction": "Tamir: approve this exact ba712 proposal before upstream submission, taking the measured attrs and stress costs into account."
   },
   {
     "id": "exception-tuple-alias-projection",
