@@ -97,9 +97,19 @@ enum Overlay {
 #[derive(Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(deny_unknown_fields)]
 struct ExpectedDiagnostic {
+    #[serde(default)]
+    severity: Severity,
     id: String,
     path: PathBuf,
     line: usize,
+}
+
+#[derive(Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[serde(rename_all = "lowercase")]
+enum Severity {
+    #[default]
+    Error,
+    Warning,
 }
 
 #[derive(Deserialize)]
@@ -122,7 +132,7 @@ struct ReportFile {
     path: PathBuf,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Default, Deserialize, Eq, PartialEq)]
 struct Counts {
     errors: usize,
     warnings: usize,
@@ -192,29 +202,47 @@ fn replace_once(source: &str, old: &str, new: &str) -> Result<String> {
 }
 
 // The pinned CLI's rendered diagnostics have one header and a first primary
-// location. Secondary locations and notes cannot satisfy an expected error.
+// location. Secondary locations and notes cannot satisfy an expected diagnostic.
 fn diagnostics(text: &str, checkout: &Path) -> Result<Vec<ExpectedDiagnostic>> {
     ensure!(
         !text.contains('\u{1b}'),
         "unexpected ANSI escapes in diagnostic output"
     );
-    let mut result = Vec::new();
+    let mut result = Vec::<ExpectedDiagnostic>::new();
     let mut pending = None;
     for line in text.lines() {
-        if let Some(header) = line.strip_prefix("error[") {
+        let header = line
+            .strip_prefix("error[")
+            .map(|header| (Severity::Error, header))
+            .or_else(|| {
+                line.strip_prefix("warning[")
+                    .map(|header| (Severity::Warning, header))
+            });
+        if let Some((severity, header)) = header {
             ensure!(
                 pending.is_none(),
                 "diagnostic has no primary source location"
             );
             let (id, _message) = header
                 .split_once("]: ")
-                .context("unrecognized error header")?;
+                .context("unrecognized diagnostic header")?;
             ensure!(!id.is_empty(), "empty diagnostic ID");
-            pending = Some(id.to_owned());
-        } else if line.starts_with("error:")
-            || line.starts_with("warning[")
-            || line.starts_with("warning:")
+            pending = Some((severity, id.to_owned()));
+        } else if let Some(count) = line
+            .strip_prefix("warning: passed with ")
+            .and_then(|count| count.strip_suffix(" warnings"))
         {
+            ensure!(pending.is_none(), "warning summary has no primary location");
+            let count: usize = count.parse()?;
+            let warnings = result
+                .iter()
+                .filter(|diagnostic| diagnostic.severity == Severity::Warning)
+                .count();
+            ensure!(
+                count == warnings,
+                "warning summary count differs from diagnostics"
+            );
+        } else if line.starts_with("error:") || line.starts_with("warning:") {
             bail!("unexpected diagnostic: {line}");
         } else if line.starts_with("info:") || line.trim_start().starts_with(":::") {
             ensure!(
@@ -222,7 +250,7 @@ fn diagnostics(text: &str, checkout: &Path) -> Result<Vec<ExpectedDiagnostic>> {
                 "diagnostic reaches a note without a primary location"
             );
         } else if let Some(location) = line.trim_start().strip_prefix("--> ") {
-            if let Some(id) = pending.take() {
+            if let Some((severity, id)) = pending.take() {
                 let (path_line, column) =
                     location.rsplit_once(':').context("missing source column")?;
                 let (path, line) = path_line.rsplit_once(':').context("missing source line")?;
@@ -231,7 +259,12 @@ fn diagnostics(text: &str, checkout: &Path) -> Result<Vec<ExpectedDiagnostic>> {
                 let path = Path::new(path);
                 let path = path.strip_prefix(checkout).unwrap_or(path).to_owned();
                 relative(&path)?;
-                result.push(ExpectedDiagnostic { id, path, line });
+                result.push(ExpectedDiagnostic {
+                    severity,
+                    id,
+                    path,
+                    line,
+                });
             }
         }
     }
@@ -251,7 +284,7 @@ fn check_report(
     report: Report,
     checkout: &Path,
     selected: &BTreeSet<PathBuf>,
-    errors: usize,
+    expected: Counts,
     bazel_version: &str,
 ) -> Result<()> {
     let Report {
@@ -267,11 +300,6 @@ fn check_report(
         diagnostics,
         complete,
     } = report;
-    let Counts {
-        errors: actual_errors,
-        warnings,
-        infos,
-    } = diagnostics;
     ensure!(
         version == 2 && load_scope == "requested",
         "unexpected coverage report version or load scope"
@@ -304,7 +332,10 @@ fn check_report(
         checked_paths(checked_files) == reported_selected,
         "report checked files differ from selected files"
     );
-    ensure!(actual_errors == errors && warnings == 0 && infos == 0, "report counts: {actual_errors} errors, {warnings} warnings, {infos} infos; expected {errors} errors");
+    ensure!(
+        diagnostics == expected,
+        "report counts: expected {expected:?}, got {diagnostics:?}"
+    );
     Ok(())
 }
 
@@ -429,14 +460,23 @@ fn run_case(checkout: &Path, bazel_version: &str, case: PreparedCase) -> Result<
     );
     let report = fs::read(output.join("report.json"))?;
     let report = serde_json::from_slice(&report)?;
-    check_report(report, checkout, &selected, expected.len(), bazel_version)?;
-    let expected_exit = if expected.is_empty() { 0 } else { 1 };
+    let counts = expected
+        .iter()
+        .fold(Counts::default(), |mut counts, diagnostic| {
+            match diagnostic.severity {
+                Severity::Error => counts.errors += 1,
+                Severity::Warning => counts.warnings += 1,
+            }
+            counts
+        });
+    let expected_exit = if counts.errors == 0 { 0 } else { 1 };
+    check_report(report, checkout, &selected, counts, bazel_version)?;
     ensure!(
         status.code() == Some(expected_exit),
         "expected exit {expected_exit}, got {status}"
     );
     println!(
-        "{name}: {} requested files, {} expected errors, {:.3}s",
+        "{name}: {} requested files, {} expected diagnostics, {:.3}s",
         selected.len(),
         expected.len(),
         elapsed.as_secs_f64()
@@ -634,14 +674,23 @@ mod tests {
 
     #[test]
     fn primary_location_is_required() {
-        let text = "error[invalid-return-type]: wrong return\n  --> lib/body.bzl:4:5\ninfo: declaration\n  --> contract.bzli:9:1\n";
+        let text = "error[invalid-return-type]: wrong return\n  --> lib/body.bzl:4:5\ninfo: declaration\n  --> contract.bzli:9:1\nwarning[non-static-type]: gradual input\n  --> lib/body.bzl:6:3\n";
         assert_eq!(
             diagnostics(text, Path::new("/repo")).unwrap(),
-            vec![ExpectedDiagnostic {
-                id: "invalid-return-type".into(),
-                path: "lib/body.bzl".into(),
-                line: 4,
-            }]
+            vec![
+                ExpectedDiagnostic {
+                    severity: Severity::Error,
+                    id: "invalid-return-type".into(),
+                    path: "lib/body.bzl".into(),
+                    line: 4,
+                },
+                ExpectedDiagnostic {
+                    severity: Severity::Warning,
+                    id: "non-static-type".into(),
+                    path: "lib/body.bzl".into(),
+                    line: 6,
+                },
+            ]
         );
         assert!(diagnostics(
             "error[invalid-return-type]: no location",
@@ -698,12 +747,19 @@ mod tests {
             },
             complete: true,
         };
-        check_report(report(), checkout, &selected, 0, "9.2.0").unwrap();
+        check_report(report(), checkout, &selected, Counts::default(), "9.2.0").unwrap();
         let mut fixture_only = report();
         fixture_only
             .checked_files
             .retain(|file| file.path.ends_with("probe.bzl"));
-        assert!(check_report(fixture_only, checkout, &selected, 0, "9.2.0").is_err());
+        assert!(check_report(
+            fixture_only,
+            checkout,
+            &selected,
+            Counts::default(),
+            "9.2.0"
+        )
+        .is_err());
 
         let mut missing_source = report();
         missing_source
@@ -712,7 +768,14 @@ mod tests {
         missing_source
             .checked_files
             .retain(|file| file.path.ends_with("probe.bzl"));
-        assert!(check_report(missing_source, checkout, &selected, 0, "9.2.0").is_err());
+        assert!(check_report(
+            missing_source,
+            checkout,
+            &selected,
+            Counts::default(),
+            "9.2.0"
+        )
+        .is_err());
 
         let donor = Path::new("/external/dependency/source.bzli");
         let mut configured = report();
@@ -722,19 +785,26 @@ mod tests {
         configured
             .checked_files
             .push(ReportFile { path: donor.into() });
-        check_report(configured, checkout, &selected, 0, "9.2.0").unwrap();
+        check_report(configured, checkout, &selected, Counts::default(), "9.2.0").unwrap();
 
         let mut unchecked_donor = report();
         unchecked_donor
             .selected_files
             .push(ReportFile { path: donor.into() });
-        assert!(check_report(unchecked_donor, checkout, &selected, 0, "9.2.0").is_err());
+        assert!(check_report(
+            unchecked_donor,
+            checkout,
+            &selected,
+            Counts::default(),
+            "9.2.0"
+        )
+        .is_err());
 
         for path in ["/external/dependency/source.bzl", "relative.bzli"] {
             let mut extra = report();
             extra.selected_files.push(ReportFile { path: path.into() });
             extra.checked_files.push(ReportFile { path: path.into() });
-            assert!(check_report(extra, checkout, &selected, 0, "9.2.0").is_err());
+            assert!(check_report(extra, checkout, &selected, Counts::default(), "9.2.0").is_err());
         }
     }
 }

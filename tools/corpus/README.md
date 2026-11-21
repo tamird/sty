@@ -39,10 +39,11 @@ The annotation commits are available on these fork branches:
 | `rules_runfiles_group` | [tamird/rules_runfiles_group:type-contracts](https://github.com/tamird/rules_runfiles_group/tree/type-contracts) |
 
 Each case selects every listed implementation and interface file. sty reads their
-associations from the source project's `sty.toml`. Positive callers must pass with
-complete coverage and zero diagnostics. Negative cases overlay an incorrect
-caller or replace exactly one source fragment, then require the precise
-diagnostic ID, source path, and line. Overlays and reports are written to the
+associations from the source project's `sty.toml`. Each case requires complete
+coverage and exactly its declared diagnostics, including severity, ID, source
+path, and line. Errors require an unsuccessful check; warning-only cases require
+a successful check. Negative cases overlay an incorrect caller or replace exactly
+one source fragment. Overlays and reports are written to the
 output directory. Repository contents are read directly from the pinned checkout.
 The runner prepares every overlay and validates all selected sources before
 starting a checker, so stale corpus inputs fail before any source checks run.
@@ -106,6 +107,10 @@ data and omitted defaults against the callback's data parameter. The omitted lis
 is allocated at the call, while explicitly supplied values retain their identity.
 
 All seven strictness rules are enabled for LLVM's selected implementations.
+Its project configuration keeps `non-static-type` at warning level for calls to
+untyped released dependencies. The corpus records both warnings from Skylib
+1.9.0's directory constructor in each LLVM case; they remain visible until a
+typed release is selected.
 Residual callback keywords and the generated name remain gradual: a ParamSpec
 forwards an intact signature but cannot describe replacing these keywords, and the
 name suffix relationship is unrepresented. The source declarations and callback
