@@ -5,17 +5,17 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-21T01:17:39Z';
+export const reviewedAt = '2026-11-21T03:04:18Z';
 
 export const projects = [
- {name:"Bazel Skylib",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/bazel-skylib",number:641,head:"a5ceab38eb0145c5144d1204def60743d10249fe",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"ce96423: 88 root files and five Gazelle files pass, with complete coverage.",followup:"Tested refresh committed locally. Push blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/ccf8450a-251e-4473-b58e-b0790f8432a9"}]},
- {name:"rules_cc",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/rules_cc",number:940,head:"ac7c8bd8ec0af475ccf4dd65b2b58806f19ef696",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"ce96423: 134 strict files pass. All 285 advisory files complete with 37,444 errors.",followup:"Tested refresh committed locally. Push blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/6f144a7e-892c-487c-b414-2e8c045e2d39"}]},
- {name:"hermetic-llvm",nextAction:"Restore GitHub SSH access",repo:"hermeticbuild/hermetic-llvm",number:835,head:"53f3ce81e92dd1bffe6100797620b45740795ffd",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"ce96423: 70 root files pass; the rules_cc example retains 31 errors. Five advisory checks complete; one required check is skipped. Native execution tests and formatter pass.",followup:"Tested refresh committed locally. Push blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/e82d6914-ec24-431f-9d5f-53db37ec2bda"}]},
- {name:"apple_support",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/apple_support",number:668,head:"6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"ce96423: all 46 strict files checked, retaining two lipo toolchain-field errors. All 76 advisory files complete with 5,994 errors.",followup:"Tested refresh committed locally. Push blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/ec97ae39-db9a-4392-9f77-3d788fc44a55"}]},
- {name:"with_cfg.bzl",nextAction:"Restore GitHub SSH access",repo:"fmeum/with_cfg.bzl",number:269,head:"52365fcdb3cf36149ee0937fb0b812968e4cb56f",draft:true,blocked:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"ce96423: 20 root and two example files pass with zero diagnostics. All five native suites pass in fast and optimized configurations.",followup:"Tested refresh committed locally. Push blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/1a96d987-440c-4a61-9c81-b45ec63453e6"}]},
- {name:"rules_runfiles_group",nextAction:"Restore GitHub SSH access",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"28fa82186d7fb3100941304ad7dfabd33f2596b9",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"ce96423: 32 root and 37 example files pass. Advisory checks retain 646 root and 344 example errors.",followup:"Tested refresh committed locally. Push blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/54d98f5a-1a42-4b64-b92a-55b4be053af5"}]},
- {name:"rules_rs",nextAction:"Restore GitHub SSH access",repo:"hermeticbuild/rules_rs",number:306,head:"2b8f319b4719f161dcdf1ef33ff9c5d78f365de9",draft:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"ce96423: 36 root and four fixture files pass; both retained Cargo tests pass. Formatting has no diffs; inherited lint warnings retain formatter exit 1.",followup:"Tested refresh committed locally. Push blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/f21320e7-3ffb-4ddc-a587-ca070d67e607"}]},
- {name:"bazel_features",nextAction:"Restore GitHub SSH access",repo:"bazel-contrib/bazel_features",number:158,head:"c4a2668321241937a8ffa47dc1eb78707c0adee1",draft:false,summary:"Feature compatibility declarations checked against implementations.",checks:"ce96423: eleven strict files pass; native tests pass. Advisory root and BCR checks retain 64 and 22 errors.",followup:"Tested refresh committed locally. Push blocked: SSH signer unavailable; HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/54d98f5a-1a42-4b64-b92a-55b4be053af5"}]}
+ {name:"Bazel Skylib",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/bazel-skylib",number:641,head:"a5ceab38eb0145c5144d1204def60743d10249fe",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"ce96423: 88 root files and five Gazelle files pass, with complete coverage.",followup:"ce96423 refresh committed locally. Refresh the engine pin and requalify before publishing; SSH signer unavailable and HTTPS lacks workflow permission.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/ccf8450a-251e-4473-b58e-b0790f8432a9"}]},
+ {name:"rules_cc",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/rules_cc",number:940,head:"ac7c8bd8ec0af475ccf4dd65b2b58806f19ef696",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"ce96423: 134 strict files pass. All 285 advisory files complete with 37,444 errors.",followup:"ce96423 refresh committed locally. Refresh the engine pin and requalify before publishing; SSH signer unavailable and HTTPS lacks workflow permission.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/6f144a7e-892c-487c-b414-2e8c045e2d39"}]},
+ {name:"hermetic-llvm",nextAction:"Restore GitHub SSH access",repo:"hermeticbuild/hermetic-llvm",number:835,head:"53f3ce81e92dd1bffe6100797620b45740795ffd",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"ce96423: 70 root files pass; the rules_cc example retains 31 errors. Five advisory checks complete; one required check is skipped. Native execution tests and formatter pass.",followup:"ce96423 refresh committed locally. Refresh the engine pin and requalify before publishing; SSH signer unavailable and HTTPS lacks workflow permission.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/e82d6914-ec24-431f-9d5f-53db37ec2bda"}]},
+ {name:"apple_support",nextAction:"Restore GitHub SSH access",repo:"bazelbuild/apple_support",number:668,head:"6e47ac0b4422ea9d9b9a7e3ae7889988f23fc3d8",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"ce96423: all 46 strict files checked, retaining two lipo toolchain-field errors. All 76 advisory files complete with 5,994 errors.",followup:"ce96423 refresh committed locally. Refresh the engine pin and requalify before publishing; SSH signer unavailable and HTTPS lacks workflow permission.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/ec97ae39-db9a-4392-9f77-3d788fc44a55"}]},
+ {name:"with_cfg.bzl",nextAction:"Restore GitHub SSH access",repo:"fmeum/with_cfg.bzl",number:269,head:"52365fcdb3cf36149ee0937fb0b812968e4cb56f",draft:true,blocked:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"ce96423: 20 root and two example files pass with zero diagnostics. All five native suites pass in fast and optimized configurations.",followup:"ce96423 refresh committed locally. Refresh the engine pin and requalify before publishing; SSH signer unavailable and HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/1a96d987-440c-4a61-9c81-b45ec63453e6"}]},
+ {name:"rules_runfiles_group",nextAction:"Restore GitHub SSH access",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"28fa82186d7fb3100941304ad7dfabd33f2596b9",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"ce96423: 32 root and 37 example files pass. Advisory checks retain 646 root and 344 example errors.",followup:"ce96423 refresh committed locally. Refresh the engine pin and requalify before publishing; SSH signer unavailable and HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/54d98f5a-1a42-4b64-b92a-55b4be053af5"}]},
+ {name:"rules_rs",nextAction:"Restore GitHub SSH access",repo:"hermeticbuild/rules_rs",number:306,head:"2b8f319b4719f161dcdf1ef33ff9c5d78f365de9",draft:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"ce96423: 36 root and four fixture files pass; both retained Cargo tests pass. Formatting has no diffs; inherited lint warnings retain formatter exit 1.",followup:"ce96423 refresh committed locally. Refresh the engine pin and requalify before publishing; SSH signer unavailable and HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/f21320e7-3ffb-4ddc-a587-ca070d67e607"}]},
+ {name:"bazel_features",nextAction:"Restore GitHub SSH access",repo:"bazel-contrib/bazel_features",number:158,head:"c4a2668321241937a8ffa47dc1eb78707c0adee1",draft:false,summary:"Feature compatibility declarations checked against implementations.",checks:"ce96423: eleven strict files pass; native tests pass. Advisory root and BCR checks retain 64 and 22 errors.",followup:"ce96423 refresh committed locally. Refresh the engine pin and requalify before publishing; SSH signer unavailable and HTTPS lacks workflow permission.",dependencies:[],evidence:[{"label": "ce96423 complete workflow qualification", "url": "https://app.buildbuddy.io/invocation/54d98f5a-1a42-4b64-b92a-55b4be053af5"}]}
 ];
 
 export const goals = [
@@ -47,6 +47,31 @@ export const goals = [
 ];
 
 export const upstream = [
+  {
+    "id": "exception-tuple-alias-projection",
+    "ref": "upstream/resolve-exception-tuple-aliases",
+    "title": "Preserve exception types through tuple aliases",
+    "state": "Awaiting Tamir review",
+    "source": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
+    "summary": "A tuple alias in an exception-handler parameter lost its ValueError element type and produced BaseException. Resolve the alias when projecting tuple elements.",
+    "qualifiedBase": "f31dd86f222f7d978a65cfc453eaf88f11456ed7",
+    "qualifiedHead": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/9188597e94983c89c39c386cb6d8a1c603d6bad5",
+    "qualification": {
+      "summary": "The existing fixture fails on pristine upstream and passes with the one-line fix. Core, semantic, IDE, all 532 default Markdown cases, canonical hooks, formatting and strict Clippy pass on RBE.",
+      "evidence": [
+        {
+          "label": "Qualified contribution",
+          "url": "https://github.com/tamird/ruff/commit/9188597e94983c89c39c386cb6d8a1c603d6bad5"
+        },
+        {
+          "label": "Native and all 532 default Markdown cases",
+          "url": "https://app.buildbuddy.io/invocation/731e2166-7327-4bcb-b58b-ec72235f39d7"
+        }
+      ]
+    },
+    "nextAction": "Tamir: review this qualified contribution before upstream submission."
+  },
   {
     "id": "receiver-union-overload-selection",
     "ref": "upstream/unify-bound-method-receivers",
@@ -1082,7 +1107,7 @@ const reviewedTyWork = [
     "id": "ty-solver-inference",
     "title": "Solver and callable generic inference",
     "state": "Requires current-upstream reconciliation",
-    "summary": "General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting.",
+    "summary": "General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting. The existing LLVM callback case with a fresh list of \"ok\" and list[Literal[\"ok\"]] fails on the fork and pristine upstream. A fix passes the strengthened existing fixture; broader qualification is in progress.",
     "sources": [
       {
         "commit": "b49d6ea5e7727b10015e87e3a8e2584b1d59560b",
@@ -1124,7 +1149,13 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Reproduce each surviving behavior on current ty; split independent fixes and qualify their solver/semantic suites before requesting Tamir review."
+    "nextAction": "Finish qualification of the fresh-literal callback fix, including the actual LLVM corpus case, before preparing an upstream proposal. Continue isolating the remaining solver improvements.",
+    "evidence": [
+      {
+        "label": "Pristine upstream literal-callback failure",
+        "url": "https://app.buildbuddy.io/invocation/807642d3-cc5a-4840-af59-3be7eb523295"
+      }
+    ]
   },
   {
     "id": "ty-overload-bodies",
@@ -1785,13 +1816,13 @@ const reviewedTyWork = [
 export const tyWork = [...reviewedTyWork, ...solverInventory.tasks];
 
 export const inventory = {
-  "pinnedFork": "521014044d2578c786fe05ff3a5bf2e1425a2cba",
-  "forkBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
-  "upstreamAudited": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
+  "pinnedFork": "b97cf3304db024069df83b0cc4df54d12a083b72",
+  "forkBase": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
+  "upstreamAudited": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
   "divergentCommits": 50,
   "userAuthoredCommits": 50,
   "upstreamAuthoredPicks": 0,
-  "status": "Qualified Sty ce96423 / Ruff 52101404 is published on Sty main. All eight community matrices completed: 11 strict passes, six advisory completions, two failures and one required LLVM skip.",
+  "status": "Sty d9d9e290 / Ruff b97cf330 is published. Native and optimized Linux checks pass. Community workflow results still refer to ce96423; updated pins and publication remain pending.",
   "reviewedCandidate": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
   "reviewedBase": "6b5b5eca948c05261a3909e78133884cd9e61c9e",
   "sourceReviewComplete": false,
@@ -1802,8 +1833,8 @@ export const inventory = {
     "runtimePathsWithSourceRecords": 142,
     "solverHunksAttributed": 939,
     "solverReviewUnits": 169,
-    "forwardCandidate": "521014044d2578c786fe05ff3a5bf2e1425a2cba",
-    "forwardBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
+    "forwardCandidate": "b97cf3304db024069df83b0cc4df54d12a083b72",
+    "forwardBase": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
     "url": "https://tamird.github.io/sty/ruff-source-audit.json",
     "qualified": false
   },
@@ -1818,14 +1849,26 @@ export const inventory = {
     "upstreamAuthoredPicks": 12
   },
   "publishedRuffCheckpoint": {
-    "revision": "521014044d2578c786fe05ff3a5bf2e1425a2cba",
-    "sourceRevision": "521014044d2578c786fe05ff3a5bf2e1425a2cba",
-    "url": "https://github.com/tamird/ruff/commit/521014044d2578c786fe05ff3a5bf2e1425a2cba",
-    "selectedTestsURL": "https://app.buildbuddy.io/invocation/93dec180-7640-4515-8bbb-f46be9c61289",
-    "testScope": "Core 101, semantic 904 (35 ignored), IDE 1979, hooks, format and strict Clippy pass. Full Markdown retains the same 31 failing fixtures as ec5; all failure bodies match after source-offset normalization. Internal truthiness guards are retained. Network-backed cases remain separate.",
+    "revision": "b97cf3304db024069df83b0cc4df54d12a083b72",
+    "sourceRevision": "b97cf3304db024069df83b0cc4df54d12a083b72",
+    "url": "https://github.com/tamird/ruff/commit/b97cf3304db024069df83b0cc4df54d12a083b72",
+    "selectedTestsURL": "https://app.buildbuddy.io/invocation/bb86dbf4-db2a-4215-830d-752021a3d649",
+    "testScope": "Core 101, semantic 904 (35 ignored), IDE 1979, hooks, format and strict Clippy pass. Full Markdown retains the same 31 failing fixtures as 521; all 31 failure bodies match after thread/time normalization. Internal truthiness guards remain. Network-backed cases are separate.",
     "fullMarkdownQualified": false,
     "styIntegrationQualified": true,
     "markdownResults": {
+      "revision": "b97cf3304db024069df83b0cc4df54d12a083b72",
+      "fixtures": 538,
+      "passed": 507,
+      "failed": 31,
+      "inventoryPassed": true,
+      "compiledHarnesses": 1,
+      "actionsCompleted": 539,
+      "url": "https://app.buildbuddy.io/invocation/cf19c18e-00ef-463b-829f-d15e8c2f2eea",
+      "historical": false,
+      "runtimeParent": "521014044d2578c786fe05ff3a5bf2e1425a2cba"
+    },
+    "previousMarkdownResults": {
       "revision": "521014044d2578c786fe05ff3a5bf2e1425a2cba",
       "fixtures": 538,
       "passed": 507,
@@ -1834,28 +1877,17 @@ export const inventory = {
       "compiledHarnesses": 1,
       "actionsCompleted": 539,
       "url": "https://app.buildbuddy.io/invocation/07037b10-9183-473f-8bed-576b6ffc6a83",
-      "historical": false,
+      "historical": true,
       "runtimeParent": "de31d23afc86395be9e24b87a487e83393fbbb9d"
-    },
-    "previousMarkdownResults": {
-      "revision": "ec5ee4693e7c1cf9a4ba432e3b0f4d494e89b805",
-      "fixtures": 538,
-      "passed": 507,
-      "failed": 31,
-      "inventoryPassed": true,
-      "compiledHarnesses": 1,
-      "actionsCompleted": 539,
-      "url": "https://app.buildbuddy.io/invocation/30d2904a-f6bc-4f5d-a726-246ae20d76e9",
-      "historical": true
     }
   },
   "currentSty": {
-    "revision": "ce96423cb6707c17953ac67ef32348af0f87fc53",
-    "url": "https://github.com/tamird/sty/commit/ce96423cb6707c17953ac67ef32348af0f87fc53",
-    "ruffRevision": "521014044d2578c786fe05ff3a5bf2e1425a2cba",
-    "testScope": "All eight native Bazel targets and the optimized Linux executable pass on RBE with frozen locks. Includes strict callback inference repairs; community matrices are being rechecked separately.",
-    "testsURL": "https://app.buildbuddy.io/invocation/78b4568c-4223-4833-a89a-e9d218c915e3",
-    "frozenBuildURL": "https://app.buildbuddy.io/invocation/aed9752a-fff2-4800-a643-8548739e5f43",
+    "revision": "d9d9e290edd40463d03e08a7e1fc2f9f9c8c0e38",
+    "url": "https://github.com/tamird/sty/commit/d9d9e290edd40463d03e08a7e1fc2f9f9c8c0e38",
+    "ruffRevision": "b97cf3304db024069df83b0cc4df54d12a083b72",
+    "testScope": "All eight native targets and the optimized Linux executable pass on RBE with frozen locks. The corpus target checks schema/unit behavior; it does not establish all 148 runtime cases.",
+    "testsURL": "https://app.buildbuddy.io/invocation/12d79653-8ba9-46bd-974b-72ffaaf25703",
+    "frozenBuildURL": "https://app.buildbuddy.io/invocation/22144e41-87d3-43f7-bec9-4538c6b656c0",
     "communityWorkflowExecutionsPlanned": 20,
     "communityRefreshPublished": false,
     "runtimeCorpusQualified": false,
@@ -1869,12 +1901,12 @@ export const inventory = {
       "failures": 2,
       "requiredSkipped": 1,
       "published": false,
-      "scope": "Current ce96423: 11 strict passes, six advisory completions, two failures and one required LLVM skip. Eight refreshed commits are prepared locally; workflow publication is blocked by GitHub authentication.",
+      "scope": "Historical ce96423 workflow census: 11 strict passes, 6 advisory completions, 2 failures, 1 required LLVM skip. Eight local commits await current-engine pin refresh, requalification and SSH publication.",
       "assembledFromLatestProjectRuns": true,
       "publishedProjects": [],
       "remainingProjects": 8,
-      "historicalForCurrentSty": false,
-      "currentRevisionPending": false,
+      "historicalForCurrentSty": true,
+      "currentRevisionPending": true,
       "readyProjects": [
         "bazel-skylib",
         "bazel_features",
@@ -1890,8 +1922,10 @@ export const inventory = {
   "latestUpstream": {
     "revision": "cd2d973241d7f5bcba588e94cc686d9e356a4621",
     "observedOn": "2026-11-21",
-    "rebasePending": true,
-    "pendingChanges": [
+    "rebasePending": false,
+    "pendingChanges": [],
+    "scope": "The three listed ty changes are integrated into published b97. Separate source reconciliation and native/Sty checks pass; existing full-Markdown failures remain.",
+    "integratedChanges": [
       {
         "number": 30641,
         "area": "TypedDict literal candidate filtering",
@@ -1907,7 +1941,6 @@ export const inventory = {
         "area": "Legacy namespace source-scan cache",
         "url": "https://github.com/astral-sh/ruff/pull/30646"
       }
-    ],
-    "scope": "Four commits follow the qualified 7d1 base; three affect ty. Source overlap was inspected; their composition with the fork is not yet qualified."
+    ]
   }
 };
