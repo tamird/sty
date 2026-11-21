@@ -2,22 +2,19 @@
   {
     "directory": "with_cfg.bzl",
     "origin": "git@github.com:tamird/with_cfg.bzl.git",
-    "commit": "1e4167246e332f1be18b76d932ab0eab834ddc1f",
+    "commit": "cace8639b445a96301d6f010d628fb862504665e",
     "sources": [
       "with_cfg/private/args.bzl",
       "with_cfg/private/frontend.bzl",
       "examples/dynamic_deps/rules/runfiles_dir.bzl",
       "with_cfg/private/args.bzli",
       "with_cfg/private/frontend.bzli",
-      "examples/dynamic_deps/rules/runfiles_dir.bzli",
       "with_cfg/private/rewrite.bzl",
       "with_cfg/private/rewrite.bzli",
       "with_cfg/private/providers.bzl",
       "with_cfg/private/providers.bzli",
       "with_cfg/private/original_settings_rule.bzl",
-      "with_cfg/private/original_settings_rule.bzli",
       "with_cfg/private/utils.bzl",
-      "with_cfg/private/utils.bzli",
       "with_cfg/private/transitioning_alias.bzl",
       "with_cfg/private/transitioning_alias.bzli",
       "with_cfg/private/setting.bzl",
@@ -73,7 +70,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
-            "line": 140
+            "line": 142
           }
         ]
       },
@@ -91,7 +88,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 78
+            "line": 84
           }
         ]
       },
@@ -109,7 +106,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/transitioning_alias.bzl",
-            "line": 41
+            "line": 43
           }
         ]
       },
@@ -127,7 +124,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/transitioning_alias.bzl",
-            "line": 77
+            "line": 80
           }
         ]
       },
@@ -207,7 +204,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 142
+            "line": 144
           }
         ]
       },
@@ -268,7 +265,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/transitioning_alias.bzl",
-            "line": 71
+            "line": 74
           }
         ]
       },
@@ -318,7 +315,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/original_settings_rule.bzl",
-            "line": 6
+            "line": 7
           }
         ]
       },
@@ -369,7 +366,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 131
+            "line": 135
           }
         ]
       },
@@ -387,7 +384,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/utils.bzl",
-            "line": 4
+            "line": 5
           }
         ]
       },
@@ -405,7 +402,7 @@
           {
             "id": "invalid-assignment",
             "path": "with_cfg/private/args.bzl",
-            "line": 129
+            "line": 98
           }
         ]
       },
@@ -423,7 +420,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 135
+            "line": 144
           }
         ]
       },
@@ -441,22 +438,22 @@
           {
             "id": "unsupported-operator",
             "path": "with_cfg/private/args.bzl",
-            "line": 120
+            "line": 132
           },
           {
             "id": "not-subscriptable",
             "path": "with_cfg/private/args.bzl",
-            "line": 122
+            "line": 134
           },
           {
             "id": "non-static-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 121
+            "line": 133
           },
           {
             "id": "non-static-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 122
+            "line": 134
           }
         ]
       },
@@ -585,7 +582,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 38
+            "line": 41
           }
         ]
       },
@@ -595,15 +592,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "    return _map_select(func, attribute, _map_list_selected, _compose_list)",
-            "new": "    _map_select(func, attribute, _map_list_selected, _compose_list)\n    return [\"bad\"]"
+            "old": "    return _compose_mapped(_map_select_pieces(func, value), _select_string_lists, _join_string_lists)",
+            "new": "    _compose_mapped(_map_select_pieces(func, value), _select_string_lists, _join_string_lists)\n    return [\"bad\"]"
           }
         ],
         "expected": [
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
-            "line": 16
+            "line": 31
           }
         ]
       },
@@ -631,15 +628,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "def _map_list_selected(func, branches):\n    return select(_map_selected(func, branches))",
-            "new": "def _map_list_selected(func, branches):\n    _map_selected(func, branches)\n    return select({\"//conditions:default\": None})"
+            "old": "def _select_string_lists(branches):\n    return select(branches)",
+            "new": "def _select_string_lists(branches):\n    return select({\"//conditions:default\": None})"
           }
         ],
         "expected": [
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
-            "line": 35
+            "line": 42
           }
         ]
       },
@@ -657,7 +654,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 140
+            "line": 145
           }
         ]
       },
@@ -675,7 +672,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 57
+            "line": 61
           }
         ]
       },
@@ -746,7 +743,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 28
+            "line": 33
           }
         ]
       },
@@ -764,12 +761,12 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 30
+            "line": 35
           },
           {
             "id": "invalid-function-interface",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 124
+            "line": 130
           }
         ]
       },
@@ -787,12 +784,12 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 28
+            "line": 33
           },
           {
             "id": "invalid-function-interface",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 125
+            "line": 131
           }
         ]
       },
@@ -810,7 +807,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/transitioning_alias.bzl",
-            "line": 72
+            "line": 75
           }
         ]
       },
@@ -856,7 +853,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/setting.bzl",
-            "line": 49
+            "line": 51
           }
         ]
       },
@@ -874,7 +871,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/setting.bzl",
-            "line": 69
+            "line": 74
           }
         ]
       },
@@ -893,6 +890,12 @@
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
             "line": 6
+          },
+          {
+            "severity": "warning",
+            "id": "unused-definition",
+            "path": "with_cfg/private/select.bzl",
+            "line": 13
           }
         ]
       },
@@ -946,7 +949,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
-            "line": 240
+            "line": 184
           }
         ]
       },
@@ -964,7 +967,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 167
+            "line": 120
           }
         ]
       },
@@ -1010,7 +1013,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/transitioning_alias.bzl",
-            "line": 41
+            "line": 43
           }
         ]
       },
@@ -1028,7 +1031,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/args.bzl",
-            "line": 137
+            "line": 139
           }
         ]
       },
@@ -1046,7 +1049,12 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 19
+            "line": 21
+          },
+          {
+            "id": "invalid-explicit-return",
+            "path": "with_cfg/private/rewrite.bzl",
+            "line": 21
           }
         ]
       },
@@ -1064,7 +1072,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 38
+            "line": 41
           }
         ]
       },
@@ -1072,17 +1080,16 @@
         "name": "finite-select-bad-kind",
         "overlays": [
           {
-            "kind": "replace",
-            "path": "with_cfg/private/select.bzl",
-            "old": "return (\"none\", select(mapped))\n    elif type(first) == \"string\":\n",
-            "new": "return (\"list\", select(mapped))\n    elif type(first) == \"string\":\n"
+            "kind": "file",
+            "path": "with_cfg/private/__sty_corpus__.bzl",
+            "fixture": "probes/with-cfg-selector-kind.bzl"
           }
         ],
         "expected": [
           {
             "id": "invalid-explicit-return",
-            "path": "with_cfg/private/select.bzl",
-            "line": 51
+            "path": "with_cfg/private/__sty_corpus__.bzl",
+            "line": 8
           }
         ]
       },
@@ -1092,15 +1099,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "return (\"none\", select(mapped))\n    elif type(first) == \"string\":\n",
-            "new": "return (\"none\", [\"plain\"])\n    elif type(first) == \"string\":\n"
+            "old": "def _join_string_lists(result, part, prepend, _use_union):\n    return part + result if prepend else result + part",
+            "new": "def _join_string_lists(result, part, prepend, _use_union):\n    return [\"plain\"]"
           }
         ],
         "expected": [
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
-            "line": 51
+            "line": 56
           }
         ]
       },
@@ -1117,6 +1124,11 @@
         "expected": [
           {
             "id": "invalid-explicit-return",
+            "path": "with_cfg/private/args.bzl",
+            "line": 50
+          },
+          {
+            "id": "non-static-type",
             "path": "with_cfg/private/args.bzl",
             "line": 50
           }
@@ -1154,7 +1166,7 @@
           {
             "id": "invalid-assignment",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 50
+            "line": 54
           }
         ]
       },
@@ -1220,7 +1232,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 24
+            "line": 29
           }
         ]
       },
@@ -1238,7 +1250,7 @@
           {
             "id": "invalid-assignment",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 23
+            "line": 28
           }
         ]
       },
@@ -1256,7 +1268,7 @@
           {
             "id": "invalid-assignment",
             "path": "with_cfg/private/frontend.bzl",
-            "line": 23
+            "line": 28
           }
         ]
       },
@@ -1266,15 +1278,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "def _map_dict_selected(func, branches):\n    return select(_map_selected(func, branches))\n",
-            "new": "def _map_dict_selected(func, branches):\n    return _map_selected(func, branches)\n"
+            "old": "def _select_dicts(branches):\n    return select(branches)",
+            "new": "def _select_dicts(branches):\n    return branches"
           }
         ],
         "expected": [
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
-            "line": 23
+            "line": 45
           }
         ]
       },
@@ -1284,45 +1296,25 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "    return _compose(items, lambda item: item[1], lambda value, result, prepend: value | result if prepend else result | value)\n",
-            "new": "    return _compose(items, lambda item: item[1], lambda value, result, prepend: value + result if prepend else result | value)\n"
+            "old": "def _join_dicts(result, part, prepend, _use_union):\n    return part | result if prepend else result | part",
+            "new": "def _join_dicts(result, part, prepend, _use_union):\n    return part + result if prepend else result | part"
           }
         ],
         "expected": [
           {
             "id": "unsupported-operator",
             "path": "with_cfg/private/select.bzl",
-            "line": 26
+            "line": 59
           },
           {
             "id": "unsound-return",
             "path": "with_cfg/private/select.bzl",
-            "line": 26
+            "line": 59
           },
           {
             "id": "non-static-type",
             "path": "with_cfg/private/select.bzl",
-            "line": 26
-          },
-          {
-            "id": "non-static-type",
-            "path": "with_cfg/private/select.bzl",
-            "line": 26
-          },
-          {
-            "id": "non-static-type",
-            "path": "with_cfg/private/select.bzl",
-            "line": 26
-          },
-          {
-            "id": "non-static-type",
-            "path": "with_cfg/private/select.bzl",
-            "line": 26
-          },
-          {
-            "id": "non-static-type",
-            "path": "with_cfg/private/select.bzl",
-            "line": 26
+            "line": 59
           }
         ]
       },
@@ -1332,15 +1324,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/select.bzl",
-            "old": "    return _map_select(func, attribute, _map_dict_selected, _compose_dict)\n",
-            "new": "    return [_map_select(func, attribute, _map_dict_selected, _compose_dict)]\n"
+            "old": "    return _compose_mapped(_map_select_pieces(func, attribute), _select_dicts, _join_dicts)",
+            "new": "    return [_compose_mapped(_map_select_pieces(func, attribute), _select_dicts, _join_dicts)]"
           }
         ],
         "expected": [
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/select.bzl",
-            "line": 20
+            "line": 36
           }
         ]
       },
@@ -1350,7 +1342,7 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/rewrite.bzl",
-            "old": "_rewrite_locations_in_parsed_list_or_single_value(v, label_rewriter)",
+            "old": "_rewrite_locations_in_list_or_single_value(v, label_rewriter)",
             "new": "struct(value = v)"
           }
         ],
@@ -1358,7 +1350,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 146
+            "line": 61
           }
         ]
       },
@@ -1368,15 +1360,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/rewrite.bzl",
-            "old": "return _rewrite_locations_in_parsed_value(value, label_rewriter)",
-            "new": "return _rewrite_locations_in_parsed_value(label_rewriter(value), label_rewriter)"
+            "old": "return _rewrite_locations_in_value(item, label_rewriter)",
+            "new": "return _rewrite_locations_in_value(label_rewriter(item), label_rewriter)"
           }
         ],
         "expected": [
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 23
+            "line": 25
           }
         ]
       },
@@ -1394,7 +1386,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 140
+            "line": 145
           }
         ]
       },
@@ -1412,7 +1404,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/setting.bzl",
-            "line": 105
+            "line": 112
           }
         ]
       },
@@ -1430,7 +1422,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/setting.bzl",
-            "line": 100
+            "line": 106
           }
         ]
       },
@@ -1448,7 +1440,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 222
+            "line": 203
           }
         ]
       },
@@ -1466,7 +1458,7 @@
           {
             "id": "invalid-argument-type",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 223
+            "line": 204
           }
         ]
       },
@@ -1484,7 +1476,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 203
+            "line": 183
           }
         ]
       },
@@ -1494,15 +1486,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/rewrite.bzl",
-            "old": "    def replace_parsed(dep):\n        # type: (_ParsedElement) -> _ParsedElement\n        return _replace_parsed_dep_value(dep, replace)\n\n    return map_parsed_select(replace_parsed, value)\n",
-            "new": "    def replace_parsed(dep):\n        # type: (_ParsedElement) -> _ParsedElement\n        return struct(value = _replace_parsed_dep_value(dep, replace))\n\n    return map_parsed_select(replace_parsed, value)\n"
+            "old": "    def replace_parsed(dep):\n        # type: (_ParsedElement) -> _ReplacedDependency\n        return _replace_dep_value(dep, replace)\n\n    return map_parsed_select(replace_parsed, value)\n",
+            "new": "    def replace_parsed(dep):\n        # type: (_ParsedElement) -> _ReplacedDependency\n        return struct(value = _replace_dep_value(dep, replace))\n\n    return map_parsed_select(replace_parsed, value)\n"
           }
         ],
         "expected": [
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/rewrite.bzl",
-            "line": 177
+            "line": 166
           }
         ]
       },
@@ -1512,15 +1504,15 @@
           {
             "kind": "replace",
             "path": "with_cfg/private/utils.bzl",
-            "old": "\ndef is_label(value):\n    return type(value) == _LABEL_TYPE\n\ndef is_list(value):\n",
-            "new": "\ndef is_label(value):\n    return int(type(value) == _LABEL_TYPE)\n\ndef is_list(value):\n"
+            "old": "def is_label(value):\n    # type: (object) -> TypeIs[Label]\n    return type(value) == _LABEL_TYPE",
+            "new": "def is_label(value):\n    # type: (object) -> TypeIs[Label]\n    return int(type(value) == _LABEL_TYPE)"
           }
         ],
         "expected": [
           {
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/utils.bzl",
-            "line": 13
+            "line": 20
           }
         ]
       },
@@ -1590,6 +1582,11 @@
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 52
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 52
           }
         ]
       },
@@ -1606,6 +1603,11 @@
         "expected": [
           {
             "id": "invalid-explicit-return",
+            "path": "with_cfg/private/args.bzl",
+            "line": 59
+          },
+          {
+            "id": "non-static-type",
             "path": "with_cfg/private/args.bzl",
             "line": 59
           }
@@ -1626,6 +1628,11 @@
             "id": "invalid-explicit-return",
             "path": "with_cfg/private/args.bzl",
             "line": 46
+          },
+          {
+            "id": "non-static-type",
+            "path": "with_cfg/private/args.bzl",
+            "line": 46
           }
         ]
       }
@@ -1635,13 +1642,11 @@
   {
     "directory": "bazel_features",
     "origin": "https://github.com/bazel-contrib/bazel_features.git",
-    "commit": "cc2a1e97b853244098efe2d4874e160c80323577",
+    "commit": "657a891ce2224a999dcc766c4acaa0ed328c9dcc",
     "sources": [
       "private/parse.bzl",
       "private/util.bzl",
-      "features.bzl",
-      "private/parse.bzli",
-      "private/util.bzli"
+      "features.bzl"
     ],
     "cases": [
       {
@@ -1686,7 +1691,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "private/parse.bzl",
-            "line": 15
+            "line": 19
           }
         ]
       }
@@ -1696,10 +1701,9 @@
   {
     "directory": "bazel-skylib",
     "origin": "https://github.com/bazelbuild/bazel-skylib.git",
-    "commit": "bb72a6b3bc17dc2b642fa005c344c1f157b670f4",
+    "commit": "903bcc4b5175b7dff751c4ed8f4fecce84634fe4",
     "sources": [
       "lib/paths.bzl",
-      "lib/paths.bzli",
       "rules/directory/providers.bzl",
       "rules/directory/providers.bzli",
       "rules/directory/private/paths.bzl",
@@ -1767,7 +1771,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "lib/paths.bzl",
-            "line": 36
+            "line": 38
           }
         ]
       },
@@ -1843,7 +1847,7 @@
           {
             "id": "invalid-argument-type",
             "path": "rules/directory/providers.bzl",
-            "line": 25
+            "line": 39
           }
         ]
       },
@@ -1861,7 +1865,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "rules/directory/private/paths.bzl",
-            "line": 58
+            "line": 65
           }
         ]
       }
@@ -1871,7 +1875,7 @@
   {
     "directory": "apple_support",
     "origin": "https://github.com/bazelbuild/apple_support.git",
-    "commit": "fa498b69d092959626704d2ba8a68888bdfa09e9",
+    "commit": "ec0fb009f2e2ddd0199365f6600d28c598d386c9",
     "sources": [
       "lib/apple_support.bzl",
       "lib/apple_support.bzli",
@@ -1955,7 +1959,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "lib/apple_support.bzl",
-            "line": 199
+            "line": 336
           }
         ]
       },
@@ -1965,7 +1969,7 @@
           {
             "kind": "replace",
             "path": "lib/apple_support.bzl",
-            "old": "        return str(apple_common.platform_type.ios)",
+            "old": "        return str(_PLATFORM_TYPE.ios)",
             "new": "        return 42"
           }
         ],
@@ -1973,7 +1977,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "lib/apple_support.bzl",
-            "line": 617
+            "line": 758
           }
         ]
       },
@@ -2049,7 +2053,7 @@
           {
             "id": "invalid-assignment",
             "path": "lib/apple_support.bzl",
-            "line": 252
+            "line": 390
           }
         ]
       },
@@ -2067,12 +2071,12 @@
           {
             "id": "invalid-argument-type",
             "path": "lib/apple_support.bzl",
-            "line": 290
+            "line": 430
           },
           {
             "id": "invalid-explicit-return",
             "path": "lib/apple_support.bzl",
-            "line": 289
+            "line": 429
           }
         ]
       },
@@ -2105,6 +2109,21 @@
             "id": "non-static-type",
             "path": "lib/sty_type_probe.bzl",
             "line": 10
+          },
+          {
+            "id": "non-static-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 6
+          },
+          {
+            "id": "non-static-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 6
+          },
+          {
+            "id": "non-static-type",
+            "path": "lib/sty_type_probe.bzl",
+            "line": 12
           }
         ]
       }
@@ -2114,12 +2133,11 @@
   {
     "directory": "hermetic-llvm",
     "origin": "https://github.com/hermeticbuild/hermetic-llvm.git",
-    "commit": "e1cdb89f2f72cfc4b78c0a683c26ff58c1a8a1a6",
+    "commit": "dd08026d84b8fc4756d7d682858826ef27702fff",
     "sources": [
       "defs.bzl",
       "directory.bzl",
-      "defs.bzli",
-      "directory.bzli"
+      "defs.bzli"
     ],
     "cases": [
       {
@@ -2131,7 +2149,20 @@
             "fixture": "probes/llvm-valid-caller.bzl"
           }
         ],
-        "expected": []
+        "expected": [
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
+          }
+        ]
       },
       {
         "name": "bad-call",
@@ -2237,6 +2268,18 @@
             "id": "non-static-type",
             "path": "_sty_contract_test.bzl",
             "line": 15
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2255,6 +2298,18 @@
             "id": "unsupported-operator",
             "path": "defs.bzl",
             "line": 25
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2272,7 +2327,19 @@
           {
             "id": "invalid-explicit-return",
             "path": "defs.bzl",
-            "line": 58
+            "line": 59
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2285,7 +2352,20 @@
             "fixture": "probes/llvm-forwarded-keywords.bzl"
           }
         ],
-        "expected": []
+        "expected": [
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
+          }
+        ]
       },
       {
         "name": "bad-forwarded-keywords",
@@ -2306,6 +2386,18 @@
             "id": "non-static-type",
             "path": "_sty_forwarded_keywords.bzl",
             "line": 7
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2318,7 +2410,20 @@
             "fixture": "probes/llvm-callback-data.bzl"
           }
         ],
-        "expected": []
+        "expected": [
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
+          }
+        ]
       },
       {
         "name": "bad-callback-data",
@@ -2429,6 +2534,18 @@
             "id": "non-static-type",
             "path": "_sty_callback_data.bzl",
             "line": 28
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2441,7 +2558,20 @@
             "fixture": "probes/llvm-callback-tags.bzl"
           }
         ],
-        "expected": []
+        "expected": [
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
+          }
+        ]
       },
       {
         "name": "bad-callback-tags",
@@ -2492,6 +2622,18 @@
             "id": "non-static-type",
             "path": "_sty_callback_tags.bzl",
             "line": 16
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2510,6 +2652,18 @@
             "id": "invalid-argument-type",
             "path": "defs.bzl",
             "line": 13
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2528,6 +2682,23 @@
             "id": "invalid-argument-type",
             "path": "defs.bzl",
             "line": 27
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
+          },
+          {
+            "id": "unused-ignore-comment",
+            "path": "defs.bzl",
+            "line": 23
           }
         ]
       },
@@ -2546,6 +2717,23 @@
             "id": "invalid-argument-type",
             "path": "defs.bzl",
             "line": 26
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
+          },
+          {
+            "id": "unused-ignore-comment",
+            "path": "defs.bzl",
+            "line": 23
           }
         ]
       },
@@ -2564,6 +2752,18 @@
             "id": "invalid-argument-type",
             "path": "defs.bzl",
             "line": 26
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2582,6 +2782,18 @@
             "id": "invalid-argument-type",
             "path": "defs.bzl",
             "line": 26
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2600,6 +2812,23 @@
             "id": "invalid-argument-type",
             "path": "defs.bzl",
             "line": 26
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
+          },
+          {
+            "id": "unused-ignore-comment",
+            "path": "defs.bzl",
+            "line": 23
           }
         ]
       },
@@ -2617,6 +2846,18 @@
             "id": "non-static-type",
             "path": "_sty_unproved_callback.bzl",
             "line": 7
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       },
@@ -2635,16 +2876,28 @@
             "id": "non-static-type",
             "path": "defs.bzl",
             "line": 42
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 64
+          },
+          {
+            "severity": "warning",
+            "id": "non-static-type",
+            "path": "directory.bzl",
+            "line": 65
           }
         ]
       }
     ],
-    "bazel_version": "9.3.0rc2"
+    "bazel_version": "9.3.2"
   },
   {
     "directory": "rules_cc",
     "origin": "git@github.com:tamird/rules_cc.git",
-    "commit": "1d4be625520f983131e73318255d4c09c571371b",
+    "commit": "a8ab72427b395721342468c8d64ab14e44482983",
     "bazel_version": "9.3.0",
     "sources": [
       "cc/cc_toolchain_config_lib.bzl",
@@ -2715,7 +2968,7 @@
             "line": 7
           },
           {
-            "id": "missing-attribute",
+            "id": "missing-union-attribute",
             "path": "cc/__sty_corpus__.bzl",
             "line": 9
           },
@@ -2740,7 +2993,7 @@
           {
             "id": "invalid-argument-type",
             "path": "cc/cc_toolchain_config_lib.bzl",
-            "line": 314
+            "line": 326
           }
         ]
       },
@@ -2758,7 +3011,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "cc/cc_toolchain_config_lib.bzl",
-            "line": 114
+            "line": 122
           }
         ]
       },
@@ -2776,7 +3029,7 @@
           {
             "id": "missing-argument",
             "path": "cc/cc_toolchain_config_lib.bzl",
-            "line": 99
+            "line": 106
           }
         ]
       },
@@ -2794,7 +3047,7 @@
           {
             "id": "invalid-argument-type",
             "path": "cc/cc_toolchain_config_lib.bzl",
-            "line": 75
+            "line": 81
           }
         ]
       }
@@ -2803,13 +3056,11 @@
   {
     "directory": "rules_rs",
     "origin": "git@github.com:tamird/rules_rs.git",
-    "commit": "de8e6696cf97f3cbbff41ef1dceef3e2c97eb488",
-    "bazel_version": "9.0.0",
+    "commit": "fa5b73e2ac1c77470c52e2776034a314803a8029",
+    "bazel_version": "9.3.1",
     "sources": [
       "rs/private/select_utils.bzl",
-      "rs/private/all_crate_deps.bzl",
-      "rs/private/all_crate_deps.bzli",
-      "rs/private/select_utils.bzli"
+      "rs/private/all_crate_deps.bzl"
     ],
     "cases": [
       {
@@ -2914,9 +3165,9 @@
         ],
         "expected": [
           {
-            "id": "invalid-explicit-return",
+            "id": "invalid-assignment",
             "path": "rs/private/select_utils.bzl",
-            "line": 22
+            "line": 27
           }
         ]
       },
@@ -2934,7 +3185,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "rs/private/all_crate_deps.bzl",
-            "line": 67
+            "line": 85
           }
         ]
       },
@@ -2952,27 +3203,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "rs/private/all_crate_deps.bzl",
-            "line": 7
-          },
-          {
-            "id": "non-static-type",
-            "path": "rs/private/all_crate_deps.bzl",
-            "line": 7
-          },
-          {
-            "id": "non-static-type",
-            "path": "rs/private/all_crate_deps.bzl",
-            "line": 9
-          },
-          {
-            "id": "non-static-type",
-            "path": "rs/private/all_crate_deps.bzl",
-            "line": 9
-          },
-          {
-            "id": "non-static-type",
-            "path": "rs/private/all_crate_deps.bzl",
-            "line": 9
+            "line": 21
           }
         ]
       }
@@ -2981,7 +3212,7 @@
   {
     "directory": "rules_runfiles_group",
     "origin": "https://github.com/bazel-contrib/rules_runfiles_group.git",
-    "commit": "b4b7fec819ac02cc9542cac7c398c09cdc1dd929",
+    "commit": "0501509db0839f5dff9f743d6fc4f45c9c2656ea",
     "bazel_version": "9.3.0",
     "sources": [
       "runfiles_group/private/lib/content.bzl",
@@ -2992,13 +3223,10 @@
       "runfiles_group/private/lib/partial.bzl",
       "runfiles_group/private/lib/resolve.bzl",
       "runfiles_group/private/providers/runfiles_group_partial_info.bzl",
-      "runfiles_group/private/lib/content.bzli",
-      "runfiles_group/private/lib/entry.bzli",
       "runfiles_group/private/lib/names.bzli",
       "runfiles_group/private/lib/packager.bzli",
       "runfiles_group/private/lib/partial.bzli",
       "runfiles_group/private/lib/resolve.bzli",
-      "runfiles_group/private/providers/runfiles_group_info.bzli",
       "runfiles_group/private/providers/runfiles_group_partial_info.bzli"
     ],
     "cases": [
@@ -3096,7 +3324,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "runfiles_group/private/lib/content.bzl",
-            "line": 58
+            "line": 62
           }
         ]
       },
@@ -3114,7 +3342,7 @@
           {
             "id": "invalid-argument-type",
             "path": "runfiles_group/private/lib/entry.bzl",
-            "line": 100
+            "line": 104
           }
         ]
       },
@@ -3132,7 +3360,7 @@
           {
             "id": "missing-argument",
             "path": "runfiles_group/private/lib/entry.bzl",
-            "line": 96
+            "line": 100
           }
         ]
       },
@@ -3150,7 +3378,7 @@
           {
             "id": "invalid-explicit-return",
             "path": "runfiles_group/private/lib/names.bzl",
-            "line": 25
+            "line": 26
           }
         ]
       },
