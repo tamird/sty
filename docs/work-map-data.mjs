@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = "2026-11-22T17:30:53.927506Z";
+export const reviewedAt = "2026-11-22T19:22:00.591382Z";
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -265,9 +265,9 @@ export const upstream = [
     "id": "call-completion-key-lifetime",
     "ref": "upstream/retain-call-completion-keys",
     "title": "Retain call-completion query keys",
-    "state": "Submitted",
+    "state": "Merged",
     "source": "1b9535f986af582c86f75977c4741c3b93eac83e",
-    "summary": "Retain call-completion query keys as semantic-index outputs. The approved 1b9535 amendment adds a deterministic dependency regression and restores the optimization explanation; PR #30759 now publishes that revision.",
+    "summary": "Merged by AlexWaygood on November 22, 2026 as Ruff #30759. The approved 1b9535 revision retains call-completion query keys as semantic-index outputs and includes the deterministic dependency regression.",
     "qualifiedBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
     "qualifiedHead": "1b9535f986af582c86f75977c4741c3b93eac83e",
     "qualifiedCommitCount": 1,
@@ -333,7 +333,7 @@ export const upstream = [
         "head": "1b9535f986af582c86f75977c4741c3b93eac83e"
       }
     },
-    "nextAction": "Follow upstream CI and review on the approved 1b9535 revision of Ruff #30759."
+    "merge": "a604f8ac5b27f9bfe1f594878c5d1fddbca23520"
   },
   {
     "id": "destructured-list-elements",
@@ -2034,7 +2034,7 @@ const reviewedTyWork = [
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Three approved ty commits have been submitted upstream. The approved 1b9535 amendment is now published on PR #30759. The e752 amendment and comments-only 6e08 personal proposal still have separate review requests. The receiver-union conditional approval is satisfied; ba712 remains Agent-owned for smaller independent contributions."
+    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30759 has merged; two other approved contributions remain submitted upstream. The e752 amendment and comments-only 6e08 personal proposal still have separate review requests. The receiver-union conditional approval is satisfied; ba712 remains Agent-owned for smaller independent contributions."
   }
 ];
 

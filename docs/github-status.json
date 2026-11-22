@@ -2,8 +2,8 @@
   "schema": 1,
   "repo": "astral-sh/ruff",
   "owner": "tamird",
-  "registryDate": "2026-11-22T17:30:53.927506Z",
-  "checkedAt": "2026-11-22T17:48:27.819403+00:00",
+  "registryDate": "2026-11-22T19:22:00.591382Z",
+  "checkedAt": "2026-11-22T19:21:27.469028+00:00",
   "repositories": {
     "astral-sh/ruff": "none",
     "tamird/ruff": "none",
@@ -26846,14 +26846,14 @@
       "number": 30759,
       "title": "[ty] Retain call-completion query keys",
       "url": "https://github.com/astral-sh/ruff/pull/30759",
-      "status": "open",
+      "status": "merged",
       "ref": "upstream/retain-call-completion-keys",
       "head": "1b9535f986af582c86f75977c4741c3b93eac83e",
       "branchHead": "1b9535f986af582c86f75977c4741c3b93eac83e",
-      "base": "ab37a8e980327682f5e03cf11db7f51a76df046c",
-      "mergeable": "MERGEABLE",
-      "mergeState": "CLEAN",
-      "mergeabilityCheckedAt": "2026-11-22T17:48:27.819403+00:00",
+      "base": "304c6d3026283ef4f9023c6f9b819d14caae5fd6",
+      "mergeable": "UNKNOWN",
+      "mergeState": "UNKNOWN",
+      "mergeabilityCheckedAt": "2026-11-22T19:21:27.469028+00:00",
       "headCommittedAt": "2026-11-22T17:04:37Z",
       "headHistoryComplete": true,
       "headIntroducedAt": "2026-11-22T17:27:16Z",
@@ -26862,10 +26862,10 @@
       "headRepo": "tamird/ruff",
       "authorLogin": "tamird",
       "createdAt": "2026-11-22T13:54:29Z",
-      "updatedAt": "2026-11-22T17:28:27Z",
-      "mergedAt": null,
-      "closedAt": null,
-      "mergeCommit": null,
+      "updatedAt": "2026-11-22T18:21:01Z",
+      "mergedAt": "2026-11-22T18:20:54Z",
+      "closedAt": "2026-11-22T18:20:54Z",
+      "mergeCommit": "a604f8ac5b27f9bfe1f594878c5d1fddbca23520",
       "githubReviewDecision": null,
       "reviewsComplete": true,
       "commentsComplete": true,
@@ -26882,12 +26882,13 @@
       ],
       "codeOwnerRequests": [],
       "labels": [
+        "bug",
         "ty"
       ],
       "labelsComplete": true,
       "threads": {
         "total": 2,
-        "unresolved": 2,
+        "unresolved": 0,
         "complete": true
       },
       "feedback": {
@@ -26911,9 +26912,26 @@
             }
           },
           {
+            "kind": "review",
+            "id": "PRR_kwDOHy0Bzc8AAAABZnIK9w",
+            "url": "https://github.com/astral-sh/ruff/pull/30759#pullrequestreview-6013717239",
+            "body": "",
+            "state": "APPROVED",
+            "submittedAt": "2026-11-22T18:20:40Z",
+            "updatedAt": "2026-11-22T18:20:40Z",
+            "authorAssociation": "MEMBER",
+            "author": {
+              "login": "AlexWaygood",
+              "__typename": "User"
+            },
+            "commit": {
+              "oid": "1b9535f986af582c86f75977c4741c3b93eac83e"
+            }
+          },
+          {
             "kind": "inline",
             "threadId": "PRRT_kwDOHy0Bzc66k1BQ",
-            "isResolved": false,
+            "isResolved": true,
             "isOutdated": true,
             "path": "crates/ty_python_semantic/src/types/infer/tests.rs",
             "line": null,
@@ -26930,7 +26948,7 @@
           {
             "kind": "inline",
             "threadId": "PRRT_kwDOHy0Bzc66k200",
-            "isResolved": false,
+            "isResolved": true,
             "isOutdated": true,
             "path": "crates/ty_python_core/src/predicate.rs",
             "line": 111,
@@ -28158,7 +28176,7 @@
       "importPolicy": "none",
       "imports": [],
       "importsComplete": true,
-      "checkedAt": "2026-11-22T17:48:27.819403+00:00",
+      "checkedAt": "2026-11-22T19:21:27.469028+00:00",
       "reviewDecision": null,
       "approvedHead": null,
       "approvedAt": null
