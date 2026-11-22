@@ -68,6 +68,7 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
       };
     }
     if (item.contributorReview) node.contributorReview = item.contributorReview;
+    if (item.refinement) node.refinement = item.refinement;
     nodes.push(node);
   }
   const registry = {

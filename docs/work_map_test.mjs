@@ -161,7 +161,11 @@ const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 assert.ok(source.endsWith('start();\n'));
 const document = {
   createElement(tag) {
-    return { tagName: tag.toUpperCase(), children: [],
+    let resolveHref;
+    const hrefReady = new Promise(resolve => { resolveHref = resolve; });
+    return { tagName: tag.toUpperCase(), children: [], hrefReady,
+      get href() { return this.url; },
+      set href(value) { this.url = value; resolveHref(value); },
       append(...children) { this.children.push(...children); },
       setAttribute(name, value) { this[name] = value; },
       addEventListener() {} };
@@ -175,13 +179,17 @@ const tracker = runInNewContext(readFileSync(new URL('./draft.js', import.meta.u
     try { return withConflictResult(pr); }
     finally { conflictResults.delete(id); }
   },
-  renderDecisionLinks(node) {
+  async renderDecisionLinks(node) {
     const parent = document.createElement('div');
     const current = { ...node, workStates: stateRecords(liveSnapshot, node) };
     appendContributorDecisions(parent, current, pendingDecisions(current));
-    return parent.children.flatMap(section => section.children
-      .filter(child => child.tagName === 'A' && child.href).map(anchor => ({ label: anchor.textContent, url: anchor.href })));
+    const anchors = parent.children.flatMap(section => section.children.filter(child => child.tagName === 'A'));
+    return Promise.all(anchors.map(async anchor => ({ label: anchor.textContent, url: await anchor.hrefReady })));
   },
+  async renderChangeLink(node, decision) {
+    return await reviewChangeLink(node, decision).hrefReady;
+  },
+  findDraft, refinementComparison,
   load(data, snapshot) {
     registry = data;
     liveSnapshot = snapshot;
@@ -217,22 +225,38 @@ for (const item of upstream) {
       assert.equal(node.head, item.qualifiedHead, 'An amendment does not replace the published PR head');
       assert.equal(node.github.head, item.qualifiedHead);
       assert.equal(node.contributorReview.baseHead, item.qualifiedHead);
+      assert.ok(tracker.refinementComparison(node, node.contributorReview).command.includes('--creation-factor=999'),
+        'The copyable single-commit command pairs the same replacement as the captured range-diff');
       assert.notEqual(node.contributorReview.head, item.qualifiedHead);
       assert.equal(node.followup, undefined, 'The amendment decision has no duplicate agent task');
-      assert.deepEqual(Array.from(tracker.renderDecisionLinks(node), anchor => anchor.url), [item.contributorReview.url],
-        'The actual PR renderer exposes the new amendment despite the old proposal approval');
+      const amendmentLinks = await tracker.renderDecisionLinks(node);
+      const reader = new URL(amendmentLinks[0].url);
+      assert.equal(reader.pathname, '/sty/draft.html');
+      assert.equal(decodeURIComponent(reader.hash.slice(1)), node.id);
+      const draft = await tracker.findDraft(node, reader.searchParams.get('draft'));
+      assert.deepEqual(draft, item.contributorReview, 'The reader addresses the exact amendment text');
+      assert.equal(await tracker.renderChangeLink(node, node.contributorReview), reader.href,
+        'The table and details use the same actual reader action');
+      assert.equal(amendmentLinks[0].label, 'Read amendment range-diff');
+      assert.equal(amendmentLinks[1].url, item.contributorReview.url, 'Retain the complete commit artifact separately');
+      assert.ok(draft.body.includes('```diff\n') && draft.body.includes('range-diff --no-color --no-dual-color --creation-factor=999'),
+        'The reader contains the actual comparison, not only its command');
+      const markdown = runInNewContext(readFileSync(new URL('./vendor/markdown-it-15.0.3/markdown-it.min.js', import.meta.url), 'utf8')
+        + '\nmarkdownit({ html: false, linkify: true })');
+      assert.ok(markdown.render(draft.body).includes('<pre><code class="language-diff">'), 'The existing reader renderer presents the diff');
+      console.log('RENDERED_AMENDMENT_READER_URL', reader.href);
       assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
       console.log('RENDERED_AMENDMENT_ACTION_URL', node.contributorReview.url);
     } else if (item.state !== 'Awaiting Tamir review') {
-      assert.equal(tracker.renderDecisionLinks(node).length, 0, 'Current approved or held heads must not ask for approval again');
+      assert.equal((await tracker.renderDecisionLinks(node)).length, 0, 'Current approved or held heads must not ask for approval again');
       assert.ok(!tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
-    } else assert.deepEqual(Array.from(tracker.renderDecisionLinks(node), anchor => anchor.url), [item.qualifiedURL]);
+    } else assert.deepEqual(Array.from(await tracker.renderDecisionLinks(node), anchor => anchor.url), [item.qualifiedURL]);
     const preview = { ...node, id: `branch:${item.id}`, type: 'branch', repo: 'tamird/ruff',
       url: item.qualifiedURL, head: item.qualifiedHead, ref: item.ref, github: undefined,
       settledReviews: undefined, followup: undefined,
       contributorReview: { kind: 'proposal', status: 'pending', head: item.qualifiedHead,
         baseHead: item.qualifiedBase, url: item.qualifiedURL } };
-    const links = tracker.renderDecisionLinks(preview);
+    const links = await tracker.renderDecisionLinks(preview);
     assert.deepEqual(Array.from(links, anchor => anchor.url), [item.qualifiedURL], 'Check the actual proposal-action renderer');
     renderedReviewLinks.push({ head: item.qualifiedHead, url: links[0].url });
     if (item.settledReviews?.some(review => review.outcome === 'approved' && review.head === item.qualifiedHead)) {
@@ -240,7 +264,7 @@ for (const item of upstream) {
       assert.equal(node.settledReviews.at(-1).head, item.qualifiedHead);
       assert.deepEqual(node.settledReviews, item.settledReviews, 'The actual node keeps its settled approval');
       if (node.type === 'branch')
-        assert.equal(tracker.renderDecisionLinks({ ...preview, settledReviews: node.settledReviews }).length, 0,
+        assert.equal((await tracker.renderDecisionLinks({ ...preview, settledReviews: node.settledReviews })).length, 0,
           'An exact settled approval must suppress a repeated branch request');
       assert.deepEqual(node.contributorReview, item.contributorReview, 'Old approval only settles its exact proposal head');
       assert.equal(node.humanAction, undefined, 'Submission is already authorized, not a new human task');
