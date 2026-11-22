@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = "2026-11-22T19:22:00.591382Z";
+export const reviewedAt = "2026-11-22T22:14:46.984816Z";
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -158,16 +158,40 @@ export const upstream = [
     "id": "receiver-union-overload-selection",
     "ref": "review/receiver-union-screening",
     "title": "Select method overloads across receiver unions",
-    "state": "Submitted",
+    "state": "Changes requested",
     "source": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
-    "summary": "Select method overloads across a receiver union. The qualified revision removes the unjustified empty-overload rejection and explains signature screening and reconstruction; Tamir’s conditional approval is satisfied. Submitted as Ruff #30761.",
+    "summary": "Carl requested a different approach after finding that combining bound receivers changes partial calls, property accessors, overload selection and expansion limits. Submitted ce523 is now Agent-owned rework; its earlier conditional approval does not authorize a replacement.",
     "qualifiedBase": "f31dd86f222f7d978a65cfc453eaf88f11456ed7",
     "qualifiedHead": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
     "qualifiedCommitCount": 1,
     "qualifiedURL": "https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
     "qualification": {
-      "summary": "The ce523f7 revision passes six existing whole fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. Tests are unchanged. Root verified the exact source and confirmed that the requested predicate and comments satisfy Tamir’s conditional LGTM. Earlier 61c and d367 qualification remains historical evidence.",
+      "summary": "Historical qualification of submitted ce523 only; Carl now requests a different approach. The ce523f7 revision passes six existing whole fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. Tests are unchanged. Root verified the exact source and confirmed that the requested predicate and comments satisfy Tamir’s conditional LGTM. Earlier 61c and d367 qualification remains historical evidence. This evidence and the settled conditional approval do not qualify or authorize a replacement.",
       "evidence": [
+        {
+          "label": "Carl: changes requested on submitted ce523",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#pullrequestreview-6013560748"
+        },
+        {
+          "label": "Partial calls must retain receiver correlation",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659214352"
+        },
+        {
+          "label": "Property setters must retain individual accessor identity",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659214358"
+        },
+        {
+          "label": "Overload order can relate result and receiver",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659214368"
+        },
+        {
+          "label": "Separate receivers retain expansion behavior and budget",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659214372"
+        },
+        {
+          "label": "Narrow UnionBuilder empty-string reconstruction",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659248502"
+        },
         {
           "label": "Submitted ce523f7 commit",
           "url": "https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e"
@@ -202,7 +226,7 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Follow upstream CI and review on Ruff #30761.",
+    "nextAction": "Replace the shared receiver-binding approach with the narrower UnionBuilder simplification requested by Carl, preserving individual bindings and other type exclusions. Address all five inline cases and qualify the replacement. Present its actual range-diff to Tamir before updating PR #30761; no candidate head is recorded yet.",
     "number": 30761,
     "settledReviews": [
       {
@@ -2034,7 +2058,7 @@ const reviewedTyWork = [
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30759 has merged; two other approved contributions remain submitted upstream. The e752 amendment and comments-only 6e08 personal proposal still have separate review requests. The receiver-union conditional approval is satisfied; ba712 remains Agent-owned for smaller independent contributions."
+    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30759 has merged; two other approved contributions remain submitted upstream. The e752 amendment and comments-only 6e08 personal proposal still have separate review requests. PR #30761 is Agent-owned rework following Carl’s review; any replacement needs user review of its range-diff before the PR is updated. The ce523 approval remains historical. ba712 remains Agent-owned for smaller independent contributions."
   }
 ];
 

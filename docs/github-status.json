@@ -2,8 +2,8 @@
   "schema": 1,
   "repo": "astral-sh/ruff",
   "owner": "tamird",
-  "registryDate": "2026-11-22T19:22:00.591382Z",
-  "checkedAt": "2026-11-22T19:21:27.469028+00:00",
+  "registryDate": "2026-11-22T22:14:46.984816Z",
+  "checkedAt": "2026-11-22T22:13:08.451844+00:00",
   "repositories": {
     "astral-sh/ruff": "none",
     "tamird/ruff": "none",
@@ -28190,10 +28190,10 @@
       "ref": "review/receiver-union-screening",
       "head": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
       "branchHead": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
-      "base": "ab37a8e980327682f5e03cf11db7f51a76df046c",
+      "base": "83fb4c4f8405d8e60a7cbdc71c206851d5d157c5",
       "mergeable": "MERGEABLE",
-      "mergeState": "CLEAN",
-      "mergeabilityCheckedAt": "2026-11-22T17:48:27.819403+00:00",
+      "mergeState": "BLOCKED",
+      "mergeabilityCheckedAt": "2026-11-22T22:13:08.451844+00:00",
       "headCommittedAt": "2026-11-22T17:11:46Z",
       "headHistoryComplete": true,
       "headIntroducedAt": null,
@@ -28202,11 +28202,11 @@
       "headRepo": "tamird/ruff",
       "authorLogin": "tamird",
       "createdAt": "2026-11-22T17:15:11Z",
-      "updatedAt": "2026-11-22T17:24:43Z",
+      "updatedAt": "2026-11-22T18:18:30Z",
       "mergedAt": null,
       "closedAt": null,
       "mergeCommit": null,
-      "githubReviewDecision": null,
+      "githubReviewDecision": "CHANGES_REQUESTED",
       "reviewsComplete": true,
       "commentsComplete": true,
       "reviewRequestsComplete": true,
@@ -28226,8 +28226,8 @@
       ],
       "labelsComplete": true,
       "threads": {
-        "total": 0,
-        "unresolved": 0,
+        "total": 5,
+        "unresolved": 5,
         "complete": true
       },
       "feedback": {
@@ -28242,6 +28242,108 @@
             "updatedAt": "2026-11-22T17:24:43Z",
             "author": {
               "login": "AlexWaygood",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "review",
+            "id": "PRR_kwDOHy0Bzc8AAAABZm-nrA",
+            "url": "https://github.com/astral-sh/ruff/pull/30761#pullrequestreview-6013560748",
+            "body": "Thanks! I think we should take a different approach to this problem, by simplifying `(str & ~AlwaysFalsy) | Literal[\"\"]` to `str`.",
+            "state": "CHANGES_REQUESTED",
+            "submittedAt": "2026-11-22T18:17:28Z",
+            "updatedAt": "2026-11-22T18:18:30Z",
+            "authorAssociation": "CONTRIBUTOR",
+            "author": {
+              "login": "carljm",
+              "__typename": "User"
+            },
+            "commit": {
+              "oid": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc66mTqm",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_semantic/src/types.rs",
+            "line": 7627,
+            "id": "PRRC_kwDOHy0Bzc8AAAABFbX4EA",
+            "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659214352",
+            "body": "Combining these bindings changes which arguments `functools.partial` accepts. With `Color` from the [enum test](https://github.com/astral-sh/ruff/blob/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e/crates/ty_python_semantic/resources/mdtest/call/overloads.md#L806), even a partial with no extra arguments loses a possible return type.\n\n```py\nfrom functools import partial\n\ndef f(color: Literal[Color.GREEN, Color.BLUE]):\n    reveal_type(color.label())           # int | str\n    reveal_type(partial(color.label)())  # was int | str, now int\n```\n\nIf we add `arg: int` to the green overload and `arg: str` to the blue one, we also miss an error.\n\n```py\ndef f(color: Literal[Color.GREEN, Color.BLUE]):\n    color.label(1)           # error, as expected\n    partial(color.label)(1)  # accepted, even though color could be BLUE\n```\n\nEach partial captures a particular receiver, so the argument has to work for both. We now infer one partial with two overloads, where matching either one suffices. I'd keep the union of bindings here.",
+            "createdAt": "2026-11-22T17:42:42Z",
+            "updatedAt": "2026-11-22T18:17:29Z",
+            "author": {
+              "login": "carljm",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc66mTqr",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_semantic/src/types/method.rs",
+            "line": 184,
+            "id": "PRRC_kwDOHy0Bzc8AAAABFbX4Fg",
+            "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659214358",
+            "body": "This also affects methods with no overloads. When `p` is a union of two properties, adding a setter now loses the getter type and lets us assign a `str` to an `int` setter.\n\n```py\nfrom typing import reveal_type\n\ndef f(flag: bool):\n    class C:\n        def a(self) -> int: return 1\n        def b(self) -> str: return \"\"\n\n        p = property(a) if flag else property(b)\n\n        @p.setter\n        def p(self, value: int) -> None: pass\n\n    c = C()\n    reveal_type(c.p)  # was int | str, now Unknown\n    c.p = \"\"          # was an error, now accepted\n```\n\n`evaluate_known_cases` needs the individual `PropertyInstance` to preserve its accessors.",
+            "createdAt": "2026-11-22T17:42:42Z",
+            "updatedAt": "2026-11-22T18:17:29Z",
+            "author": {
+              "login": "carljm",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc66mTqv",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_semantic/src/types/signatures.rs",
+            "line": 1351,
+            "id": "PRRC_kwDOHy0Bzc8AAAABFbX4IA",
+            "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659214368",
+            "body": "The choice of overload can itself tie the return type to the receiver, even if every signature passes these checks. Suppose we add one last overload to `Color.label` in the [enum test](https://github.com/astral-sh/ruff/blob/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e/crates/ty_python_semantic/resources/mdtest/call/overloads.md#L806).\n\n```pyi\n@overload\ndef label(self) -> object: ...\n```\n\n```py\ndef f(flag: bool) -> int | str:\n    label = Color.GREEN.label if flag else Color.BLUE.label\n    return label()  # now an error, inferred as object\n```\n\nGreen still selects the `int` overload and blue still selects the `str` overload. Neither selects the fallback on its own, yet it's the only match for the combined receiver. I'd keep these bound methods separate. Simplifying the type of `foo or \"\"` to `str` would fix the motivating example without changing overload selection here.",
+            "createdAt": "2026-11-22T17:42:42Z",
+            "updatedAt": "2026-11-22T18:17:29Z",
+            "author": {
+              "login": "carljm",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc66mTqz",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_semantic/src/types/method.rs",
+            "line": 194,
+            "id": "PRRC_kwDOHy0Bzc8AAAABFbX4JA",
+            "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659214372",
+            "body": "Checking the receivers together can also reject calls that succeed for every receiver individually. Both examples below now give `no-matching-overload`.\n\n<details>\n<summary>We expand E | Other but never expand E into its two members.</summary>\n\n```py\nfrom __future__ import annotations\nfrom enum import Enum\nfrom typing import Literal, overload\n\nclass Base:\n    @overload\n    def f(self: Literal[E.A]) -> int: ...\n    @overload\n    def f(self: Literal[E.B]) -> str: ...\n    @overload\n    def f(self: Other) -> bytes: ...\n    def f(self) -> object:\n        if isinstance(self, Other):\n            return b\"\"\n        return \"\" if self is E.B else 1\n\nclass E(Base, Enum):\n    A = 1\n    B = 2\n\nclass Other(Base): pass\n\ndef test(x: E | Other):\n    x.f()  # was int | str | bytes\n```\n\n</details>\n\n<details>\n<summary>Two receivers push the call over the 256-case expansion limit.</summary>\n\n```py\nfrom typing import Literal, overload\n\nclass Base:\n    @overload\n    def f(self, *args: bool, quiet: Literal[True]) -> int: ...\n    @overload\n    def f(self, *args: bool, quiet: Literal[False]) -> str: ...\n    def f(self, *args: bool, quiet: bool) -> int | str:\n        return 1 if quiet else \"\"\n\nclass A(Base): pass\nclass B(Base): pass\n\ndef test(x: A | B, b: bool):\n    x.f(b, b, b, b, b, b, b, quiet=b)  # was int | str\n```\n\nThe eight booleans fit within the limit for each receiver. Expanding `self` first doubles the count to 512, even though only `quiet` distinguishes the overloads.\n\n</details>\n",
+            "createdAt": "2026-11-22T17:42:43Z",
+            "updatedAt": "2026-11-22T18:17:29Z",
+            "author": {
+              "login": "carljm",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc66mY4-",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_semantic/resources/mdtest/expression/boolean.md",
+            "line": 17,
+            "id": "PRRC_kwDOHy0Bzc8AAAABFbZ9dg",
+            "url": "https://github.com/astral-sh/ruff/pull/30761#discussion_r4659248502",
+            "body": "I agree that this is the desirable result here, but I don't think the approach in this PR to fix it is correct.\n\nInstead I think we should aim to fix this case by simplifying `(str & ~AlwaysFalsy) | Literal[\"\"]` to `str` in `UnionBuilder`. For ordinary strings, `\"\"` adds back exactly the value that the truthiness check excluded.\n\n```py\ndef f(s: str):\n    reveal_type(s or \"\")            # str\n    reveal_type((s or \"\").split())  # list[str]\n    reveal_type(\"\".split())         # list[LiteralString]\n```\n\nI tried prototyping this, and it works for `rsplit` and `splitlines` too, without changing method binding or overload selection. We'd still keep `str & ~AlwaysFalsy` for `s or \"fallback\"`.\n\nThe only mdtest that changes is [this conditional expression in `narrow/len.md`](https://github.com/astral-sh/ruff/blob/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e/crates/ty_python_semantic/resources/mdtest/narrow/len.md#L636). We'd infer `str` both before and inside `if len(value)`. We'd also stop warning on `(s or \"\")[0]`, which seems fine to me.\n\nStrictly speaking, this simplification widens the type for `str` subclasses that override `__bool__` to always return `False`, but I think that's fine.",
+            "createdAt": "2026-11-22T17:51:20Z",
+            "updatedAt": "2026-11-22T18:17:29Z",
+            "author": {
+              "login": "carljm",
               "__typename": "User"
             }
           }
@@ -29459,8 +29561,8 @@
       "importPolicy": "none",
       "imports": [],
       "importsComplete": true,
-      "checkedAt": "2026-11-22T17:48:27.819403+00:00",
-      "reviewDecision": null,
+      "checkedAt": "2026-11-22T22:13:08.451844+00:00",
+      "reviewDecision": "CHANGES_REQUESTED",
       "approvedHead": null,
       "approvedAt": null
     }
