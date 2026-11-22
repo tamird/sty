@@ -116,6 +116,15 @@ for (const item of upstream) {
     assert.ok(item.number, `Merged item ${item.id} needs an upstream PR`);
     assert.match(item.merge, /^[a-f0-9]{10,40}$/);
   }
+  if (item.qualifiedCommitCount !== undefined) {
+    assert.ok(Number.isSafeInteger(item.qualifiedCommitCount) && item.qualifiedCommitCount > 0);
+    assert.match(item.qualifiedHead, /^[a-f0-9]{40}$/);
+    assert.match(item.qualifiedBase, /^[a-f0-9]{40}$/);
+    const path = item.qualifiedCommitCount === 1
+      ? `commit/${item.qualifiedHead}` : `compare/${item.qualifiedBase}...${item.qualifiedHead}`;
+    assert.equal(item.qualifiedURL, `https://github.com/tamird/ruff/${path}`,
+      'A single commit needs its native commit page; a series needs its range');
+  }
   if (item.state === 'Awaiting Tamir review') {
     assert.ok(item.ref, `Review request ${item.id} needs its published branch`);
     assert.match(item.qualifiedHead, /^[a-f0-9]{40}$/);
@@ -150,6 +159,12 @@ for (const [name, expected] of [['registry.json', generated.registry], ['github-
 // Exercise the inherited browser application's real schema and attention logic.
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 assert.ok(source.endsWith('start();\n'));
+const document = {
+  createElement(tag) {
+    return { tagName: tag.toUpperCase(), children: [],
+      append(...children) { this.children.push(...children); } };
+  },
+};
 const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
 ({ validateRegistry, validateSnapshot, attentionReasons, historical, citationURL, status, checkInfo, checksPassed, effectiveReviewDecision, withConflictResult, mergeProviderPRs,
   recheck(pr, result) {
@@ -158,6 +173,13 @@ const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
     try { return withConflictResult(pr); }
     finally { conflictResults.delete(id); }
   },
+  renderDecisionLinks(node) {
+    const parent = document.createElement('div');
+    const current = { ...node, workStates: stateRecords(liveSnapshot, node) };
+    appendContributorDecisions(parent, current, pendingDecisions(current));
+    return parent.children.flatMap(section => section.children
+      .filter(child => child.tagName === 'A').map(anchor => ({ label: anchor.textContent, url: anchor.href })));
+  },
   load(data, snapshot) {
     registry = data;
     liveSnapshot = snapshot;
@@ -165,7 +187,7 @@ const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
     for (const node of model.nodes) node.workStates = stateRecords(snapshot, node);
     return model.nodes;
   }
-})`, { URL, console });
+})`, { URL, console, document });
 tracker.validateRegistry(generated.registry);
 tracker.validateSnapshot(generated.snapshot, generated.registry);
 const nodes = tracker.load(generated.registry, generated.snapshot);
@@ -184,10 +206,41 @@ for (const item of [...projects, ...additionalProjects]) {
     assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
   else assert.ok(!tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'), 'Recorded follow-ups belong to their source head');
 }
+const renderedReviewLinks = [];
 for (const item of upstream) {
+  if (item.qualifiedCommitCount !== undefined) {
+    const node = nodes.find(node => item.number ? node.repo === 'astral-sh/ruff' && node.number === item.number : node.id === `branch:${item.id}`);
+    if (item.state !== 'Awaiting Tamir review') {
+      assert.equal(tracker.renderDecisionLinks(node).length, 0, 'Current approved or held heads must not ask for approval again');
+      assert.ok(!tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
+    } else assert.deepEqual(Array.from(tracker.renderDecisionLinks(node), anchor => anchor.url), [item.qualifiedURL]);
+    const preview = { ...node, id: `branch:${item.id}`, type: 'branch', repo: 'tamird/ruff',
+      url: item.qualifiedURL, head: item.qualifiedHead, ref: item.ref, github: undefined,
+      settledReviews: undefined, followup: undefined,
+      contributorReview: { kind: 'proposal', status: 'pending', head: item.qualifiedHead,
+        baseHead: item.qualifiedBase, url: item.qualifiedURL } };
+    const links = tracker.renderDecisionLinks(preview);
+    assert.deepEqual(Array.from(links, anchor => anchor.url), [item.qualifiedURL], 'Check the actual proposal-action renderer');
+    renderedReviewLinks.push({ head: item.qualifiedHead, url: links[0].url });
+    if (item.settledReviews?.some(review => review.outcome === 'approved' && review.head === item.qualifiedHead)) {
+      assert.equal(node.settledReviews.at(-1).outcome, 'approved');
+      assert.equal(node.settledReviews.at(-1).head, item.qualifiedHead);
+      assert.deepEqual(node.settledReviews, item.settledReviews, 'The actual node keeps its settled approval');
+      if (node.type === 'branch')
+        assert.equal(tracker.renderDecisionLinks({ ...preview, settledReviews: node.settledReviews }).length, 0,
+          'An exact settled approval must suppress a repeated branch request');
+      assert.equal(node.contributorReview, undefined);
+      assert.equal(node.humanAction, undefined, 'Submission is already authorized, not a new human task');
+      assert.ok(node.summary.includes('approved this exact commit'));
+    } else assert.equal(node.settledReviews, undefined, 'Assessment is not approval');
+    if (item.state === 'Submitted') {
+      assert.equal(node.url, `https://github.com/astral-sh/ruff/pull/${item.number}`);
+      assert.ok(node.evidence.some(evidence => evidence.url === item.qualifiedURL), 'Submitted PR keeps its native commit review artifact');
+    }
+  }
   if (item.state === 'Merged') assert.ok(tracker.historical(nodes.find(node => node.number === item.number)));
   if (item.nextAction && item.state !== 'Awaiting Tamir review') {
-    const node = nodes.find(node => node.id === `branch:${item.id}`);
+    const node = nodes.find(node => item.number ? node.repo === 'astral-sh/ruff' && node.number === item.number : node.id === `branch:${item.id}`);
     assert.equal(node.contributorReview, undefined, 'Outstanding feedback must not request approval of the old proposal');
     assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
   }
@@ -203,6 +256,8 @@ for (const item of upstream) {
   invalid.nodes.find(candidate => candidate.id === node.id).contributorReview.head = '0'.repeat(40);
   assert.throws(() => tracker.validateRegistry(invalid), /Invalid contributor decision/);
 }
+
+console.log('RENDERED_REVIEW_ACTION_URLS', JSON.stringify(renderedReviewLinks));
 
 unique(bazelFeedback.map(item => item.number), 'Bazel feedback issues');
 assert.equal(bazelFeedback.length, 17, 'Reconcile the full discovered typing issue set');

@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = "2026-11-21T22:37:11.372833Z";
+export const reviewedAt = "2026-11-22T14:17:35.629390Z";
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -51,14 +51,15 @@ export const upstream = [
     "id": "fresh-collection-callback-context",
     "ref": "upstream/fresh-collection-context-75fabee2",
     "title": "Infer fresh collection argument contexts",
-    "state": "Awaiting Tamir review",
+    "state": "Assessment in progress",
     "source": "ba712134db00258728314f30ae2a70d69de8728d",
     "summary": "Fresh collection arguments keep literal types supplied by other arguments in generic calls. Incompatible hints fall back to ordinary inference.",
     "qualifiedBase": "75fabee2e0a069b6bf5a1af4226025afa0324fa5",
     "qualifiedHead": "ba712134db00258728314f30ae2a70d69de8728d",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/75fabee2e0a069b6bf5a1af4226025afa0324fa5...ba712134db00258728314f30ae2a70d69de8728d",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/ba712134db00258728314f30ae2a70d69de8728d",
     "qualification": {
-      "summary": "Core, semantic and IDE tests, style and all 532 default Markdown cases pass on 75fabee2. Current-parent attrs checks used same-worker ABBA with 30 samples per phase: 405.077 to 415.182 ms (+2.495%), with all 45 diagnostics byte-identical. This is one maintained workload; three untimed helper entries do not prove projection reuse, benefit or broad performance neutrality. Optimized no-LTO stress checks cost 12.0% more for 256 homogeneous arguments, 19.6% for alternating types and 16.2% for 1,500 rejected hints. Both focused lambda probes are rejected by parent and proposal: the same-key pair has the identical int.lower error; the callback-list variant changes invalid-argument-type to a missing-attribute error inside the lambda. Neither demonstrates a newly rejected valid call or broadly resolves the speculative-diagnostics question. The earlier cd2 attrs evidence is historical and exercised only two hint attempts.",
+      "summary": "Historical qualification for ba712: Core, semantic and IDE tests, style and all 532 default Markdown cases pass on 75fabee2. Current-parent attrs checks used same-worker ABBA with 30 samples per phase: 405.077 to 415.182 ms (+2.495%), with all 45 diagnostics byte-identical. This is one maintained workload; three untimed helper entries do not prove projection reuse, benefit or broad performance neutrality. Optimized no-LTO stress checks cost 12.0% more for 256 homogeneous arguments, 19.6% for alternating types and 16.2% for 1,500 rejected hints. Both focused lambda probes are rejected by parent and proposal: the same-key pair has the identical int.lower error; the callback-list variant changes invalid-argument-type to a missing-attribute error inside the lambda. Neither demonstrates a newly rejected valid call or broadly resolves the speculative-diagnostics question. The earlier cd2 attrs evidence is historical and exercised only two hint attempts.",
       "evidence": [
         {
           "label": "75fabee2: native suites, style and all 532 Markdown cases",
@@ -90,17 +91,18 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Tamir: approve this exact ba712 proposal before upstream submission, taking the measured attrs and stress costs into account."
+    "nextAction": "Replace repeated solving only with a design that preserves declared literal donors inside fresh displays, such as ok: Literal['ok']; pair([ok], ['ok']). Omitting every fresh display can lose that evidence, and contextual promotability flags do not identify independent donors. Retain final validation. This is a source-derived design limit, not an executed regression."
   },
   {
     "id": "exception-tuple-alias-projection",
     "ref": "upstream/resolve-exception-tuple-aliases",
     "title": "Preserve exception types through tuple aliases",
-    "state": "Awaiting Tamir review",
+    "state": "Submitted",
     "source": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
     "summary": "A tuple alias in an exception-handler parameter lost its ValueError element type and produced BaseException. Resolve the alias when projecting tuple elements.",
     "qualifiedBase": "f31dd86f222f7d978a65cfc453eaf88f11456ed7",
     "qualifiedHead": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
+    "qualifiedCommitCount": 1,
     "qualifiedURL": "https://github.com/tamird/ruff/commit/9188597e94983c89c39c386cb6d8a1c603d6bad5",
     "qualification": {
       "summary": "The existing fixture fails on pristine upstream and passes with the one-line fix. Core, semantic, IDE, all 532 default Markdown cases, canonical hooks, formatting and strict Clippy pass on RBE.",
@@ -115,40 +117,59 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Tamir: review this qualified contribution before upstream submission."
+    "nextAction": "Follow upstream CI and review on Ruff #30758.",
+    "settledReviews": [
+      {
+        "kind": "proposal",
+        "head": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
+        "url": "https://github.com/tamird/ruff/commit/9188597e94983c89c39c386cb6d8a1c603d6bad5",
+        "outcome": "approved",
+        "summary": "Tamir approved this exact commit for upstream submission."
+      }
+    ],
+    "number": 30758
   },
   {
     "id": "receiver-union-overload-selection",
-    "ref": "upstream/unify-bound-method-receivers",
+    "ref": "upstream/receiver-union-clarity-rework",
     "title": "Select method overloads across receiver unions",
     "state": "Awaiting Tamir review",
-    "source": "d367097750ddf7a8cd0f1e23b543cd3a8208af56",
-    "summary": "Keep internal truthiness guards while selecting the same method's overloads against its full receiver union. Fixes `(value or \"\").split()` inference.",
+    "source": "61c71bb62410ceb55c45c0f6d223c437858e07c1",
+    "summary": "Retain internal truthiness guards while selecting one method’s overloads against its full receiver union. The rework makes eligibility exclusions explicit without changing the existing tests.",
     "qualifiedBase": "f31dd86f222f7d978a65cfc453eaf88f11456ed7",
-    "qualifiedHead": "d367097750ddf7a8cd0f1e23b543cd3a8208af56",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/f31dd86f222f7d978a65cfc453eaf88f11456ed7...d367097750ddf7a8cd0f1e23b543cd3a8208af56",
+    "qualifiedHead": "61c71bb62410ceb55c45c0f6d223c437858e07c1",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/61c71bb62410ceb55c45c0f6d223c437858e07c1",
     "qualification": {
-      "summary": "Core, semantic and IDE suites, all 532 default Markdown cases, formatting and strict Clippy pass. A minimal extension of the existing enum fixture preserves rejection of a mixed supported/unsupported receiver union. Current Dulwich and SymPy diagnostic multisets are unchanged from the frozen original baseline: 688 and 16,588 existing diagnostics, respectively. The original baseline was reused with an exact environment fingerprint.",
+      "summary": "The 61c71bb rework passes six relevant existing whole Markdown fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy on RBE. Test code is unchanged. Earlier d367 qualification, including its Dulwich and SymPy comparisons, remains historical evidence; no new ecosystem run is claimed.",
       "evidence": [
         {
-          "label": "Review the qualified commit",
+          "label": "New 61c71bb single commit for review",
+          "url": "https://github.com/tamird/ruff/commit/61c71bb62410ceb55c45c0f6d223c437858e07c1"
+        },
+        {
+          "label": "61c71bb: six existing fixtures, semantic tests, hooks and strict style checks",
+          "url": "https://app.buildbuddy.io/invocation/b2334840-f593-40d3-85b7-c08feadc29e5"
+        },
+        {
+          "label": "Earlier d367: Review the qualified commit",
           "url": "https://github.com/tamird/ruff/commit/d367097750ddf7a8cd0f1e23b543cd3a8208af56"
         },
         {
-          "label": "Guard-preserving fix: native and all 532 default Markdown cases",
+          "label": "Earlier d367: Guard-preserving fix: native and all 532 default Markdown cases",
           "url": "https://app.buildbuddy.io/invocation/5fd38933-656b-48ca-9496-4bb62970bd88"
         },
         {
-          "label": "Existing enum fixture and final canonical hooks",
+          "label": "Earlier d367: Existing enum fixture and final canonical hooks",
           "url": "https://app.buildbuddy.io/invocation/68523e7a-4661-400e-9e87-cbf65205f4f2"
         },
         {
-          "label": "Current Dulwich and SymPy: unchanged diagnostics",
+          "label": "Earlier d367: Current Dulwich and SymPy: unchanged diagnostics",
           "url": "https://app.buildbuddy.io/invocation/2ad7d8d4-5061-4c34-a4ea-64a11df3bb10"
         }
       ]
     },
-    "nextAction": "Tamir: approve this qualified contribution before upstream submission."
+    "nextAction": "Tamir: review the new 61c71bb receiver-union clarity rework before any upstream submission."
   },
   {
     "id": "residual-truthiness-guards",
@@ -199,12 +220,13 @@ export const upstream = [
     "id": "call-completion-key-lifetime",
     "ref": "upstream/retain-call-completion-keys",
     "title": "Retain call-completion query keys",
-    "state": "Awaiting Tamir review",
+    "state": "Submitted",
     "source": "5678a81398ae87c721118445dd539e568f940c10",
-    "summary": "Unrelated project edits can collect interned call keys and rerun an unchanged file's semantic index. Track these keys as outputs of that index. One isolated commit; not submitted upstream.",
+    "summary": "Unrelated project edits can collect interned call keys and rerun an unchanged file's semantic index. Track these keys as outputs of that index. One isolated commit, submitted as Ruff #30759.",
     "qualifiedBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
     "qualifiedHead": "5678a81398ae87c721118445dd539e568f940c10",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc...5678a81398ae87c721118445dd539e568f940c10",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/5678a81398ae87c721118445dd539e568f940c10",
     "qualification": {
       "summary": "Current 7d1 refresh: core, semantic and IDE suites and canonical hooks pass. Affected source files and Cargo authorities are unchanged. Earlier e905 qualification: The maintained regression fails three times on the baseline and passes three times with the fix. Core, semantic and IDE suites, all 533 default native Markdown/inventory actions, hooks, formatting and strict Clippy pass. The smaller test uses the existing query-event helpers and a LOW-durability project root. All five original repeated-call benchmarks ran four times per phase; comparisons within CPU models found no material regression. Mixed hardware and small per-model samples limit the performance conclusion; network-backed Markdown cases were not enabled.",
       "evidence": [
@@ -226,36 +248,55 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Tamir: approve this qualified contribution before upstream submission."
+    "nextAction": "Follow upstream CI and review on Ruff #30759.",
+    "settledReviews": [
+      {
+        "kind": "proposal",
+        "head": "5678a81398ae87c721118445dd539e568f940c10",
+        "url": "https://github.com/tamird/ruff/commit/5678a81398ae87c721118445dd539e568f940c10",
+        "outcome": "approved",
+        "summary": "Tamir approved this exact commit after confirmation of the existing negative controls."
+      }
+    ],
+    "number": 30759
   },
   {
     "id": "destructured-list-elements",
-    "ref": "upstream/destructured-list-elements",
+    "ref": "upstream/destructured-list-elements-rework",
     "title": "Preserve literals in loop unpacking",
     "state": "Awaiting Tamir review",
-    "source": "bf95f29c54153597cd59bfb602fe5e56aa965e75",
-    "summary": "Preserve literal element types when unpacking immediately consumed lists. Single and destructured loop targets share tuple widening policy. Qualified on 7d1b1355; not submitted upstream.",
+    "source": "f69b792ae4530552c91cff7375a2b6f2e9497a5c",
+    "summary": "Preserve literal types when unpacking immediately consumed lists and dictionaries. The shared helper explicitly declines other expressions; fixed-tuple extraction and widening policy stay unchanged.",
     "qualifiedBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
-    "qualifiedHead": "bf95f29c54153597cd59bfb602fe5e56aa965e75",
-    "qualifiedURL": "https://github.com/tamird/ruff/compare/7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc...bf95f29c54153597cd59bfb602fe5e56aa965e75",
+    "qualifiedHead": "f69b792ae4530552c91cff7375a2b6f2e9497a5c",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/f69b792ae4530552c91cff7375a2b6f2e9497a5c",
     "qualification": {
-      "summary": "Current 7d1 refresh: semantic suite, all five maintained Markdown fixtures and canonical hooks pass. Affected source files and Cargo authorities are unchanged. Earlier e905 qualification: Five complete Markdown fixtures pass: unpacking, comprehensions/basic, loops/for, async_for and iterators. Core and semantic unit suites, required hooks, formatting and strict Clippy pass. Tests cover tuple aliases, names, calls and the 65-element widening boundary for both loop-target forms. No full Markdown or ecosystem qualification is claimed.",
+      "summary": "The f69 rework passes the five existing whole Markdown fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy on RBE. The wrapper then incorrectly required a test count for the successful style-only build and exited 1; the exported source hashes were verified and no rerun was needed. Earlier bf95 qualification remains historical evidence. No full Markdown or ecosystem qualification is claimed.",
       "evidence": [
         {
-          "label": "Current-base refresh: independent guarded phases",
+          "label": "New f69 single commit for review",
+          "url": "https://github.com/tamird/ruff/commit/f69b792ae4530552c91cff7375a2b6f2e9497a5c"
+        },
+        {
+          "label": "f69: five fixtures, semantic tests and successful style build; wrapper-count failure disclosed",
+          "url": "https://app.buildbuddy.io/invocation/378c990e-1dd7-4bca-9dae-aaf45f4c77d6"
+        },
+        {
+          "label": "Earlier bf95: Current-base refresh: independent guarded phases",
           "url": "https://app.buildbuddy.io/invocation/4076d5be-7ee1-4e87-a1ed-5a6f5a0e0520"
         },
         {
-          "label": "Review the single upstream commit",
+          "label": "Earlier bf95: Review the single upstream commit",
           "url": "https://github.com/tamird/ruff/commit/bf95f29c54153597cd59bfb602fe5e56aa965e75"
         },
         {
-          "label": "Matched baseline and revised qualification",
+          "label": "Earlier bf95: Matched baseline and revised qualification",
           "url": "https://app.buildbuddy.io/invocation/3e27961a-71f9-4e9f-abd3-526529ae6c41"
         }
       ]
     },
-    "nextAction": "Tamir: approve this qualified contribution before upstream submission."
+    "nextAction": "Tamir: review the new f69 loop-unpacking rework before any upstream submission."
   },
   {
     "id": "related-upstream-29027",
@@ -1892,7 +1933,7 @@ const reviewedTyWork = [
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Five isolated ty proposals await Tamir review before upstream submission."
+    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Two approved ty commits have been submitted upstream. The new f69 and 61c71bb reworks await Tamir review; ba712 remains with the agent for architecture assessment."
   }
 ];
 

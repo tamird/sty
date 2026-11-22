@@ -5166,7 +5166,7 @@ export const ruffForwardAudit = {
     "These 59 forward Rust paths contain mixed runtime, API, upstream migrations and maintained tests; counts do not establish independent contributions.",
     "Every changed hunk is explicitly reviewed by exact path and whole-hunk SHA. Reuse requires exact whole or body equality, never path/start fallback.",
     "Fresh collection inference reuses prepared argument constraints and at most one completed projection. Scoped constraint order remains part of the cache identity; unsupported pack/legacy calls and incomplete outcomes keep their original handling.",
-    "Official proposal ba712 is separately native-qualified and awaiting Tamir review; no upstream submission approval is implied. Related #27665 overlap remains explicit.",
+    "Official proposal ba712 remains unapproved while its architecture and documentation are assessed. Its prior qualification is not submission approval; related #27665 overlap remains explicit.",
     "Sty engine 14d05b98 pins 07a and passes all native/optimized and 148 unchanged corpus cases. All eight qualified community workflow updates are published; GitHub CI and reviews remain separate from completed RBE qualification. No all-fork readiness or upstream submission approval is claimed.",
     "Native 43ad results are recorded from the owner receipt, not performed by this audit. The 31 unchanged failed Markdown fixtures remain failures; external-network cases are not covered.",
     "Frozen 169-unit/939-hunk history and 250-path lineage remain unchanged. Rejected global truthiness guard stripping remains absent."
@@ -5604,7 +5604,7 @@ export const ruffForwardAudit = {
       "id": "fresh-bounded-collection-sibling-context",
       "title": "Infer compatible fresh collection context from reusable sibling evidence",
       "classification": "Tentative sibling context with result compatibility fallback, prepared ordered argument evidence and complete-only bounded-retention projection reuse; authoritative supplied-field context remains separate.",
-      "nextAction": "Review official proposal ba712 with Tamir before submission. Preserve valid-call literal return precision, heterogeneous widening, callback/stored-wide rejection and per-expression fallback; coordinate overlap with #27665. Fork optimization includes scoped ordering-key adaptation and retained supplied-field precedence; native qualification is separate from pending Sty host gates.",
+      "nextAction": "Keep ba712 on hold pending a design that preserves independently declared donor evidence inside fresh displays and final validation; the current proposal assessment records the source-derived limitation. Coordinate overlap with #27665.",
       "evidence": [
         {
           "label": "Complete sibling-only inference with reusable prepared evidence",

@@ -38,28 +38,35 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
     evidence: item.retest ? [{ label: 'Current Bazel reproduction', url: item.retest.url }] : [],
   });
   for (const item of upstream) {
-    if (item.number) {
-      nodes.push({ id: identity(repo, item.number), type: 'pr', repo, number: item.number,
-        title: item.title, group: 'ty', status: item.state === 'Merged' ? 'merged' : 'open',
-        url: `https://github.com/${repo}/pull/${item.number}`,
-        summary: item.summary || `${item.state}. ${item.author === 'zsol' ? 'Zsol contribution; use as an upstream template.' : 'Related upstream work; inspect before proposing overlapping changes.'}`,
-        evidence: item.merge ? [{ label: 'Upstream merge', url: `https://github.com/${repo}/commit/${item.merge}` }] : [],
-      });
-      continue;
-    }
-    const node = { id: `branch:${item.id}`, type: 'branch', repo: 'tamird/ruff',
+    const node = item.number ? {
+      id: identity(repo, item.number), type: 'pr', repo, number: item.number,
+      title: item.title, group: 'ty', status: item.state === 'Merged' ? 'merged' : 'open',
+      url: `https://github.com/${repo}/pull/${item.number}`,
+      summary: item.summary || `${item.state}. ${item.author === 'zsol' ? 'Zsol contribution; use as an upstream template.' : 'Related upstream work; inspect before proposing overlapping changes.'}`,
+      evidence: item.merge ? [{ label: 'Upstream merge', url: `https://github.com/${repo}/commit/${item.merge}` }] : [],
+    } : {
+      id: `branch:${item.id}`, type: 'branch', repo: 'tamird/ruff',
       title: item.title, group: 'ty', status: item.state,
-      ref: item.ref, head: item.qualifiedHead, url: item.qualifiedURL,
-      summary: `${item.summary}\n\n${item.qualification?.summary || ''}\n\nTamir must approve before any upstream submission.`,
-      evidence: item.qualification?.evidence || [],
+      ref: item.ref, url: item.qualifiedURL, evidence: [],
     };
-    if (item.nextAction && item.state !== 'Awaiting Tamir review')
-      node.followup = { owner: 'Agent', sourceHead: item.qualifiedHead, nextAction: item.nextAction };
-    if (item.state === 'Awaiting Tamir review') node.contributorReview = {
-      kind: 'proposal', status: 'pending', title: 'Review qualified ty proposal',
-      summary: 'Review the published change and decide whether to submit upstream. Qualification is recorded in the item details. Nothing has been submitted upstream.',
-      head: item.qualifiedHead, baseHead: item.qualifiedBase, url: item.qualifiedURL,
-    };
+    if (item.qualifiedHead) {
+      const approval = item.settledReviews?.findLast(review => review.kind === 'proposal'
+        && review.head === item.qualifiedHead && review.url === item.qualifiedURL);
+      const permission = approval?.outcome === 'approved'
+        ? approval.summary || 'Tamir approved this exact commit for upstream submission.'
+        : 'This proposal is not approved for upstream submission.';
+      node.head = item.qualifiedHead;
+      node.summary = `${item.summary}\n\n${item.qualification?.summary || ''}\n\n${permission}`;
+      node.evidence.push(...(item.qualification?.evidence || []));
+      if (item.settledReviews) node.settledReviews = item.settledReviews;
+      if (item.nextAction && item.state !== 'Awaiting Tamir review')
+        node.followup = { owner: 'Agent', sourceHead: item.qualifiedHead, nextAction: item.nextAction };
+      if (node.type === 'branch' && item.state === 'Awaiting Tamir review') node.contributorReview = {
+        kind: 'proposal', status: 'pending', title: 'Review qualified ty proposal',
+        summary: 'Review the published change and decide whether to submit upstream. Qualification is recorded in the item details. Nothing has been submitted upstream.',
+        head: item.qualifiedHead, baseHead: item.qualifiedBase, url: item.qualifiedURL,
+      };
+    }
     nodes.push(node);
   }
   const registry = {
