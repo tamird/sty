@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = "2026-11-22T16:57:06.685308Z";
+export const reviewedAt = "2026-11-22T17:09:44.433758Z";
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -91,7 +91,7 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Replace repeated solving only with a design that preserves declared literal donors inside fresh displays, such as ok: Literal['ok']; pair([ok], ['ok']). Omitting every fresh display can lose that evidence, and contextual promotability flags do not identify independent donors. Retain final validation. This is a source-derived design limit, not an executed regression."
+    "nextAction": "Simplify the design and prepare smaller, independently reviewable contributions. Do not bring the 749-line ba712 proposal back for review or merely split it cosmetically. Preserve independently declared literal donors inside fresh displays and final validation; contextual promotability does not establish an independent donor. The existing evidence is historical, not approval of the architecture."
   },
   {
     "id": "exception-tuple-alias-projection",
@@ -270,10 +270,21 @@ export const upstream = [
         {
           "label": "Original repeated-call benchmarks with profiling code generation",
           "url": "https://app.buildbuddy.io/invocation/9a013a63-e833-4f89-9470-35264ab4d88b"
+        },
+        {
+          "label": "Proposed1b9535 amendment: deterministic dependency regression",
+          "url": "https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e"
+        },
+        {
+          "label": "1b9535: focused regression, full semantic suite, hooks and style",
+          "url": "https://app.buildbuddy.io/invocation/94b0a1df-fff3-4102-af51-7c19d032ca3c"
+        },
+        {
+          "label": "Submitted5678: matched deterministic dependency failure",
+          "url": "https://app.buildbuddy.io/invocation/b0a41fcc-1144-423e-a4bb-c9b4365a34ef"
         }
       ]
     },
-    "nextAction": "Follow upstream CI and review on Ruff #30759.",
     "settledReviews": [
       {
         "kind": "proposal",
@@ -283,15 +294,33 @@ export const upstream = [
         "summary": "Tamir approved this exact commit after confirmation of the existing negative controls."
       }
     ],
-    "number": 30759
+    "number": 30759,
+    "contributorReview": {
+      "kind": "amendment",
+      "status": "pending",
+      "head": "1b9535f986af582c86f75977c4741c3b93eac83e",
+      "baseHead": "5678a81398ae87c721118445dd539e568f940c10",
+      "url": "https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e",
+      "title": "Review the call-key dependency revision for PR #30759",
+      "summary": "The qualified 1b9535 revision adds a deterministic interned-dependency regression and restores the original optimization sentence. The PR still publishes 5678a813; its approval does not cover this amendment.",
+      "body": "Review the amendment to PR #30759. The PR still publishes `5678a813`; this proposed replacement is `1b9535f`. The earlier approval does not cover this amendment.\n\nThe revision adds a deterministic check that validating an unchanged semantic index does not depend on interned call keys. It fails on the submitted commit and passes with the amendment. The original optimization sentence is restored. This test does not claim to force slot eviction on every CPU or shard count.\n\nThe focused regression, full semantic suite (516 passed, 35 ignored), canonical hooks, formatting and strict Clippy pass. [Candidate qualification](https://app.buildbuddy.io/invocation/94b0a1df-fff3-4102-af51-7c19d032ca3c); [matched baseline failure](https://app.buildbuddy.io/invocation/b0a41fcc-1144-423e-a4bb-c9b4365a34ef).\n\n## Changes from the submitted commit\n\nThis is Git’s actual range-diff of the two single-commit proposals on the same base. The pairing option matches the replacement commit with its predecessor.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..5678a81398ae87c721118445dd539e568f940c10 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..1b9535f986af582c86f75977c4741c3b93eac83e\n```\n\n```diff\n1:  5678a81398 ! 1:  1b9535f986 [ty] Retain call-completion query keys\n    @@ Commit message\n         unchanged file when its interned call-completion keys were collected.\n     \n         Make these keys tracked outputs of the semantic-index query, matching the\n    -    lifetime of the expressions they contain. Cover reuse across unrelated\n    -    revisions and invalidation after the indexed source changes.\n    +    lifetime of the expressions they contain. Check the dependency directly\n    +    after a low-durability write so the regression test does not depend on an\n    +    LRU shard reusing a slot. Keep the check that editing the indexed source\n    +    still invalidates the index.\n     \n      ## crates/ty_python_core/src/predicate.rs ##\n     @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n    @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n     -/// queries use its ID directly, without looking up its components in Salsa's intern table again.\n     -#[salsa::interned(debug, heap_size=ruff_memory_usage::heap_size)]\n     +/// A call-completion query key owned by the semantic index that creates its expressions.\n    ++///\n    ++/// Creating it while building predicates lets cached queries use its ID directly, without looking\n    ++/// up its components in Salsa's intern table again.\n    ++///\n     +/// Tracking the key keeps unrelated revisions from collecting it and invalidating that index.\n     +#[salsa::tracked(debug, heap_size=ruff_memory_usage::heap_size)]\n      pub struct CallableAndCallExpr<'db> {\n    @@ crates/ty_python_semantic/src/types/infer/tests.rs: fn dependency_implicit_alias\n     +        ruff_db::system::SystemPath::new(\"/src/project\"),\n     +        ruff_db::files::FileRootKind::Project,\n     +    );\n    -+    let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(4));\n    -+    db.write_file(\"/src/project/target.py\", &source)?;\n    ++    let source = \"def run(callback):\\n    callback()\\n\";\n    ++    db.write_file(\"/src/project/target.py\", source)?;\n     +    let file = system_path_to_file(&db, \"/src/project/target.py\")?;\n    -+    let mut others = Vec::new();\n    -+    for revision in 0..4 {\n    -+        let path = format!(\"/src/project/other_{revision}.py\");\n    -+        db.write_file(&path, \"\")?;\n    -+        let other = system_path_to_file(&db, &path)?;\n    -+        others.push((path, other));\n    -+    }\n     +    semantic_index(&db, program_file(&db, file));\n    -+    // Fresh call keys in four revisions age Salsa's three-revision retention queue.\n    -+    for (path, other) in others {\n    -+        let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(16));\n    -+        db.write_file(&path, source)?;\n    -+        semantic_index(&db, program_file(&db, other));\n    -+    }\n    ++\n    ++    db.synthetic_write(salsa::Durability::LOW);\n     +    db.clear_salsa_events();\n     +    semantic_index(&db, program_file(&db, file));\n     +    let events = db.take_salsa_events();\n     +    assert_function_query_was_not_run(&db, semantic_index, program_file(&db, file), &events);\n    ++    assert!(\n    ++        !events.iter().any(|event| matches!(\n    ++            event.kind,\n    ++            salsa::EventKind::DidValidateInternedValue { key, .. }\n    ++                if db.ingredient_debug_name(key.ingredient_index()) == \"CallableAndCallExpr\"\n    ++        )),\n    ++        \"validating the semantic index depended on an interned call key\"\n    ++    );\n     +\n     +    db.write_file(\"/src/project/target.py\", format!(\"{source}changed = 1\\n\"))?;\n     +    semantic_index(&db, program_file(&db, file));\n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e). No PR-head update or maintainer reply has been posted."
+    },
+    "refinement": {
+      "before": {
+        "head": "5678a81398ae87c721118445dd539e568f940c10"
+      },
+      "after": {
+        "head": "1b9535f986af582c86f75977c4741c3b93eac83e"
+      }
+    }
   },
   {
     "id": "destructured-list-elements",
     "ref": "upstream/destructured-list-elements-rework",
     "title": "Preserve literals in loop unpacking",
-    "state": "Awaiting Tamir review",
+    "state": "Addressing review",
     "source": "f69b792ae4530552c91cff7375a2b6f2e9497a5c",
-    "summary": "Preserve literal types when unpacking immediately consumed lists and dictionaries. The shared helper explicitly declines other expressions; fixed-tuple extraction and widening policy stay unchanged.",
+    "summary": "Tamir requested clearer justification for the List dispatch and tuple-extractor suppression in f69. The agent is revising the explanation and helper scope; this artifact is not approved.",
     "qualifiedBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
     "qualifiedHead": "f69b792ae4530552c91cff7375a2b6f2e9497a5c",
     "qualifiedCommitCount": 1,
@@ -321,7 +350,7 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Tamir: review the new f69 loop-unpacking rework before any upstream submission."
+    "nextAction": "Explain why List expressions need this helper dispatch and how fixed-tuple extraction and promotion differ. Simplify the helper scope and presentation as needed, then qualify the revision before another review request."
   },
   {
     "id": "related-upstream-29027",
@@ -1958,7 +1987,7 @@ const reviewedTyWork = [
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Two approved ty commits have been submitted upstream. The f69 rework awaits Tamir review; the agent is addressing Tamir’s conditional LGTM on 61c71bb and assessing ba712’s architecture. The proposed e752 amendment to PR #30758 has its own review request."
+    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Two approved ty commits have been submitted upstream. Their proposed e752 and 1b9535 amendments have separate review requests. The agent is addressing the clarity requests on f69 and the conditional LGTM on 61c71bb, and redesigning ba712 as smaller independent contributions."
   }
 ];
 
