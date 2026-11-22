@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
-import { createHash } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import { generated, observations } from './generate-registry.mjs';
 import { checkProviderIntegration } from './github-provider-test.mjs';
 import { buildRegistry, validateForkAudit, validateSolverInventory, validateForwardAudit } from './tracker-data.mjs';
@@ -162,10 +162,12 @@ assert.ok(source.endsWith('start();\n'));
 const document = {
   createElement(tag) {
     return { tagName: tag.toUpperCase(), children: [],
-      append(...children) { this.children.push(...children); } };
+      append(...children) { this.children.push(...children); },
+      setAttribute(name, value) { this[name] = value; },
+      addEventListener() {} };
   },
 };
-const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
+const tracker = runInNewContext(readFileSync(new URL('./draft.js', import.meta.url), 'utf8') + '\n' + source.slice(0, -'start();\n'.length) + `
 ({ validateRegistry, validateSnapshot, attentionReasons, historical, citationURL, status, checkInfo, checksPassed, effectiveReviewDecision, withConflictResult, mergeProviderPRs,
   recheck(pr, result) {
     const id = prIdentity(pr);
@@ -178,7 +180,7 @@ const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
     const current = { ...node, workStates: stateRecords(liveSnapshot, node) };
     appendContributorDecisions(parent, current, pendingDecisions(current));
     return parent.children.flatMap(section => section.children
-      .filter(child => child.tagName === 'A').map(anchor => ({ label: anchor.textContent, url: anchor.href })));
+      .filter(child => child.tagName === 'A' && child.href).map(anchor => ({ label: anchor.textContent, url: anchor.href })));
   },
   load(data, snapshot) {
     registry = data;
@@ -187,7 +189,7 @@ const tracker = runInNewContext(source.slice(0, -'start();\n'.length) + `
     for (const node of model.nodes) node.workStates = stateRecords(snapshot, node);
     return model.nodes;
   }
-})`, { URL, console, document });
+})`, { URL, console, document, crypto: webcrypto, TextEncoder, location: { href: 'https://tamird.github.io/sty/' } });
 tracker.validateRegistry(generated.registry);
 tracker.validateSnapshot(generated.snapshot, generated.registry);
 const nodes = tracker.load(generated.registry, generated.snapshot);
@@ -210,7 +212,18 @@ const renderedReviewLinks = [];
 for (const item of upstream) {
   if (item.qualifiedCommitCount !== undefined) {
     const node = nodes.find(node => item.number ? node.repo === 'astral-sh/ruff' && node.number === item.number : node.id === `branch:${item.id}`);
-    if (item.state !== 'Awaiting Tamir review') {
+    if (item.contributorReview) {
+      assert.deepEqual(node.contributorReview, item.contributorReview);
+      assert.equal(node.head, item.qualifiedHead, 'An amendment does not replace the published PR head');
+      assert.equal(node.github.head, item.qualifiedHead);
+      assert.equal(node.contributorReview.baseHead, item.qualifiedHead);
+      assert.notEqual(node.contributorReview.head, item.qualifiedHead);
+      assert.equal(node.followup, undefined, 'The amendment decision has no duplicate agent task');
+      assert.deepEqual(Array.from(tracker.renderDecisionLinks(node), anchor => anchor.url), [item.contributorReview.url],
+        'The actual PR renderer exposes the new amendment despite the old proposal approval');
+      assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
+      console.log('RENDERED_AMENDMENT_ACTION_URL', node.contributorReview.url);
+    } else if (item.state !== 'Awaiting Tamir review') {
       assert.equal(tracker.renderDecisionLinks(node).length, 0, 'Current approved or held heads must not ask for approval again');
       assert.ok(!tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
     } else assert.deepEqual(Array.from(tracker.renderDecisionLinks(node), anchor => anchor.url), [item.qualifiedURL]);
@@ -229,7 +242,7 @@ for (const item of upstream) {
       if (node.type === 'branch')
         assert.equal(tracker.renderDecisionLinks({ ...preview, settledReviews: node.settledReviews }).length, 0,
           'An exact settled approval must suppress a repeated branch request');
-      assert.equal(node.contributorReview, undefined);
+      assert.deepEqual(node.contributorReview, item.contributorReview, 'Old approval only settles its exact proposal head');
       assert.equal(node.humanAction, undefined, 'Submission is already authorized, not a new human task');
       assert.ok(node.summary.includes('approved this exact commit'));
     } else assert.equal(node.settledReviews, undefined, 'Assessment is not approval');

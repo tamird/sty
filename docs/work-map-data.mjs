@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = "2026-11-22T14:17:35.629390Z";
+export const reviewedAt = "2026-11-22T14:42:08.910627Z";
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -114,10 +114,17 @@ export const upstream = [
         {
           "label": "Native and all 532 default Markdown cases",
           "url": "https://app.buildbuddy.io/invocation/731e2166-7327-4bcb-b58b-ec72235f39d7"
+        },
+        {
+          "label": "Proposed e752397 amendment: resolve the alias once",
+          "url": "https://github.com/tamird/ruff/commit/e752397a71030a39868a43a682835508238e3afd"
+        },
+        {
+          "label": "e752397 amendment: matched regression, exception/alias fixtures, semantic tests and style",
+          "url": "https://app.buildbuddy.io/invocation/f85ed6ea-83fa-436d-9eba-468ac1c7c9ac"
         }
       ]
     },
-    "nextAction": "Follow upstream CI and review on Ruff #30758.",
     "settledReviews": [
       {
         "kind": "proposal",
@@ -127,7 +134,17 @@ export const upstream = [
         "summary": "Tamir approved this exact commit for upstream submission."
       }
     ],
-    "number": 30758
+    "number": 30758,
+    "contributorReview": {
+      "kind": "amendment",
+      "status": "pending",
+      "head": "e752397a71030a39868a43a682835508238e3afd",
+      "baseHead": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
+      "url": "https://github.com/tamird/ruff/commit/e752397a71030a39868a43a682835508238e3afd",
+      "title": "Review the exception-alias revision for PR #30758",
+      "summary": "Alex requested resolving the alias once before the structural branches. The qualified e752397 revision also preserves class-or-tuple union precision. The published PR remains at 9188597; its approval does not cover this revision.",
+      "body": "Resolve the outer exception type alias once, then reuse that type for class, tuple, union and intersection handling. The added class-or-tuple union assertion fails on the published 9188597 and passes on e752397. Whole exception and both alias fixtures, semantic tests (515 passed, 35 ignored), hooks, formatting and strict Clippy pass. Review the exact e752397 commit before updating PR #30758. No PR-head update or maintainer reply has been posted."
+    }
   },
   {
     "id": "receiver-union-overload-selection",

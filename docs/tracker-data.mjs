@@ -59,7 +59,7 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
       node.summary = `${item.summary}\n\n${item.qualification?.summary || ''}\n\n${permission}`;
       node.evidence.push(...(item.qualification?.evidence || []));
       if (item.settledReviews) node.settledReviews = item.settledReviews;
-      if (item.nextAction && item.state !== 'Awaiting Tamir review')
+      if (item.nextAction && item.state !== 'Awaiting Tamir review' && !item.contributorReview)
         node.followup = { owner: 'Agent', sourceHead: item.qualifiedHead, nextAction: item.nextAction };
       if (node.type === 'branch' && item.state === 'Awaiting Tamir review') node.contributorReview = {
         kind: 'proposal', status: 'pending', title: 'Review qualified ty proposal',
@@ -67,6 +67,7 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
         head: item.qualifiedHead, baseHead: item.qualifiedBase, url: item.qualifiedURL,
       };
     }
+    if (item.contributorReview) node.contributorReview = item.contributorReview;
     nodes.push(node);
   }
   const registry = {
