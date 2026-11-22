@@ -1921,6 +1921,8 @@ function appendHumanAction(parent, node) {
 function appendSettledPublications(parent, node) {
   const labels = { issue: "Issue filed", reply: "Reply posted", review: "Review posted" };
   for (const decision of node.settledReviews || []) {
+    if (["proposal", "amendment"].includes(decision.kind) && decision.outcome === "approved" && decision.body)
+      parent.append(readDraftLink(node, decision, "Read approved revision range-diff"));
     const url = safeURL(decision.postedURL);
     if (Object.hasOwn(labels, decision.kind) && url) {
       const evidence = node.evidence?.find(item => item.url === url);
@@ -1979,8 +1981,8 @@ function readDraftLink(node, draft, label = "Read draft") {
   return anchor;
 }
 function reviewChangeLink(node, decision, label) {
-  return decision.kind === "amendment"
-    ? readDraftLink(node, decision, label || "Read amendment range-diff")
+  return decision.kind === "amendment" || decision.kind === "proposal" && decision.body && refinementComparison(node, decision)
+    ? readDraftLink(node, decision, label || (decision.kind === "amendment" ? "Read amendment range-diff" : "Read revised proposal range-diff"))
     : link(label || "Open proposed change ↗", decision.url, "decision-source");
 }
 function appendContributorDecisions(parent, node, decisions) {
@@ -2002,7 +2004,7 @@ function appendContributorDecisions(parent, node, decisions) {
         showedComparison = true;
       }
     }
-    if (decision.body && decision.kind !== "amendment") section.append(readDraftLink(node, decision));
+    if (decision.body && decision.kind !== "amendment" && !(decision.kind === "proposal" && refinementComparison(node, decision))) section.append(readDraftLink(node, decision));
     if (decision.kind === "issue") {
       const form = decision.url + "?title=" + encodeURIComponent(decision.title) + "&body=" + encodeURIComponent(decision.body);
       section.append(link("Open prefilled issue ↗", form));
@@ -2010,7 +2012,8 @@ function appendContributorDecisions(parent, node, decisions) {
       section.append(link(decision.kind === "review" ? "Open original PR ↗" : "Open original discussion ↗", decision.url));
     } else {
       section.append(reviewChangeLink(node, decision));
-      if (decision.kind === "amendment") section.append(link("Open amended commit ↗", decision.url));
+      if (decision.kind === "amendment" || decision.kind === "proposal" && decision.body && refinementComparison(node, decision))
+        section.append(link(decision.kind === "amendment" ? "Open amended commit ↗" : "Open revised commit ↗", decision.url));
     }
     parent.append(section);
   }

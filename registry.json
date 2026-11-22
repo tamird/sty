@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-22T17:09:44.433758Z",
+    "updatedAt": "2026-11-22T17:30:53.927506Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -1131,15 +1131,24 @@
       }
     },
     {
-      "id": "branch:receiver-union-overload-selection",
-      "type": "branch",
-      "repo": "tamird/ruff",
+      "id": "pr:30761",
+      "type": "pr",
+      "repo": "astral-sh/ruff",
+      "number": 30761,
       "title": "Select method overloads across receiver unions",
       "group": "ty",
-      "status": "Addressing review",
-      "ref": "upstream/receiver-union-clarity-rework",
-      "url": "https://github.com/tamird/ruff/commit/61c71bb62410ceb55c45c0f6d223c437858e07c1",
+      "status": "open",
+      "url": "https://github.com/astral-sh/ruff/pull/30761",
+      "summary": "Select method overloads across a receiver union. The qualified revision removes the unjustified empty-overload rejection and explains signature screening and reconstruction; Tamir’s conditional approval is satisfied. Submitted as Ruff #30761.\n\nThe ce523f7 revision passes six existing whole fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. Tests are unchanged. Root verified the exact source and confirmed that the requested predicate and comments satisfy Tamir’s conditional LGTM. Earlier 61c and d367 qualification remains historical evidence.\n\nTamir approved this exact commit under the conditional LGTM after the requested predicate and comment changes were verified and qualified.",
       "evidence": [
+        {
+          "label": "Submitted ce523f7 commit",
+          "url": "https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e"
+        },
+        {
+          "label": "ce523f7: six whole fixtures, semantic tests, hooks and strict style",
+          "url": "https://app.buildbuddy.io/invocation/3108c385-3841-4250-868f-e9b9bac86188"
+        },
         {
           "label": "New 61c71bb single commit for review",
           "url": "https://github.com/tamird/ruff/commit/61c71bb62410ceb55c45c0f6d223c437858e07c1"
@@ -1165,12 +1174,22 @@
           "url": "https://app.buildbuddy.io/invocation/2ad7d8d4-5061-4c34-a4ea-64a11df3bb10"
         }
       ],
-      "head": "61c71bb62410ceb55c45c0f6d223c437858e07c1",
-      "summary": "Tamir gave 61c71bb conditional LGTM, requesting removal of the unjustified empty-overload rejection and comments explaining the remaining receiver-union screening and reconstruction. The revision is with the agent; no new approval is requested on the old artifact.\n\nThe 61c71bb rework passes six relevant existing whole Markdown fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy on RBE. Test code is unchanged. Earlier d367 qualification, including its Dulwich and SymPy comparisons, remains historical evidence; no new ecosystem run is claimed.\n\nThis proposal is not approved for upstream submission.",
+      "head": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
+      "settledReviews": [
+        {
+          "kind": "proposal",
+          "head": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
+          "url": "https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
+          "outcome": "approved",
+          "title": "Approved receiver-union revision: 61c71bb to ce523f7",
+          "summary": "Tamir approved this exact commit under the conditional LGTM after the requested predicate and comment changes were verified and qualified.",
+          "body": "The requested receiver-union changes are qualified and submitted as [Ruff #30761](https://github.com/astral-sh/ruff/pull/30761). The unsupported-overload predicate allows an empty set, and comments explain the remaining screening and reconstruction. Tamir’s conditional approval is satisfied; this is review history, not a new decision request.\n\n## Changes from the previous proposal\n\nGit’s actual range-diff pairs the two single-commit proposals on the same base.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 f31dd86f222f7d978a65cfc453eaf88f11456ed7..61c71bb62410ceb55c45c0f6d223c437858e07c1 f31dd86f222f7d978a65cfc453eaf88f11456ed7..ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e\n```\n\n```diff\n1:  61c71bb624 ! 1:  ce523f7be1 [ty] Unify receivers of one bound method\n    @@ crates/ty_python_semantic/src/types/method.rs: impl<'db> BoundMethodType<'db> {\n     +            }\n     +        }\n     +        let signatures = first.unbound_signatures_with_inferred_return_type(db)?;\n    -+        if signatures.overloads.is_empty()\n    -+            || !signatures\n    -+                .overloads\n    -+                .iter()\n    -+                .all(|signature| signature.supports_receiver_union(db, env))\n    ++        // Parameters, returns, or predicates that depend on one receiver need separate bindings.\n    ++        if signatures\n    ++            .overloads\n    ++            .iter()\n    ++            .any(|signature| !signature.supports_receiver_union(db, env))\n     +        {\n     +            return None;\n     +        }\n    ++        // The shared overload matcher needs the full receiver union to determine its return type.\n     +        let receiver = UnionType::from_elements(\n     +            db,\n     +            env,\n    @@ crates/ty_python_semantic/src/types/method.rs: impl<'db> BoundMethodType<'db> {\n     +                method.self_instance(db)\n     +            }),\n     +        );\n    ++        // The identity checks let the first method retain the shared function and program.\n     +        Some(first.map_self_type(db, |_receiver| receiver))\n     +    }\n     +\n```\n\n[Read the complete commit](https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e)."
+        }
+      ],
       "followup": {
         "owner": "Agent",
-        "sourceHead": "61c71bb62410ceb55c45c0f6d223c437858e07c1",
-        "nextAction": "Remove the empty-overload guard and use any unsupported overload as the rejection predicate, allowing empty overloads. Explain the remaining screening and reconstruction, verify merge semantics, and qualify the targeted revision to satisfy Tamir’s conditional LGTM without repeating the approval question."
+        "sourceHead": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
+        "nextAction": "Follow upstream CI and review on Ruff #30761."
       }
     },
     {
@@ -1233,7 +1252,7 @@
       "group": "ty",
       "status": "open",
       "url": "https://github.com/astral-sh/ruff/pull/30759",
-      "summary": "Unrelated project edits can collect interned call keys and rerun an unchanged file's semantic index. Track these keys as outputs of that index. One isolated commit, submitted as Ruff #30759.\n\nCurrent 7d1 refresh: core, semantic and IDE suites and canonical hooks pass. Affected source files and Cargo authorities are unchanged. Earlier e905 qualification: The maintained regression fails three times on the baseline and passes three times with the fix. Core, semantic and IDE suites, all 533 default native Markdown/inventory actions, hooks, formatting and strict Clippy pass. The smaller test uses the existing query-event helpers and a LOW-durability project root. All five original repeated-call benchmarks ran four times per phase; comparisons within CPU models found no material regression. Mixed hardware and small per-model samples limit the performance conclusion; network-backed Markdown cases were not enabled.\n\nTamir approved this exact commit after confirmation of the existing negative controls.",
+      "summary": "Retain call-completion query keys as semantic-index outputs. The approved 1b9535 amendment adds a deterministic dependency regression and restores the optimization explanation; PR #30759 now publishes that revision.\n\nThe current 1b9535 amendment passes the focused deterministic dependency regression, the full semantic suite (516 passed, 35 ignored), canonical hooks, formatting and strict Clippy. The same regression fails on submitted 5678. It verifies the absence of an interned-call-key dependency when validating the cached semantic index; it does not claim to force eviction on every CPU or shard count. Earlier 5678/e905 native and benchmark results remain historical evidence; no new hardware or performance claim is made.\n\nTamir approved the exact 1b9535 amendment for PR #30759; it is now the published head.",
       "evidence": [
         {
           "label": "Current-base refresh: independent guarded phases",
@@ -1264,7 +1283,7 @@
           "url": "https://app.buildbuddy.io/invocation/b0a41fcc-1144-423e-a4bb-c9b4365a34ef"
         }
       ],
-      "head": "5678a81398ae87c721118445dd539e568f940c10",
+      "head": "1b9535f986af582c86f75977c4741c3b93eac83e",
       "settledReviews": [
         {
           "kind": "proposal",
@@ -1272,17 +1291,22 @@
           "url": "https://github.com/tamird/ruff/commit/5678a81398ae87c721118445dd539e568f940c10",
           "outcome": "approved",
           "summary": "Tamir approved this exact commit after confirmation of the existing negative controls."
+        },
+        {
+          "kind": "amendment",
+          "head": "1b9535f986af582c86f75977c4741c3b93eac83e",
+          "baseHead": "5678a81398ae87c721118445dd539e568f940c10",
+          "url": "https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e",
+          "title": "Review the call-key dependency revision for PR #30759",
+          "summary": "Tamir approved the exact 1b9535 amendment for PR #30759; it is now the published head.",
+          "body": "Review the amendment to PR #30759. The PR still publishes `5678a813`; this proposed replacement is `1b9535f`. The earlier approval does not cover this amendment.\n\nThe revision adds a deterministic check that validating an unchanged semantic index does not depend on interned call keys. It fails on the submitted commit and passes with the amendment. The original optimization sentence is restored. This test does not claim to force slot eviction on every CPU or shard count.\n\nThe focused regression, full semantic suite (516 passed, 35 ignored), canonical hooks, formatting and strict Clippy pass. [Candidate qualification](https://app.buildbuddy.io/invocation/94b0a1df-fff3-4102-af51-7c19d032ca3c); [matched baseline failure](https://app.buildbuddy.io/invocation/b0a41fcc-1144-423e-a4bb-c9b4365a34ef).\n\n## Changes from the submitted commit\n\nThis is Git’s actual range-diff of the two single-commit proposals on the same base. The pairing option matches the replacement commit with its predecessor.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..5678a81398ae87c721118445dd539e568f940c10 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..1b9535f986af582c86f75977c4741c3b93eac83e\n```\n\n```diff\n1:  5678a81398 ! 1:  1b9535f986 [ty] Retain call-completion query keys\n    @@ Commit message\n         unchanged file when its interned call-completion keys were collected.\n     \n         Make these keys tracked outputs of the semantic-index query, matching the\n    -    lifetime of the expressions they contain. Cover reuse across unrelated\n    -    revisions and invalidation after the indexed source changes.\n    +    lifetime of the expressions they contain. Check the dependency directly\n    +    after a low-durability write so the regression test does not depend on an\n    +    LRU shard reusing a slot. Keep the check that editing the indexed source\n    +    still invalidates the index.\n     \n      ## crates/ty_python_core/src/predicate.rs ##\n     @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n    @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n     -/// queries use its ID directly, without looking up its components in Salsa's intern table again.\n     -#[salsa::interned(debug, heap_size=ruff_memory_usage::heap_size)]\n     +/// A call-completion query key owned by the semantic index that creates its expressions.\n    ++///\n    ++/// Creating it while building predicates lets cached queries use its ID directly, without looking\n    ++/// up its components in Salsa's intern table again.\n    ++///\n     +/// Tracking the key keeps unrelated revisions from collecting it and invalidating that index.\n     +#[salsa::tracked(debug, heap_size=ruff_memory_usage::heap_size)]\n      pub struct CallableAndCallExpr<'db> {\n    @@ crates/ty_python_semantic/src/types/infer/tests.rs: fn dependency_implicit_alias\n     +        ruff_db::system::SystemPath::new(\"/src/project\"),\n     +        ruff_db::files::FileRootKind::Project,\n     +    );\n    -+    let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(4));\n    -+    db.write_file(\"/src/project/target.py\", &source)?;\n    ++    let source = \"def run(callback):\\n    callback()\\n\";\n    ++    db.write_file(\"/src/project/target.py\", source)?;\n     +    let file = system_path_to_file(&db, \"/src/project/target.py\")?;\n    -+    let mut others = Vec::new();\n    -+    for revision in 0..4 {\n    -+        let path = format!(\"/src/project/other_{revision}.py\");\n    -+        db.write_file(&path, \"\")?;\n    -+        let other = system_path_to_file(&db, &path)?;\n    -+        others.push((path, other));\n    -+    }\n     +    semantic_index(&db, program_file(&db, file));\n    -+    // Fresh call keys in four revisions age Salsa's three-revision retention queue.\n    -+    for (path, other) in others {\n    -+        let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(16));\n    -+        db.write_file(&path, source)?;\n    -+        semantic_index(&db, program_file(&db, other));\n    -+    }\n    ++\n    ++    db.synthetic_write(salsa::Durability::LOW);\n     +    db.clear_salsa_events();\n     +    semantic_index(&db, program_file(&db, file));\n     +    let events = db.take_salsa_events();\n     +    assert_function_query_was_not_run(&db, semantic_index, program_file(&db, file), &events);\n    ++    assert!(\n    ++        !events.iter().any(|event| matches!(\n    ++            event.kind,\n    ++            salsa::EventKind::DidValidateInternedValue { key, .. }\n    ++                if db.ingredient_debug_name(key.ingredient_index()) == \"CallableAndCallExpr\"\n    ++        )),\n    ++        \"validating the semantic index depended on an interned call key\"\n    ++    );\n     +\n     +    db.write_file(\"/src/project/target.py\", format!(\"{source}changed = 1\\n\"))?;\n     +    semantic_index(&db, program_file(&db, file));\n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e). No PR-head update or maintainer reply has been posted.",
+          "outcome": "approved"
         }
       ],
-      "contributorReview": {
-        "kind": "amendment",
-        "status": "pending",
-        "head": "1b9535f986af582c86f75977c4741c3b93eac83e",
-        "baseHead": "5678a81398ae87c721118445dd539e568f940c10",
-        "url": "https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e",
-        "title": "Review the call-key dependency revision for PR #30759",
-        "summary": "The qualified 1b9535 revision adds a deterministic interned-dependency regression and restores the original optimization sentence. The PR still publishes 5678a813; its approval does not cover this amendment.",
-        "body": "Review the amendment to PR #30759. The PR still publishes `5678a813`; this proposed replacement is `1b9535f`. The earlier approval does not cover this amendment.\n\nThe revision adds a deterministic check that validating an unchanged semantic index does not depend on interned call keys. It fails on the submitted commit and passes with the amendment. The original optimization sentence is restored. This test does not claim to force slot eviction on every CPU or shard count.\n\nThe focused regression, full semantic suite (516 passed, 35 ignored), canonical hooks, formatting and strict Clippy pass. [Candidate qualification](https://app.buildbuddy.io/invocation/94b0a1df-fff3-4102-af51-7c19d032ca3c); [matched baseline failure](https://app.buildbuddy.io/invocation/b0a41fcc-1144-423e-a4bb-c9b4365a34ef).\n\n## Changes from the submitted commit\n\nThis is Git’s actual range-diff of the two single-commit proposals on the same base. The pairing option matches the replacement commit with its predecessor.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..5678a81398ae87c721118445dd539e568f940c10 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..1b9535f986af582c86f75977c4741c3b93eac83e\n```\n\n```diff\n1:  5678a81398 ! 1:  1b9535f986 [ty] Retain call-completion query keys\n    @@ Commit message\n         unchanged file when its interned call-completion keys were collected.\n     \n         Make these keys tracked outputs of the semantic-index query, matching the\n    -    lifetime of the expressions they contain. Cover reuse across unrelated\n    -    revisions and invalidation after the indexed source changes.\n    +    lifetime of the expressions they contain. Check the dependency directly\n    +    after a low-durability write so the regression test does not depend on an\n    +    LRU shard reusing a slot. Keep the check that editing the indexed source\n    +    still invalidates the index.\n     \n      ## crates/ty_python_core/src/predicate.rs ##\n     @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n    @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n     -/// queries use its ID directly, without looking up its components in Salsa's intern table again.\n     -#[salsa::interned(debug, heap_size=ruff_memory_usage::heap_size)]\n     +/// A call-completion query key owned by the semantic index that creates its expressions.\n    ++///\n    ++/// Creating it while building predicates lets cached queries use its ID directly, without looking\n    ++/// up its components in Salsa's intern table again.\n    ++///\n     +/// Tracking the key keeps unrelated revisions from collecting it and invalidating that index.\n     +#[salsa::tracked(debug, heap_size=ruff_memory_usage::heap_size)]\n      pub struct CallableAndCallExpr<'db> {\n    @@ crates/ty_python_semantic/src/types/infer/tests.rs: fn dependency_implicit_alias\n     +        ruff_db::system::SystemPath::new(\"/src/project\"),\n     +        ruff_db::files::FileRootKind::Project,\n     +    );\n    -+    let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(4));\n    -+    db.write_file(\"/src/project/target.py\", &source)?;\n    ++    let source = \"def run(callback):\\n    callback()\\n\";\n    ++    db.write_file(\"/src/project/target.py\", source)?;\n     +    let file = system_path_to_file(&db, \"/src/project/target.py\")?;\n    -+    let mut others = Vec::new();\n    -+    for revision in 0..4 {\n    -+        let path = format!(\"/src/project/other_{revision}.py\");\n    -+        db.write_file(&path, \"\")?;\n    -+        let other = system_path_to_file(&db, &path)?;\n    -+        others.push((path, other));\n    -+    }\n     +    semantic_index(&db, program_file(&db, file));\n    -+    // Fresh call keys in four revisions age Salsa's three-revision retention queue.\n    -+    for (path, other) in others {\n    -+        let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(16));\n    -+        db.write_file(&path, source)?;\n    -+        semantic_index(&db, program_file(&db, other));\n    -+    }\n    ++\n    ++    db.synthetic_write(salsa::Durability::LOW);\n     +    db.clear_salsa_events();\n     +    semantic_index(&db, program_file(&db, file));\n     +    let events = db.take_salsa_events();\n     +    assert_function_query_was_not_run(&db, semantic_index, program_file(&db, file), &events);\n    ++    assert!(\n    ++        !events.iter().any(|event| matches!(\n    ++            event.kind,\n    ++            salsa::EventKind::DidValidateInternedValue { key, .. }\n    ++                if db.ingredient_debug_name(key.ingredient_index()) == \"CallableAndCallExpr\"\n    ++        )),\n    ++        \"validating the semantic index depended on an interned call key\"\n    ++    );\n     +\n     +    db.write_file(\"/src/project/target.py\", format!(\"{source}changed = 1\\n\"))?;\n     +    semantic_index(&db, program_file(&db, file));\n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e). No PR-head update or maintainer reply has been posted."
+      "followup": {
+        "owner": "Agent",
+        "sourceHead": "1b9535f986af582c86f75977c4741c3b93eac83e",
+        "nextAction": "Follow upstream CI and review on the approved 1b9535 revision of Ruff #30759."
       },
       "refinement": {
         "before": {
@@ -1299,10 +1323,18 @@
       "repo": "tamird/ruff",
       "title": "Preserve literals in loop unpacking",
       "group": "ty",
-      "status": "Addressing review",
-      "ref": "upstream/destructured-list-elements-rework",
-      "url": "https://github.com/tamird/ruff/commit/f69b792ae4530552c91cff7375a2b6f2e9497a5c",
+      "status": "Awaiting Tamir review",
+      "ref": "review/list-iteration-rationale",
+      "url": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d",
       "evidence": [
+        {
+          "label": "New comments-only 6e08 commit",
+          "url": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d"
+        },
+        {
+          "label": "6e08 canonical hooks; verified unchanged code/tests and reused native proof",
+          "url": "https://app.buildbuddy.io/invocation/06b8444c-860c-4a54-a164-eaffb7b17c21"
+        },
         {
           "label": "New f69 single commit for review",
           "url": "https://github.com/tamird/ruff/commit/f69b792ae4530552c91cff7375a2b6f2e9497a5c"
@@ -1324,12 +1356,25 @@
           "url": "https://app.buildbuddy.io/invocation/3e27961a-71f9-4e9f-abd3-526529ae6c41"
         }
       ],
-      "head": "f69b792ae4530552c91cff7375a2b6f2e9497a5c",
-      "summary": "Tamir requested clearer justification for the List dispatch and tuple-extractor suppression in f69. The agent is revising the explanation and helper scope; this artifact is not approved.\n\nThe f69 rework passes the five existing whole Markdown fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy on RBE. The wrapper then incorrectly required a test count for the successful style-only build and exited 1; the exported source hashes were verified and no rerun was needed. Earlier bf95 qualification remains historical evidence. No full Markdown or ecosystem qualification is claimed.\n\nThis proposal is not approved for upstream submission.",
-      "followup": {
-        "owner": "Agent",
-        "sourceHead": "f69b792ae4530552c91cff7375a2b6f2e9497a5c",
-        "nextAction": "Explain why List expressions need this helper dispatch and how fixed-tuple extraction and promotion differ. Simplify the helper scope and presentation as needed, then qualify the revision before another review request."
+      "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
+      "summary": "Explain List dispatch and why direct tuple displays retain their existing widening behavior. This revision changes comments only; runtime code and tests are unchanged.\n\nThe comments-only 6e08 revision passes canonical hooks on RBE. All four source postimages were verified; runtime code and test lines match qualified f69 exactly, so its five whole fixtures, semantic tests (515 passed, 35 ignored), formatting and strict Clippy proof is reused. Native checks were not rerun. The earlier f69 wrapper-count failure remains disclosed in its historical receipt.\n\nThis proposal is not approved for upstream submission.",
+      "contributorReview": {
+        "kind": "proposal",
+        "status": "pending",
+        "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
+        "baseHead": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
+        "url": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d",
+        "title": "Review the list-iteration rationale revision",
+        "summary": "The 6e08 revision explains the List dispatch and tuple widening policy. It changes comments only; review the actual f69-to 6e08 comparison before deciding whether to submit.",
+        "body": "Review the comments-only list-iteration revision. The List/default branches now explain their scope and the tuple extraction/promotion distinction. Runtime code and tests are unchanged from qualified f69; canonical hooks passed and its existing native proof is reused. Nothing has been submitted upstream.\n\n## Changes from the previous proposal\n\nGit’s actual range-diff pairs the two single-commit proposals on the same base.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..f69b792ae4530552c91cff7375a2b6f2e9497a5c 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..6e08e84a339ee7d27a36371c2b439db84cf58a3d\n```\n\n```diff\n1:  f69b792ae4 ! 1:  6e08e84a33 [ty] Preserve literals in loop unpacking\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n          Some(element_types.into_boxed_slice())\n      }\n      \n    -+/// Infer precise element types for immediately consumed list and dictionary displays.\n    ++/// Recover element types when iterating directly over a list or dictionary display.\n     +pub(super) fn precise_iterable_element_type<'db>(\n     +    db: &'db dyn Db,\n     +    env: &ProgramEnvironment<'db>,\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n     +) -> Option<Type<'db>> {\n     +    match iterable {\n     +        ast::Expr::List(_) => {\n    ++            // List inference promotes element literals to allow later mutation. This display is\n    ++            // consumed immediately, so use the original element expression types.\n     +            let element_types =\n     +                extract_fixed_length_iterable_element_types(db, env, iterable, expression_type)?;\n     +            if element_types.is_empty() {\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n     +        ast::Expr::Dict(dict) => {\n     +            dict_literal_key_value_types(db, env, dict, expression_type).map(|(keys, _values)| keys)\n     +        }\n    ++        // Other expressions use their inferred iterable type. Tuple inference already preserves\n    ++        // literals or widens large tuples; rereading their elements would undo that widening.\n     +        _ => None,\n     +    }\n     +}\n```\n\n[Read the complete commit](https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d)."
+      },
+      "refinement": {
+        "before": {
+          "head": "f69b792ae4530552c91cff7375a2b6f2e9497a5c"
+        },
+        "after": {
+          "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d"
+        }
       }
     },
     {
@@ -1565,7 +1610,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1580,7 +1625,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1595,7 +1640,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1610,7 +1655,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1625,7 +1670,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1641,7 +1686,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python bugfix candidate. Exclude NotImplemented from the assigned result and try ordinary or reflected binary dispatch. Preserve aliases and any ordinary return alternatives. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; qualify reflected overloads, mixed returns, conditional in-place methods and unsupported operands.",
       "findings": [
@@ -1669,7 +1714,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
       "findings": [
@@ -1697,7 +1742,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
       "findings": [
@@ -1742,7 +1787,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Fork correction qualified; upstream extraction pending. The published checker retains complete later contexts for empty dictionaries, lists and sets. Skylib root and Gazelle checks now pass. Thirty native cases and incremental query-order controls cover generic keys, aliases, conflicting consumers and invalid writes; current-upstream extraction and overlap review remain open.",
       "nextStep": "Reduce the correction on current upstream and compare with ibraheemdev’s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
       "findings": [
@@ -1810,7 +1855,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
       "findings": [
@@ -1838,7 +1883,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python bugfix candidate. Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
       "findings": [
@@ -1896,7 +1941,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python bugfix candidate. Group keys that share value types and requiredness, retaining large literal-key groups instead of merging incompatible get overloads. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; cover required and optional keys, key unions, missing keys, defaults and large schemas.",
       "findings": [
@@ -1924,7 +1969,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement / host API candidate. Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
       "findings": [
@@ -1952,7 +1997,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
       "findings": [
@@ -1980,7 +2025,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python bugfix candidate. Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
       "findings": [
@@ -2008,7 +2053,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host API design. Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
       "findings": [
@@ -2036,7 +2081,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host adaptation not implemented. Sty currently selects Standard or Bazel dialects; native annotations and builtin extensions are tied to Bazel. Buck2 needs distinct BUCK, rule-definition and BXL environments. Existing ty parser and supplied-binding hooks are reusable boundaries, not established Buck2 support.",
       "nextStep": "Separate host file modes and builtin catalog selection from Bazel metadata; qualify native annotations and isolation between Buck2 environments.",
       "findings": [],
@@ -2062,7 +2107,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host adaptation not implemented. Reuse Sty’s FileLoader boundary for Buck2 resolution rather than Bazel repository labels. Buck2 cells come from .buckconfig; JSON and TOML can be loaded as modules exporting value. Source lookup, exports and invalidation need the same logical module identity.",
       "nextStep": "Implement a Buck2 loader using cell-relative identities and explicit data-module exports; qualify cross-cell aliases and edits to loaded data.",
       "findings": [],
@@ -2088,7 +2133,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host semantics require qualification. Buck2 exposes record, field and enum constructors alongside namespaced typing values. Map those values through host-supplied semantic contracts instead of assuming Bazel provider or struct behavior. Documentation differs on using record constructors directly versus .type in annotations; settle that against a pinned runtime.",
       "nextStep": "Pin the target Buck2/Starlark runtime, establish constructor and annotation behavior, then qualify field defaults, invalid values and nominal type identity.",
       "findings": [],
@@ -2114,7 +2159,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -2193,7 +2238,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -2408,7 +2453,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host API design. Apple lipo still lacks a static ToolchainInfo field contract. An RBE aspect/cquery probe follows the selected producer, field shape and configured dependency edge through an --extra_toolchains replacement. Producer bodies remain unchecked.",
       "nextStep": "Check selected producer bodies and handle multiple configurations without label-only joins before adding keyed host bounds. Universal source contracts still require an enforced ABI. Sty integration is not implemented.",
       "findings": [
@@ -2444,7 +2489,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -2640,7 +2685,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting. The existing LLVM callback case with a fresh list of \"ok\" and list[Literal[\"ok\"]] fails on the fork and pristine upstream. A fix passes the strengthened existing fixture; broader qualification is in progress.",
       "nextStep": "Finish qualification of the fresh-literal callback fix, including the actual LLVM corpus case, before preparing an upstream proposal. Continue isolating the remaining solver improvements.",
       "findings": [
@@ -3047,7 +3092,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Sty now pairs overloaded interfaces with checked source bodies and uses the same finite domains for strictness. General Python body-domain analysis still needs an upstream split and review.",
       "nextStep": "Repair with_cfg dictionary-union admission and the fork-only generic callback rejection; compare the remaining body-domain APIs with upstream.",
       "findings": [
@@ -3132,7 +3177,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
       "nextStep": "Reject global guard removal: full upstream Markdown has 24 new failing fixtures and current project checks add diagnostics. Fix the original string-splitting bug without discarding internal guards. Saved runtime type tests and tagged-union mechanisms still need separate reconciliation.",
       "findings": [
@@ -3234,7 +3279,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream. The fresh-literal callback fix is now qualified in the fork and passes the actual LLVM corpus case. The expanded official port covers both bounded and unbounded type variables and passes native suites and all 532 default Markdown fixtures. The fork backport passes the current corpus. The official port is withheld after benchmarks found material inference overhead; a correction must preserve required return precision.",
       "nextStep": "Review the qualified bounded/unbounded callback contribution before upstream submission. Finish fork backport qualification and retain the separate stored-collection overlap with #27665.",
       "findings": [
@@ -3354,7 +3399,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3404,7 +3449,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3436,7 +3481,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3487,7 +3532,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3537,7 +3582,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3669,7 +3714,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3692,7 +3737,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
       "nextStep": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
       "findings": [
@@ -3715,7 +3760,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
       "nextStep": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
       "findings": [
@@ -3738,7 +3783,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
       "nextStep": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
       "findings": [
@@ -3778,7 +3823,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
       "nextStep": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
       "findings": [
@@ -3806,7 +3851,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
       "nextStep": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix.",
       "findings": [
@@ -3829,7 +3874,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
       "nextStep": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change.",
       "findings": [
@@ -3884,7 +3929,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Upstream reproduced; fix not qualified. Structural comparison accepts Result[str] as Result[int] when a generic first_or method returns its payload or a caller-supplied fallback. The same false acceptance occurs with nested recursive payloads. Direct recursive payload comparison rejects correctly. Baseline and deferred-receiver experiments agree in both generic syntaxes, so this is a separate signature-comparison defect.",
       "nextStep": "Reconcile existing upstream reports #2924 and #2323, binder PR #29027 and the closed higher-rank attempt #26638 before preparing feedback or extracting another binder implementation. Keep the scoped-binder prerequisite under ty-scoped-witness-proofs. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review.",
       "findings": [],
@@ -3926,9 +3971,9 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Reconciliation in progress. Qualified Sty 14d05b98 pins Ruff 07a4f30c on official 75fabee2. Eight native targets, the optimized build and all 148 unchanged corpus cases pass. All 20 community checks execute with unchanged outcomes: 11 strict passes, six advisory completions and three known failures. All eight qualified workflow refreshes are published. Full Ruff Markdown retains 507 passing and 31 unchanged failing fixtures.",
-      "nextStep": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Two approved ty commits have been submitted upstream. Their proposed e752 and 1b9535 amendments have separate review requests. The agent is addressing the clarity requests on f69 and the conditional LGTM on 61c71bb, and redesigning ba712 as smaller independent contributions.",
+      "nextStep": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Three approved ty commits have been submitted upstream. The approved 1b9535 amendment is now published on PR #30759. The e752 amendment and comments-only 6e08 personal proposal still have separate review requests. The receiver-union conditional approval is satisfied; ba712 remains Agent-owned for smaller independent contributions.",
       "findings": [
         {
           "text": "[ty] Accept immediately guarded dictionary reads — crates/ty_python_semantic/resources/mdtest/narrow/conditionals/in.md, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/infer/builder/subscript.rs, crates/ty_python_semantic/src/types/subscript.rs",
@@ -3974,7 +4019,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Track specialized bounds in TypeVar identity while preserving materialized views and exact ParamSpec components.",
       "nextStep": "Reduce domain identity and substitution cases; qualify captured binders and compare upstream #29555.",
       "findings": [
@@ -4064,7 +4109,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python solver design. Keep local binders, declared domains and correlated witnesses together through inference, replay and bounded proof. Unknown proofs remain incomplete.",
       "nextStep": "Compare upstream PR #29027 before extracting the binder representation. Reduce the remaining quantified-domain, witness-correlation and budget differences for design review.",
       "findings": [
@@ -4880,7 +4925,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python bugfix candidate. A sibling branch can negate a rolled-back consequence while its antecedents still hold. Retriggering cached rules detects the conflict.",
       "nextStep": "Reproduce against clean upstream and qualify both single and pair implication regressions.",
       "findings": [
@@ -4918,7 +4963,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python bugfix candidate. Exhausted generic witness proof must remain unknown instead of producing an upper-bound violation.",
       "nextStep": "Qualify the native exhausted-witness regression and reduce a Python diagnostic example.",
       "findings": [
@@ -4956,7 +5001,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Preserve strict callable relations while solving finite source domains, covering union inputs and comparing nested protocol receivers.",
       "nextStep": "Reduce strict callable cases; qualify domain replay and receiver progress against upstream #29555.",
       "findings": [
@@ -5042,7 +5087,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Specialize generic implementation inputs before declaration coverage checks. Broader implementation return annotations are permitted; body checking has a separate owner.",
       "nextStep": "Correct the invalid nullable-return assertion, then qualify generic declaration consistency.",
       "findings": [
@@ -5094,7 +5139,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Preserve callable-local binders under outer substitution and project captured callback variables before they reach ordinary results.",
       "nextStep": "Reconcile binder ownership with upstream #29553 and #29555; qualify partial and captured-return cases.",
       "findings": [
@@ -5170,7 +5215,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python bugfix candidate. Keep overload expansion available when some generic specialization accepts an argument, including provisional arity mismatches.",
       "nextStep": "Qualify the bound-method starred-union fixture and reduce the generic expansion precheck.",
       "findings": [
@@ -5208,7 +5253,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Python enhancement candidate. Use finite member facts for getattr results and fresh empty defaults. Immutable storage guarantees have a separate host contract.",
       "nextStep": "Reduce ordinary Python lookup cases; compare collection context with upstream #27665.",
       "findings": [
@@ -5274,7 +5319,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host API design. Distinguish accepted keyword parameters from received keyword dictionaries, then verify complete ParamSpec witnesses against the original call relation.",
       "nextStep": "Specify host annotation and capture semantics before proposing shared solver APIs.",
       "findings": [
@@ -5370,7 +5415,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T17:09:44.433758Z",
+      "updatedAt": "2026-11-22T17:30:53.927506Z",
       "summary": "Host API design. Keep source definitions or ranges through parameter specialization, default presentation and hidden internal keyword handling.",
       "nextStep": "Review the public source-location contract and qualify navigation and signature presentation.",
       "findings": [
