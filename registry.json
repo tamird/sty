@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-22T22:25:52.195979Z",
+    "updatedAt": "2026-11-22T22:44:25.105866Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -1144,8 +1144,16 @@
       "group": "ty",
       "status": "open",
       "url": "https://github.com/astral-sh/ruff/pull/30761",
-      "summary": "Carl requested a different approach after finding that combining bound receivers changes partial calls, property accessors, overload selection and expansion limits. Submitted ce523 is now Agent-owned rework; its earlier conditional approval does not authorize a replacement.\n\nHistorical qualification of submitted ce523 only; Carl now requests a different approach. The ce523f7 revision passes six existing whole fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. Tests are unchanged. Root verified the exact source and confirmed that the requested predicate and comments satisfy Tamir’s conditional LGTM. Earlier 61c and d367 qualification remains historical evidence. This evidence and the settled conditional approval do not qualify or authorize a replacement.\n\nTamir approved this exact commit under the conditional LGTM after the requested predicate and comment changes were verified and qualified.",
+      "summary": "Carl requested replacing the submitted receiver-merging approach. The qualified edc8 replacement uses narrow string-union normalization instead; PR #30761 still publishes ce523 pending user review of the replacement range-diff.\n\nHistorical qualification of submitted ce523 only; Carl now requests a different approach. The ce523f7 revision passes six existing whole fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. Tests are unchanged. Root verified the exact source and confirmed that the requested predicate and comments satisfy Tamir’s conditional LGTM. Earlier 61c and d367 qualification remains historical evidence. This evidence and the settled conditional approval do not qualify or authorize a replacement.\n\nTamir approved this exact commit under the conditional LGTM after the requested predicate and comment changes were verified and qualified.",
       "evidence": [
+        {
+          "label": "Proposed edc8 complete replacement commit",
+          "url": "https://github.com/tamird/ruff/commit/edc8e4990cd10109fadea84e15447438a7141a31"
+        },
+        {
+          "label": "edc8: maintained532MD plus1temporary review fixture; core/semantic/IDE and strict style",
+          "url": "https://app.buildbuddy.io/invocation/459a1ca0-d642-491d-970f-b35ccdbd261c"
+        },
         {
           "label": "Carl: changes requested on submitted ce523",
           "url": "https://github.com/astral-sh/ruff/pull/30761#pullrequestreview-6013560748"
@@ -1215,10 +1223,23 @@
           "body": "The requested receiver-union changes are qualified and submitted as [Ruff #30761](https://github.com/astral-sh/ruff/pull/30761). The unsupported-overload predicate allows an empty set, and comments explain the remaining screening and reconstruction. Tamir’s conditional approval is satisfied; this is review history, not a new decision request.\n\n## Changes from the previous proposal\n\nGit’s actual range-diff pairs the two single-commit proposals on the same base.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 f31dd86f222f7d978a65cfc453eaf88f11456ed7..61c71bb62410ceb55c45c0f6d223c437858e07c1 f31dd86f222f7d978a65cfc453eaf88f11456ed7..ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e\n```\n\n```diff\n1:  61c71bb624 ! 1:  ce523f7be1 [ty] Unify receivers of one bound method\n    @@ crates/ty_python_semantic/src/types/method.rs: impl<'db> BoundMethodType<'db> {\n     +            }\n     +        }\n     +        let signatures = first.unbound_signatures_with_inferred_return_type(db)?;\n    -+        if signatures.overloads.is_empty()\n    -+            || !signatures\n    -+                .overloads\n    -+                .iter()\n    -+                .all(|signature| signature.supports_receiver_union(db, env))\n    ++        // Parameters, returns, or predicates that depend on one receiver need separate bindings.\n    ++        if signatures\n    ++            .overloads\n    ++            .iter()\n    ++            .any(|signature| !signature.supports_receiver_union(db, env))\n     +        {\n     +            return None;\n     +        }\n    ++        // The shared overload matcher needs the full receiver union to determine its return type.\n     +        let receiver = UnionType::from_elements(\n     +            db,\n     +            env,\n    @@ crates/ty_python_semantic/src/types/method.rs: impl<'db> BoundMethodType<'db> {\n     +                method.self_instance(db)\n     +            }),\n     +        );\n    ++        // The identity checks let the first method retain the shared function and program.\n     +        Some(first.map_self_type(db, |_receiver| receiver))\n     +    }\n     +\n```\n\n[Read the complete commit](https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e)."
         }
       ],
-      "followup": {
-        "owner": "Agent",
-        "sourceHead": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
-        "nextAction": "Replace the shared receiver-binding approach with the narrower UnionBuilder simplification requested by Carl, preserving individual bindings and other type exclusions. Address all five inline cases and qualify the replacement. Present its actual range-diff to Tamir before updating PR #30761; no candidate head is recorded yet."
+      "contributorReview": {
+        "kind": "amendment",
+        "status": "pending",
+        "head": "edc8e4990cd10109fadea84e15447438a7141a31",
+        "baseHead": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
+        "url": "https://github.com/tamird/ruff/commit/edc8e4990cd10109fadea84e15447438a7141a31",
+        "title": "Review the narrow string-union replacement for PR #30761",
+        "summary": "The qualified edc8 replacement removes receiver merging and normalizes the empty-string union instead. Review the full paired range-diff; the current ce523 approval does not cover this source.",
+        "body": "Review replacing submitted `ce523f7` with `edc8e499` on PR #30761. This removes the receiver-merging approach and implements Carl’s requested UnionBuilder fix: `(str & ~AlwaysFalsy) | Literal[\"\"]` becomes `str`. Nonempty fallbacks, additional intersection constraints and literal-string precision retain their existing handling.\n\nFor ordinary `str` annotations that include subclasses with a false-returning `__bool__`, this deliberately widens the modeled type; it is not an exact runtime-class claim.\n\nQualification passes all 532 maintained Markdown fixtures plus one temporary reviewer-case fixture, core 86, semantic 515 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy. The temporary examples are not committed; network-backed modes were not separately qualified. [Qualification](https://app.buildbuddy.io/invocation/459a1ca0-d642-491d-970f-b35ccdbd261c).\n\n## Replacement range-diff\n\nThe complete paired comparison follows. PR #30761 remains at the old head until this replacement is approved.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 f31dd86f222f7d978a65cfc453eaf88f11456ed7..ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e f31dd86f222f7d978a65cfc453eaf88f11456ed7..edc8e4990cd10109fadea84e15447438a7141a31\n```\n\n```diff\n1:  ce523f7be1 ! 1:  edc8e4990c [ty] Unify receivers of one bound method\n    @@ Metadata\n     Author: Tamir Duberstein <tamird@gmail.com>\n     \n      ## Commit message ##\n    -    [ty] Unify receivers of one bound method\n    +    [ty] Simplify strings with empty fallbacks\n     \n    -    A boolean fallback could produce a union of bound methods for the same\n    -    function. Selecting overloads separately for each receiver chose a\n    -    LiteralString-specific return for str.split, even when another receiver\n    -    required the ordinary list[str] result.\n    +    Normalize `(str & ~AlwaysFalsy) | Literal[\"\"]` to `str` in the union\n    +    builder. This lets methods on `s or \"\"` use their ordinary `str` overloads\n    +    without combining bound methods from different receivers.\n     \n    -    Combine receiver alternatives before overload selection when they refer\n    -    to the same instance method and its signatures have no receiver-dependent\n    -    correlations. Preserve independent bindings for class methods, generic\n    -    correlations and predicates. Keep the original callable union for\n    -    diagnostics and reject alternatives with no matching overload.\n    +    Match only the builtin `str` core with the single truthiness exclusion,\n    +    and handle both insertion orders through the existing union reductions.\n    +    Nonempty fallbacks retain their truthiness narrowing, and a literal empty\n    +    receiver still selects LiteralString-specific overloads.\n     \n    - ## crates/ty_python_semantic/resources/mdtest/call/overloads.md ##\n    -@@ crates/ty_python_semantic/resources/mdtest/call/overloads.md: def narrowed(color: Color):\n    -         return\n    -     reveal_type(color.label())  # revealed: int | str\n    - \n    --def explicit(color: Literal[Color.GREEN, Color.BLUE]):\n    -+def explicit(\n    -+    color: Literal[Color.GREEN, Color.BLUE],\n    -+    unsupported: Literal[Color.RED, Color.GREEN],\n    -+):\n    -     reveal_type(color.label())  # revealed: int | str\n    -+    unsupported.label()  # error: [no-matching-overload]\n    - ```\n    - \n    - ### Expanding PEP 695 type alias\n    +    This deliberately widens the broad `str` annotation for subclasses that\n    +    override `__bool__` to return false. Other intersection constraints and\n    +    subclass-specific cores retain their original unions.\n     \n      ## crates/ty_python_semantic/resources/mdtest/expression/boolean.md ##\n     @@ crates/ty_python_semantic/resources/mdtest/expression/boolean.md: def _(foo: str):\n          reveal_type(False or False)  # revealed: Literal[False]\n          reveal_type(foo or False)  # revealed: (str & ~AlwaysFalsy) | Literal[False]\n          reveal_type(foo or True)  # revealed: (str & ~AlwaysFalsy) | Literal[True]\n    -+\n    -+    # Splitting str with an empty-string fallback still returns list[str].\n    ++    reveal_type(foo or \"\")  # revealed: str\n     +    reveal_type((foo or \"\").split())  # revealed: list[str]\n    ++    reveal_type(foo or \"fallback\")  # revealed: str & ~AlwaysFalsy\n     +\n     +# A literal receiver still selects the LiteralString overload.\n     +reveal_type(\"\".split())  # revealed: list[LiteralString]\n    @@ crates/ty_python_semantic/resources/mdtest/expression/boolean.md: def _(foo: str\n      \n      ## AND\n     \n    - ## crates/ty_python_semantic/src/types.rs ##\n    -@@ crates/ty_python_semantic/src/types.rs: impl<'db> Type<'db> {\n    -                 Binding::single(self, Signature::dynamic(self)).into()\n    -             }\n    + ## crates/ty_python_semantic/resources/mdtest/narrow/len.md ##\n    +@@ crates/ty_python_semantic/resources/mdtest/narrow/len.md: def _(x: Literal[\"foo\", \"\"] | list[int]):\n    +         reveal_type(x)  # revealed: Literal[\"\"] | list[int]\n    + ```\n      \n    --            // Note that this correctly returns `None` if none of the union elements are callable.\n    --            Type::Union(union) => Bindings::from_union(\n    --                self,\n    --                union.elements(db).iter().map(|element| {\n    --                    element.bindings_with_receiver(db, env, recursion_guard, receiver)\n    --                }),\n    --            ),\n    -+            // Select one function's overloads against all of its possible receivers together.\n    -+            Type::Union(union) => {\n    -+                if let Some(method) = BoundMethodType::from_receiver_union(db, env, union) {\n    -+                    return Type::BoundMethod(method)\n    -+                        .bindings_with_receiver(db, env, recursion_guard, receiver)\n    -+                        .with_callable_type(self);\n    -+                }\n    -+                Bindings::from_union(\n    -+                    self,\n    -+                    union.elements(db).iter().map(|element| {\n    -+                        element.bindings_with_receiver(db, env, recursion_guard, receiver)\n    -+                    }),\n    -+                )\n    -+            }\n    +-## Narrowing away empty literals\n    ++## An empty fallback restores `str`\n      \n    -             // A narrowed `type[T: Base] & type[Child]` still needs to construct `T & Child`,\n    -             // but its constructor must come from `Child`, not from `Base` as an independent,\n    +-This pattern is common when a prior truthiness check narrows a type, and then a conditional\n    +-expression adds an empty literal back:\n    ++A truthiness check narrows a string, but adding an empty string back restores broad `str`, in either\n    ++branch order. A later length check leaves that type unchanged:\n    + \n    + ```py\n    + def _(lines: list[str]):\n    +@@ crates/ty_python_semantic/resources/mdtest/narrow/len.md: def _(lines: list[str]):\n    + \n    +         reveal_type(line)  # revealed: str & ~AlwaysFalsy\n    +         value = line if len(line) < 3 else \"\"\n    +-        reveal_type(value)  # revealed: (str & ~AlwaysFalsy) | Literal[\"\"]\n    ++        reveal_type(value)  # revealed: str\n    ++        value = \"\" if len(line) < 3 else line\n    ++        reveal_type(value)  # revealed: str\n    + \n    +         if len(value):\n    +-            # `Literal[\"\"]` is removed, `str & ~AlwaysFalsy` is unchanged\n    +-            reveal_type(value)  # revealed: str & ~AlwaysFalsy\n    +-            # Accessing value[0] is safe here\n    ++            reveal_type(value)  # revealed: str\n    +             _ = value[0]\n    + ```\n     \n    - ## crates/ty_python_semantic/src/types/method.rs ##\n    -@@ crates/ty_python_semantic/src/types/method.rs: impl<'db> BoundMethodType<'db> {\n    -         )\n    -     }\n    + ## crates/ty_python_semantic/src/types/set_theoretic/builder.rs ##\n    +@@ crates/ty_python_semantic/src/types/set_theoretic/builder.rs: use itertools::Itertools;\n    + use rustc_hash::FxHashSet;\n    + use smallvec::SmallVec;\n      \n    -+    /// Combine receivers of the same instance method before choosing its overloads.\n    -+    ///\n    -+    /// Signatures that depend on individual receivers must still be bound separately.\n    -+    pub(super) fn from_receiver_union(\n    -+        db: &'db dyn Db,\n    -+        env: &ProgramEnvironment<'db>,\n    -+        union: UnionType<'db>,\n    -+    ) -> Option<Self> {\n    -+        let (first, remaining) = union.elements(db).split_first()?;\n    -+        let Type::BoundMethod(first) = *first else {\n    -+            return None;\n    -+        };\n    -+        let function = first.func(db);\n    -+        let Type::FunctionLiteral(_) = function else {\n    -+            return None;\n    -+        };\n    -+        // Class methods capture a class object but substitute its instance type for `Self`.\n    -+        // They cannot use the single instance-receiver union constructed below.\n    -+        if first.class_method(db) {\n    -+            return None;\n    -+        }\n    -+        // A constrained receiver checks one alternative while retaining the original `__self__`.\n    -+        // Combining it with other receivers would lose that alternative's constraint.\n    -+        if first.self_instance(db) != first.signature_receiver(db) {\n    -+            return None;\n    -+        }\n    -+\n    -+        let program = first.program(db);\n    -+        for element in remaining {\n    -+            let Type::BoundMethod(method) = element else {\n    -+                return None;\n    -+            };\n    -+            // Binding only the first method must not discard another function's overloads or\n    -+            // class specialization, or use signatures from a different program.\n    -+            if method.func(db) != function || method.program(db) != program {\n    -+                return None;\n    -+            }\n    -+            if method.class_method(db) {\n    -+                return None;\n    -+            }\n    -+            if method.self_instance(db) != method.signature_receiver(db) {\n    -+                return None;\n    -+            }\n    -+        }\n    -+        let signatures = first.unbound_signatures_with_inferred_return_type(db)?;\n    -+        // Parameters, returns, or predicates that depend on one receiver need separate bindings.\n    -+        if signatures\n    -+            .overloads\n    ++fn is_exact_truthy_str<'db>(db: &'db dyn Db, env: &ProgramEnvironment<'db>, ty: Type<'db>) -> bool {\n    ++    let Type::Intersection(intersection) = ty else {\n    ++        return false;\n    ++    };\n    ++    intersection\n    ++        .positive(db)\n    ++        .iter()\n    ++        .copied()\n    ++        .eq([KnownClass::Str.to_instance(db, env)])\n    ++        && intersection\n    ++            .negative(db)\n     +            .iter()\n    -+            .any(|signature| !signature.supports_receiver_union(db, env))\n    ++            .copied()\n    ++            .eq([Type::AlwaysFalsy])\n    ++}\n    ++\n    + /// Extract `(core, guard)` from truthiness-guarded intersections.\n    + ///\n    + /// e.g.\n    +@@ crates/ty_python_semantic/src/types/set_theoretic/builder.rs: impl<'db> UnionElement<'db> {\n    +             return ReduceResult::KeepIf(true);\n    +         }\n    + \n    ++        // Treat an empty-string fallback as broad `str`, while keeping truthiness\n    ++        // narrowing for nonempty fallbacks and intersections with other constraints.\n    ++        if let UnionElement::StringLiterals(literals) = self\n    ++            && is_exact_truthy_str(db, env, other_type)\n    ++            && literals.keys().any(|literal| literal.value(db).is_empty())\n     +        {\n    -+            return None;\n    ++            return ReduceResult::Merged(KnownClass::Str.to_instance(db, env));\n     +        }\n    -+        // The shared overload matcher needs the full receiver union to determine its return type.\n    -+        let receiver = UnionType::from_elements(\n    -+            db,\n    -+            env,\n    -+            union.elements(db).iter().map(|element| {\n    -+                let Type::BoundMethod(method) = element else {\n    -+                    unreachable!(\"all union elements are bound methods\");\n    -+                };\n    -+                method.self_instance(db)\n    -+            }),\n    -+        );\n    -+        // The identity checks let the first method retain the shared function and program.\n    -+        Some(first.map_self_type(db, |_receiver| receiver))\n    -+    }\n     +\n    -     pub(super) fn apply_type_mapping_impl(\n    -         self,\n    -         db: &'db dyn Db,\n    -\n    - ## crates/ty_python_semantic/src/types/signatures.rs ##\n    -@@ crates/ty_python_semantic/src/types/signatures.rs: impl<'db> Signature<'db> {\n    -         self.receiver_constraints().is_none() && !self.is_paramspec_value()\n    +         let mut other_type_negated_cache = None;\n    + \n    +         let mut collapse = false;\n    +@@ crates/ty_python_semantic/src/types/set_theoretic/builder.rs: enum ReduceResult<'db> {\n    +     /// The given `Type` can stand-in for the entire `UnionElement` for further union\n    +     /// simplification checks.\n    +     Type(Type<'db>),\n    ++    /// Replace both this element and the incoming type, reconsidering earlier elements.\n    ++    Merged(Type<'db>),\n    + }\n    + \n    + /// If the value ​​is defined recursively, widening is performed from fewer literal elements,\n    +@@ crates/ty_python_semantic/src/types/set_theoretic/builder.rs: impl<'db> UnionBuilder<'db> {\n    +                                 UnionElement::Type(existing)\n    +                                     if can_compare_with_literals(*existing) =>\n    +                                 {\n    ++                                    if string_literal.value(db).is_empty()\n    ++                                        && is_exact_truthy_str(db, &self.env, *existing)\n    ++                                    {\n    ++                                        self.elements.swap_remove(index);\n    ++                                        self.add_in_place_impl(\n    ++                                            KnownClass::Str.to_instance(db, &self.env),\n    ++                                            seen_aliases,\n    ++                                        );\n    ++                                        return;\n    ++                                    }\n    +                                     // e.g. `existing` could be `Literal[\"\"] & Any`,\n    +                                     // and `ty` could be `Literal[\"\"]`\n    +                                     if ty.is_redundant_with(db, &self.env, *existing) {\n    +@@ crates/ty_python_semantic/src/types/set_theoretic/builder.rs: impl<'db> UnionBuilder<'db> {\n    +         }\n          }\n      \n    -+    /// Whether all receiver alternatives can be checked against one signature.\n    -+    pub(super) fn supports_receiver_union(\n    -+        &self,\n    -+        db: &'db dyn Db,\n    -+        env: &ProgramEnvironment<'db>,\n    -+    ) -> bool {\n    -+        let Some((receiver, parameters)) = self.parameters.as_slice().split_first() else {\n    -+            return false;\n    -+        };\n    -+        if !self.supports_overload_aggregation() {\n    -+            return false;\n    -+        }\n    -+        if !receiver.is_positional() {\n    -+            return false;\n    -+        }\n    -+        // `Self` in another parameter or the return type relates that type to one receiver.\n    -+        if self.needs_self_mapping(db, env, parameters) {\n    -+            return false;\n    -+        }\n    -+        // Predicate results narrow an argument; retain the receiver that established that narrowing.\n    -+        if super::visitor::any_over_type_expanding_aliases(db, env, self.return_ty, |ty| {\n    -+            matches!(ty, Type::TypeIs(_) | Type::TypeGuard(_))\n    -+        }) {\n    -+            return false;\n    ++    fn reinsert_merged_type(\n    ++        &mut self,\n    ++        merged: Type<'db>,\n    ++        to_remove: SmallVec<[usize; 2]>,\n    ++        seen_aliases: &mut Vec<Type<'db>>,\n    ++    ) {\n    ++        for index in to_remove.into_iter().rev() {\n    ++            self.elements.swap_remove(index);\n     +        }\n    -+        // Other type parameters can correlate the receiver with arguments or the result.\n    -+        // A sole implicit `Self` is safe only when no other type depends on it.\n    -+        self.is_non_generic() || self.with_unused_self_upper_bound(db, env).is_some()\n    ++        // A merged type may subsume elements visited before the pair that produced it.\n    ++        self.add_in_place_impl(merged, seen_aliases);\n     +    }\n     +\n    -     /// Restrict the base signature to positional calls for parameters whose keyword name\n    -     /// is lost in every overriding overload. This comparison-only signature may contain\n    -     /// a positional-only parameter after a positional-or-keyword parameter so that we\n    +     fn push_type(&mut self, ty: Type<'db>, seen_aliases: &mut Vec<Type<'db>>) {\n    +         let db = self.db;\n    +         let mut ty = ty;\n    +@@ crates/ty_python_semantic/src/types/set_theoretic/builder.rs: impl<'db> UnionBuilder<'db> {\n    +                     }\n    +                     continue;\n    +                 }\n    ++                ReduceResult::Merged(merged) => {\n    ++                    to_remove.push(i);\n    ++                    self.reinsert_merged_type(merged, to_remove, seen_aliases);\n    ++                    return;\n    ++                }\n    +                 ReduceResult::Type(ty) => ty,\n    +                 ReduceResult::CollapseToObject => {\n    +                     self.collapse_to_object();\n    +@@ crates/ty_python_semantic/src/types/set_theoretic/builder.rs: impl<'db> UnionBuilder<'db> {\n    +                     ty = merged_type;\n    +                     continue;\n    +                 }\n    +-                for index in to_remove.into_iter().rev() {\n    +-                    self.elements.swap_remove(index);\n    +-                }\n    +-                // The merged type can also subsume earlier elements, such as `bool` when\n    +-                // the truthy and falsy parts of `int` merge.\n    +-                self.add_in_place_impl(merged_type, seen_aliases);\n    ++                self.reinsert_merged_type(merged_type, to_remove, seen_aliases);\n    +                 return;\n    +             }\n    + \n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/edc8e4990cd10109fadea84e15447438a7141a31)."
+      },
+      "refinement": {
+        "before": {
+          "head": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e"
+        },
+        "after": {
+          "head": "edc8e4990cd10109fadea84e15447438a7141a31"
+        }
       }
     },
     {
@@ -1633,7 +1654,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1648,7 +1669,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1663,7 +1684,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1678,7 +1699,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1693,7 +1714,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1709,7 +1730,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python bugfix candidate. Exclude NotImplemented from the assigned result and try ordinary or reflected binary dispatch. Preserve aliases and any ordinary return alternatives. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; qualify reflected overloads, mixed returns, conditional in-place methods and unsupported operands.",
       "findings": [
@@ -1737,7 +1758,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
       "findings": [
@@ -1765,7 +1786,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
       "findings": [
@@ -1810,7 +1831,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Fork correction qualified; upstream extraction pending. The published checker retains complete later contexts for empty dictionaries, lists and sets. Skylib root and Gazelle checks now pass. Thirty native cases and incremental query-order controls cover generic keys, aliases, conflicting consumers and invalid writes; current-upstream extraction and overlap review remain open.",
       "nextStep": "Reduce the correction on current upstream and compare with ibraheemdev’s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
       "findings": [
@@ -1878,7 +1899,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
       "findings": [
@@ -1906,7 +1927,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python bugfix candidate. Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
       "findings": [
@@ -1964,7 +1985,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python bugfix candidate. Group keys that share value types and requiredness, retaining large literal-key groups instead of merging incompatible get overloads. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; cover required and optional keys, key unions, missing keys, defaults and large schemas.",
       "findings": [
@@ -1992,7 +2013,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement / host API candidate. Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
       "findings": [
@@ -2020,7 +2041,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
       "findings": [
@@ -2048,7 +2069,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python bugfix candidate. Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
       "findings": [
@@ -2076,7 +2097,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host API design. Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
       "findings": [
@@ -2104,7 +2125,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host adaptation not implemented. Sty currently selects Standard or Bazel dialects; native annotations and builtin extensions are tied to Bazel. Buck2 needs distinct BUCK, rule-definition and BXL environments. Existing ty parser and supplied-binding hooks are reusable boundaries, not established Buck2 support.",
       "nextStep": "Separate host file modes and builtin catalog selection from Bazel metadata; qualify native annotations and isolation between Buck2 environments.",
       "findings": [],
@@ -2130,7 +2151,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host adaptation not implemented. Reuse Sty’s FileLoader boundary for Buck2 resolution rather than Bazel repository labels. Buck2 cells come from .buckconfig; JSON and TOML can be loaded as modules exporting value. Source lookup, exports and invalidation need the same logical module identity.",
       "nextStep": "Implement a Buck2 loader using cell-relative identities and explicit data-module exports; qualify cross-cell aliases and edits to loaded data.",
       "findings": [],
@@ -2156,7 +2177,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host semantics require qualification. Buck2 exposes record, field and enum constructors alongside namespaced typing values. Map those values through host-supplied semantic contracts instead of assuming Bazel provider or struct behavior. Documentation differs on using record constructors directly versus .type in annotations; settle that against a pinned runtime.",
       "nextStep": "Pin the target Buck2/Starlark runtime, establish constructor and annotation behavior, then qualify field defaults, invalid values and nominal type identity.",
       "findings": [],
@@ -2182,7 +2203,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -2261,7 +2282,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -2476,7 +2497,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host API design. Apple lipo still lacks a static ToolchainInfo field contract. An RBE aspect/cquery probe follows the selected producer, field shape and configured dependency edge through an --extra_toolchains replacement. Producer bodies remain unchecked.",
       "nextStep": "Check selected producer bodies and handle multiple configurations without label-only joins before adding keyed host bounds. Universal source contracts still require an enforced ABI. Sty integration is not implemented.",
       "findings": [
@@ -2512,7 +2533,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -2708,7 +2729,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting. The existing LLVM callback case with a fresh list of \"ok\" and list[Literal[\"ok\"]] fails on the fork and pristine upstream. A fix passes the strengthened existing fixture; broader qualification is in progress.",
       "nextStep": "Finish qualification of the fresh-literal callback fix, including the actual LLVM corpus case, before preparing an upstream proposal. Continue isolating the remaining solver improvements.",
       "findings": [
@@ -3115,7 +3136,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Sty now pairs overloaded interfaces with checked source bodies and uses the same finite domains for strictness. General Python body-domain analysis still needs an upstream split and review.",
       "nextStep": "Repair with_cfg dictionary-union admission and the fork-only generic callback rejection; compare the remaining body-domain APIs with upstream.",
       "findings": [
@@ -3200,7 +3221,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
       "nextStep": "Reject global guard removal: full upstream Markdown has 24 new failing fixtures and current project checks add diagnostics. Fix the original string-splitting bug without discarding internal guards. Saved runtime type tests and tagged-union mechanisms still need separate reconciliation.",
       "findings": [
@@ -3302,7 +3323,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream. The fresh-literal callback fix is now qualified in the fork and passes the actual LLVM corpus case. The expanded official port covers both bounded and unbounded type variables and passes native suites and all 532 default Markdown fixtures. The fork backport passes the current corpus. The official port is withheld after benchmarks found material inference overhead; a correction must preserve required return precision.",
       "nextStep": "Review the qualified bounded/unbounded callback contribution before upstream submission. Finish fork backport qualification and retain the separate stored-collection overlap with #27665.",
       "findings": [
@@ -3422,7 +3443,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3472,7 +3493,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3504,7 +3525,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3555,7 +3576,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3605,7 +3626,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3737,7 +3758,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3760,7 +3781,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
       "nextStep": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
       "findings": [
@@ -3783,7 +3804,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
       "nextStep": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
       "findings": [
@@ -3806,7 +3827,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
       "nextStep": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
       "findings": [
@@ -3846,7 +3867,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
       "nextStep": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
       "findings": [
@@ -3874,7 +3895,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
       "nextStep": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix.",
       "findings": [
@@ -3897,7 +3918,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
       "nextStep": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change.",
       "findings": [
@@ -3952,7 +3973,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Upstream reproduced; fix not qualified. Structural comparison accepts Result[str] as Result[int] when a generic first_or method returns its payload or a caller-supplied fallback. The same false acceptance occurs with nested recursive payloads. Direct recursive payload comparison rejects correctly. Baseline and deferred-receiver experiments agree in both generic syntaxes, so this is a separate signature-comparison defect.",
       "nextStep": "Reconcile existing upstream reports #2924 and #2323, binder PR #29027 and the closed higher-rank attempt #26638 before preparing feedback or extracting another binder implementation. Keep the scoped-binder prerequisite under ty-scoped-witness-proofs. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review.",
       "findings": [],
@@ -3994,9 +4015,9 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Reconciliation in progress. Qualified Sty 14d05b98 pins Ruff 07a4f30c on official 75fabee2. Eight native targets, the optimized build and all 148 unchanged corpus cases pass. All 20 community checks execute with unchanged outcomes: 11 strict passes, six advisory completions and three known failures. All eight qualified workflow refreshes are published. Full Ruff Markdown retains 507 passing and 31 unchanged failing fixtures.",
-      "nextStep": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30759 has merged; two other approved contributions remain submitted upstream. The approved e752 amendment is now published on PR #30758. The list-iteration proposal is Agent-owned factoring rework, with no current user decision. PR #30761 is Agent-owned rework following Carl’s review; any replacement needs user review of its range-diff before the PR is updated. The ce523 approval remains historical. ba712 remains Agent-owned for smaller independent contributions.",
+      "nextStep": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30759 has merged; two other approved contributions remain submitted upstream. The approved e752 amendment is now published on PR #30758. The list-iteration proposal is Agent-owned factoring rework, with no current user decision. PR #30761 has a qualified edc8 replacement awaiting user review of its full paired range-diff; the public head remains ce523 until approval. The ce523 approval remains historical. ba712 remains Agent-owned for smaller independent contributions.",
       "findings": [
         {
           "text": "[ty] Accept immediately guarded dictionary reads — crates/ty_python_semantic/resources/mdtest/narrow/conditionals/in.md, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/infer/builder/subscript.rs, crates/ty_python_semantic/src/types/subscript.rs",
@@ -4042,7 +4063,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Track specialized bounds in TypeVar identity while preserving materialized views and exact ParamSpec components.",
       "nextStep": "Reduce domain identity and substitution cases; qualify captured binders and compare upstream #29555.",
       "findings": [
@@ -4132,7 +4153,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python solver design. Keep local binders, declared domains and correlated witnesses together through inference, replay and bounded proof. Unknown proofs remain incomplete.",
       "nextStep": "Compare upstream PR #29027 before extracting the binder representation. Reduce the remaining quantified-domain, witness-correlation and budget differences for design review.",
       "findings": [
@@ -4948,7 +4969,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python bugfix candidate. A sibling branch can negate a rolled-back consequence while its antecedents still hold. Retriggering cached rules detects the conflict.",
       "nextStep": "Reproduce against clean upstream and qualify both single and pair implication regressions.",
       "findings": [
@@ -4986,7 +5007,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python bugfix candidate. Exhausted generic witness proof must remain unknown instead of producing an upper-bound violation.",
       "nextStep": "Qualify the native exhausted-witness regression and reduce a Python diagnostic example.",
       "findings": [
@@ -5024,7 +5045,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Preserve strict callable relations while solving finite source domains, covering union inputs and comparing nested protocol receivers.",
       "nextStep": "Reduce strict callable cases; qualify domain replay and receiver progress against upstream #29555.",
       "findings": [
@@ -5110,7 +5131,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Specialize generic implementation inputs before declaration coverage checks. Broader implementation return annotations are permitted; body checking has a separate owner.",
       "nextStep": "Correct the invalid nullable-return assertion, then qualify generic declaration consistency.",
       "findings": [
@@ -5162,7 +5183,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Preserve callable-local binders under outer substitution and project captured callback variables before they reach ordinary results.",
       "nextStep": "Reconcile binder ownership with upstream #29553 and #29555; qualify partial and captured-return cases.",
       "findings": [
@@ -5238,7 +5259,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python bugfix candidate. Keep overload expansion available when some generic specialization accepts an argument, including provisional arity mismatches.",
       "nextStep": "Qualify the bound-method starred-union fixture and reduce the generic expansion precheck.",
       "findings": [
@@ -5276,7 +5297,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Python enhancement candidate. Use finite member facts for getattr results and fresh empty defaults. Immutable storage guarantees have a separate host contract.",
       "nextStep": "Reduce ordinary Python lookup cases; compare collection context with upstream #27665.",
       "findings": [
@@ -5342,7 +5363,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host API design. Distinguish accepted keyword parameters from received keyword dictionaries, then verify complete ParamSpec witnesses against the original call relation.",
       "nextStep": "Specify host annotation and capture semantics before proposing shared solver APIs.",
       "findings": [
@@ -5438,7 +5459,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:25:52.195979Z",
+      "updatedAt": "2026-11-22T22:44:25.105866Z",
       "summary": "Host API design. Keep source definitions or ranges through parameter specialization, default presentation and hidden internal keyword handling.",
       "nextStep": "Review the public source-location contract and qualify navigation and signature presentation.",
       "findings": [
