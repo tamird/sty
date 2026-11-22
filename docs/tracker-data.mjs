@@ -50,7 +50,7 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
       ref: item.ref, url: item.qualifiedURL, evidence: [],
     };
     if (item.qualifiedHead) {
-      const approval = item.settledReviews?.findLast(review => review.kind === 'proposal'
+      const approval = item.settledReviews?.findLast(review => ['proposal', 'amendment'].includes(review.kind)
         && review.head === item.qualifiedHead && review.url === item.qualifiedURL);
       const permission = approval?.outcome === 'approved'
         ? approval.summary || 'Tamir approved this exact commit for upstream submission.'

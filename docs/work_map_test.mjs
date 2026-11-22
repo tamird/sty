@@ -189,6 +189,12 @@ const tracker = runInNewContext(readFileSync(new URL('./draft.js', import.meta.u
   async renderChangeLink(node, decision) {
     return await reviewChangeLink(node, decision).hrefReady;
   },
+  async renderSettledLinks(node) {
+    const parent = document.createElement('div');
+    appendSettledPublications(parent, node);
+    return Promise.all(parent.children.filter(child => child.tagName === 'A')
+      .map(async anchor => ({ label: anchor.textContent, url: await anchor.hrefReady })));
+  },
   findDraft, refinementComparison,
   load(data, snapshot) {
     registry = data;
@@ -223,11 +229,18 @@ for (const item of upstream) {
     if (item.contributorReview) {
       assert.deepEqual(node.contributorReview, item.contributorReview);
       assert.equal(node.head, item.qualifiedHead, 'An amendment does not replace the published PR head');
-      assert.equal(node.github.head, item.qualifiedHead);
-      assert.equal(node.contributorReview.baseHead, item.qualifiedHead);
+      if (node.contributorReview.kind === 'amendment') {
+        assert.equal(node.github.head, item.qualifiedHead);
+        assert.equal(node.contributorReview.baseHead, item.qualifiedHead);
+        assert.notEqual(node.contributorReview.head, item.qualifiedHead);
+      } else {
+        assert.equal(node.type, 'branch');
+        assert.equal(node.contributorReview.kind, 'proposal');
+        assert.equal(node.contributorReview.head, item.qualifiedHead);
+        assert.equal(node.contributorReview.baseHead, item.qualifiedBase);
+      }
       assert.ok(tracker.refinementComparison(node, node.contributorReview).command.includes('--creation-factor=999'),
         'The copyable single-commit command pairs the same replacement as the captured range-diff');
-      assert.notEqual(node.contributorReview.head, item.qualifiedHead);
       assert.equal(node.followup, undefined, 'The amendment decision has no duplicate agent task');
       const amendmentLinks = await tracker.renderDecisionLinks(node);
       const reader = new URL(amendmentLinks[0].url);
@@ -237,7 +250,8 @@ for (const item of upstream) {
       assert.deepEqual(draft, item.contributorReview, 'The reader addresses the exact amendment text');
       assert.equal(await tracker.renderChangeLink(node, node.contributorReview), reader.href,
         'The table and details use the same actual reader action');
-      assert.equal(amendmentLinks[0].label, 'Read amendment range-diff');
+      assert.equal(amendmentLinks[0].label, node.contributorReview.kind === 'amendment'
+        ? 'Read amendment range-diff' : 'Read revised proposal range-diff');
       assert.equal(amendmentLinks[1].url, item.contributorReview.url, 'Retain the complete commit artifact separately');
       assert.ok(draft.body.includes('```diff\n') && draft.body.includes('range-diff --no-color --no-dual-color --creation-factor=999'),
         'The reader contains the actual comparison, not only its command');
@@ -253,13 +267,15 @@ for (const item of upstream) {
     } else assert.deepEqual(Array.from(await tracker.renderDecisionLinks(node), anchor => anchor.url), [item.qualifiedURL]);
     const preview = { ...node, id: `branch:${item.id}`, type: 'branch', repo: 'tamird/ruff',
       url: item.qualifiedURL, head: item.qualifiedHead, ref: item.ref, github: undefined,
-      settledReviews: undefined, followup: undefined,
+      settledReviews: undefined, followup: undefined, refinement: undefined,
       contributorReview: { kind: 'proposal', status: 'pending', head: item.qualifiedHead,
         baseHead: item.qualifiedBase, url: item.qualifiedURL } };
     const links = await tracker.renderDecisionLinks(preview);
     assert.deepEqual(Array.from(links, anchor => anchor.url), [item.qualifiedURL], 'Check the actual proposal-action renderer');
     renderedReviewLinks.push({ head: item.qualifiedHead, url: links[0].url });
-    if (item.settledReviews?.some(review => review.outcome === 'approved' && review.head === item.qualifiedHead)) {
+    const approval = item.settledReviews?.findLast(review => ['proposal', 'amendment'].includes(review.kind)
+      && review.head === item.qualifiedHead && review.url === item.qualifiedURL);
+    if (approval?.outcome === 'approved') {
       assert.equal(node.settledReviews.at(-1).outcome, 'approved');
       assert.equal(node.settledReviews.at(-1).head, item.qualifiedHead);
       assert.deepEqual(node.settledReviews, item.settledReviews, 'The actual node keeps its settled approval');
@@ -268,7 +284,15 @@ for (const item of upstream) {
           'An exact settled approval must suppress a repeated branch request');
       assert.deepEqual(node.contributorReview, item.contributorReview, 'Old approval only settles its exact proposal head');
       assert.equal(node.humanAction, undefined, 'Submission is already authorized, not a new human task');
-      assert.ok(node.summary.includes('approved this exact commit'));
+      assert.ok(node.summary.includes(approval.summary), 'Describe the matched exact-head approval, including an approved amendment');
+      const approved = node.settledReviews.find(review => review.outcome === 'approved' && review.body);
+      if (approved) {
+        const links = await tracker.renderSettledLinks(node);
+        const reader = new URL(links.find(link => link.label === 'Read approved revision range-diff').url);
+        assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), approved);
+        assert.ok(approved.body.includes('```diff\n'), 'Approved comparison remains readable without a new decision');
+        console.log('RENDERED_APPROVED_HISTORY_READER_URL', reader.href);
+      }
     } else assert.equal(node.settledReviews, undefined, 'Assessment is not approval');
     if (item.state === 'Submitted') {
       assert.equal(node.url, `https://github.com/astral-sh/ruff/pull/${item.number}`);

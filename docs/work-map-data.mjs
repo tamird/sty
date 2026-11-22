@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = "2026-11-22T17:09:44.433758Z";
+export const reviewedAt = "2026-11-22T17:30:53.927506Z";
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -156,18 +156,26 @@ export const upstream = [
   },
   {
     "id": "receiver-union-overload-selection",
-    "ref": "upstream/receiver-union-clarity-rework",
+    "ref": "review/receiver-union-screening",
     "title": "Select method overloads across receiver unions",
-    "state": "Addressing review",
-    "source": "61c71bb62410ceb55c45c0f6d223c437858e07c1",
-    "summary": "Tamir gave 61c71bb conditional LGTM, requesting removal of the unjustified empty-overload rejection and comments explaining the remaining receiver-union screening and reconstruction. The revision is with the agent; no new approval is requested on the old artifact.",
+    "state": "Submitted",
+    "source": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
+    "summary": "Select method overloads across a receiver union. The qualified revision removes the unjustified empty-overload rejection and explains signature screening and reconstruction; Tamir’s conditional approval is satisfied. Submitted as Ruff #30761.",
     "qualifiedBase": "f31dd86f222f7d978a65cfc453eaf88f11456ed7",
-    "qualifiedHead": "61c71bb62410ceb55c45c0f6d223c437858e07c1",
+    "qualifiedHead": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
     "qualifiedCommitCount": 1,
-    "qualifiedURL": "https://github.com/tamird/ruff/commit/61c71bb62410ceb55c45c0f6d223c437858e07c1",
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
     "qualification": {
-      "summary": "The 61c71bb rework passes six relevant existing whole Markdown fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy on RBE. Test code is unchanged. Earlier d367 qualification, including its Dulwich and SymPy comparisons, remains historical evidence; no new ecosystem run is claimed.",
+      "summary": "The ce523f7 revision passes six existing whole fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. Tests are unchanged. Root verified the exact source and confirmed that the requested predicate and comments satisfy Tamir’s conditional LGTM. Earlier 61c and d367 qualification remains historical evidence.",
       "evidence": [
+        {
+          "label": "Submitted ce523f7 commit",
+          "url": "https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e"
+        },
+        {
+          "label": "ce523f7: six whole fixtures, semantic tests, hooks and strict style",
+          "url": "https://app.buildbuddy.io/invocation/3108c385-3841-4250-868f-e9b9bac86188"
+        },
         {
           "label": "New 61c71bb single commit for review",
           "url": "https://github.com/tamird/ruff/commit/61c71bb62410ceb55c45c0f6d223c437858e07c1"
@@ -194,7 +202,19 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Remove the empty-overload guard and use any unsupported overload as the rejection predicate, allowing empty overloads. Explain the remaining screening and reconstruction, verify merge semantics, and qualify the targeted revision to satisfy Tamir’s conditional LGTM without repeating the approval question."
+    "nextAction": "Follow upstream CI and review on Ruff #30761.",
+    "number": 30761,
+    "settledReviews": [
+      {
+        "kind": "proposal",
+        "head": "ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
+        "url": "https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e",
+        "outcome": "approved",
+        "title": "Approved receiver-union revision: 61c71bb to ce523f7",
+        "summary": "Tamir approved this exact commit under the conditional LGTM after the requested predicate and comment changes were verified and qualified.",
+        "body": "The requested receiver-union changes are qualified and submitted as [Ruff #30761](https://github.com/astral-sh/ruff/pull/30761). The unsupported-overload predicate allows an empty set, and comments explain the remaining screening and reconstruction. Tamir’s conditional approval is satisfied; this is review history, not a new decision request.\n\n## Changes from the previous proposal\n\nGit’s actual range-diff pairs the two single-commit proposals on the same base.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 f31dd86f222f7d978a65cfc453eaf88f11456ed7..61c71bb62410ceb55c45c0f6d223c437858e07c1 f31dd86f222f7d978a65cfc453eaf88f11456ed7..ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e\n```\n\n```diff\n1:  61c71bb624 ! 1:  ce523f7be1 [ty] Unify receivers of one bound method\n    @@ crates/ty_python_semantic/src/types/method.rs: impl<'db> BoundMethodType<'db> {\n     +            }\n     +        }\n     +        let signatures = first.unbound_signatures_with_inferred_return_type(db)?;\n    -+        if signatures.overloads.is_empty()\n    -+            || !signatures\n    -+                .overloads\n    -+                .iter()\n    -+                .all(|signature| signature.supports_receiver_union(db, env))\n    ++        // Parameters, returns, or predicates that depend on one receiver need separate bindings.\n    ++        if signatures\n    ++            .overloads\n    ++            .iter()\n    ++            .any(|signature| !signature.supports_receiver_union(db, env))\n     +        {\n     +            return None;\n     +        }\n    ++        // The shared overload matcher needs the full receiver union to determine its return type.\n     +        let receiver = UnionType::from_elements(\n     +            db,\n     +            env,\n    @@ crates/ty_python_semantic/src/types/method.rs: impl<'db> BoundMethodType<'db> {\n     +                method.self_instance(db)\n     +            }),\n     +        );\n    ++        // The identity checks let the first method retain the shared function and program.\n     +        Some(first.map_self_type(db, |_receiver| receiver))\n     +    }\n     +\n```\n\n[Read the complete commit](https://github.com/tamird/ruff/commit/ce523f7be15caa2f1dbcbdd16dfc1d64826fa47e)."
+      }
+    ]
   },
   {
     "id": "residual-truthiness-guards",
@@ -246,14 +266,14 @@ export const upstream = [
     "ref": "upstream/retain-call-completion-keys",
     "title": "Retain call-completion query keys",
     "state": "Submitted",
-    "source": "5678a81398ae87c721118445dd539e568f940c10",
-    "summary": "Unrelated project edits can collect interned call keys and rerun an unchanged file's semantic index. Track these keys as outputs of that index. One isolated commit, submitted as Ruff #30759.",
+    "source": "1b9535f986af582c86f75977c4741c3b93eac83e",
+    "summary": "Retain call-completion query keys as semantic-index outputs. The approved 1b9535 amendment adds a deterministic dependency regression and restores the optimization explanation; PR #30759 now publishes that revision.",
     "qualifiedBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
-    "qualifiedHead": "5678a81398ae87c721118445dd539e568f940c10",
+    "qualifiedHead": "1b9535f986af582c86f75977c4741c3b93eac83e",
     "qualifiedCommitCount": 1,
-    "qualifiedURL": "https://github.com/tamird/ruff/commit/5678a81398ae87c721118445dd539e568f940c10",
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e",
     "qualification": {
-      "summary": "Current 7d1 refresh: core, semantic and IDE suites and canonical hooks pass. Affected source files and Cargo authorities are unchanged. Earlier e905 qualification: The maintained regression fails three times on the baseline and passes three times with the fix. Core, semantic and IDE suites, all 533 default native Markdown/inventory actions, hooks, formatting and strict Clippy pass. The smaller test uses the existing query-event helpers and a LOW-durability project root. All five original repeated-call benchmarks ran four times per phase; comparisons within CPU models found no material regression. Mixed hardware and small per-model samples limit the performance conclusion; network-backed Markdown cases were not enabled.",
+      "summary": "The current 1b9535 amendment passes the focused deterministic dependency regression, the full semantic suite (516 passed, 35 ignored), canonical hooks, formatting and strict Clippy. The same regression fails on submitted 5678. It verifies the absence of an interned-call-key dependency when validating the cached semantic index; it does not claim to force eviction on every CPU or shard count. Earlier 5678/e905 native and benchmark results remain historical evidence; no new hardware or performance claim is made.",
       "evidence": [
         {
           "label": "Current-base refresh: independent guarded phases",
@@ -292,19 +312,19 @@ export const upstream = [
         "url": "https://github.com/tamird/ruff/commit/5678a81398ae87c721118445dd539e568f940c10",
         "outcome": "approved",
         "summary": "Tamir approved this exact commit after confirmation of the existing negative controls."
+      },
+      {
+        "kind": "amendment",
+        "head": "1b9535f986af582c86f75977c4741c3b93eac83e",
+        "baseHead": "5678a81398ae87c721118445dd539e568f940c10",
+        "url": "https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e",
+        "title": "Review the call-key dependency revision for PR #30759",
+        "summary": "Tamir approved the exact 1b9535 amendment for PR #30759; it is now the published head.",
+        "body": "Review the amendment to PR #30759. The PR still publishes `5678a813`; this proposed replacement is `1b9535f`. The earlier approval does not cover this amendment.\n\nThe revision adds a deterministic check that validating an unchanged semantic index does not depend on interned call keys. It fails on the submitted commit and passes with the amendment. The original optimization sentence is restored. This test does not claim to force slot eviction on every CPU or shard count.\n\nThe focused regression, full semantic suite (516 passed, 35 ignored), canonical hooks, formatting and strict Clippy pass. [Candidate qualification](https://app.buildbuddy.io/invocation/94b0a1df-fff3-4102-af51-7c19d032ca3c); [matched baseline failure](https://app.buildbuddy.io/invocation/b0a41fcc-1144-423e-a4bb-c9b4365a34ef).\n\n## Changes from the submitted commit\n\nThis is Git’s actual range-diff of the two single-commit proposals on the same base. The pairing option matches the replacement commit with its predecessor.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..5678a81398ae87c721118445dd539e568f940c10 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..1b9535f986af582c86f75977c4741c3b93eac83e\n```\n\n```diff\n1:  5678a81398 ! 1:  1b9535f986 [ty] Retain call-completion query keys\n    @@ Commit message\n         unchanged file when its interned call-completion keys were collected.\n     \n         Make these keys tracked outputs of the semantic-index query, matching the\n    -    lifetime of the expressions they contain. Cover reuse across unrelated\n    -    revisions and invalidation after the indexed source changes.\n    +    lifetime of the expressions they contain. Check the dependency directly\n    +    after a low-durability write so the regression test does not depend on an\n    +    LRU shard reusing a slot. Keep the check that editing the indexed source\n    +    still invalidates the index.\n     \n      ## crates/ty_python_core/src/predicate.rs ##\n     @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n    @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n     -/// queries use its ID directly, without looking up its components in Salsa's intern table again.\n     -#[salsa::interned(debug, heap_size=ruff_memory_usage::heap_size)]\n     +/// A call-completion query key owned by the semantic index that creates its expressions.\n    ++///\n    ++/// Creating it while building predicates lets cached queries use its ID directly, without looking\n    ++/// up its components in Salsa's intern table again.\n    ++///\n     +/// Tracking the key keeps unrelated revisions from collecting it and invalidating that index.\n     +#[salsa::tracked(debug, heap_size=ruff_memory_usage::heap_size)]\n      pub struct CallableAndCallExpr<'db> {\n    @@ crates/ty_python_semantic/src/types/infer/tests.rs: fn dependency_implicit_alias\n     +        ruff_db::system::SystemPath::new(\"/src/project\"),\n     +        ruff_db::files::FileRootKind::Project,\n     +    );\n    -+    let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(4));\n    -+    db.write_file(\"/src/project/target.py\", &source)?;\n    ++    let source = \"def run(callback):\\n    callback()\\n\";\n    ++    db.write_file(\"/src/project/target.py\", source)?;\n     +    let file = system_path_to_file(&db, \"/src/project/target.py\")?;\n    -+    let mut others = Vec::new();\n    -+    for revision in 0..4 {\n    -+        let path = format!(\"/src/project/other_{revision}.py\");\n    -+        db.write_file(&path, \"\")?;\n    -+        let other = system_path_to_file(&db, &path)?;\n    -+        others.push((path, other));\n    -+    }\n     +    semantic_index(&db, program_file(&db, file));\n    -+    // Fresh call keys in four revisions age Salsa's three-revision retention queue.\n    -+    for (path, other) in others {\n    -+        let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(16));\n    -+        db.write_file(&path, source)?;\n    -+        semantic_index(&db, program_file(&db, other));\n    -+    }\n    ++\n    ++    db.synthetic_write(salsa::Durability::LOW);\n     +    db.clear_salsa_events();\n     +    semantic_index(&db, program_file(&db, file));\n     +    let events = db.take_salsa_events();\n     +    assert_function_query_was_not_run(&db, semantic_index, program_file(&db, file), &events);\n    ++    assert!(\n    ++        !events.iter().any(|event| matches!(\n    ++            event.kind,\n    ++            salsa::EventKind::DidValidateInternedValue { key, .. }\n    ++                if db.ingredient_debug_name(key.ingredient_index()) == \"CallableAndCallExpr\"\n    ++        )),\n    ++        \"validating the semantic index depended on an interned call key\"\n    ++    );\n     +\n     +    db.write_file(\"/src/project/target.py\", format!(\"{source}changed = 1\\n\"))?;\n     +    semantic_index(&db, program_file(&db, file));\n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e). No PR-head update or maintainer reply has been posted.",
+        "outcome": "approved"
       }
     ],
     "number": 30759,
-    "contributorReview": {
-      "kind": "amendment",
-      "status": "pending",
-      "head": "1b9535f986af582c86f75977c4741c3b93eac83e",
-      "baseHead": "5678a81398ae87c721118445dd539e568f940c10",
-      "url": "https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e",
-      "title": "Review the call-key dependency revision for PR #30759",
-      "summary": "The qualified 1b9535 revision adds a deterministic interned-dependency regression and restores the original optimization sentence. The PR still publishes 5678a813; its approval does not cover this amendment.",
-      "body": "Review the amendment to PR #30759. The PR still publishes `5678a813`; this proposed replacement is `1b9535f`. The earlier approval does not cover this amendment.\n\nThe revision adds a deterministic check that validating an unchanged semantic index does not depend on interned call keys. It fails on the submitted commit and passes with the amendment. The original optimization sentence is restored. This test does not claim to force slot eviction on every CPU or shard count.\n\nThe focused regression, full semantic suite (516 passed, 35 ignored), canonical hooks, formatting and strict Clippy pass. [Candidate qualification](https://app.buildbuddy.io/invocation/94b0a1df-fff3-4102-af51-7c19d032ca3c); [matched baseline failure](https://app.buildbuddy.io/invocation/b0a41fcc-1144-423e-a4bb-c9b4365a34ef).\n\n## Changes from the submitted commit\n\nThis is Git’s actual range-diff of the two single-commit proposals on the same base. The pairing option matches the replacement commit with its predecessor.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..5678a81398ae87c721118445dd539e568f940c10 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..1b9535f986af582c86f75977c4741c3b93eac83e\n```\n\n```diff\n1:  5678a81398 ! 1:  1b9535f986 [ty] Retain call-completion query keys\n    @@ Commit message\n         unchanged file when its interned call-completion keys were collected.\n     \n         Make these keys tracked outputs of the semantic-index query, matching the\n    -    lifetime of the expressions they contain. Cover reuse across unrelated\n    -    revisions and invalidation after the indexed source changes.\n    +    lifetime of the expressions they contain. Check the dependency directly\n    +    after a low-durability write so the regression test does not depend on an\n    +    LRU shard reusing a slot. Keep the check that editing the indexed source\n    +    still invalidates the index.\n     \n      ## crates/ty_python_core/src/predicate.rs ##\n     @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n    @@ crates/ty_python_core/src/predicate.rs: impl PredicateOrLiteral<'_> {\n     -/// queries use its ID directly, without looking up its components in Salsa's intern table again.\n     -#[salsa::interned(debug, heap_size=ruff_memory_usage::heap_size)]\n     +/// A call-completion query key owned by the semantic index that creates its expressions.\n    ++///\n    ++/// Creating it while building predicates lets cached queries use its ID directly, without looking\n    ++/// up its components in Salsa's intern table again.\n    ++///\n     +/// Tracking the key keeps unrelated revisions from collecting it and invalidating that index.\n     +#[salsa::tracked(debug, heap_size=ruff_memory_usage::heap_size)]\n      pub struct CallableAndCallExpr<'db> {\n    @@ crates/ty_python_semantic/src/types/infer/tests.rs: fn dependency_implicit_alias\n     +        ruff_db::system::SystemPath::new(\"/src/project\"),\n     +        ruff_db::files::FileRootKind::Project,\n     +    );\n    -+    let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(4));\n    -+    db.write_file(\"/src/project/target.py\", &source)?;\n    ++    let source = \"def run(callback):\\n    callback()\\n\";\n    ++    db.write_file(\"/src/project/target.py\", source)?;\n     +    let file = system_path_to_file(&db, \"/src/project/target.py\")?;\n    -+    let mut others = Vec::new();\n    -+    for revision in 0..4 {\n    -+        let path = format!(\"/src/project/other_{revision}.py\");\n    -+        db.write_file(&path, \"\")?;\n    -+        let other = system_path_to_file(&db, &path)?;\n    -+        others.push((path, other));\n    -+    }\n     +    semantic_index(&db, program_file(&db, file));\n    -+    // Fresh call keys in four revisions age Salsa's three-revision retention queue.\n    -+    for (path, other) in others {\n    -+        let source = format!(\"def run(callback):\\n{}\", \"    callback()\\n\".repeat(16));\n    -+        db.write_file(&path, source)?;\n    -+        semantic_index(&db, program_file(&db, other));\n    -+    }\n    ++\n    ++    db.synthetic_write(salsa::Durability::LOW);\n     +    db.clear_salsa_events();\n     +    semantic_index(&db, program_file(&db, file));\n     +    let events = db.take_salsa_events();\n     +    assert_function_query_was_not_run(&db, semantic_index, program_file(&db, file), &events);\n    ++    assert!(\n    ++        !events.iter().any(|event| matches!(\n    ++            event.kind,\n    ++            salsa::EventKind::DidValidateInternedValue { key, .. }\n    ++                if db.ingredient_debug_name(key.ingredient_index()) == \"CallableAndCallExpr\"\n    ++        )),\n    ++        \"validating the semantic index depended on an interned call key\"\n    ++    );\n     +\n     +    db.write_file(\"/src/project/target.py\", format!(\"{source}changed = 1\\n\"))?;\n     +    semantic_index(&db, program_file(&db, file));\n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/1b9535f986af582c86f75977c4741c3b93eac83e). No PR-head update or maintainer reply has been posted."
-    },
     "refinement": {
       "before": {
         "head": "5678a81398ae87c721118445dd539e568f940c10"
@@ -312,22 +332,31 @@ export const upstream = [
       "after": {
         "head": "1b9535f986af582c86f75977c4741c3b93eac83e"
       }
-    }
+    },
+    "nextAction": "Follow upstream CI and review on the approved 1b9535 revision of Ruff #30759."
   },
   {
     "id": "destructured-list-elements",
-    "ref": "upstream/destructured-list-elements-rework",
+    "ref": "review/list-iteration-rationale",
     "title": "Preserve literals in loop unpacking",
-    "state": "Addressing review",
-    "source": "f69b792ae4530552c91cff7375a2b6f2e9497a5c",
-    "summary": "Tamir requested clearer justification for the List dispatch and tuple-extractor suppression in f69. The agent is revising the explanation and helper scope; this artifact is not approved.",
+    "state": "Awaiting Tamir review",
+    "source": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
+    "summary": "Explain List dispatch and why direct tuple displays retain their existing widening behavior. This revision changes comments only; runtime code and tests are unchanged.",
     "qualifiedBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
-    "qualifiedHead": "f69b792ae4530552c91cff7375a2b6f2e9497a5c",
+    "qualifiedHead": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
     "qualifiedCommitCount": 1,
-    "qualifiedURL": "https://github.com/tamird/ruff/commit/f69b792ae4530552c91cff7375a2b6f2e9497a5c",
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d",
     "qualification": {
-      "summary": "The f69 rework passes the five existing whole Markdown fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy on RBE. The wrapper then incorrectly required a test count for the successful style-only build and exited 1; the exported source hashes were verified and no rerun was needed. Earlier bf95 qualification remains historical evidence. No full Markdown or ecosystem qualification is claimed.",
+      "summary": "The comments-only 6e08 revision passes canonical hooks on RBE. All four source postimages were verified; runtime code and test lines match qualified f69 exactly, so its five whole fixtures, semantic tests (515 passed, 35 ignored), formatting and strict Clippy proof is reused. Native checks were not rerun. The earlier f69 wrapper-count failure remains disclosed in its historical receipt.",
       "evidence": [
+        {
+          "label": "New comments-only 6e08 commit",
+          "url": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d"
+        },
+        {
+          "label": "6e08 canonical hooks; verified unchanged code/tests and reused native proof",
+          "url": "https://app.buildbuddy.io/invocation/06b8444c-860c-4a54-a164-eaffb7b17c21"
+        },
         {
           "label": "New f69 single commit for review",
           "url": "https://github.com/tamird/ruff/commit/f69b792ae4530552c91cff7375a2b6f2e9497a5c"
@@ -350,7 +379,25 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Explain why List expressions need this helper dispatch and how fixed-tuple extraction and promotion differ. Simplify the helper scope and presentation as needed, then qualify the revision before another review request."
+    "nextAction": "Review the comments-only 6e08 revision and its actual range-diff before any upstream submission.",
+    "refinement": {
+      "before": {
+        "head": "f69b792ae4530552c91cff7375a2b6f2e9497a5c"
+      },
+      "after": {
+        "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d"
+      }
+    },
+    "contributorReview": {
+      "kind": "proposal",
+      "status": "pending",
+      "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
+      "baseHead": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
+      "url": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d",
+      "title": "Review the list-iteration rationale revision",
+      "summary": "The 6e08 revision explains the List dispatch and tuple widening policy. It changes comments only; review the actual f69-to 6e08 comparison before deciding whether to submit.",
+      "body": "Review the comments-only list-iteration revision. The List/default branches now explain their scope and the tuple extraction/promotion distinction. Runtime code and tests are unchanged from qualified f69; canonical hooks passed and its existing native proof is reused. Nothing has been submitted upstream.\n\n## Changes from the previous proposal\n\nGit’s actual range-diff pairs the two single-commit proposals on the same base.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..f69b792ae4530552c91cff7375a2b6f2e9497a5c 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..6e08e84a339ee7d27a36371c2b439db84cf58a3d\n```\n\n```diff\n1:  f69b792ae4 ! 1:  6e08e84a33 [ty] Preserve literals in loop unpacking\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n          Some(element_types.into_boxed_slice())\n      }\n      \n    -+/// Infer precise element types for immediately consumed list and dictionary displays.\n    ++/// Recover element types when iterating directly over a list or dictionary display.\n     +pub(super) fn precise_iterable_element_type<'db>(\n     +    db: &'db dyn Db,\n     +    env: &ProgramEnvironment<'db>,\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n     +) -> Option<Type<'db>> {\n     +    match iterable {\n     +        ast::Expr::List(_) => {\n    ++            // List inference promotes element literals to allow later mutation. This display is\n    ++            // consumed immediately, so use the original element expression types.\n     +            let element_types =\n     +                extract_fixed_length_iterable_element_types(db, env, iterable, expression_type)?;\n     +            if element_types.is_empty() {\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n     +        ast::Expr::Dict(dict) => {\n     +            dict_literal_key_value_types(db, env, dict, expression_type).map(|(keys, _values)| keys)\n     +        }\n    ++        // Other expressions use their inferred iterable type. Tuple inference already preserves\n    ++        // literals or widens large tuples; rereading their elements would undo that widening.\n     +        _ => None,\n     +    }\n     +}\n```\n\n[Read the complete commit](https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d)."
+    }
   },
   {
     "id": "related-upstream-29027",
@@ -1987,7 +2034,7 @@ const reviewedTyWork = [
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Two approved ty commits have been submitted upstream. Their proposed e752 and 1b9535 amendments have separate review requests. The agent is addressing the clarity requests on f69 and the conditional LGTM on 61c71bb, and redesigning ba712 as smaller independent contributions."
+    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Three approved ty commits have been submitted upstream. The approved 1b9535 amendment is now published on PR #30759. The e752 amendment and comments-only 6e08 personal proposal still have separate review requests. The receiver-union conditional approval is satisfied; ba712 remains Agent-owned for smaller independent contributions."
   }
 ];
 
