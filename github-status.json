@@ -2,8 +2,8 @@
   "schema": 1,
   "repo": "astral-sh/ruff",
   "owner": "tamird",
-  "registryDate": "2026-11-22T14:42:08.910627Z",
-  "checkedAt": "2026-11-22T14:26:35.346650Z",
+  "registryDate": "2026-11-22T16:57:06.685308Z",
+  "checkedAt": "2026-11-22T16:52:09.902871+00:00",
   "repositories": {
     "astral-sh/ruff": "none",
     "tamird/ruff": "none",
@@ -26850,10 +26850,10 @@
       "ref": "upstream/retain-call-completion-keys",
       "head": "5678a81398ae87c721118445dd539e568f940c10",
       "branchHead": "5678a81398ae87c721118445dd539e568f940c10",
-      "base": "2bd2c4d36de90b37635997c9199f5df8a8fe31c3",
+      "base": "304c6d3026283ef4f9023c6f9b819d14caae5fd6",
       "mergeable": "MERGEABLE",
       "mergeState": "CLEAN",
-      "mergeabilityCheckedAt": "2026-11-22T14:26:35.346650Z",
+      "mergeabilityCheckedAt": "2026-11-22T16:52:09.902871+00:00",
       "headCommittedAt": "2026-11-21T01:14:25Z",
       "headHistoryComplete": true,
       "headIntroducedAt": null,
@@ -26862,7 +26862,7 @@
       "headRepo": "tamird/ruff",
       "authorLogin": "tamird",
       "createdAt": "2026-11-22T13:54:29Z",
-      "updatedAt": "2026-11-22T14:05:22Z",
+      "updatedAt": "2026-11-22T14:55:39Z",
       "mergedAt": null,
       "closedAt": null,
       "mergeCommit": null,
@@ -26886,13 +26886,65 @@
       ],
       "labelsComplete": true,
       "threads": {
-        "total": 0,
-        "unresolved": 0,
+        "total": 2,
+        "unresolved": 2,
         "complete": true
       },
       "feedback": {
         "complete": true,
-        "items": []
+        "items": [
+          {
+            "kind": "review",
+            "id": "PRR_kwDOHy0Bzc8AAAABZmVOPQ",
+            "url": "https://github.com/astral-sh/ruff/pull/30759#pullrequestreview-6012882493",
+            "body": "Thank you",
+            "state": "COMMENTED",
+            "submittedAt": "2026-11-22T14:55:39Z",
+            "updatedAt": "2026-11-22T14:55:39Z",
+            "authorAssociation": "MEMBER",
+            "author": {
+              "login": "AlexWaygood",
+              "__typename": "User"
+            },
+            "commit": {
+              "oid": "5678a81398ae87c721118445dd539e568f940c10"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc66k1BQ",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_semantic/src/types/infer/tests.rs",
+            "line": 1828,
+            "id": "PRRC_kwDOHy0Bzc8AAAABFaxnig",
+            "url": "https://github.com/astral-sh/ruff/pull/30759#discussion_r4658587530",
+            "body": "Codex tells me that this test is hardware-dependent -- it tried these inputs on my Mac with `CallableAndCallExpr` still `salsa::interned`, and the assertions passed.\r\n\r\nPer codex:\r\n\r\n> Could we test the dependency directly?\r\n>\r\n> Even once the target's keys are old enough to collect, Salsa only reuses a slot if a new key lands in the same shard. The number of shards depends on the CPU count, so increasing the number of calls doesn't guarantee we'll catch the regression.\r\n>\r\n> I think we can drop the other files entirely. Keep the low-durability project root, index the target with a single `callback()` statement, then do this before the final edit to the target.\r\n>\r\n> ```rust\r\n> db.synthetic_write(salsa::Durability::LOW);\r\n> db.clear_salsa_events();\r\n> semantic_index(&db, program_file(&db, file));\r\n> let events = db.take_salsa_events();\r\n> assert_function_query_was_not_run(&db, semantic_index, program_file(&db, file), &events);\r\n> assert!(\r\n>     !events.iter().any(|event| matches!(\r\n>         event.kind,\r\n>         salsa::EventKind::DidValidateInternedValue { key, .. }\r\n>             if db.ingredient_debug_name(key.ingredient_index()) == \"CallableAndCallExpr\"\r\n>     )),\r\n>     \"validating the semantic index depended on an interned call key\"\r\n> );\r\n> ```\r\n> \r\n> The synthetic write makes Salsa revalidate the cached index without changing the target file. Before this PR, Salsa checks that the interned call key is still valid, which emits `DidValidateInternedValue` and fails the last assertion. With this PR, `semantic_index` produces the key as a tracked output, so there's no such event. Codex verified both outcomes. This lets us catch the regression without having to trigger eviction.",
+            "createdAt": "2026-11-22T14:52:53Z",
+            "updatedAt": "2026-11-22T14:55:39Z",
+            "author": {
+              "login": "AlexWaygood",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc66k200",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_core/src/predicate.rs",
+            "line": 107,
+            "id": "PRRC_kwDOHy0Bzc8AAAABFayUVg",
+            "url": "https://github.com/astral-sh/ruff/pull/30759#discussion_r4658598998",
+            "body": "Can we keep the sentence\r\n\r\n> Creating it while building predicates lets cached queries use its ID directly, without looking up its components in Salsa's intern table again.\r\n\r\nYour new doc-comment explains why it's necessary for correctness for the struct to be tracked rather than interned, but it's not self-evident that this struct should be interned _or_ tracked. The existing sentence in the doc-comment explains that it's a performance/memory optimization rather than something that's necessary for correctness.",
+            "createdAt": "2026-11-22T14:55:32Z",
+            "updatedAt": "2026-11-22T14:55:39Z",
+            "author": {
+              "login": "AlexWaygood",
+              "__typename": "User"
+            }
+          }
+        ]
       },
       "checks": {
         "state": "SUCCESS",
@@ -28106,7 +28158,7 @@
       "importPolicy": "none",
       "imports": [],
       "importsComplete": true,
-      "checkedAt": "2026-11-22T14:26:35.346650Z",
+      "checkedAt": "2026-11-22T16:52:09.902871+00:00",
       "reviewDecision": null,
       "approvedHead": null,
       "approvedAt": null
