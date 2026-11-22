@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = "2026-11-22T22:14:46.984816Z";
+export const reviewedAt = "2026-11-22T22:25:52.195979Z";
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -98,14 +98,14 @@ export const upstream = [
     "ref": "upstream/resolve-exception-tuple-aliases",
     "title": "Preserve exception types through tuple aliases",
     "state": "Submitted",
-    "source": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
-    "summary": "A tuple alias in an exception-handler parameter lost its ValueError element type and produced BaseException. Resolve the alias when projecting tuple elements.",
+    "source": "e752397a71030a39868a43a682835508238e3afd",
+    "summary": "PR #30758 now publishes the approved e752397 revision. Resolve the outer exception type alias once, retaining the exception-class and tuple alternatives when inferring the caught value.",
     "qualifiedBase": "f31dd86f222f7d978a65cfc453eaf88f11456ed7",
-    "qualifiedHead": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
+    "qualifiedHead": "e752397a71030a39868a43a682835508238e3afd",
     "qualifiedCommitCount": 1,
-    "qualifiedURL": "https://github.com/tamird/ruff/commit/9188597e94983c89c39c386cb6d8a1c603d6bad5",
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/e752397a71030a39868a43a682835508238e3afd",
     "qualification": {
-      "summary": "The existing fixture fails on pristine upstream and passes with the one-line fix. Core, semantic, IDE, all 532 default Markdown cases, canonical hooks, formatting and strict Clippy pass on RBE.",
+      "summary": "The current e752397 amendment passes the whole exception fixture, both legacy and PEP695 alias fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. The added finite class-or-tuple union assertion fails on submitted 918 and passes with this revision. Earlier 918 core, IDE and full Markdown results remain historical evidence; they are not a new full-suite claim for e752397.",
       "evidence": [
         {
           "label": "Qualified contribution",
@@ -132,19 +132,19 @@ export const upstream = [
         "url": "https://github.com/tamird/ruff/commit/9188597e94983c89c39c386cb6d8a1c603d6bad5",
         "outcome": "approved",
         "summary": "Tamir approved this exact commit for upstream submission."
+      },
+      {
+        "kind": "amendment",
+        "head": "e752397a71030a39868a43a682835508238e3afd",
+        "baseHead": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
+        "url": "https://github.com/tamird/ruff/commit/e752397a71030a39868a43a682835508238e3afd",
+        "title": "Review the exception-alias revision for PR #30758",
+        "summary": "Tamir approved the exact e752397 amendment for PR #30758; it is now the published head.",
+        "body": "Review the amendment to PR #30758. The PR still publishes `9188597`; this proposed replacement is `e752397`. The earlier approval does not cover the amendment.\n\nAlex requested resolving the outer alias once before class, tuple, union and intersection handling. The added class-or-tuple union assertion fails on the published commit and passes on the amendment. Whole exception and both alias fixtures, semantic tests (515 passed, 35 ignored), hooks, formatting and strict Clippy pass. [Qualification](https://app.buildbuddy.io/invocation/f85ed6ea-83fa-436d-9eba-468ac1c7c9ac).\n\n## Changes from the submitted commit\n\nThis is Git’s actual range-diff of the two single-commit proposals on the same base. The pairing option matches the replacement commit with its predecessor.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 f31dd86f222f7d978a65cfc453eaf88f11456ed7..9188597e94983c89c39c386cb6d8a1c603d6bad5 f31dd86f222f7d978a65cfc453eaf88f11456ed7..e752397a71030a39868a43a682835508238e3afd\n```\n\n```diff\n1:  9188597e94 ! 1:  e752397a71 [ty] Resolve aliases of exception tuples\n    @@ Metadata\n     Author: Tamir Duberstein <tamird@gmail.com>\n     \n      ## Commit message ##\n    -    [ty] Resolve aliases of exception tuples\n    +    [ty] Resolve exception-handler aliases\n     \n    -    An except handler annotated with an alias of a tuple of exception\n    -    classes inferred BaseException for its caught value, losing the tuple\n    -    element types. The structural handler inspected the alias wrapper\n    -    instead of the tuple it described.\n    +    Aliases of exception tuples and class-or-tuple unions could infer\n    +    BaseException for the caught value, losing the exception types described\n    +    by the alias.\n     \n    -    Resolve aliases when projecting the tuple specification. Keep the\n    -    original type for union and assignability handling so this projection\n    -    does not add recursive traversal through union aliases. Extend the\n    -    existing alias fixture with a plain tuple alias beside the narrowed one.\n    +    Resolve the outermost alias once before dispatching to the existing\n    +    tuple, class, union and intersection projections. Extend the existing\n    +    alias fixture with plain tuple and class-or-tuple union cases beside the\n    +    narrowed tuple.\n     \n      ## crates/ty_python_semantic/resources/mdtest/exception/basic.md ##\n    +@@ crates/ty_python_semantic/resources/mdtest/exception/basic.md: def catch(classes: tuple[type[ValueError], ...] | tuple[type[RuntimeError], ...]\n    +         reveal_type(exc)  # revealed: ValueError | RuntimeError\n    + ```\n    + \n    +-## Type alias for a narrowed tuple of exception classes\n    ++## Aliases for exception classes and tuples\n    + \n    +-The caught type comes from the tuple described by the alias.\n    ++The caught type comes from the exception classes and tuple elements described by the alias.\n    + \n    + ```toml\n    + [environment]\n     @@ crates/ty_python_semantic/resources/mdtest/exception/basic.md: python-version = \"3.12\"\n      ```py\n      from ty_extensions import AlwaysFalsy, Intersection, Not\n      \n     +type Errors = tuple[type[ValueError], ...]\n      type NonemptyErrors = Intersection[tuple[type[ValueError], ...], Not[AlwaysFalsy]]\n    ++type MixedErrors = type[ValueError] | tuple[type[RuntimeError], ...]\n      \n     -def catch(classes: NonemptyErrors):\n    -+def catch(classes: NonemptyErrors, plain: Errors):\n    ++def catch(classes: NonemptyErrors, plain: Errors, mixed: MixedErrors):\n          try:\n              help()\n          except classes as exc:\n    @@ crates/ty_python_semantic/resources/mdtest/exception/basic.md: python-version =\n     +        help()\n     +    except plain as exc:\n     +        reveal_type(exc)  # revealed: ValueError\n    ++\n    ++    try:\n    ++        help()\n    ++    except mixed as exc:\n    ++        reveal_type(exc)  # revealed: ValueError | RuntimeError\n      ```\n      \n      ## Negated dynamic type aliases\n    @@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInfere\n                  )\n              };\n      \n    --        if let Some(tuple_spec) = ty.tuple_instance_spec(db, env) {\n    -+        if let Some(tuple_spec) = ty.resolve_type_alias(db).tuple_instance_spec(db, env) {\n    ++        let ty = ty.resolve_type_alias(db);\n    ++\n    +         if let Some(tuple_spec) = ty.tuple_instance_spec(db, env) {\n                  infer_from_tuple(&tuple_spec)\n              } else if ty.is_assignable_to(db, env, type_base_exception) {\n    -             // `except ValueError as e:`\n    +@@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n    +         ) {\n    +             // A tuple can retain its element types in a positive intersection member after\n    +             // narrowing, for example `tuple[type[ValueError], ...] & ~AlwaysFalsy`.\n    +-            let caught = ty\n    +-                .resolve_type_alias(db)\n    +-                .as_intersection()\n    +-                .and_then(|intersection| {\n    +-                    intersection.bounded_filter_map_positive(db, env, |member| {\n    +-                        infer_from_tuple(member.tuple_instance_spec(db, env)?.as_ref())\n    +-                    })\n    +-                });\n    ++            let caught = ty.as_intersection().and_then(|intersection| {\n    ++                intersection.bounded_filter_map_positive(db, env, |member| {\n    ++                    infer_from_tuple(member.tuple_instance_spec(db, env)?.as_ref())\n    ++                })\n    ++            });\n    +             Some(caught.unwrap_or_else(|| KnownClass::BaseException.to_instance(db, env)))\n    +         } else {\n    +             None\n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/e752397a71030a39868a43a682835508238e3afd). No PR-head update or maintainer reply has been posted.",
+        "outcome": "approved"
       }
     ],
     "number": 30758,
-    "contributorReview": {
-      "kind": "amendment",
-      "status": "pending",
-      "head": "e752397a71030a39868a43a682835508238e3afd",
-      "baseHead": "9188597e94983c89c39c386cb6d8a1c603d6bad5",
-      "url": "https://github.com/tamird/ruff/commit/e752397a71030a39868a43a682835508238e3afd",
-      "title": "Review the exception-alias revision for PR #30758",
-      "summary": "Alex requested resolving the alias once before the structural branches. The qualified e752397 revision also preserves class-or-tuple union precision. The published PR remains at 9188597; its approval does not cover this revision.",
-      "body": "Review the amendment to PR #30758. The PR still publishes `9188597`; this proposed replacement is `e752397`. The earlier approval does not cover the amendment.\n\nAlex requested resolving the outer alias once before class, tuple, union and intersection handling. The added class-or-tuple union assertion fails on the published commit and passes on the amendment. Whole exception and both alias fixtures, semantic tests (515 passed, 35 ignored), hooks, formatting and strict Clippy pass. [Qualification](https://app.buildbuddy.io/invocation/f85ed6ea-83fa-436d-9eba-468ac1c7c9ac).\n\n## Changes from the submitted commit\n\nThis is Git’s actual range-diff of the two single-commit proposals on the same base. The pairing option matches the replacement commit with its predecessor.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 f31dd86f222f7d978a65cfc453eaf88f11456ed7..9188597e94983c89c39c386cb6d8a1c603d6bad5 f31dd86f222f7d978a65cfc453eaf88f11456ed7..e752397a71030a39868a43a682835508238e3afd\n```\n\n```diff\n1:  9188597e94 ! 1:  e752397a71 [ty] Resolve aliases of exception tuples\n    @@ Metadata\n     Author: Tamir Duberstein <tamird@gmail.com>\n     \n      ## Commit message ##\n    -    [ty] Resolve aliases of exception tuples\n    +    [ty] Resolve exception-handler aliases\n     \n    -    An except handler annotated with an alias of a tuple of exception\n    -    classes inferred BaseException for its caught value, losing the tuple\n    -    element types. The structural handler inspected the alias wrapper\n    -    instead of the tuple it described.\n    +    Aliases of exception tuples and class-or-tuple unions could infer\n    +    BaseException for the caught value, losing the exception types described\n    +    by the alias.\n     \n    -    Resolve aliases when projecting the tuple specification. Keep the\n    -    original type for union and assignability handling so this projection\n    -    does not add recursive traversal through union aliases. Extend the\n    -    existing alias fixture with a plain tuple alias beside the narrowed one.\n    +    Resolve the outermost alias once before dispatching to the existing\n    +    tuple, class, union and intersection projections. Extend the existing\n    +    alias fixture with plain tuple and class-or-tuple union cases beside the\n    +    narrowed tuple.\n     \n      ## crates/ty_python_semantic/resources/mdtest/exception/basic.md ##\n    +@@ crates/ty_python_semantic/resources/mdtest/exception/basic.md: def catch(classes: tuple[type[ValueError], ...] | tuple[type[RuntimeError], ...]\n    +         reveal_type(exc)  # revealed: ValueError | RuntimeError\n    + ```\n    + \n    +-## Type alias for a narrowed tuple of exception classes\n    ++## Aliases for exception classes and tuples\n    + \n    +-The caught type comes from the tuple described by the alias.\n    ++The caught type comes from the exception classes and tuple elements described by the alias.\n    + \n    + ```toml\n    + [environment]\n     @@ crates/ty_python_semantic/resources/mdtest/exception/basic.md: python-version = \"3.12\"\n      ```py\n      from ty_extensions import AlwaysFalsy, Intersection, Not\n      \n     +type Errors = tuple[type[ValueError], ...]\n      type NonemptyErrors = Intersection[tuple[type[ValueError], ...], Not[AlwaysFalsy]]\n    ++type MixedErrors = type[ValueError] | tuple[type[RuntimeError], ...]\n      \n     -def catch(classes: NonemptyErrors):\n    -+def catch(classes: NonemptyErrors, plain: Errors):\n    ++def catch(classes: NonemptyErrors, plain: Errors, mixed: MixedErrors):\n          try:\n              help()\n          except classes as exc:\n    @@ crates/ty_python_semantic/resources/mdtest/exception/basic.md: python-version =\n     +        help()\n     +    except plain as exc:\n     +        reveal_type(exc)  # revealed: ValueError\n    ++\n    ++    try:\n    ++        help()\n    ++    except mixed as exc:\n    ++        reveal_type(exc)  # revealed: ValueError | RuntimeError\n      ```\n      \n      ## Negated dynamic type aliases\n    @@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInfere\n                  )\n              };\n      \n    --        if let Some(tuple_spec) = ty.tuple_instance_spec(db, env) {\n    -+        if let Some(tuple_spec) = ty.resolve_type_alias(db).tuple_instance_spec(db, env) {\n    ++        let ty = ty.resolve_type_alias(db);\n    ++\n    +         if let Some(tuple_spec) = ty.tuple_instance_spec(db, env) {\n                  infer_from_tuple(&tuple_spec)\n              } else if ty.is_assignable_to(db, env, type_base_exception) {\n    -             // `except ValueError as e:`\n    +@@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n    +         ) {\n    +             // A tuple can retain its element types in a positive intersection member after\n    +             // narrowing, for example `tuple[type[ValueError], ...] & ~AlwaysFalsy`.\n    +-            let caught = ty\n    +-                .resolve_type_alias(db)\n    +-                .as_intersection()\n    +-                .and_then(|intersection| {\n    +-                    intersection.bounded_filter_map_positive(db, env, |member| {\n    +-                        infer_from_tuple(member.tuple_instance_spec(db, env)?.as_ref())\n    +-                    })\n    +-                });\n    ++            let caught = ty.as_intersection().and_then(|intersection| {\n    ++                intersection.bounded_filter_map_positive(db, env, |member| {\n    ++                    infer_from_tuple(member.tuple_instance_spec(db, env)?.as_ref())\n    ++                })\n    ++            });\n    +             Some(caught.unwrap_or_else(|| KnownClass::BaseException.to_instance(db, env)))\n    +         } else {\n    +             None\n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/e752397a71030a39868a43a682835508238e3afd). No PR-head update or maintainer reply has been posted."
-    },
     "refinement": {
       "before": {
         "head": "9188597e94983c89c39c386cb6d8a1c603d6bad5"
@@ -152,7 +152,8 @@ export const upstream = [
       "after": {
         "head": "e752397a71030a39868a43a682835508238e3afd"
       }
-    }
+    },
+    "nextAction": "Follow upstream CI and review on the approved e752397 revision of Ruff #30758."
   },
   {
     "id": "receiver-union-overload-selection",
@@ -363,15 +364,15 @@ export const upstream = [
     "id": "destructured-list-elements",
     "ref": "review/list-iteration-rationale",
     "title": "Preserve literals in loop unpacking",
-    "state": "Awaiting Tamir review",
+    "state": "Addressing review",
     "source": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
-    "summary": "Explain List dispatch and why direct tuple displays retain their existing widening behavior. This revision changes comments only; runtime code and tests are unchanged.",
+    "summary": "The user requested architectural rework of precise_iterable_element_type’s factoring and fallback responsibilities. The 6e08 artifact remains historical and unapproved; no replacement head or user decision is recorded.",
     "qualifiedBase": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
     "qualifiedHead": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
     "qualifiedCommitCount": 1,
     "qualifiedURL": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d",
     "qualification": {
-      "summary": "The comments-only 6e08 revision passes canonical hooks on RBE. All four source postimages were verified; runtime code and test lines match qualified f69 exactly, so its five whole fixtures, semantic tests (515 passed, 35 ignored), formatting and strict Clippy proof is reused. Native checks were not rerun. The earlier f69 wrapper-count failure remains disclosed in its historical receipt.",
+      "summary": "Historical qualification for 6e08 only; the user has requested factoring rework. The comments-only 6e08 revision passes canonical hooks on RBE. All four source postimages were verified; runtime code and test lines match qualified f69 exactly, so its five whole fixtures, semantic tests (515 passed, 35 ignored), formatting and strict Clippy proof is reused. Native checks were not rerun. The earlier f69 wrapper-count failure remains disclosed in its historical receipt.",
       "evidence": [
         {
           "label": "New comments-only 6e08 commit",
@@ -403,7 +404,7 @@ export const upstream = [
         }
       ]
     },
-    "nextAction": "Review the comments-only 6e08 revision and its actual range-diff before any upstream submission.",
+    "nextAction": "Reassess the factoring of precise_iterable_element_type and its caller-owned iterable fallback. Simplify the responsibility boundary before preparing a new qualified artifact and range-diff. Do not return the current 6e08 proposal for approval.",
     "refinement": {
       "before": {
         "head": "f69b792ae4530552c91cff7375a2b6f2e9497a5c"
@@ -411,16 +412,6 @@ export const upstream = [
       "after": {
         "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d"
       }
-    },
-    "contributorReview": {
-      "kind": "proposal",
-      "status": "pending",
-      "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
-      "baseHead": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
-      "url": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d",
-      "title": "Review the list-iteration rationale revision",
-      "summary": "The 6e08 revision explains the List dispatch and tuple widening policy. It changes comments only; review the actual f69-to 6e08 comparison before deciding whether to submit.",
-      "body": "Review the comments-only list-iteration revision. The List/default branches now explain their scope and the tuple extraction/promotion distinction. Runtime code and tests are unchanged from qualified f69; canonical hooks passed and its existing native proof is reused. Nothing has been submitted upstream.\n\n## Changes from the previous proposal\n\nGit’s actual range-diff pairs the two single-commit proposals on the same base.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..f69b792ae4530552c91cff7375a2b6f2e9497a5c 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..6e08e84a339ee7d27a36371c2b439db84cf58a3d\n```\n\n```diff\n1:  f69b792ae4 ! 1:  6e08e84a33 [ty] Preserve literals in loop unpacking\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n          Some(element_types.into_boxed_slice())\n      }\n      \n    -+/// Infer precise element types for immediately consumed list and dictionary displays.\n    ++/// Recover element types when iterating directly over a list or dictionary display.\n     +pub(super) fn precise_iterable_element_type<'db>(\n     +    db: &'db dyn Db,\n     +    env: &ProgramEnvironment<'db>,\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n     +) -> Option<Type<'db>> {\n     +    match iterable {\n     +        ast::Expr::List(_) => {\n    ++            // List inference promotes element literals to allow later mutation. This display is\n    ++            // consumed immediately, so use the original element expression types.\n     +            let element_types =\n     +                extract_fixed_length_iterable_element_types(db, env, iterable, expression_type)?;\n     +            if element_types.is_empty() {\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n     +        ast::Expr::Dict(dict) => {\n     +            dict_literal_key_value_types(db, env, dict, expression_type).map(|(keys, _values)| keys)\n     +        }\n    ++        // Other expressions use their inferred iterable type. Tuple inference already preserves\n    ++        // literals or widens large tuples; rereading their elements would undo that widening.\n     +        _ => None,\n     +    }\n     +}\n```\n\n[Read the complete commit](https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d)."
     }
   },
   {
@@ -2058,7 +2049,7 @@ const reviewedTyWork = [
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30759 has merged; two other approved contributions remain submitted upstream. The e752 amendment and comments-only 6e08 personal proposal still have separate review requests. PR #30761 is Agent-owned rework following Carl’s review; any replacement needs user review of its range-diff before the PR is updated. The ce523 approval remains historical. ba712 remains Agent-owned for smaller independent contributions."
+    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30759 has merged; two other approved contributions remain submitted upstream. The approved e752 amendment is now published on PR #30758. The list-iteration proposal is Agent-owned factoring rework, with no current user decision. PR #30761 is Agent-owned rework following Carl’s review; any replacement needs user review of its range-diff before the PR is updated. The ce523 approval remains historical. ba712 remains Agent-owned for smaller independent contributions."
   }
 ];
 
