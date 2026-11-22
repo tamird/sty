@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-22T22:44:25.105866Z",
+    "updatedAt": "2026-11-22T23:00:31.258018Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -1080,10 +1080,14 @@
       "number": 30758,
       "title": "Preserve exception types through tuple aliases",
       "group": "ty",
-      "status": "open",
+      "status": "merged",
       "url": "https://github.com/astral-sh/ruff/pull/30758",
-      "summary": "PR #30758 now publishes the approved e752397 revision. Resolve the outer exception type alias once, retaining the exception-class and tuple alternatives when inferring the caught value.\n\nThe current e752397 amendment passes the whole exception fixture, both legacy and PEP695 alias fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. The added finite class-or-tuple union assertion fails on submitted 918 and passes with this revision. Earlier 918 core, IDE and full Markdown results remain historical evidence; they are not a new full-suite claim for e752397.\n\nTamir approved the exact e752397 amendment for PR #30758; it is now the published head.",
+      "summary": "Merged by AlexWaygood on November 22, 2026 as Ruff #30758. The approved e752397 revision resolves the outer exception type alias once, preserving class and tuple alternatives in the caught value.\n\nThe current e752397 amendment passes the whole exception fixture, both legacy and PEP695 alias fixtures, semantic tests (515 passed, 35 ignored), canonical hooks, formatting and strict Clippy. The added finite class-or-tuple union assertion fails on submitted 918 and passes with this revision. Earlier 918 core, IDE and full Markdown results remain historical evidence; they are not a new full-suite claim for e752397.\n\nTamir approved the exact e752397 amendment for PR #30758; it is now the published head.",
       "evidence": [
+        {
+          "label": "Upstream merge",
+          "url": "https://github.com/astral-sh/ruff/commit/acf15a39e2aa7b97ff7feda4fe94275447fa68ed"
+        },
         {
           "label": "Qualified contribution",
           "url": "https://github.com/tamird/ruff/commit/9188597e94983c89c39c386cb6d8a1c603d6bad5"
@@ -1121,11 +1125,6 @@
           "outcome": "approved"
         }
       ],
-      "followup": {
-        "owner": "Agent",
-        "sourceHead": "e752397a71030a39868a43a682835508238e3afd",
-        "nextAction": "Follow upstream CI and review on the approved e752397 revision of Ruff #30758."
-      },
       "refinement": {
         "before": {
           "head": "9188597e94983c89c39c386cb6d8a1c603d6bad5"
@@ -1372,52 +1371,65 @@
       "repo": "tamird/ruff",
       "title": "Preserve literals in loop unpacking",
       "group": "ty",
-      "status": "Addressing review",
-      "ref": "review/list-iteration-rationale",
-      "url": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d",
+      "status": "Awaiting Tamir review",
+      "ref": "review/iteration-expression-owner",
+      "url": "https://github.com/tamird/ruff/commit/31bf4e4fd869f34c947e32701f5c5af386106587",
       "evidence": [
         {
-          "label": "New comments-only 6e08 commit",
+          "label": "31bf complete expression-iteration owner commit",
+          "url": "https://github.com/tamird/ruff/commit/31bf4e4fd869f34c947e32701f5c5af386106587"
+        },
+        {
+          "label": "31bf: five whole boundary fixtures, 532 default Markdown and native/style qualification",
+          "url": "https://app.buildbuddy.io/invocation/fbee6f68-fbd4-45e8-9d96-1324c61d391b"
+        },
+        {
+          "label": "Historical: New comments-only 6e08 commit",
           "url": "https://github.com/tamird/ruff/commit/6e08e84a339ee7d27a36371c2b439db84cf58a3d"
         },
         {
-          "label": "6e08 canonical hooks; verified unchanged code/tests and reused native proof",
+          "label": "Historical: 6e08 canonical hooks; verified unchanged code/tests and reused native proof",
           "url": "https://app.buildbuddy.io/invocation/06b8444c-860c-4a54-a164-eaffb7b17c21"
         },
         {
-          "label": "New f69 single commit for review",
+          "label": "Historical: New f69 single commit for review",
           "url": "https://github.com/tamird/ruff/commit/f69b792ae4530552c91cff7375a2b6f2e9497a5c"
         },
         {
-          "label": "f69: five fixtures, semantic tests and successful style build; wrapper-count failure disclosed",
+          "label": "Historical: f69: five fixtures, semantic tests and successful style build; wrapper-count failure disclosed",
           "url": "https://app.buildbuddy.io/invocation/378c990e-1dd7-4bca-9dae-aaf45f4c77d6"
         },
         {
-          "label": "Earlier bf95: Current-base refresh: independent guarded phases",
+          "label": "Historical: Earlier bf95: Current-base refresh: independent guarded phases",
           "url": "https://app.buildbuddy.io/invocation/4076d5be-7ee1-4e87-a1ed-5a6f5a0e0520"
         },
         {
-          "label": "Earlier bf95: Review the single upstream commit",
+          "label": "Historical: Earlier bf95: Review the single upstream commit",
           "url": "https://github.com/tamird/ruff/commit/bf95f29c54153597cd59bfb602fe5e56aa965e75"
         },
         {
-          "label": "Earlier bf95: Matched baseline and revised qualification",
+          "label": "Historical: Earlier bf95: Matched baseline and revised qualification",
           "url": "https://app.buildbuddy.io/invocation/3e27961a-71f9-4e9f-abd3-526529ae6c41"
         }
       ],
-      "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
-      "summary": "The user requested architectural rework of precise_iterable_element_type’s factoring and fallback responsibilities. The 6e08 artifact remains historical and unapproved; no replacement head or user decision is recorded.\n\nHistorical qualification for 6e08 only; the user has requested factoring rework. The comments-only 6e08 revision passes canonical hooks on RBE. All four source postimages were verified; runtime code and test lines match qualified f69 exactly, so its five whole fixtures, semantic tests (515 passed, 35 ignored), formatting and strict Clippy proof is reused. Native checks were not rerun. The earlier f69 wrapper-count failure remains disclosed in its historical receipt.\n\nThis proposal is not approved for upstream submission.",
-      "followup": {
-        "owner": "Agent",
-        "sourceHead": "6e08e84a339ee7d27a36371c2b439db84cf58a3d",
-        "nextAction": "Reassess the factoring of precise_iterable_element_type and its caller-owned iterable fallback. Simplify the responsibility boundary before preparing a new qualified artifact and range-diff. Do not return the current 6e08 proposal for approval."
+      "head": "31bf4e4fd869f34c947e32701f5c5af386106587",
+      "summary": "One expression-iteration operation now owns immediate display precision and ordinary iteration. It takes the already-inferred whole type and child-type provider; callers retain error reporting and recovery.\n\nThe 31bf revision passes five whole iteration/unpacking boundary fixtures, all 532 default Markdown fixtures, core 86, semantic 515 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy. Tests are unchanged from 6e08, and the raw fixed extractor is unchanged. Existing quiet async behavior is preserved. Network-enabled modes were not separately qualified; older proof remains historical.\n\nThis proposal is not approved for upstream submission.",
+      "contributorReview": {
+        "kind": "proposal",
+        "status": "pending",
+        "head": "31bf4e4fd869f34c947e32701f5c5af386106587",
+        "baseHead": "7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc",
+        "url": "https://github.com/tamird/ruff/commit/31bf4e4fd869f34c947e32701f5c5af386106587",
+        "title": "Review the expression-iteration owner revision",
+        "summary": "The qualified 31bf revision moves display precision and ordinary iteration into one Result-returning operation, retaining caller diagnostics and recovery. Review the actual 6e08-to31bf range-diff before deciding whether to submit.",
+        "body": "Review `31bf4e4f`, replacing the previous `6e08` proposal. A single expression-iteration operation takes the already-inferred whole type and child-type provider. It owns immediate display precision and ordinary iteration; callers report iteration errors or recover as before. The forwarding wrapper and repeated normal fallback branches are gone.\n\nThe raw fixed extractor and existing quiet async behavior are unchanged. No tests were added or changed from 6e08. Five whole boundary fixtures, all 532 default Markdown fixtures, core 86, semantic 515 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy pass. Network-enabled modes were not separately qualified. [Qualification](https://app.buildbuddy.io/invocation/fbee6f68-fbd4-45e8-9d96-1324c61d391b).\n\n## Changes from the previous proposal\n\nThis is the complete paired range-diff. User approval is required before upstream submission.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..6e08e84a339ee7d27a36371c2b439db84cf58a3d 7d1b1355ef43bc9169ec5743667ca2a6cdbde2dc..31bf4e4fd869f34c947e32701f5c5af386106587\n```\n\n```diff\n1:  6e08e84a33 ! 1:  31bf4e4fd8 [ty] Preserve literals in loop unpacking\n    @@ Commit message\n         [ty] Preserve literals in loop unpacking\n     \n         Destructuring an immediately consumed list widened literal elements,\n    -    while single-target iteration preserved them. Share precise element\n    -    inference for list and dictionary displays with unpacking.\n    +    while single-target iteration preserved them. Share expression iteration\n    +    between loop targets, comprehensions, and unpacking so display precision\n    +    and ordinary iteration have one owner.\n     \n    -    Use normal inferred iteration for other expressions so tuple inference\n    -    still controls widening and stored values retain their inferred element\n    -    types.\n    +    Read already-inferred expression types, leaving error reporting and\n    +    recovery at the callers. Preserve the existing asynchronous target\n    +    behavior and the fixed-length iterable extractor.\n     \n      ## crates/ty_python_semantic/resources/mdtest/unpacking.md ##\n     @@ crates/ty_python_semantic/resources/mdtest/unpacking.md: for a, b in ((1, 2), (3, 4)):\n    @@ crates/ty_python_semantic/src/types/infer/builder.rs: use crate::types::infer::{\n          TypeAndRange, TypeExpressionFlags, infer_statement_types, nearest_enclosing_class,\n          nearest_enclosing_function, original_class_type,\n      };\n    -+use crate::types::iteration::precise_iterable_element_type;\n    ++use crate::types::iteration::iterable_element_type;\n      use crate::types::match_pattern::{ClassPatternPositionalResult, class_pattern_positional_result};\n      use crate::types::member::{class_body_declaration_from_bases, inherited_class_body_declaration};\n      use crate::types::narrow::NarrowingEvaluatorExtension;\n    @@ crates/ty_python_semantic/src/types/infer/builder.rs: use crate::types::{\n      use crate::{AnalysisSettings, Db, DisplaySettings, FxIndexSet, FxOrderSet, SemanticModel};\n      use ty_python_core::ast_ids::PlaceUse;\n     @@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n    -         iterable: &ast::Expr,\n    -         expression_type: impl FnMut(&ast::Expr) -> Type<'db>,\n    -     ) -> Option<Type<'db>> {\n    +         self.infer_definition(node);\n    +     }\n    + \n    +-    fn precise_iterable_element_type(\n    +-        &self,\n    +-        iterable: &ast::Expr,\n    +-        expression_type: impl FnMut(&ast::Expr) -> Type<'db>,\n    +-    ) -> Option<Type<'db>> {\n     -        let db = self.db();\n     -        let env = self.program_environment();\n     -        if let ast::Expr::Dict(dict) = iterable {\n    @@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInfere\n     -                element_types.iter().copied(),\n     -            ))\n     -        }\n    -+        precise_iterable_element_type(\n    -+            self.db(),\n    -+            self.program_environment(),\n    -+            iterable,\n    -+            expression_type,\n    -+        )\n    -     }\n    - \n    +-    }\n    +-\n          fn infer_for_statement(&mut self, for_statement: &ast::StmtFor) {\n    +         let db = self.db();\n    +         let ast::StmtFor {\n    +@@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n    +             //  but only if the target is a name. We should report a diagnostic here if the target isn't a name:\n    +             //  `for a.x in not_iterable: ...\n    +             let iterable_type = builder.infer_standalone_expression(iter, tcx);\n    +-            if !*is_async\n    +-                && let Some(element_type) = builder\n    +-                    .precise_iterable_element_type(iter, |expr| builder.expression_type(expr))\n    +-            {\n    +-                element_type\n    +-            } else {\n    +-                let env = builder.program_environment();\n    +-                iterable_type\n    ++            let env = builder.program_environment();\n    ++            if *is_async {\n    ++                return iterable_type\n    +                     .iterate(db, env)\n    +-                    .homogeneous_element_type(db, env)\n    ++                    .homogeneous_element_type(db, env);\n    +             }\n    ++            iterable_element_type(\n    ++                db,\n    ++                env,\n    ++                iterable_type,\n    ++                iter,\n    ++                |expr| builder.expression_type(expr),\n    ++                EvaluationMode::Sync,\n    ++            )\n    ++            .unwrap_or_else(|err| err.fallback_element_type(db, env))\n    +         });\n    + \n    +         self.infer_body(body);\n    +@@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n    +                 let iterable_type =\n    +                     self.infer_standalone_expression(iterable, TypeContext::default());\n    + \n    +-                if !for_stmt.is_async()\n    +-                    && let Some(element_type) = self\n    +-                        .precise_iterable_element_type(iterable, |expr| self.expression_type(expr))\n    +-                {\n    +-                    element_type\n    +-                } else {\n    +-                    let env = self.program_environment();\n    +-                    iterable_type\n    +-                        .try_iterate_with_mode(\n    +-                            db,\n    +-                            env,\n    +-                            EvaluationMode::from_is_async(for_stmt.is_async()),\n    +-                        )\n    +-                        .map(|tuple| tuple.homogeneous_element_type(db, env))\n    +-                        .unwrap_or_else(|err| {\n    +-                            err.report_diagnostic(&self.context, iterable_type, iterable.into());\n    +-                            err.fallback_element_type(db, env)\n    +-                        })\n    +-                }\n    ++                let env = self.program_environment();\n    ++                iterable_element_type(\n    ++                    db,\n    ++                    env,\n    ++                    iterable_type,\n    ++                    iterable,\n    ++                    |expr| self.expression_type(expr),\n    ++                    EvaluationMode::from_is_async(for_stmt.is_async()),\n    ++                )\n    ++                .unwrap_or_else(|err| {\n    ++                    err.report_diagnostic(&self.context, iterable_type, iterable.into());\n    ++                    err.fallback_element_type(db, env)\n    ++                })\n    +             }\n    +         };\n    + \n    +@@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n    +             // TODO: `infer_comprehension_definition` reports a diagnostic if `iter_ty` isn't iterable\n    +             //  but only if the target is a name. We should report a diagnostic here if the target isn't a name:\n    +             //  `[... for a.x in not_iterable]\n    +-            let (iterable_type, element_type) = if is_first {\n    +-                let result =\n    +-                    infer_expression_types(builder.db(), builder.index.expression(iter), tcx);\n    +-                (\n    +-                    result.expression_type(iter),\n    +-                    builder\n    +-                        .precise_iterable_element_type(iter, |expr| result.expression_type(expr)),\n    +-                )\n    ++            let outer_inference = is_first\n    ++                .then(|| infer_expression_types(builder.db(), builder.index.expression(iter), tcx));\n    ++            let iterable_type = if let Some(result) = &outer_inference {\n    ++                result.expression_type(iter)\n    +             } else {\n    +-                let iterable_type = builder.infer_maybe_standalone_expression(iter, tcx);\n    +-                (\n    +-                    iterable_type,\n    +-                    builder\n    +-                        .precise_iterable_element_type(iter, |expr| builder.expression_type(expr)),\n    +-                )\n    ++                builder.infer_maybe_standalone_expression(iter, tcx)\n    +             };\n    +-            if !*is_async && let Some(element_type) = element_type {\n    +-                element_type\n    +-            } else {\n    +-                iterable_type\n    ++            if *is_async {\n    ++                return iterable_type\n    +                     .iterate(db, env)\n    +-                    .homogeneous_element_type(db, env)\n    ++                    .homogeneous_element_type(db, env);\n    +             }\n    ++            iterable_element_type(\n    ++                db,\n    ++                env,\n    ++                iterable_type,\n    ++                iter,\n    ++                |expr| match &outer_inference {\n    ++                    Some(result) => result.expression_type(expr),\n    ++                    None => builder.expression_type(expr),\n    ++                },\n    ++                EvaluationMode::Sync,\n    ++            )\n    ++            .unwrap_or_else(|err| err.fallback_element_type(db, env))\n    +         });\n    + \n    +         for expr in ifs {\n    +@@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n    +             let expression = self.index.expression(iterable);\n    +             let result = infer_expression_types(self.db(), expression, TypeContext::default());\n    +             let iterable_type = result.expression_type(iterable);\n    +-            let element_type = if comprehension.is_async() {\n    +-                None\n    +-            } else {\n    +-                self.precise_iterable_element_type(iterable, |expr| result.expression_type(expr))\n    +-            };\n    ++            let element_type = iterable_element_type(\n    ++                db,\n    ++                self.program_environment(),\n    ++                iterable_type,\n    ++                iterable,\n    ++                |expr| result.expression_type(expr),\n    ++                EvaluationMode::from_is_async(comprehension.is_async()),\n    ++            );\n    + \n    +             // Two things are different if it's the first comprehension:\n    +             // (1) We must lookup the `ScopedExpressionId` of the iterable expression in the outer scope,\n    +@@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n    +             TargetKind::Single => {\n    +                 let (iterable_type, element_type) = infer_iterable_type();\n    + \n    +-                if let Some(element_type) = element_type {\n    +-                    element_type\n    +-                } else {\n    +-                    let env = self.program_environment();\n    +-                    iterable_type\n    +-                        .try_iterate_with_mode(\n    +-                            db,\n    +-                            env,\n    +-                            EvaluationMode::from_is_async(comprehension.is_async()),\n    +-                        )\n    +-                        .map(|tuple| tuple.homogeneous_element_type(db, env))\n    +-                        .unwrap_or_else(|err| {\n    +-                            err.report_diagnostic(&self.context, iterable_type, iterable.into());\n    +-                            err.fallback_element_type(db, env)\n    +-                        })\n    +-                }\n    ++                let env = self.program_environment();\n    ++                element_type.unwrap_or_else(|err| {\n    ++                    err.report_diagnostic(&self.context, iterable_type, iterable.into());\n    ++                    err.fallback_element_type(db, env)\n    ++                })\n    +             }\n    +         };\n    + \n     \n      ## crates/ty_python_semantic/src/types/iteration.rs ##\n     @@\n    @@ crates/ty_python_semantic/src/types/iteration.rs: pub(crate) fn extract_fixed_le\n          Some(element_types.into_boxed_slice())\n      }\n      \n    -+/// Recover element types when iterating directly over a list or dictionary display.\n    -+pub(super) fn precise_iterable_element_type<'db>(\n    ++/// Return the element type of an already-inferred iterable expression.\n    ++pub(super) fn iterable_element_type<'db>(\n     +    db: &'db dyn Db,\n     +    env: &ProgramEnvironment<'db>,\n    ++    iterable_type: Type<'db>,\n     +    iterable: &ast::Expr,\n     +    expression_type: impl FnMut(&ast::Expr) -> Type<'db>,\n    -+) -> Option<Type<'db>> {\n    -+    match iterable {\n    -+        ast::Expr::List(_) => {\n    -+            // List inference promotes element literals to allow later mutation. This display is\n    -+            // consumed immediately, so use the original element expression types.\n    -+            let element_types =\n    -+                extract_fixed_length_iterable_element_types(db, env, iterable, expression_type)?;\n    -+            if element_types.is_empty() {\n    -+                None\n    -+            } else {\n    -+                Some(UnionType::from_elements(\n    -+                    db,\n    -+                    env,\n    -+                    element_types.iter().copied(),\n    -+                ))\n    ++    mode: EvaluationMode,\n    ++) -> Result<Type<'db>, IterationError<'db>> {\n    ++    if !mode.is_async() {\n    ++        match iterable {\n    ++            ast::Expr::List(_) => {\n    ++                // List inference promotes literals for later mutation. This display is consumed\n    ++                // immediately, so use its already-inferred element expression types.\n    ++                if let Some(element_types) =\n    ++                    extract_fixed_length_iterable_element_types(db, env, iterable, expression_type)\n    ++                    && !element_types.is_empty()\n    ++                {\n    ++                    return Ok(UnionType::from_elements(\n    ++                        db,\n    ++                        env,\n    ++                        element_types.iter().copied(),\n    ++                    ));\n    ++                }\n     +            }\n    ++            ast::Expr::Dict(dict) => {\n    ++                if let Some((keys, _values)) =\n    ++                    dict_literal_key_value_types(db, env, dict, expression_type)\n    ++                {\n    ++                    return Ok(keys);\n    ++                }\n    ++            }\n    ++            _ => {}\n     +        }\n    -+        ast::Expr::Dict(dict) => {\n    -+            dict_literal_key_value_types(db, env, dict, expression_type).map(|(keys, _values)| keys)\n    -+        }\n    -+        // Other expressions use their inferred iterable type. Tuple inference already preserves\n    -+        // literals or widens large tuples; rereading their elements would undo that widening.\n    -+        _ => None,\n     +    }\n    ++    iterable_type\n    ++        .try_iterate_with_mode(db, env, mode)\n    ++        .map(|tuple| tuple.homogeneous_element_type(db, env))\n     +}\n     +\n      impl<'db> Type<'db> {\n    @@ crates/ty_python_semantic/src/types/unpacker.rs: use ruff_python_ast::{self as a\n      use crate::Db;\n     -use crate::types::dict::dict_literal_key_value_types;\n      use crate::types::infer::{ExpressionInference, FrozenMap};\n    -+use crate::types::iteration::precise_iterable_element_type;\n    ++use crate::types::iteration::iterable_element_type;\n      use crate::types::tuple::promotion::TupleSizePromotionConstraints;\n      use crate::types::tuple::{\n          ResizeTupleError, Tuple, TupleBuilder, TupleElement, TupleLength, TupleSpec,\n     @@ crates/ty_python_semantic/src/types/unpacker.rs: impl<'db, 'ast> Unpacker<'db, 'ast> {\n    +             }\n                  UnpackKind::Iterable { mode } => {\n                      let env = self.context.program_environment();\n    -                 if !mode.is_async()\n    +-                if !mode.is_async()\n     -                    && let ast::Expr::Dict(dict) = value_expr\n     -                    && let Some((keys, _)) = dict_literal_key_value_types(db, env, dict, |expr| {\n     -                        value_inference.expression_type(expr)\n     -                    })\n    -+                    && let Some(element) =\n    -+                        precise_iterable_element_type(db, env, value_expr, |expr| {\n    -+                            value_inference.expression_type(expr)\n    -+                        })\n    -                 {\n    +-                {\n     -                    keys\n    -+                    element\n    -                 } else {\n    -                     value_type\n    -                         .try_iterate_with_mode(db, env, mode)\n    +-                } else {\n    +-                    value_type\n    +-                        .try_iterate_with_mode(db, env, mode)\n    +-                        .map(|tuple| tuple.homogeneous_element_type(db, env))\n    +-                        .unwrap_or_else(|err| {\n    +-                            err.report_diagnostic(\n    +-                                &self.context,\n    +-                                value_type,\n    +-                                value.as_any_node_ref(self.db(), self.module()),\n    +-                            );\n    +-                            err.fallback_element_type(db, env)\n    +-                        })\n    +-                }\n    ++                iterable_element_type(\n    ++                    db,\n    ++                    env,\n    ++                    value_type,\n    ++                    value_expr,\n    ++                    |expr| value_inference.expression_type(expr),\n    ++                    mode,\n    ++                )\n    ++                .unwrap_or_else(|err| {\n    ++                    err.report_diagnostic(\n    ++                        &self.context,\n    ++                        value_type,\n    ++                        value.as_any_node_ref(self.db(), self.module()),\n    ++                    );\n    ++                    err.fallback_element_type(db, env)\n    ++                })\n    +             }\n    +             UnpackKind::ContextManager { mode } => {\n    +                 let env = self.context.program_environment();\n```\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/31bf4e4fd869f34c947e32701f5c5af386106587)."
       },
       "refinement": {
         "before": {
-          "head": "f69b792ae4530552c91cff7375a2b6f2e9497a5c"
+          "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d"
         },
         "after": {
-          "head": "6e08e84a339ee7d27a36371c2b439db84cf58a3d"
+          "head": "31bf4e4fd869f34c947e32701f5c5af386106587"
         }
       }
     },
@@ -1654,7 +1666,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1669,7 +1681,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1684,7 +1696,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1699,7 +1711,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1714,7 +1726,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1730,7 +1742,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python bugfix candidate. Exclude NotImplemented from the assigned result and try ordinary or reflected binary dispatch. Preserve aliases and any ordinary return alternatives. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; qualify reflected overloads, mixed returns, conditional in-place methods and unsupported operands.",
       "findings": [
@@ -1758,7 +1770,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
       "findings": [
@@ -1786,7 +1798,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
       "findings": [
@@ -1831,7 +1843,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Fork correction qualified; upstream extraction pending. The published checker retains complete later contexts for empty dictionaries, lists and sets. Skylib root and Gazelle checks now pass. Thirty native cases and incremental query-order controls cover generic keys, aliases, conflicting consumers and invalid writes; current-upstream extraction and overlap review remain open.",
       "nextStep": "Reduce the correction on current upstream and compare with ibraheemdev’s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
       "findings": [
@@ -1899,7 +1911,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
       "findings": [
@@ -1927,7 +1939,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python bugfix candidate. Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
       "findings": [
@@ -1985,7 +1997,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python bugfix candidate. Group keys that share value types and requiredness, retaining large literal-key groups instead of merging incompatible get overloads. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reproduce on upstream; cover required and optional keys, key unions, missing keys, defaults and large schemas.",
       "findings": [
@@ -2013,7 +2025,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement / host API candidate. Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
       "findings": [
@@ -2041,7 +2053,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
       "findings": [
@@ -2069,7 +2081,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python bugfix candidate. Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
       "findings": [
@@ -2097,7 +2109,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host API design. Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
       "findings": [
@@ -2125,7 +2137,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host adaptation not implemented. Sty currently selects Standard or Bazel dialects; native annotations and builtin extensions are tied to Bazel. Buck2 needs distinct BUCK, rule-definition and BXL environments. Existing ty parser and supplied-binding hooks are reusable boundaries, not established Buck2 support.",
       "nextStep": "Separate host file modes and builtin catalog selection from Bazel metadata; qualify native annotations and isolation between Buck2 environments.",
       "findings": [],
@@ -2151,7 +2163,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host adaptation not implemented. Reuse Sty’s FileLoader boundary for Buck2 resolution rather than Bazel repository labels. Buck2 cells come from .buckconfig; JSON and TOML can be loaded as modules exporting value. Source lookup, exports and invalidation need the same logical module identity.",
       "nextStep": "Implement a Buck2 loader using cell-relative identities and explicit data-module exports; qualify cross-cell aliases and edits to loaded data.",
       "findings": [],
@@ -2177,7 +2189,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host semantics require qualification. Buck2 exposes record, field and enum constructors alongside namespaced typing values. Map those values through host-supplied semantic contracts instead of assuming Bazel provider or struct behavior. Documentation differs on using record constructors directly versus .type in annotations; settle that against a pinned runtime.",
       "nextStep": "Pin the target Buck2/Starlark runtime, establish constructor and annotation behavior, then qualify field defaults, invalid values and nominal type identity.",
       "findings": [],
@@ -2203,7 +2215,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -2282,7 +2294,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -2497,7 +2509,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host API design. Apple lipo still lacks a static ToolchainInfo field contract. An RBE aspect/cquery probe follows the selected producer, field shape and configured dependency edge through an --extra_toolchains replacement. Producer bodies remain unchecked.",
       "nextStep": "Check selected producer bodies and handle multiple configurations without label-only joins before adding keyed host bounds. Universal source contracts still require an enforced ABI. Sty integration is not implemented.",
       "findings": [
@@ -2533,7 +2545,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -2729,7 +2741,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting. The existing LLVM callback case with a fresh list of \"ok\" and list[Literal[\"ok\"]] fails on the fork and pristine upstream. A fix passes the strengthened existing fixture; broader qualification is in progress.",
       "nextStep": "Finish qualification of the fresh-literal callback fix, including the actual LLVM corpus case, before preparing an upstream proposal. Continue isolating the remaining solver improvements.",
       "findings": [
@@ -3136,7 +3148,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Sty now pairs overloaded interfaces with checked source bodies and uses the same finite domains for strictness. General Python body-domain analysis still needs an upstream split and review.",
       "nextStep": "Repair with_cfg dictionary-union admission and the fork-only generic callback rejection; compare the remaining body-domain APIs with upstream.",
       "findings": [
@@ -3221,7 +3233,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
       "nextStep": "Reject global guard removal: full upstream Markdown has 24 new failing fixtures and current project checks add diagnostics. Fix the original string-splitting bug without discarding internal guards. Saved runtime type tests and tagged-union mechanisms still need separate reconciliation.",
       "findings": [
@@ -3323,7 +3335,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream. The fresh-literal callback fix is now qualified in the fork and passes the actual LLVM corpus case. The expanded official port covers both bounded and unbounded type variables and passes native suites and all 532 default Markdown fixtures. The fork backport passes the current corpus. The official port is withheld after benchmarks found material inference overhead; a correction must preserve required return precision.",
       "nextStep": "Review the qualified bounded/unbounded callback contribution before upstream submission. Finish fork backport qualification and retain the separate stored-collection overlap with #27665.",
       "findings": [
@@ -3443,7 +3455,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3493,7 +3505,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3525,7 +3537,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3576,7 +3588,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3626,7 +3638,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3758,7 +3770,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3781,7 +3793,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
       "nextStep": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
       "findings": [
@@ -3804,7 +3816,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
       "nextStep": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
       "findings": [
@@ -3827,7 +3839,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
       "nextStep": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
       "findings": [
@@ -3867,7 +3879,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
       "nextStep": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
       "findings": [
@@ -3895,7 +3907,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
       "nextStep": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix.",
       "findings": [
@@ -3918,7 +3930,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
       "nextStep": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change.",
       "findings": [
@@ -3973,7 +3985,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Upstream reproduced; fix not qualified. Structural comparison accepts Result[str] as Result[int] when a generic first_or method returns its payload or a caller-supplied fallback. The same false acceptance occurs with nested recursive payloads. Direct recursive payload comparison rejects correctly. Baseline and deferred-receiver experiments agree in both generic syntaxes, so this is a separate signature-comparison defect.",
       "nextStep": "Reconcile existing upstream reports #2924 and #2323, binder PR #29027 and the closed higher-rank attempt #26638 before preparing feedback or extracting another binder implementation. Keep the scoped-binder prerequisite under ty-scoped-witness-proofs. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review.",
       "findings": [],
@@ -4015,9 +4027,9 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Reconciliation in progress. Qualified Sty 14d05b98 pins Ruff 07a4f30c on official 75fabee2. Eight native targets, the optimized build and all 148 unchanged corpus cases pass. All 20 community checks execute with unchanged outcomes: 11 strict passes, six advisory completions and three known failures. All eight qualified workflow refreshes are published. Full Ruff Markdown retains 507 passing and 31 unchanged failing fixtures.",
-      "nextStep": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30759 has merged; two other approved contributions remain submitted upstream. The approved e752 amendment is now published on PR #30758. The list-iteration proposal is Agent-owned factoring rework, with no current user decision. PR #30761 has a qualified edc8 replacement awaiting user review of its full paired range-diff; the public head remains ce523 until approval. The ce523 approval remains historical. ba712 remains Agent-owned for smaller independent contributions.",
+      "nextStep": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30758 and #30759 have merged. PR #30761 remains at its submitted ce523 head pending review of its replacement. The approved e752 amendment is now published on PR #30758. The qualified 31bf list-iteration owner revision has a new review request with its complete range-diff. PR #30761 has a qualified edc8 replacement awaiting user review of its full paired range-diff; the public head remains ce523 until approval. The ce523 approval remains historical. ba712 remains Agent-owned for smaller independent contributions.",
       "findings": [
         {
           "text": "[ty] Accept immediately guarded dictionary reads — crates/ty_python_semantic/resources/mdtest/narrow/conditionals/in.md, crates/ty_python_semantic/src/types/dictionary.rs, crates/ty_python_semantic/src/types/infer/builder/subscript.rs, crates/ty_python_semantic/src/types/subscript.rs",
@@ -4063,7 +4075,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Track specialized bounds in TypeVar identity while preserving materialized views and exact ParamSpec components.",
       "nextStep": "Reduce domain identity and substitution cases; qualify captured binders and compare upstream #29555.",
       "findings": [
@@ -4153,7 +4165,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python solver design. Keep local binders, declared domains and correlated witnesses together through inference, replay and bounded proof. Unknown proofs remain incomplete.",
       "nextStep": "Compare upstream PR #29027 before extracting the binder representation. Reduce the remaining quantified-domain, witness-correlation and budget differences for design review.",
       "findings": [
@@ -4969,7 +4981,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python bugfix candidate. A sibling branch can negate a rolled-back consequence while its antecedents still hold. Retriggering cached rules detects the conflict.",
       "nextStep": "Reproduce against clean upstream and qualify both single and pair implication regressions.",
       "findings": [
@@ -5007,7 +5019,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python bugfix candidate. Exhausted generic witness proof must remain unknown instead of producing an upper-bound violation.",
       "nextStep": "Qualify the native exhausted-witness regression and reduce a Python diagnostic example.",
       "findings": [
@@ -5045,7 +5057,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Preserve strict callable relations while solving finite source domains, covering union inputs and comparing nested protocol receivers.",
       "nextStep": "Reduce strict callable cases; qualify domain replay and receiver progress against upstream #29555.",
       "findings": [
@@ -5131,7 +5143,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Specialize generic implementation inputs before declaration coverage checks. Broader implementation return annotations are permitted; body checking has a separate owner.",
       "nextStep": "Correct the invalid nullable-return assertion, then qualify generic declaration consistency.",
       "findings": [
@@ -5183,7 +5195,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Preserve callable-local binders under outer substitution and project captured callback variables before they reach ordinary results.",
       "nextStep": "Reconcile binder ownership with upstream #29553 and #29555; qualify partial and captured-return cases.",
       "findings": [
@@ -5259,7 +5271,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python bugfix candidate. Keep overload expansion available when some generic specialization accepts an argument, including provisional arity mismatches.",
       "nextStep": "Qualify the bound-method starred-union fixture and reduce the generic expansion precheck.",
       "findings": [
@@ -5297,7 +5309,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Python enhancement candidate. Use finite member facts for getattr results and fresh empty defaults. Immutable storage guarantees have a separate host contract.",
       "nextStep": "Reduce ordinary Python lookup cases; compare collection context with upstream #27665.",
       "findings": [
@@ -5363,7 +5375,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host API design. Distinguish accepted keyword parameters from received keyword dictionaries, then verify complete ParamSpec witnesses against the original call relation.",
       "nextStep": "Specify host annotation and capture semantics before proposing shared solver APIs.",
       "findings": [
@@ -5459,7 +5471,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-22T22:44:25.105866Z",
+      "updatedAt": "2026-11-22T23:00:31.258018Z",
       "summary": "Host API design. Keep source definitions or ranges through parameter specialization, default presentation and hidden internal keyword handling.",
       "nextStep": "Review the public source-location contract and qualify navigation and signature presentation.",
       "findings": [

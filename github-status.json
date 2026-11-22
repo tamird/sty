@@ -2,8 +2,8 @@
   "schema": 1,
   "repo": "astral-sh/ruff",
   "owner": "tamird",
-  "registryDate": "2026-11-22T22:44:25.105866Z",
-  "checkedAt": "2026-11-22T22:43:26.842571+00:00",
+  "registryDate": "2026-11-22T23:00:31.258018Z",
+  "checkedAt": "2026-11-22T22:59:19.041257+00:00",
   "repositories": {
     "astral-sh/ruff": "none",
     "tamird/ruff": "none",
@@ -25558,14 +25558,14 @@
       "number": 30758,
       "title": "[ty] Resolve exception-handler aliases",
       "url": "https://github.com/astral-sh/ruff/pull/30758",
-      "status": "open",
+      "status": "merged",
       "ref": "upstream/resolve-exception-tuple-aliases",
       "head": "e752397a71030a39868a43a682835508238e3afd",
       "branchHead": "e752397a71030a39868a43a682835508238e3afd",
       "base": "99692a76d8e4264ec1b28143e316a1e27ae80f55",
-      "mergeable": "MERGEABLE",
-      "mergeState": "UNSTABLE",
-      "mergeabilityCheckedAt": "2026-11-22T22:43:26.842571+00:00",
+      "mergeable": "UNKNOWN",
+      "mergeState": "UNKNOWN",
+      "mergeabilityCheckedAt": "2026-11-22T22:59:19.041257+00:00",
       "headCommittedAt": "2026-11-22T14:38:13Z",
       "headHistoryComplete": true,
       "headIntroducedAt": "2026-11-22T22:22:59Z",
@@ -25574,10 +25574,10 @@
       "headRepo": "tamird/ruff",
       "authorLogin": "tamird",
       "createdAt": "2026-11-22T13:54:19Z",
-      "updatedAt": "2026-11-22T22:37:08Z",
-      "mergedAt": null,
-      "closedAt": null,
-      "mergeCommit": null,
+      "updatedAt": "2026-11-22T22:57:11Z",
+      "mergedAt": "2026-11-22T22:57:11Z",
+      "closedAt": "2026-11-22T22:57:11Z",
+      "mergeCommit": "acf15a39e2aa7b97ff7feda4fe94275447fa68ed",
       "githubReviewDecision": null,
       "reviewsComplete": true,
       "commentsComplete": true,
@@ -25654,9 +25654,9 @@
         ]
       },
       "checks": {
-        "state": "PENDING",
-        "total": 79,
-        "reportedTotal": 79,
+        "state": "SUCCESS",
+        "total": 80,
+        "reportedTotal": 80,
         "complete": true,
         "contexts": [
           {
@@ -26682,7 +26682,7 @@
           {
             "id": "CR_kwDOHy0Bzc8AAAAf_HIxWQ",
             "name": "benchmarks instrumented ty (simulation: micro-2)",
-            "state": "IN_PROGRESS",
+            "state": "SUCCESS",
             "url": "https://github.com/astral-sh/ruff/actions/runs/45077420315/job/137379328345",
             "kind": "check-run",
             "app": "GitHub Actions",
@@ -26843,6 +26843,21 @@
             "runNumber": 100002,
             "runAttempt": 1,
             "purpose": "validation"
+          },
+          {
+            "id": "CR_kwDOHy0Bzc8AAAAf_LplPg",
+            "name": "CodSpeed Performance Analysis",
+            "state": "SUCCESS",
+            "url": "https://app.codspeed.io/astral-sh/ruff/branches/tamird%3Aupstream%2Fresolve-exception-tuple-aliases?utm_source=github&utm_medium=check&utm_content=details",
+            "kind": "check-run",
+            "app": "CodSpeed",
+            "appSlug": "codspeed",
+            "appId": "A_kwHOBvQP3M4AA-0N",
+            "workflow": null,
+            "workflowId": null,
+            "runNumber": null,
+            "runAttempt": null,
+            "purpose": "validation"
           }
         ],
         "supersededContexts": []
@@ -26850,7 +26865,7 @@
       "importPolicy": "none",
       "imports": [],
       "importsComplete": true,
-      "checkedAt": "2026-11-22T22:43:26.842571+00:00",
+      "checkedAt": "2026-11-22T22:59:19.041257+00:00",
       "reviewDecision": null,
       "approvedHead": null,
       "approvedAt": null
