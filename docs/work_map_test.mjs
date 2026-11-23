@@ -239,7 +239,10 @@ for (const item of upstream) {
         assert.equal(node.contributorReview.head, item.qualifiedHead);
         assert.equal(node.contributorReview.baseHead, item.qualifiedBase);
       }
-      assert.ok(tracker.refinementComparison(node, node.contributorReview).command.includes('--creation-factor=999'),
+      const comparison = tracker.refinementComparison(node, node.contributorReview);
+      if (node.refinement || node.contributorReview.kind === 'amendment')
+        assert.ok(comparison, 'A recorded revision must retain its actual range-diff comparison');
+      if (comparison) assert.ok(comparison.command.includes('--creation-factor=999'),
         'The copyable single-commit command pairs the same replacement as the captured range-diff');
       assert.equal(node.followup, undefined, 'The amendment decision has no duplicate agent task');
       const amendmentLinks = await tracker.renderDecisionLinks(node);
@@ -248,16 +251,22 @@ for (const item of upstream) {
       assert.equal(decodeURIComponent(reader.hash.slice(1)), node.id);
       const draft = await tracker.findDraft(node, reader.searchParams.get('draft'));
       assert.deepEqual(draft, item.contributorReview, 'The reader addresses the exact amendment text');
-      assert.equal(await tracker.renderChangeLink(node, node.contributorReview), reader.href,
-        'The table and details use the same actual reader action');
-      assert.equal(amendmentLinks[0].label, node.contributorReview.kind === 'amendment'
-        ? 'Read amendment range-diff' : 'Read revised proposal range-diff');
       assert.equal(amendmentLinks[1].url, item.contributorReview.url, 'Retain the complete commit artifact separately');
-      assert.ok(draft.body.includes('```diff\n') && draft.body.includes('range-diff --no-color --no-dual-color --creation-factor=999'),
-        'The reader contains the actual comparison, not only its command');
-      const markdown = runInNewContext(readFileSync(new URL('./vendor/markdown-it-15.0.3/markdown-it.min.js', import.meta.url), 'utf8')
-        + '\nmarkdownit({ html: false, linkify: true })');
-      assert.ok(markdown.render(draft.body).includes('<pre><code class="language-diff">'), 'The existing reader renderer presents the diff');
+      if (comparison) {
+        assert.equal(await tracker.renderChangeLink(node, node.contributorReview), reader.href,
+          'The table and details use the same actual reader action');
+        assert.equal(amendmentLinks[0].label, node.contributorReview.kind === 'amendment'
+          ? 'Read amendment range-diff' : 'Read revised proposal range-diff');
+        assert.ok(draft.body.includes('```diff\n') && draft.body.includes('range-diff --no-color --no-dual-color --creation-factor=999'),
+          'The reader contains the actual comparison, not only its command');
+        const markdown = runInNewContext(readFileSync(new URL('./vendor/markdown-it-15.0.3/markdown-it.min.js', import.meta.url), 'utf8')
+          + '\nmarkdownit({ html: false, linkify: true })');
+        assert.ok(markdown.render(draft.body).includes('<pre><code class="language-diff">'), 'The existing reader renderer presents the diff');
+      } else {
+        assert.equal(amendmentLinks[0].label, 'Read draft');
+        assert.equal(await tracker.renderChangeLink(node, node.contributorReview), item.contributorReview.url,
+          'An initial proposal links its native commit without inventing a prior review');
+      }
       console.log('RENDERED_AMENDMENT_READER_URL', reader.href);
       assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
       console.log('RENDERED_AMENDMENT_ACTION_URL', node.contributorReview.url);

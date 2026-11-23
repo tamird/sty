@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = "2026-11-22T23:00:31.258018Z";
+export const reviewedAt = '2026-11-23T20:58:43.467895Z';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -47,6 +47,84 @@ export const goals = [
 ];
 
 export const upstream = [
+  {
+    "id": "typed-dict-get-key-groups",
+    "ref": "review/typed-dict-get-groups-3f63e8b",
+    "title": "Group equivalent TypedDict.get keys",
+    "state": "Awaiting Tamir review",
+    "source": "5d2628cbb2296f33d81828f6ce34a7140a36e5e4",
+    "summary": "Preserve the common field type for literal key unions within the same declared value-type and requiredness group. Optional groups keep their default handling; mixed groups retain existing fallback behavior.",
+    "qualifiedBase": "3f63e8b368924bb58875a7590e07f667805839a5",
+    "qualifiedHead": "5d2628cbb2296f33d81828f6ce34a7140a36e5e4",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/5d2628cbb2296f33d81828f6ce34a7140a36e5e4",
+    "qualification": {
+      "summary": "Four current-base type assertions fail before grouping and pass after it. Whole TypedDict fixture, all 532 default Markdown fixtures, core 86, semantic 539 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy pass. Scope is same declared value-type identity and requiredness; mixed groups remain unchanged. No performance or network-mode claim.",
+      "evidence": [
+        {
+          "label": "Qualified standalone TypedDict.get grouping commit",
+          "url": "https://github.com/tamird/ruff/commit/5d2628cbb2296f33d81828f6ce34a7140a36e5e4"
+        },
+        {
+          "label": "Whole TypedDict, full Markdown and native/style qualification",
+          "url": "https://app.buildbuddy.io/invocation/53e62ab8-5901-4039-b69b-650cbdef53e4"
+        },
+        {
+          "label": "Current-base baseline: four intended type assertion failures",
+          "url": "https://app.buildbuddy.io/invocation/dfff1183-c060-45f1-ae81-609bfa383ba2"
+        },
+        {
+          "label": "Closed prior literal-call filtering proposal; distinct from signature grouping",
+          "url": "https://github.com/astral-sh/ruff/pull/30109"
+        }
+      ]
+    },
+    "contributorReview": {
+      "kind": "proposal",
+      "status": "pending",
+      "head": "5d2628cbb2296f33d81828f6ce34a7140a36e5e4",
+      "baseHead": "3f63e8b368924bb58875a7590e07f667805839a5",
+      "url": "https://github.com/tamird/ruff/commit/5d2628cbb2296f33d81828f6ce34a7140a36e5e4",
+      "title": "Review equivalent TypedDict.get key grouping",
+      "summary": "Review the qualified standalone grouping correction before deciding whether to submit it upstream.",
+      "body": "Calls with a union of known keys could match the broad string fallback before argument expansion, losing their field types. With required `first: int` and `second: int` fields, `data.get(key)` should return `int` for `key: Literal[\"first\", \"second\"]`.\n\nThis change groups keys with the same declared value type and requiredness into an exact literal-key overload. Optional groups retain `None` or the supplied default; unions spanning different groups keep their existing fallback behavior.\n\nFour current-base type assertions fail before the change and pass afterward. The whole TypedDict fixture, all 532 default Markdown fixtures, core 86, semantic 539 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy pass. No performance claim or network-enabled qualification is made. [Qualification](https://app.buildbuddy.io/invocation/53e62ab8-5901-4039-b69b-650cbdef53e4).\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/5d2628cbb2296f33d81828f6ce34a7140a36e5e4). Tamir approval is required before upstream submission."
+    }
+  },
+  {
+    "id": "inplace-notimplemented",
+    "ref": "review/inplace-notimplemented-3f63e8b",
+    "title": "Honor NotImplemented in augmented assignments",
+    "state": "Awaiting Tamir review",
+    "source": "0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
+    "summary": "When an in-place operator returns NotImplemented, use ordinary or reflected binary dispatch instead of assigning the sentinel. Retain other return alternatives and unsupported-operand errors.",
+    "qualifiedBase": "3f63e8b368924bb58875a7590e07f667805839a5",
+    "qualifiedHead": "0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
+    "qualification": {
+      "summary": "Matched current-base regression fails before the correction and passes after it. Whole augmented-assignment fixture, all 532 default Markdown fixtures, core 86, semantic 539 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy pass. No network-enabled mode qualification or performance claim.",
+      "evidence": [
+        {
+          "label": "Qualified standalone in-place fallback commit",
+          "url": "https://github.com/tamird/ruff/commit/0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9"
+        },
+        {
+          "label": "Matched regression, whole fixture, full Markdown and native/style qualification",
+          "url": "https://app.buildbuddy.io/invocation/e19deaea-67f1-41bf-95bf-ac212d18d525"
+        }
+      ]
+    },
+    "contributorReview": {
+      "kind": "proposal",
+      "status": "pending",
+      "head": "0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
+      "baseHead": "3f63e8b368924bb58875a7590e07f667805839a5",
+      "url": "https://github.com/tamird/ruff/commit/0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
+      "title": "Review in-place NotImplemented fallback",
+      "summary": "Review the qualified standalone correction before deciding whether to submit it upstream.",
+      "body": "An in-place method can return `NotImplemented` to request the ordinary binary operation. The sentinel was instead assigned to the target, bypassing ordinary and reflected dispatch and missing unsupported-operand errors.\n\nThis change removes sentinel alternatives and uses the existing binary dispatch for them. Other return alternatives and the fallback for conditionally defined in-place methods remain.\n\nThe exact current-base regression fails before the change and passes afterward. The whole augmented-assignment fixture, all 532 default Markdown fixtures, core 86, semantic 539 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy pass. Network-enabled modes were not separately qualified. [Qualification](https://app.buildbuddy.io/invocation/e19deaea-67f1-41bf-95bf-ac212d18d525).\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9). Tamir approval is required before upstream submission."
+    }
+  },
   {
     "id": "fresh-collection-callback-context",
     "ref": "upstream/fresh-collection-context-75fabee2",
@@ -903,8 +981,8 @@ const reviewedTyWork = [
   {
     "id": "ty-inplace-notimplemented",
     "title": "Fall back when an in-place operator returns NotImplemented",
-    "state": "Python bugfix candidate",
-    "summary": "Exclude NotImplemented from the assigned result and try ordinary or reflected binary dispatch. Preserve aliases and any ordinary return alternatives. Extraction and runtime qualification remain incomplete.",
+    "state": "Qualified standalone proposal",
+    "summary": "The standalone current-base correction uses ordinary or reflected dispatch when an in-place method returns NotImplemented, preserving other return alternatives. Its exact source and existing regression are qualified; upstream submission awaits Tamir review.",
     "sources": [
       {
         "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
@@ -912,13 +990,29 @@ const reviewedTyWork = [
         "paths": [
           "crates/ty_python_semantic/src/types/infer/builder.rs"
         ]
+      },
+      {
+        "commit": "0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
+        "detail": "Qualified independent in-place NotImplemented fallback on current upstream",
+        "paths": [
+          "crates/ty_python_semantic/src/types/infer/builder.rs",
+          "crates/ty_python_semantic/resources/mdtest/assignment/augmented.md"
+        ]
       }
     ],
-    "nextAction": "Reproduce on upstream; qualify reflected overloads, mixed returns, conditional in-place methods and unsupported operands.",
+    "nextAction": "Track review of the qualified in-place fallback proposal; revise if requested before upstream submission.",
     "evidence": [
       {
         "label": "Reviewed implementation",
         "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/infer/builder.rs#L5354"
+      },
+      {
+        "label": "Qualified proposal awaiting Tamir review",
+        "url": "https://github.com/tamird/ruff/commit/0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9"
+      },
+      {
+        "label": "Existing proposal reader and decision",
+        "url": "https://tamird.github.io/sty/#branch%3Ainplace-notimplemented"
       }
     ]
   },
@@ -1051,8 +1145,8 @@ const reviewedTyWork = [
   {
     "id": "ty-typed-dict-key-groups",
     "title": "Group TypedDict.get keys without losing literals",
-    "state": "Python bugfix candidate",
-    "summary": "Group keys that share value types and requiredness, retaining large literal-key groups instead of merging incompatible get overloads. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
+    "state": "Qualified standalone proposal",
+    "summary": "The standalone correction preserves field types for literal key unions within one declared value-type and requiredness group. Current-base regression and full native qualification pass; mixed groups retain existing fallback behavior. Upstream submission awaits Tamir review.",
     "sources": [
       {
         "commit": "dfe98a7daef8d3e8076f20e55ece2f4a98769331",
@@ -1060,13 +1154,29 @@ const reviewedTyWork = [
         "paths": [
           "crates/ty_python_semantic/src/types/class/typed_dict.rs"
         ]
+      },
+      {
+        "commit": "5d2628cbb2296f33d81828f6ce34a7140a36e5e4",
+        "detail": "Qualified independent grouping of equivalent TypedDict.get keys",
+        "paths": [
+          "crates/ty_python_semantic/src/types/class/typed_dict.rs",
+          "crates/ty_python_semantic/resources/mdtest/typed_dict.md"
+        ]
       }
     ],
-    "nextAction": "Reproduce on upstream; cover required and optional keys, key unions, missing keys, defaults and large schemas.",
+    "nextAction": "Track review of the qualified TypedDict.get key-group proposal; revise if requested before upstream submission.",
     "evidence": [
       {
         "label": "Reviewed implementation",
         "url": "https://github.com/tamird/ruff/blob/dfe98a7daef8d3e8076f20e55ece2f4a98769331/crates/ty_python_semantic/src/types/class/typed_dict.rs#L391"
+      },
+      {
+        "label": "Qualified proposal awaiting Tamir review",
+        "url": "https://github.com/tamird/ruff/commit/5d2628cbb2296f33d81828f6ce34a7140a36e5e4"
+      },
+      {
+        "label": "Existing proposal reader and decision",
+        "url": "https://tamird.github.io/sty/#branch%3Atyped-dict-get-key-groups"
       }
     ]
   },
@@ -2160,7 +2270,7 @@ const reviewedTyWork = [
         "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
       }
     ],
-    "nextAction": "Continue reconciling remaining fork changes and the known Apple/LLVM contract gaps. Ruff #30758 and #30759 have merged. PR #30761 remains at its submitted ce523 head pending review of its replacement. The approved e752 amendment is now published on PR #30758. The qualified 31bf list-iteration owner revision has a new review request with its complete range-diff. PR #30761 has a qualified edc8 replacement awaiting user review of its full paired range-diff; the public head remains ce523 until approval. The ce523 approval remains historical. ba712 remains Agent-owned for smaller independent contributions."
+    "nextAction": "Review the qualified standalone in-place NotImplemented and TypedDict.get key-group proposals before upstream submission. PRs #30761 and #30848 publish the delivered 71295c and 50c072 revisions; follow their CI and maintainer feedback. Continue the existing Apple/LLVM contract work and smaller-contribution redesign of the withdrawn fresh-collection proposal.",
   }
 ];
 
