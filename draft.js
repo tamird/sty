@@ -15,10 +15,11 @@ async function draftURL(itemID, draft, currentURL) {
   return url;
 }
 
-function draftReturnURL(currentURL) {
+function draftReturnURL(currentURL, resolvedID) {
   const url = new URL(currentURL);
   url.pathname = new URL("./", url).pathname;
   url.searchParams.delete("draft");
+  if (resolvedID !== undefined) url.hash = encodeURIComponent(resolvedID);
   return url;
 }
 
@@ -29,4 +30,23 @@ async function findDraft(item, key) {
     if (draft?.body && key.startsWith(draft.kind + "-") && await draftKey(draft) === key) return draft;
   }
   return null;
+}
+
+// Registration can move a branch's retained draft history onto its pull request.
+// Only a unique immutable key may recover a link whose original item is absent.
+async function findDraftEntry(items, id, key) {
+  if (!key) return null;
+  const item = items.find(item => item.id === id);
+  if (item) {
+    const draft = await findDraft(item, key);
+    return draft ? { item, draft } : null;
+  }
+  let found = null;
+  for (const item of items) {
+    const draft = await findDraft(item, key);
+    if (!draft) continue;
+    if (found) return null;
+    found = { item, draft };
+  }
+  return found;
 }

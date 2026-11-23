@@ -22,9 +22,10 @@ async function readDraft() {
     if (!response.ok) throw Error("Could not load the work map. Reload to try again.");
     const data = await response.json();
     const id = decodeURIComponent(url.hash.slice(1));
-    const item = [...data.nodes, ...(data.investigations || [])].find(node => node.id === id);
-    const draft = await findDraft(item, url.searchParams.get("draft"));
-    if (!draft) throw Error("This version of the draft is no longer available. Open its card for the current work.");
+    const entry = await findDraftEntry([...data.nodes, ...(data.investigations || [])], id, url.searchParams.get("draft"));
+    if (!entry) throw Error("This version of the draft is no longer available. Open its card for the current work.");
+    const { item, draft } = entry;
+    back.href = draftReturnURL(url, item.id).href;
     const labels = { issue: "Issue", reply: "Reply", review: "Review", proposal: "Pull request", amendment: "PR amendment", submission: "Pull request" };
     const kind = labels[draft.kind] || "Draft";
     document.getElementById("draft-context").textContent = [kind, item.repo || item.title].join(" · ");
