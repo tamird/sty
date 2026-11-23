@@ -195,7 +195,7 @@ const tracker = runInNewContext(readFileSync(new URL('./draft.js', import.meta.u
     return Promise.all(parent.children.filter(child => child.tagName === 'A')
       .map(async anchor => ({ label: anchor.textContent, url: await anchor.hrefReady })));
   },
-  findDraft, refinementComparison,
+  findDraft, findDraftEntry, draftReturnURL, refinementComparison,
   load(data, snapshot) {
     registry = data;
     liveSnapshot = snapshot;
@@ -290,6 +290,25 @@ for (const item of upstream) {
         const links = await tracker.renderSettledLinks(node);
         const reader = new URL(links.find(link => link.label === 'Read approved revision range-diff').url);
         assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), approved);
+        const key = reader.searchParams.get('draft');
+        assert.equal((await tracker.findDraftEntry(nodes, node.id, key)).item, node);
+        if (node.type === 'pr') {
+          const oldBranchID = `branch:${item.id}`;
+          assert.ok(!nodes.some(candidate => candidate.id === oldBranchID));
+          const migrated = await tracker.findDraftEntry(nodes, oldBranchID, key);
+          assert.equal(migrated.item, node, 'A sent branch link resolves after PR registration');
+          assert.equal(migrated.draft, approved, 'Migration preserves the exact retained review text');
+          const oldURL = new URL(reader);
+          oldURL.hash = encodeURIComponent(oldBranchID);
+          oldURL.searchParams.set('group', 'ty');
+          const back = tracker.draftReturnURL(oldURL, migrated.item.id);
+          assert.equal(decodeURIComponent(back.hash.slice(1)), node.id, 'Back and Escape return to the current card');
+          assert.equal(back.searchParams.get('group'), 'ty');
+          assert.equal(back.searchParams.has('draft'), false);
+          assert.equal(await tracker.findDraftEntry(nodes, oldBranchID, key + '-wrong'), null);
+          assert.equal(await tracker.findDraftEntry([node, { ...node, id: 'duplicate-history' }], oldBranchID, key), null,
+            'An ambiguous retained key must not select an unrelated item');
+        }
         assert.ok(approved.body.includes('```diff\n'), 'Approved comparison remains readable without a new decision');
         console.log('RENDERED_APPROVED_HISTORY_READER_URL', reader.href);
       }
