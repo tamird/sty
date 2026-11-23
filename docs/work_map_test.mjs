@@ -275,8 +275,13 @@ for (const item of upstream) {
     renderedReviewLinks.push({ head: item.qualifiedHead, url: links[0].url });
     const approval = item.settledReviews?.findLast(review => ['proposal', 'amendment'].includes(review.kind)
       && review.head === item.qualifiedHead && review.url === item.qualifiedURL);
-    if (approval?.outcome === 'approved') {
-      assert.equal(node.settledReviews.at(-1).outcome, 'approved');
+    const delivery = item.settledReviews?.findLast(review => review.kind === 'amendment'
+      && review.outcome === 'posted' && review.head === item.qualifiedHead && review.url === item.qualifiedURL);
+    if (delivery) assert.ok(item.settledReviews.some(review => review.outcome === 'approved'
+      && review.head === delivery.baseHead && review.url === `https://github.com/tamird/ruff/commit/${delivery.baseHead}`),
+    'Delivered amendments retain the approval of their original contribution');
+    if (approval?.outcome === 'approved' || delivery) {
+      assert.equal(node.settledReviews.at(-1).outcome, delivery ? 'posted' : 'approved');
       assert.equal(node.settledReviews.at(-1).head, item.qualifiedHead);
       assert.deepEqual(node.settledReviews, item.settledReviews, 'The actual node keeps its settled approval');
       if (node.type === 'branch')
@@ -284,7 +289,7 @@ for (const item of upstream) {
           'An exact settled approval must suppress a repeated branch request');
       assert.deepEqual(node.contributorReview, item.contributorReview, 'Old approval only settles its exact proposal head');
       assert.equal(node.humanAction, undefined, 'Submission is already authorized, not a new human task');
-      assert.ok(node.summary.includes(approval.summary), 'Describe the matched exact-head approval, including an approved amendment');
+      assert.ok(node.summary.includes((delivery || approval).summary), 'Describe exact approval or authorized delivery without conflating them');
       const approved = node.settledReviews.find(review => review.outcome === 'approved' && review.body);
       if (approved) {
         const links = await tracker.renderSettledLinks(node);
@@ -311,6 +316,15 @@ for (const item of upstream) {
         }
         assert.ok(approved.body.includes('```diff\n'), 'Approved comparison remains readable without a new decision');
         console.log('RENDERED_APPROVED_HISTORY_READER_URL', reader.href);
+      }
+      if (delivery) {
+        const links = await tracker.renderSettledLinks(node);
+        const reader = new URL(links.find(link => link.label === 'Read delivered amendment range-diff').url);
+        assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), delivery);
+        assert.ok(delivery.body.includes('```diff\n'), 'Delivered source changes retain their actual range-diff');
+        assert.equal(node.settledReviews.some(review => review.head === node.head && review.outcome === 'approved'), false,
+          'Normal delivery does not invent a user approval for the replacement head');
+        console.log('RENDERED_DELIVERED_HISTORY_READER_URL', reader.href);
       }
     } else assert.equal(node.settledReviews, undefined, 'Assessment is not approval');
     if (item.state === 'Submitted') {

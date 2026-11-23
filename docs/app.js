@@ -1923,6 +1923,8 @@ function appendSettledPublications(parent, node) {
   for (const decision of node.settledReviews || []) {
     if (["proposal", "amendment"].includes(decision.kind) && decision.outcome === "approved" && decision.body)
       parent.append(readDraftLink(node, decision, "Read approved revision range-diff"));
+    if (decision.kind === "amendment" && decision.outcome === "posted" && decision.body)
+      parent.append(readDraftLink(node, decision, "Read delivered amendment range-diff"));
     const url = safeURL(decision.postedURL);
     if (Object.hasOwn(labels, decision.kind) && url) {
       const evidence = node.evidence?.find(item => item.url === url);

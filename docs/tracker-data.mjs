@@ -52,9 +52,14 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
     if (item.qualifiedHead) {
       const approval = item.settledReviews?.findLast(review => ['proposal', 'amendment'].includes(review.kind)
         && review.head === item.qualifiedHead && review.url === item.qualifiedURL);
+      const delivery = item.settledReviews?.findLast(review => review.kind === 'amendment'
+        && review.outcome === 'posted' && review.head === item.qualifiedHead && review.url === item.qualifiedURL
+        && item.settledReviews.some(approved => ['proposal', 'amendment'].includes(approved.kind)
+          && approved.outcome === 'approved' && approved.head === review.baseHead
+          && approved.url === `https://github.com/tamird/ruff/commit/${review.baseHead}`));
       const permission = approval?.outcome === 'approved'
         ? approval.summary || 'Tamir approved this exact commit for upstream submission.'
-        : 'This proposal is not approved for upstream submission.';
+        : delivery?.summary || 'This proposal is not approved for upstream submission.';
       node.head = item.qualifiedHead;
       node.summary = `${item.summary}\n\n${item.qualification?.summary || ''}\n\n${permission}`;
       node.evidence.push(...(item.qualification?.evidence || []));
