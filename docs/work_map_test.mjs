@@ -349,7 +349,7 @@ for (const item of upstream) {
     assert.equal(node.contributorReview, undefined, 'Outstanding feedback must not request approval of the old proposal');
     assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
   }
-  if (item.state !== 'Awaiting Tamir review') continue;
+  if (item.state !== 'Awaiting Tamir review' || item.number) continue;
   const node = nodes.find(node => node.id === `branch:${item.id}`);
   assert.equal(node.ref, item.ref, 'Each proposal needs its own published branch');
   assert.equal(node.followup, undefined, 'Qualified proposals need one contributor decision, without a duplicate agent task');

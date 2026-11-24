@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-24T15:35:22.719833Z",
+    "updatedAt": "2026-11-24T18:46:59.905Z",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -1091,19 +1091,23 @@
       "group": "ty",
       "status": "open",
       "url": "https://github.com/astral-sh/ruff/pull/30898",
-      "summary": "Tamir approved exact 0af5b7f2e, submitted as Ruff #30898. When an in-place operator returns NotImplemented, use ordinary or reflected binary dispatch instead of assigning the sentinel. Retain other return alternatives and unsupported-operand errors.\n\nMatched current-base regression fails before the correction and passes after it. Whole augmented-assignment fixture, all 532 default Markdown fixtures, core 86, semantic 539 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy pass. No network-enabled mode qualification or performance claim.\n\nTamir approved exact 0af5b7f2e for upstream submission; it is submitted as Ruff #30898.",
+      "summary": "Arithmetic NotImplemented amendment 88b15ebe is qualified; review its range-diff before updating PR #30898.\n\nNative suites, all 532 Markdown tests, canonical hooks, formatting and strict Clippy pass on 88b15ebe. Both regression fixtures fail on published 0af5b7f2e.\n\nTamir approved exact 0af5b7f2e for upstream submission; it is submitted as Ruff #30898.",
       "evidence": [
         {
-          "label": "Submitted Ruff PR #30898",
-          "url": "https://github.com/astral-sh/ruff/pull/30898"
+          "label": "Qualified arithmetic amendment 88b15ebe",
+          "url": "https://github.com/tamird/ruff/commit/88b15ebe27958d0cdac952904b9f4d497c0a0d18"
         },
         {
-          "label": "Qualified standalone in-place fallback commit",
-          "url": "https://github.com/tamird/ruff/commit/0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9"
+          "label": "Native suites, full Markdown and strict style qualification",
+          "url": "https://app.buildbuddy.io/invocation/f6a9e652-fe1f-4866-b3f2-251ac7fa181d"
         },
         {
-          "label": "Matched regression, whole fixture, full Markdown and native/style qualification",
-          "url": "https://app.buildbuddy.io/invocation/e19deaea-67f1-41bf-95bf-ac212d18d525"
+          "label": "Published 0af regression controls",
+          "url": "https://app.buildbuddy.io/invocation/dd07a677-6774-4678-89c6-55ccc1bb30fb"
+        },
+        {
+          "label": "Alex: ordinary dunders and annotation conventions",
+          "url": "https://github.com/astral-sh/ruff/pull/30898#issuecomment-7136569495"
         }
       ],
       "head": "0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
@@ -1120,10 +1124,23 @@
           "outcome": "approved"
         }
       ],
-      "followup": {
-        "owner": "Agent",
-        "sourceHead": "0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
-        "nextAction": "Follow current-head CI and maintainer feedback on PR #30898."
+      "contributorReview": {
+        "kind": "amendment",
+        "status": "pending",
+        "head": "88b15ebe27958d0cdac952904b9f4d497c0a0d18",
+        "baseHead": "0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9",
+        "url": "https://github.com/tamird/ruff/commit/88b15ebe27958d0cdac952904b9f4d497c0a0d18",
+        "title": "Review the arithmetic amendment for PR #30898",
+        "summary": "Approve replacing published 0af5b7f2e with qualified 88b15ebe. The original proposal approval is retained separately.",
+        "body": "Review the replacement for Ruff #30898: published `0af5b7f2e` → proposed `88b15ebe27`. Both commits use upstream `3f63e8b36` as their base.\n\nThe revision handles `NotImplemented` in ordinary and reflected arithmetic as well as augmented assignments. Existing successful-result annotations and parameter-based fallback remain supported. Direct method calls retain their original return types. Callability errors block reflection; methods on two operands with the same known runtime class are not retried as reflected calls.\n\nThe original two regression fixtures fail on published `0af5b7f2e`. The candidate passes core 86, semantic 539 (35 ignored), IDE 1,964, all 532 default Markdown tests, canonical hooks, formatting and strict Clippy. [Qualification](https://app.buildbuddy.io/invocation/f6a9e652-fe1f-4866-b3f2-251ac7fa181d); [published-head controls](https://app.buildbuddy.io/invocation/dd07a677-6774-4678-89c6-55ccc1bb30fb).\n\n[Read the complete proposed commit](https://github.com/tamird/ruff/commit/88b15ebe27958d0cdac952904b9f4d497c0a0d18).\n\n## Changes from the submitted commit\n\nThis is Git's actual paired range-diff of the two single-commit proposals.\n\n```sh\ngit range-diff --no-color --no-dual-color --creation-factor=999 3f63e8b368924bb58875a7590e07f667805839a5..0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9 3f63e8b368924bb58875a7590e07f667805839a5..88b15ebe27958d0cdac952904b9f4d497c0a0d18\n```\n\n```diff\n1:  0af5b7f2e0 ! 1:  88b15ebe27 [ty] Honor NotImplemented in augmented assignments\n    @@ Metadata\n     Author: Tamir Duberstein <tamird@gmail.com>\n     \n      ## Commit message ##\n    -    [ty] Honor NotImplemented in augmented assignments\n    +    [ty] Honor NotImplemented in binary operators\n     \n    -    An in-place method can return NotImplemented to request the ordinary\n    -    binary operation. That result was instead assigned to the target,\n    -    bypassing ordinary and reflected dispatch and missing unsupported-operand\n    -    errors.\n    +    Binary dispatch stopped when a method returned NotImplemented, so\n    +    arithmetic could infer the sentinel instead of trying a reflected method\n    +    or reporting an unsupported operation. The in-place fallback could\n    +    expose the same result after __iadd__ declined.\n     \n    -    Remove the sentinel alternatives and use the existing binary dispatch for\n    -    them. Retain other return alternatives and the fallback for conditionally\n    -    defined in-place methods.\n    +    Treat NotImplemented as a request to continue dispatch, preserving other\n    +    return alternatives when fallback succeeds. Conditionally defined\n    +    methods also retain their own return types alongside the fallback. Reuse\n    +    this partition for in-place results. Keep original call bindings for\n    +    navigation and retain deprecation warnings from methods that decline the\n    +    operation.\n    +\n    +    Distinguish unavailable methods from methods that may not be callable;\n    +    the latter can raise before reflection. Suppress reflected calls when\n    +    both operands have the same exact runtime class [1]. This includes\n    +    different specializations of a final generic class.\n    +\n    +    Conventional successful-result annotations and parameter-based fallback\n    +    remain supported; direct method calls keep their annotated or inferred\n    +    return types. This does not change the annotation validation discussed\n    +    in [2].\n    +\n    +    [1]: https://docs.python.org/3/reference/datamodel.html#object.__radd__\n    +    [2]: https://github.com/astral-sh/ty/issues/1150\n     \n      ## crates/ty_python_semantic/resources/mdtest/assignment/augmented.md ##\n     @@ crates/ty_python_semantic/resources/mdtest/assignment/augmented.md: x += \"Hello\"\n    @@ crates/ty_python_semantic/resources/mdtest/assignment/augmented.md: x += \"Hello\"\n     +Returning `NotImplemented` requests ordinary binary dispatch, including the reflected method. The\n     +sentinel is never assigned to the target; other in-place return alternatives are retained.\n     +\n    ++```toml\n    ++[analysis]\n    ++return-type-inference = \"always\"\n    ++```\n    ++\n     +```py\n     +from types import NotImplementedType\n    ++from typing import final\n     +\n     +InPlaceResult = int | NotImplementedType\n     +\n    ++@final\n     +class Left:\n    -+    def __iadd__(self, other: object) -> NotImplementedType:\n    ++    def __iadd__(self, other: object):\n     +        return NotImplemented\n     +\n     +    def __add__(self, other: int) -> str:\n     +        return \"added\"\n     +\n     +class Right:\n    -+    def __radd__(self, other: Left) -> bytes:\n    ++    def __radd__(self, other: object) -> bytes:\n     +        return b\"reflected\"\n     +\n     +left = Left()\n    @@ crates/ty_python_semantic/resources/mdtest/assignment/augmented.md: x += \"Hello\"\n     +mixed = Mixed()\n     +mixed += 1\n     +reveal_type(mixed)  # revealed: int | str\n    ++\n    ++@final\n    ++class Declines:\n    ++    def __iadd__(self, other: object) -> NotImplementedType:\n    ++        return NotImplemented\n    ++\n    ++    def __add__(self, other: object):\n    ++        return NotImplemented\n    ++\n    ++both = Declines()\n    ++both += Right()\n    ++reveal_type(both)  # revealed: bytes\n     +```\n     +\n      ## Unsupported types\n      \n      ```py\n     \n    + ## crates/ty_python_semantic/resources/mdtest/binary/instances.md ##\n    +@@ crates/ty_python_semantic/resources/mdtest/binary/instances.md: class GenericChild(GenericBase[T]):\n    + def add_generic(left: GenericBase[int], right: GenericChild[str]) -> Literal[\"left\", \"right\"]:\n    +     reveal_type(left + right)  # revealed: Literal[\"right\", \"left\"]\n    +     return left + right\n    ++\n    ++from types import NotImplementedType\n    ++from typing import final\n    ++\n    ++@final\n    ++class Box(Generic[T]):\n    ++    value: T\n    ++\n    ++    def __add__(self, other: object) -> NotImplementedType:\n    ++        return NotImplemented\n    ++\n    ++    def __radd__(self, other: object) -> int:\n    ++        return 1\n    ++\n    ++def same_runtime_class(left: Box[int], right: Box[str]):\n    ++    # error: [unsupported-operator]\n    ++    reveal_type(left + right)  # revealed: Unknown\n    + ```\n    + \n    + ## Class objects use their metaclasses for reflected precedence\n    +@@ crates/ty_python_semantic/resources/mdtest/binary/instances.md: class B:\n    + reveal_type(A() - B())  # revealed: B\n    + ```\n    + \n    ++## Methods returning `NotImplemented`\n    ++\n    ++An explicit or inferred `NotImplemented` return tries the next method. Direct calls retain the\n    ++method's return type:\n    ++\n    ++```toml\n    ++[analysis]\n    ++return-type-inference = \"always\"\n    ++```\n    ++\n    ++```py\n    ++from types import NotImplementedType\n    ++from typing import final\n    ++\n    ++class Reflected:\n    ++    def __radd__(self, other: object) -> int:\n    ++        return 1\n    ++\n    ++@final\n    ++class Inferred:\n    ++    def __add__(self, other: object):\n    ++        if isinstance(other, bytes):\n    ++            return other\n    ++        return NotImplemented\n    ++\n    ++reveal_type(Inferred().__add__(Reflected()))  # revealed: bytes | NotImplementedType\n    ++reveal_type(Inferred() + Reflected())  # revealed: bytes | int\n    ++\n    ++# error: [unsupported-operator]\n    ++reveal_type(Inferred() + object())  # revealed: Unknown\n    ++\n    ++class Declines:\n    ++    def __add__(self, other: object) -> NotImplementedType:\n    ++        return NotImplemented\n    ++\n    ++    def __radd__(self, other: object) -> int:\n    ++        return 1\n    ++\n    ++reveal_type(Declines() + Reflected())  # revealed: int\n    ++\n    ++# Reflected methods are not tried for two operands of the same runtime type.\n    ++# error: [unsupported-operator]\n    ++reveal_type(Declines() + Declines())  # revealed: Unknown\n    ++\n    ++class Refuses:\n    ++    def __radd__(self, other: object) -> NotImplementedType:\n    ++        return NotImplemented\n    ++\n    ++# error: [unsupported-operator]\n    ++reveal_type(Declines() + Refuses())  # revealed: Unknown\n    ++\n    ++class Blocked:\n    ++    __add__ = None\n    ++\n    ++# A non-callable method raises instead of trying the reflected method.\n    ++# error: [unsupported-operator]\n    ++reveal_type(Blocked() + Reflected())  # revealed: Unknown\n    ++```\n    ++\n    + ## Callable instances as dunders\n    + \n    + Believe it or not, this is supported at runtime:\n    +\n    + ## crates/ty_python_semantic/src/types/call.rs ##\n    +@@ crates/ty_python_semantic/src/types/call.rs: impl<'db> OperatorResult<'db> {\n    +         db: &'db dyn Db,\n    +         env: &ProgramEnvironment<'db>,\n    +         bindings: &Bindings<'db>,\n    ++    ) -> Self {\n    ++        Self::from_bindings_and_return_type(db, bindings, bindings.return_type(db, env))\n    ++    }\n    ++\n    ++    fn from_bindings_and_return_type(\n    ++        db: &'db dyn Db,\n    ++        bindings: &Bindings<'db>,\n    ++        return_type: Type<'db>,\n    +     ) -> Self {\n    +         Self {\n    +-            return_type: bindings.return_type(db, env),\n    ++            return_type,\n    +             deprecated_functions: bindings\n    +                 .deprecated_functions(db)\n    +                 .map(|(_, function)| function)\n    +@@ crates/ty_python_semantic/src/types/call.rs: impl<'db> OperatorResult<'db> {\n    +     }\n    + }\n    + \n    ++/// The methods called by a binary operation and its result after `NotImplemented` fallback.\n    ++///\n    ++/// Method bindings retain their original return types for IDE navigation. Arithmetic syntax\n    ++/// uses a separate result after `NotImplemented` fallback.\n    ++pub(crate) struct BinaryOperatorCall<'db> {\n    ++    pub(super) bindings: Bindings<'db>,\n    ++    pub(super) return_type: Type<'db>,\n    ++}\n    ++\n    ++impl<'db> BinaryOperatorCall<'db> {\n    ++    fn union(self, db: &'db dyn Db, env: &ProgramEnvironment<'db>, other: Self) -> Self {\n    ++        let Self {\n    ++            bindings: left,\n    ++            return_type: left_type,\n    ++        } = self;\n    ++        let Self {\n    ++            bindings: right,\n    ++            return_type: right_type,\n    ++        } = other;\n    ++        let callable_type =\n    ++            UnionType::from_two_elements(db, env, left.callable_type(), right.callable_type());\n    ++        Self {\n    ++            bindings: Bindings::from_union(callable_type, [left, right]),\n    ++            return_type: UnionType::from_two_elements(db, env, left_type, right_type),\n    ++        }\n    ++    }\n    ++\n    ++    pub(super) fn into_result(self, db: &'db dyn Db) -> OperatorResult<'db> {\n    ++        let Self {\n    ++            bindings,\n    ++            return_type,\n    ++        } = self;\n    ++        OperatorResult::from_bindings_and_return_type(db, &bindings, return_type)\n    ++    }\n    ++}\n    ++\n    ++#[expect(\n    ++    clippy::large_enum_variant,\n    ++    reason = \"Boxing adds an allocation to each successful call\"\n    ++)]\n    ++enum OperatorCallOutcome<'db> {\n    ++    Called {\n    ++        call: BinaryOperatorCall<'db>,\n    ++        /// The method can return `NotImplemented` or may not be defined at runtime.\n    ++        may_fall_through: bool,\n    ++    },\n    ++    Unavailable,\n    ++    Blocked,\n    ++}\n    ++\n    ++impl<'db> OperatorCallOutcome<'db> {\n    ++    fn into_error(self, db: &'db dyn Db) -> CallBinOpError<'db> {\n    ++        match self {\n    ++            Self::Called {\n    ++                call,\n    ++                may_fall_through: _,\n    ++            } => CallBinOpError::from_call(db, call),\n    ++            Self::Unavailable => CallBinOpError::default(),\n    ++            Self::Blocked => CallBinOpError::default(),\n    ++        }\n    ++    }\n    ++}\n    ++\n    ++fn operator_call_outcome<'db>(\n    ++    db: &'db dyn Db,\n    ++    env: &ProgramEnvironment<'db>,\n    ++    call: Result<Bindings<'db>, CallDunderError<'db>>,\n    ++) -> OperatorCallOutcome<'db> {\n    ++    let (bindings, possibly_unbound) = match call {\n    ++        Ok(bindings) => (bindings, false),\n    ++        Err(error) => match error {\n    ++            CallDunderError::PossiblyUnbound {\n    ++                bindings,\n    ++                unbound_on: _,\n    ++            } => (*bindings, true),\n    ++            CallDunderError::MethodNotAvailable => return OperatorCallOutcome::Unavailable,\n    ++            CallDunderError::CallError(kind, _, _) => match kind {\n    ++                // Calling a non-callable method can raise before reflection, even if other\n    ++                // possible method types are callable.\n    ++                CallErrorKind::NotCallable => return OperatorCallOutcome::Blocked,\n    ++                CallErrorKind::PossiblyNotCallable => return OperatorCallOutcome::Blocked,\n    ++                // Keep parameter-based fallback for the existing annotation convention.\n    ++                CallErrorKind::BindingError => return OperatorCallOutcome::Unavailable,\n    ++            },\n    ++        },\n    ++    };\n    ++    let (return_type, may_decline) = bindings.return_type(db, env).split_not_implemented(db, env);\n    ++    OperatorCallOutcome::Called {\n    ++        call: BinaryOperatorCall {\n    ++            bindings,\n    ++            return_type,\n    ++        },\n    ++        may_fall_through: may_decline || possibly_unbound,\n    ++    }\n    ++}\n    ++\n    ++fn resolve_ordered_operator_calls<'db>(\n    ++    db: &'db dyn Db,\n    ++    env: &ProgramEnvironment<'db>,\n    ++    first: OperatorCallOutcome<'db>,\n    ++    fallback: impl FnOnce() -> OperatorCallOutcome<'db>,\n    ++) -> Result<BinaryOperatorCall<'db>, CallBinOpError<'db>> {\n    ++    let first = match first {\n    ++        OperatorCallOutcome::Called {\n    ++            call,\n    ++            may_fall_through,\n    ++        } => {\n    ++            if !may_fall_through {\n    ++                return Ok(call);\n    ++            }\n    ++            Some(call)\n    ++        }\n    ++        OperatorCallOutcome::Unavailable => None,\n    ++        OperatorCallOutcome::Blocked => return Err(CallBinOpError::default()),\n    ++    };\n    ++    match fallback() {\n    ++        OperatorCallOutcome::Called {\n    ++            call: second,\n    ++            may_fall_through,\n    ++        } => {\n    ++            let call = match first {\n    ++                Some(first) => first.union(db, env, second),\n    ++                None => second,\n    ++            };\n    ++            if may_fall_through {\n    ++                Err(CallBinOpError::from_call(db, call))\n    ++            } else {\n    ++                Ok(call)\n    ++            }\n    ++        }\n    ++        OperatorCallOutcome::Unavailable => Err(match first {\n    ++            Some(call) => CallBinOpError::from_call(db, call),\n    ++            None => CallBinOpError::default(),\n    ++        }),\n    ++        OperatorCallOutcome::Blocked => Err(match first {\n    ++            Some(call) => CallBinOpError::from_call(db, call),\n    ++            None => CallBinOpError::default(),\n    ++        }),\n    ++    }\n    ++}\n    ++\n    ++fn resolve_possible_operator_calls<'db>(\n    ++    db: &'db dyn Db,\n    ++    env: &ProgramEnvironment<'db>,\n    ++    first: OperatorCallOutcome<'db>,\n    ++    second: OperatorCallOutcome<'db>,\n    ++) -> Result<BinaryOperatorCall<'db>, CallBinOpError<'db>> {\n    ++    let (call, may_fall_through) = match first {\n    ++        OperatorCallOutcome::Blocked => return Err(second.into_error(db)),\n    ++        OperatorCallOutcome::Unavailable => match second {\n    ++            OperatorCallOutcome::Called {\n    ++                call,\n    ++                may_fall_through,\n    ++            } => (call, may_fall_through),\n    ++            OperatorCallOutcome::Unavailable => return Err(CallBinOpError::default()),\n    ++            OperatorCallOutcome::Blocked => return Err(CallBinOpError::default()),\n    ++        },\n    ++        OperatorCallOutcome::Called {\n    ++            call: first,\n    ++            may_fall_through: first_declines,\n    ++        } => match second {\n    ++            OperatorCallOutcome::Called {\n    ++                call: second,\n    ++                may_fall_through: second_declines,\n    ++            } => (\n    ++                first.union(db, env, second),\n    ++                first_declines && second_declines,\n    ++            ),\n    ++            OperatorCallOutcome::Unavailable => (first, first_declines),\n    ++            OperatorCallOutcome::Blocked => return Err(CallBinOpError::from_call(db, first)),\n    ++        },\n    ++    };\n    ++    if may_fall_through {\n    ++        Err(CallBinOpError::from_call(db, call))\n    ++    } else {\n    ++        Ok(call)\n    ++    }\n    ++}\n    ++\n    + /// Whether the right operand's reflected method has priority based on the possible runtime\n    + /// classes of both operands.\n    + ///\n    +@@ crates/ty_python_semantic/src/types/call.rs: fn reflected_method_priority<'db>(\n    + }\n    + \n    + impl<'db> Type<'db> {\n    ++    /// Separate operator result values from a request to try another method.\n    ++    pub(super) fn split_not_implemented(\n    ++        self,\n    ++        db: &'db dyn Db,\n    ++        env: &ProgramEnvironment<'db>,\n    ++    ) -> (Self, bool) {\n    ++        let expanded = self.expand_top_level_aliases(db, env);\n    ++        let completing = match expanded {\n    ++            Type::Union(union) => union.filter(db, |ty| !ty.is_notimplemented(db)),\n    ++            ty => {\n    ++                if ty.is_notimplemented(db) {\n    ++                    Type::Never\n    ++                } else {\n    ++                    ty\n    ++                }\n    ++            }\n    ++        };\n    ++        if completing == expanded {\n    ++            (self, false)\n    ++        } else {\n    ++            (completing, true)\n    ++        }\n    ++    }\n    ++\n    +     /// Return the result of dispatching a rich comparison method between two operands.\n    +     ///\n    +     /// A strict subclass on the right takes precedence over the normal method on the left.\n    +@@ crates/ty_python_semantic/src/types/call.rs: impl<'db> Type<'db> {\n    + \n    +     /// Memoize the return type and deprecations from binary dunder resolution, without retaining\n    +     /// the full call bindings or repeating overload selection at each expression.\n    +-    /// Returns `None` if resolution fails; callers remain responsible for call-site diagnostics.\n    ++    /// Failed resolution retains called-method metadata;\n    ++    /// callers remain responsible for call-site diagnostics.\n    +     pub(crate) fn try_call_bin_op_result(\n    +         db: &'db dyn Db,\n    +         env: &ProgramEnvironment<'db>,\n    +         left_ty: Type<'db>,\n    +         op: ast::Operator,\n    +         right_ty: Type<'db>,\n    +-    ) -> Option<&'db OperatorResult<'db>> {\n    +-        #[salsa::tracked(returns(ref), cycle_initial=|_, _, _, _, _, _, _| None, heap_size=ruff_memory_usage::heap_size)]\n    ++    ) -> Result<&'db OperatorResult<'db>, &'db CallBinOpError<'db>> {\n    ++        #[salsa::tracked(returns(ref), cycle_initial=|_, _, _, _, _, _, _| Err(CallBinOpError::default()), heap_size=ruff_memory_usage::heap_size)]\n    +         fn try_call_bin_op_result_impl<'db>(\n    +             db: &'db dyn Db,\n    +             program: Program<'db>,\n    +             left_ty: Type<'db>,\n    +             op: ast::Operator,\n    +             right_ty: Type<'db>,\n    +-        ) -> Option<OperatorResult<'db>> {\n    ++        ) -> Result<OperatorResult<'db>, CallBinOpError<'db>> {\n    +             let env = &ProgramEnvironment::from_program(program);\n    +-            Type::try_call_bin_op(db, env, left_ty, op, right_ty)\n    +-                .ok()\n    +-                .map(|bindings| OperatorResult::from_bindings(db, env, &bindings))\n    ++            Type::try_call_bin_op(db, env, left_ty, op, right_ty).map(|call| call.into_result(db))\n    +         }\n    + \n    +         try_call_bin_op_result_impl(db, env.program(db), left_ty, op, right_ty).as_ref()\n    +@@ crates/ty_python_semantic/src/types/call.rs: impl<'db> Type<'db> {\n    +         left_ty: Type<'db>,\n    +         op: ast::Operator,\n    +         right_ty: Type<'db>,\n    +-    ) -> Result<Bindings<'db>, CallBinOpError> {\n    ++    ) -> Result<BinaryOperatorCall<'db>, CallBinOpError<'db>> {\n    +         Self::try_call_bin_op_with_policy(\n    +             db,\n    +             env,\n    +@@ crates/ty_python_semantic/src/types/call.rs: impl<'db> Type<'db> {\n    +         op: ast::Operator,\n    +         right_ty: Type<'db>,\n    +         policy: MemberLookupPolicy,\n    +-    ) -> Result<Bindings<'db>, CallBinOpError> {\n    +-        // We either want to call lhs.__op__ or rhs.__rop__. The full decision tree from\n    +-        // the Python spec [1] is:\n    +-        //\n    +-        //   - If rhs is a (proper) subclass of lhs, and it provides a different\n    +-        //     implementation of __rop__, use that.\n    +-        //   - Otherwise, if lhs implements __op__, use that.\n    +-        //   - Otherwise, if lhs and rhs are different types, and rhs implements __rop__,\n    +-        //     use that.\n    +-        //\n    +-        // [1] https://docs.python.org/3/reference/datamodel.html#object.__radd__\n    +-\n    +-        // Runtime classes determine reflected priority, but static operand types may only\n    +-        // establish that priority conditionally.\n    ++    ) -> Result<BinaryOperatorCall<'db>, CallBinOpError<'db>> {\n    ++        // A different reflected implementation on a proper subclass is tried first.\n    ++        // A method that returns NotImplemented lets the next method run; parameter\n    ++        // binding failures retain their existing fallback behavior.\n    ++        let call_dunder = |receiver: Type<'db>, argument: Type<'db>, name| {\n    ++            operator_call_outcome(\n    ++                db,\n    ++                env,\n    ++                receiver.try_call_dunder_with_policy(\n    ++                    db,\n    ++                    env,\n    ++                    name,\n    ++                    &mut CallArguments::positional([argument]),\n    ++                    TypeContext::default(),\n    ++                    policy,\n    ++                ),\n    ++            )\n    ++        };\n    ++        let call_left = || call_dunder(left_ty, right_ty, op.dunder());\n    ++        let call_right = || {\n    ++            if left_ty == right_ty {\n    ++                return OperatorCallOutcome::Unavailable;\n    ++            }\n    ++            // Different specializations can still have the same exact runtime class.\n    ++            let same_runtime_class = has_exact_runtime_class(db, env, left_ty)\n    ++                && has_exact_runtime_class(db, env, right_ty)\n    ++                && operator_dispatch_class(db, env, left_ty)\n    ++                    .zip(operator_dispatch_class(db, env, right_ty))\n    ++                    .is_some_and(|(left, right)| left.class_literal(db) == right.class_literal(db));\n    ++            if same_runtime_class {\n    ++                OperatorCallOutcome::Unavailable\n    ++            } else {\n    ++                call_dunder(right_ty, left_ty, op.reflected_dunder())\n    ++            }\n    ++        };\n    +         let reflected_priority = reflected_method_priority(db, env, left_ty, right_ty);\n    +-\n    +-        let left_class = left_ty.to_meta_type(db, env);\n    +-        let right_class = right_ty.to_meta_type(db, env);\n    +         if reflected_priority != ReflectedMethodPriority::Never {\n    +             let reflected_dunder = op.reflected_dunder();\n    ++            let left_class = left_ty.to_meta_type(db, env);\n    ++            let right_class = right_ty.to_meta_type(db, env);\n    +             let rhs_reflected = right_class.member(db, env, reflected_dunder).place;\n    +-            // TODO: if `rhs_reflected` is possibly unbound, we should union the two possible\n    +-            // Bindings together\n    +             if !rhs_reflected.is_undefined()\n    +                 && !rhs_reflected.is_equal_ignoring_provenance(\n    +                     left_class.member(db, env, reflected_dunder).place,\n    +                 )\n    +             {\n    +-                let call_on_right_instance = right_ty.try_call_dunder_with_policy(\n    +-                    db,\n    +-                    env,\n    +-                    reflected_dunder,\n    +-                    &mut CallArguments::positional([left_ty]),\n    +-                    TypeContext::default(),\n    +-                    policy,\n    +-                );\n    +-\n    +                 if reflected_priority == ReflectedMethodPriority::Definitely {\n    +-                    return Ok(call_on_right_instance.or_else(|_| {\n    +-                        left_ty.try_call_dunder_with_policy(\n    +-                            db,\n    +-                            env,\n    +-                            op.dunder(),\n    +-                            &mut CallArguments::positional([right_ty]),\n    +-                            TypeContext::default(),\n    +-                            policy,\n    +-                        )\n    +-                    })?);\n    ++                    return resolve_ordered_operator_calls(db, env, call_right(), call_left);\n    +                 }\n    +-\n    +-                let call_on_left_instance = left_ty.try_call_dunder_with_policy(\n    +-                    db,\n    +-                    env,\n    +-                    op.dunder(),\n    +-                    &mut CallArguments::positional([right_ty]),\n    +-                    TypeContext::default(),\n    +-                    policy,\n    +-                );\n    +-\n    +-                return match (call_on_right_instance, call_on_left_instance) {\n    +-                    (Ok(right_bindings), Ok(left_bindings)) => {\n    +-                        let callable_type = UnionType::from_two_elements(\n    +-                            db,\n    +-                            env,\n    +-                            right_bindings.callable_type(),\n    +-                            left_bindings.callable_type(),\n    +-                        );\n    +-                        Ok(Bindings::from_union(\n    +-                            callable_type,\n    +-                            [right_bindings, left_bindings],\n    +-                        ))\n    +-                    }\n    +-                    (Ok(bindings), Err(_)) | (Err(_), Ok(bindings)) => Ok(bindings),\n    +-                    (Err(_), Err(error)) => Err(error.into()),\n    +-                };\n    ++                // Either method may have runtime priority. Both are evaluated once; if\n    ++                // either always completes, neither ordering can exhaust both methods.\n    ++                return resolve_possible_operator_calls(db, env, call_right(), call_left());\n    +             }\n    +         }\n    +-\n    +-        let call_on_left_instance = left_ty.try_call_dunder_with_policy(\n    +-            db,\n    +-            env,\n    +-            op.dunder(),\n    +-            &mut CallArguments::positional([right_ty]),\n    +-            TypeContext::default(),\n    +-            policy,\n    +-        );\n    +-\n    +-        call_on_left_instance.or_else(|_| {\n    +-            if left_ty == right_ty {\n    +-                Err(CallBinOpError::NotSupported)\n    +-            } else {\n    +-                Ok(right_ty.try_call_dunder_with_policy(\n    +-                    db,\n    +-                    env,\n    +-                    op.reflected_dunder(),\n    +-                    &mut CallArguments::positional([left_ty]),\n    +-                    TypeContext::default(),\n    +-                    policy,\n    +-                )?)\n    +-            }\n    +-        })\n    ++        resolve_ordered_operator_calls(db, env, call_left(), call_right)\n    +     }\n    + }\n    + \n    +@@ crates/ty_python_semantic/src/types/call.rs: impl<'db> CallDunderError<'db> {\n    +     }\n    + }\n    + \n    +-#[derive(Debug)]\n    +-pub(crate) enum CallBinOpError {\n    +-    /// The dunder attribute exists but it can't be called with the given arguments.\n    +-    ///\n    +-    /// This includes non-callable dunder attributes that are possibly unbound.\n    +-    CallError,\n    +-\n    +-    NotSupported,\n    ++/// Called-method metadata retained when a binary operation is unsupported.\n    ++#[derive(Clone, Debug, Default, PartialEq, Eq, get_size2::GetSize, salsa::SalsaValue)]\n    ++pub(crate) struct CallBinOpError<'db> {\n    ++    /// Includes methods that were called but returned only `NotImplemented`.\n    ++    pub(super) deprecated_functions: Box<[OverloadLiteral<'db>]>,\n    + }\n    + \n    +-impl From<CallDunderError<'_>> for CallBinOpError {\n    +-    fn from(value: CallDunderError<'_>) -> Self {\n    +-        match value {\n    +-            CallDunderError::CallError(_, _, _) => Self::CallError,\n    +-            CallDunderError::MethodNotAvailable | CallDunderError::PossiblyUnbound { .. } => {\n    +-                CallBinOpError::NotSupported\n    +-            }\n    ++impl<'db> CallBinOpError<'db> {\n    ++    fn from_call(db: &'db dyn Db, call: BinaryOperatorCall<'db>) -> Self {\n    ++        Self {\n    ++            deprecated_functions: call.into_result(db).deprecated_functions,\n    +         }\n    +     }\n    + }\n    +\n    + ## crates/ty_python_semantic/src/types/ide_support.rs ##\n    +@@ crates/ty_python_semantic/src/types/ide_support.rs: pub fn definitions_for_bin_op<'db>(\n    +     let left_ty = binary_op.left.inferred_type(model)?;\n    +     let right_ty = binary_op.right.inferred_type(model)?;\n    +     let env = &model.program_environment();\n    +-    let Ok(bindings) = Type::try_call_bin_op(db, env, left_ty, binary_op.op, right_ty) else {\n    ++    let Ok(call) = Type::try_call_bin_op(db, env, left_ty, binary_op.op, right_ty) else {\n    +         return None;\n    +     };\n    ++    let bindings = call.bindings;\n    + \n    +     let callable_type = promote_for_self(db, env, bindings.callable_type());\n    + \n    +\n      ## crates/ty_python_semantic/src/types/infer/builder.rs ##\n     @@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {\n                          &mut |builder, (_, _, tcx)| infer_value_ty(builder, tcx),\n    @@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInfere\n                                  value_ty,\n                              );\n     -                        Err(bindings.return_type(db, env))\n    -+                        return Err(bindings.return_type(db, env));\n    ++                        let (return_type, may_decline) =\n    ++                            bindings.return_type(db, env).split_not_implemented(db, env);\n    ++                        return Err(if may_decline {\n    ++                            UnionType::from_two_elements(db, env, return_type, Type::unknown())\n    ++                        } else {\n    ++                            return_type\n    ++                        });\n                          }\n     +                };\n     +                state.deprecated_functions.extend(\n    @@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInfere\n     +                        .map(|(_, function)| function),\n     +                );\n     +\n    -+                // Returning NotImplemented requests the ordinary binary operation; it is\n    -+                // never assigned back to the target. Other return alternatives still apply.\n    -+                let return_ty = outcome.return_type(db, env);\n    -+                let expanded_return_ty = return_ty.expand_top_level_aliases(db, env);\n    -+                let assigned_ty = match expanded_return_ty {\n    -+                    Type::Union(union) => union.filter(db, |ty| !ty.is_notimplemented(db)),\n    -+                    ty => {\n    -+                        if ty.is_notimplemented(db) {\n    -+                            Type::Never\n    -+                        } else {\n    -+                            ty\n    -+                        }\n    -+                    }\n    -+                };\n    -+                let assigned_ty = if assigned_ty == expanded_return_ty {\n    -+                    if !possibly_unbound {\n    -+                        return Ok(return_ty);\n    -+                    }\n    -+                    return_ty\n    -+                } else {\n    -+                    assigned_ty\n    -+                };\n    ++                let (assigned_ty, may_decline) =\n    ++                    outcome.return_type(db, env).split_not_implemented(db, env);\n    ++                if !possibly_unbound && !may_decline {\n    ++                    return Ok(assigned_ty);\n    ++                }\n     +\n     +                let value_ty = outcome.type_for_argument(&call_arguments, 0);\n     +                match binary_return_ty(self, value_ty, state) {\n    @@ crates/ty_python_semantic/src/types/infer/builder.rs: impl<'db, 'ast> TypeInfere\n                      }\n                  }\n              }\n    +\n    + ## crates/ty_python_semantic/src/types/infer/builder/binary_expressions.rs ##\n    +@@ crates/ty_python_semantic/src/types/infer/builder/binary_expressions.rs: use compact_str::CompactString;\n    + use ruff_python_ast::{self as ast, AnyNodeRef};\n    + \n    + use super::TypeInferenceBuilder;\n    +-use crate::types::call::CallArguments;\n    ++use crate::types::call::{CallArguments, CallBinOpError, OperatorResult};\n    + use crate::types::constraints::ConstraintSetBuilder;\n    + use crate::types::cyclic::CycleDetector;\n    + use crate::types::diagnostic::{\n    +@@ crates/ty_python_semantic/src/types/infer/builder/binary_expressions.rs: pub(super) struct BinaryInferenceState<'db> {\n    + }\n    + \n    + impl<'db> BinaryInferenceState<'db> {\n    ++    fn record_operator_result(\n    ++        &mut self,\n    ++        result: Result<&OperatorResult<'db>, &CallBinOpError<'db>>,\n    ++    ) -> Option<Type<'db>> {\n    ++        match result {\n    ++            Ok(result) => {\n    ++                self.deprecated_functions\n    ++                    .extend(&result.deprecated_functions);\n    ++                Some(result.return_type)\n    ++            }\n    ++            Err(error) => {\n    ++                self.deprecated_functions\n    ++                    .extend(&error.deprecated_functions);\n    ++                None\n    ++            }\n    ++        }\n    ++    }\n    ++\n    +     fn tuple_alternative_count(db: &'db dyn Db, ty: Type<'db>) -> usize {\n    +         match ty {\n    +             Type::Union(union) => union\n    +@@ crates/ty_python_semantic/src/types/infer/builder/binary_expressions.rs: impl<'db> TypeInferenceBuilder<'db, '_> {\n    +             left_ty,\n    +             op,\n    +             right_ty,\n    +-        )?;\n    +-        state\n    +-            .deprecated_functions\n    +-            .extend(&result.deprecated_functions);\n    +-        Some(result.return_type)\n    ++        );\n    ++        state.record_operator_result(result)\n    +     }\n    + \n    +     /// Infer the result type and collect deprecated methods for the enclosing operation.\n    +@@ crates/ty_python_semantic/src/types/infer/builder/binary_expressions.rs: impl<'db> TypeInferenceBuilder<'db, '_> {\n    +                 _,\n    +                 Type::ClassLiteral(..) | Type::GenericAlias(..) | Type::SubclassOf(..),\n    +                 ast::Operator::BitOr,\n    +-            ) => Type::try_call_bin_op_with_policy(\n    +-                db,\n    +-                env,\n    +-                left_ty,\n    +-                ast::Operator::BitOr,\n    +-                right_ty,\n    +-                MemberLookupPolicy::META_CLASS_NO_TYPE_FALLBACK,\n    +-            )\n    +-            .ok()\n    +-            .map(|binding| {\n    +-                state.deprecated_functions.extend(\n    +-                    binding\n    +-                        .deprecated_functions(db)\n    +-                        .map(|(_, function)| function),\n    +-                );\n    +-                binding.return_type(db, env)\n    +-            }),\n    ++            ) => {\n    ++                let result = Type::try_call_bin_op_with_policy(\n    ++                    db,\n    ++                    env,\n    ++                    left_ty,\n    ++                    ast::Operator::BitOr,\n    ++                    right_ty,\n    ++                    MemberLookupPolicy::META_CLASS_NO_TYPE_FALLBACK,\n    ++                )\n    ++                .map(|call| call.into_result(db));\n    ++                state.record_operator_result(result.as_ref())\n    ++            }\n    + \n    +             // We've handled all of the special cases that we support for literals, so we need to\n    +             // fall back on looking for dunder methods on one of the operand types.\n```\n"
+      },
+      "refinement": {
+        "before": {
+          "head": "0af5b7f2e02fa2efddd6b6ff0cc1e37af09142b9"
+        },
+        "after": {
+          "head": "88b15ebe27958d0cdac952904b9f4d497c0a0d18"
+        }
       }
     },
     {
@@ -1865,7 +1882,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1880,7 +1897,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1895,7 +1912,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1910,7 +1927,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1925,7 +1942,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "evidence": [
         {
           "label": "sty source",
@@ -1941,7 +1958,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Submitted upstream. Tamir approved exact 0af5b7f2e, submitted as Ruff #30898. The in-place NotImplemented correction preserves other return alternatives and uses existing ordinary/reflected dispatch.",
       "nextStep": "Reconcile the fork with the outcome of upstream PR #30898 after review and merge.",
       "findings": [
@@ -1986,7 +2003,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
       "findings": [
@@ -2014,7 +2031,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
       "findings": [
@@ -2059,7 +2076,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Fork correction qualified; upstream extraction pending. The published checker retains complete later contexts for empty dictionaries, lists and sets. Skylib root and Gazelle checks now pass. Thirty native cases and incremental query-order controls cover generic keys, aliases, conflicting consumers and invalid writes; current-upstream extraction and overlap review remain open.",
       "nextStep": "Reduce the correction on current upstream and compare with ibraheemdev’s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
       "findings": [
@@ -2127,7 +2144,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
       "findings": [
@@ -2155,7 +2172,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python bugfix candidate. Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
       "findings": [
@@ -2213,7 +2230,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Submitted upstream. Tamir approved exact 5d2628cbb, submitted as Ruff #30897. The TypedDict.get correction groups keys only within one declared value-type and requiredness group; mixed groups keep existing fallback behavior.",
       "nextStep": "Reconcile the fork with the outcome of upstream PR #30897 after review and merge.",
       "findings": [
@@ -2258,7 +2275,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement / host API candidate. Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
       "findings": [
@@ -2286,7 +2303,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
       "findings": [
@@ -2314,7 +2331,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python bugfix candidate. Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
       "findings": [
@@ -2342,7 +2359,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host API design. Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
       "findings": [
@@ -2370,7 +2387,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host adaptation not implemented. Sty currently selects Standard or Bazel dialects; native annotations and builtin extensions are tied to Bazel. Buck2 needs distinct BUCK, rule-definition and BXL environments. Existing ty parser and supplied-binding hooks are reusable boundaries, not established Buck2 support.",
       "nextStep": "Separate host file modes and builtin catalog selection from Bazel metadata; qualify native annotations and isolation between Buck2 environments.",
       "findings": [],
@@ -2396,7 +2413,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host adaptation not implemented. Reuse Sty’s FileLoader boundary for Buck2 resolution rather than Bazel repository labels. Buck2 cells come from .buckconfig; JSON and TOML can be loaded as modules exporting value. Source lookup, exports and invalidation need the same logical module identity.",
       "nextStep": "Implement a Buck2 loader using cell-relative identities and explicit data-module exports; qualify cross-cell aliases and edits to loaded data.",
       "findings": [],
@@ -2422,7 +2439,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host semantics require qualification. Buck2 exposes record, field and enum constructors alongside namespaced typing values. Map those values through host-supplied semantic contracts instead of assuming Bazel provider or struct behavior. Documentation differs on using record constructors directly versus .type in annotations; settle that against a pinned runtime.",
       "nextStep": "Pin the target Buck2/Starlark runtime, establish constructor and annotation behavior, then qualify field defaults, invalid values and nominal type identity.",
       "findings": [],
@@ -2448,7 +2465,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -2527,7 +2544,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -2742,7 +2759,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host API design. Apple lipo still lacks a static ToolchainInfo field contract. An RBE aspect/cquery probe follows the selected producer, field shape and configured dependency edge through an --extra_toolchains replacement. Producer bodies remain unchecked.",
       "nextStep": "Check selected producer bodies and handle multiple configurations without label-only joins before adding keyed host bounds. Universal source contracts still require an enforced ABI. Sty integration is not implemented.",
       "findings": [
@@ -2778,7 +2795,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -2974,7 +2991,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting. The existing LLVM callback case with a fresh list of \"ok\" and list[Literal[\"ok\"]] fails on the fork and pristine upstream. A fix passes the strengthened existing fixture; broader qualification is in progress.",
       "nextStep": "Finish qualification of the fresh-literal callback fix, including the actual LLVM corpus case, before preparing an upstream proposal. Continue isolating the remaining solver improvements.",
       "findings": [
@@ -3381,7 +3398,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Sty now pairs overloaded interfaces with checked source bodies and uses the same finite domains for strictness. General Python body-domain analysis still needs an upstream split and review.",
       "nextStep": "Repair with_cfg dictionary-union admission and the fork-only generic callback rejection; compare the remaining body-domain APIs with upstream.",
       "findings": [
@@ -3466,7 +3483,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
       "nextStep": "Reject global guard removal: full upstream Markdown has 24 new failing fixtures and current project checks add diagnostics. Fix the original string-splitting bug without discarding internal guards. Saved runtime type tests and tagged-union mechanisms still need separate reconciliation.",
       "findings": [
@@ -3568,7 +3585,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream. The fresh-literal callback fix is now qualified in the fork and passes the actual LLVM corpus case. The expanded official port covers both bounded and unbounded type variables and passes native suites and all 532 default Markdown fixtures. The fork backport passes the current corpus. The official port is withheld after benchmarks found material inference overhead; a correction must preserve required return precision.",
       "nextStep": "Review the qualified bounded/unbounded callback contribution before upstream submission. Finish fork backport qualification and retain the separate stored-collection overlap with #27665.",
       "findings": [
@@ -3688,7 +3705,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3738,7 +3755,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3770,7 +3787,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3821,7 +3838,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -3871,7 +3888,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -4003,7 +4020,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -4026,7 +4043,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
       "nextStep": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
       "findings": [
@@ -4049,7 +4066,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
       "nextStep": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
       "findings": [
@@ -4072,7 +4089,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
       "nextStep": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
       "findings": [
@@ -4112,7 +4129,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
       "nextStep": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
       "findings": [
@@ -4140,7 +4157,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
       "nextStep": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix.",
       "findings": [
@@ -4163,7 +4180,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Old-fork candidate; current-upstream reproduction pending. TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
       "nextStep": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change.",
       "findings": [
@@ -4218,7 +4235,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Upstream reproduced; fix not qualified. Structural comparison accepts Result[str] as Result[int] when a generic first_or method returns its payload or a caller-supplied fallback. The same false acceptance occurs with nested recursive payloads. Direct recursive payload comparison rejects correctly. Baseline and deferred-receiver experiments agree in both generic syntaxes, so this is a separate signature-comparison defect.",
       "nextStep": "Reconcile existing upstream reports #2924 and #2323, binder PR #29027 and the closed higher-rank attempt #26638 before preparing feedback or extracting another binder implementation. Keep the scoped-binder prerequisite under ty-scoped-witness-proofs. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review.",
       "findings": [],
@@ -4260,8 +4277,8 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
-      "summary": "Reconciliation in progress. Qualified Sty 14d05b98 pins Ruff 07a4f30c on official 75fabee2. Eight native targets, the optimized build and all 148 unchanged corpus cases pass. All 20 community checks execute with unchanged outcomes: 11 strict passes, six advisory completions and three known failures. All eight qualified workflow refreshes are published. Full Ruff Markdown retains 507 passing and 31 unchanged failing fixtures.",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
+      "summary": "Reconciliation in progress. Qualified Sty 14d05b98 pins Ruff 07a4f30c on official 75fabee2. Eight native targets, the optimized build and all 148 unchanged corpus cases pass. All 20 community checks execute with unchanged outcomes: 11 strict passes, six advisory completions and three known failures. All eight qualified workflow refreshes are published. Full Ruff Markdown retains 507 passing and 31 unchanged failing fixtures. Ruff’s maintained build branch now pins Bazel rustfmt to Rust 1.100.0 in 928316fb; Cargo inputs and Rust sources are unchanged.",
       "nextStep": "Follow current-head CI and maintainer feedback on submitted PRs #30761, #30848, #30897 and #30898, then reconcile their outcomes with the fork. Continue the existing Apple/LLVM contract work and smaller-contribution redesign of the withdrawn fresh-collection proposal.",
       "findings": [
         {
@@ -4296,6 +4313,14 @@
           "url": "https://app.buildbuddy.io/invocation/dd978d27-6ff9-436d-8925-6e9e5afc8737"
         },
         {
+          "label": "Bazel rustfmt pinned to Rust 1.100.0",
+          "url": "https://github.com/tamird/ruff/commit/928316fb0471779f50fb65f7041c6642bd241ff1"
+        },
+        {
+          "label": "Pinned formatter, ty_format and changed-config hooks on RBE",
+          "url": "https://app.buildbuddy.io/invocation/b88fbd58-7aa0-4903-bc8f-03a009f57cce"
+        },
+        {
           "label": "Frozen source receipt and historical coverage",
           "url": "https://tamird.github.io/sty/ruff-fork-audit.json"
         }
@@ -4308,7 +4333,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Track specialized bounds in TypeVar identity while preserving materialized views and exact ParamSpec components.",
       "nextStep": "Reduce domain identity and substitution cases; qualify captured binders and compare upstream #29555.",
       "findings": [
@@ -4398,7 +4423,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python solver design. Keep local binders, declared domains and correlated witnesses together through inference, replay and bounded proof. Unknown proofs remain incomplete.",
       "nextStep": "Compare upstream PR #29027 before extracting the binder representation. Reduce the remaining quantified-domain, witness-correlation and budget differences for design review.",
       "findings": [
@@ -5214,7 +5239,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python bugfix candidate. A sibling branch can negate a rolled-back consequence while its antecedents still hold. Retriggering cached rules detects the conflict.",
       "nextStep": "Reproduce against clean upstream and qualify both single and pair implication regressions.",
       "findings": [
@@ -5252,7 +5277,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python bugfix candidate. Exhausted generic witness proof must remain unknown instead of producing an upper-bound violation.",
       "nextStep": "Qualify the native exhausted-witness regression and reduce a Python diagnostic example.",
       "findings": [
@@ -5290,7 +5315,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Preserve strict callable relations while solving finite source domains, covering union inputs and comparing nested protocol receivers.",
       "nextStep": "Reduce strict callable cases; qualify domain replay and receiver progress against upstream #29555.",
       "findings": [
@@ -5376,7 +5401,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Specialize generic implementation inputs before declaration coverage checks. Broader implementation return annotations are permitted; body checking has a separate owner.",
       "nextStep": "Correct the invalid nullable-return assertion, then qualify generic declaration consistency.",
       "findings": [
@@ -5428,7 +5453,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Preserve callable-local binders under outer substitution and project captured callback variables before they reach ordinary results.",
       "nextStep": "Reconcile binder ownership with upstream #29553 and #29555; qualify partial and captured-return cases.",
       "findings": [
@@ -5504,7 +5529,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python bugfix candidate. Keep overload expansion available when some generic specialization accepts an argument, including provisional arity mismatches.",
       "nextStep": "Qualify the bound-method starred-union fixture and reduce the generic expansion precheck.",
       "findings": [
@@ -5542,7 +5567,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Python enhancement candidate. Use finite member facts for getattr results and fresh empty defaults. Immutable storage guarantees have a separate host contract.",
       "nextStep": "Reduce ordinary Python lookup cases; compare collection context with upstream #27665.",
       "findings": [
@@ -5608,7 +5633,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host API design. Distinguish accepted keyword parameters from received keyword dictionaries, then verify complete ParamSpec witnesses against the original call relation.",
       "nextStep": "Specify host annotation and capture semantics before proposing shared solver APIs.",
       "findings": [
@@ -5704,7 +5729,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-24T15:35:22.719833Z",
+      "updatedAt": "2026-11-24T18:46:59.905Z",
       "summary": "Host API design. Keep source definitions or ranges through parameter specialization, default presentation and hidden internal keyword handling.",
       "nextStep": "Review the public source-location contract and qualify navigation and signature presentation.",
       "findings": [
