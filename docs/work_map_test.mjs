@@ -302,7 +302,8 @@ for (const item of upstream) {
       const approved = node.settledReviews.find(review => review.outcome === 'approved' && review.body);
       if (approved) {
         const links = await tracker.renderSettledLinks(node);
-        const reader = new URL(links.find(link => link.label === 'Read approved revision range-diff').url);
+        const label = approved.kind === 'proposal' ? 'Read approved proposal' : 'Read approved revision range-diff';
+        const reader = new URL(links.find(link => link.label === label).url);
         assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), approved);
         const key = reader.searchParams.get('draft');
         assert.equal((await tracker.findDraftEntry(nodes, node.id, key)).item, node);
@@ -323,7 +324,8 @@ for (const item of upstream) {
           assert.equal(await tracker.findDraftEntry([node, { ...node, id: 'duplicate-history' }], oldBranchID, key), null,
             'An ambiguous retained key must not select an unrelated item');
         }
-        assert.ok(approved.body.includes('```diff\n'), 'Approved comparison remains readable without a new decision');
+        if (approved.kind === 'amendment' || node.refinement?.after.head === approved.head)
+          assert.ok(approved.body.includes('```diff\n'), 'Approved comparison remains readable without a new decision');
         console.log('RENDERED_APPROVED_HISTORY_READER_URL', reader.href);
       }
       if (delivery) {
