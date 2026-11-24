@@ -1922,7 +1922,8 @@ function appendSettledPublications(parent, node) {
   const labels = { issue: "Issue filed", reply: "Reply posted", review: "Review posted" };
   for (const decision of node.settledReviews || []) {
     if (["proposal", "amendment"].includes(decision.kind) && decision.outcome === "approved" && decision.body)
-      parent.append(readDraftLink(node, decision, "Read approved revision range-diff"));
+      parent.append(readDraftLink(node, decision, decision.kind === "proposal"
+        ? "Read approved proposal" : "Read approved revision range-diff"));
     if (decision.kind === "amendment" && decision.outcome === "posted" && decision.body)
       parent.append(readDraftLink(node, decision, "Read delivered amendment range-diff"));
     const url = safeURL(decision.postedURL);
