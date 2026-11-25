@@ -268,6 +268,7 @@ function checksPassed(pr) {
 }
 
 const DECISION_REASONS = [
+  { id: "authorize-scope", owner: "user", title: "Authorize proposed scope" },
   { id: "review-changes", owner: "user", title: "Review our changes" },
   { id: "post-review", owner: "user", title: "Approve outgoing PR reviews" },
   { id: "post-reply", owner: "user", title: "Approve replies, comments, and issues" },
@@ -1204,7 +1205,7 @@ function contributorChanges(node) {
 // messages about the same commit, so their text is part of the decision too.
 function alreadyReviewed(node, decision) {
   return node.settledReviews?.some(item => item.kind === decision.kind && item.head === decision.head
-    && (!["review", "reply", "issue"].includes(item.kind) || item.body === decision.body)
+    && (!["scope", "review", "reply", "issue"].includes(item.kind) || item.body === decision.body)
     && (item.kind !== "issue" || item.url === decision.url && item.title === decision.title));
 }
 function commitLinkMatches(repo, head, url) {
@@ -1222,9 +1223,10 @@ function pendingDecisions(node) {
     || node.type === "pr" && decision.kind === "amendment" && !providerClosed(node) && decision.head !== node.github?.head
     || node.type === "investigation" && node.status === "active" && ["issue", "proposal"].includes(decision.kind)
     || ["pr", "issue"].includes(node.type) && ["reply", "issue"].includes(decision.kind)
-    || node.type === "pr" && decision.kind === "review" && !providerClosed(node)));
+    || node.type === "pr" && ["scope", "review"].includes(decision.kind) && !providerClosed(node)));
 }
 function decisionReason(decision) {
+  if (decision.kind === "scope") return "authorize-scope";
   if (decision.kind === "review") return "post-review";
   if (["reply", "issue"].includes(decision.kind)) return "post-reply";
   return "review-changes";
@@ -1243,7 +1245,7 @@ function contributorDecisionHeadChanged(node, decision = contributorDecision(nod
   return Boolean(node.github?.head && head && head !== node.github.head);
 }
 function contributorDecisionNeedsRefresh(node, decision = contributorDecision(node)) {
-  return ["amendment", "review"].includes(decision?.kind) && contributorDecisionHeadChanged(node, decision);
+  return ["scope", "amendment", "review"].includes(decision?.kind) && contributorDecisionHeadChanged(node, decision);
 }
 function validateHumanAction(node, retiredExecution = false) {
   const action = node.humanAction;
@@ -1830,8 +1832,8 @@ function drawTable(nodes) {
       const revision = refinementComparison(node, decision);
       title.append(reviewChangeLink(node, decision, (decision.title || "Review proposed change") + (revision ? ` · ${revision.label}` : "")));
     }
-    for (const decision of decisions.filter(item => ["review", "reply", "issue"].includes(item.kind))) {
-      title.append(readDraftLink(node, decision, decisions.length === 1 ? "Read draft " + decision.kind : decision.title));
+    for (const decision of decisions.filter(item => ["scope", "review", "reply", "issue"].includes(item.kind))) {
+      title.append(readDraftLink(node, decision, decision.kind === "scope" ? decision.title : decisions.length === 1 ? "Read draft " + decision.kind : decision.title));
     }
     const action = humanAction(node);
     if (action) title.append(submissionLink(action, "human-action-source"));
@@ -1854,6 +1856,7 @@ function rangeDiffCommand(repo, args) {
   return `${git} range-diff ${args}`;
 }
 function refinementComparison(node, decision = contributorDecision(node)) {
+  if (decision?.kind === "scope") return null;
   const amendment = decision?.kind === "amendment";
   let revision = node.refinement;
   if (amendment) {
@@ -2011,8 +2014,8 @@ function appendContributorDecisions(parent, node, decisions) {
     if (decision.kind === "issue") {
       const form = decision.url + "?title=" + encodeURIComponent(decision.title) + "&body=" + encodeURIComponent(decision.body);
       section.append(link("Open prefilled issue ↗", form));
-    } else if (["review", "reply"].includes(decision.kind)) {
-      section.append(link(decision.kind === "review" ? "Open original PR ↗" : "Open original discussion ↗", decision.url));
+    } else if (["scope", "review", "reply"].includes(decision.kind)) {
+      section.append(link(decision.kind === "reply" ? "Open original discussion ↗" : "Open original PR ↗", decision.url));
     } else {
       section.append(reviewChangeLink(node, decision));
       if (decision.kind === "amendment" || decision.kind === "proposal" && decision.body && refinementComparison(node, decision))
@@ -2489,6 +2492,9 @@ function validateRegistry(candidate, { allowRetiredExecution = false } = {}) {
         && decision.head !== decision.baseHead
         && commitLinkMatches(`${candidate.meta.owner}/${node.repo.split("/")[1]}`, decision.head, decision.url)
         && [decision.title, decision.summary, decision.body].every(value => typeof value === "string" && value.trim());
+      const scope = node.type === "pr" && decision?.kind === "scope" && decision.head === node.head
+        && /^[a-f0-9]{40}$/.test(decision.head) && decision.url === node.url
+        && [decision.title, decision.summary, decision.body].every(value => typeof value === "string" && value.trim());
       const outgoing = ["pr", "issue"].includes(node.type) && ["reply", "review", "issue"].includes(decision?.kind)
         && (node.type === "issue" && decision.head === undefined || /^[a-f0-9]{40}$/.test(decision.head))
         && (decision.kind === "issue" ? validIssueDraft(decision)
@@ -2498,7 +2504,7 @@ function validateRegistry(candidate, { allowRetiredExecution = false } = {}) {
         && typeof decision.title === "string" && decision.title.trim()
         && typeof decision.summary === "string" && decision.summary.trim()
         && typeof decision.body === "string" && decision.body.trim();
-      if (!decision || decision.status !== "pending" || !proposal && !amendment && !outgoing
+      if (!decision || decision.status !== "pending" || !proposal && !amendment && !scope && !outgoing
           || decision.body !== undefined && typeof decision.body !== "string"
           || decision.replyBody !== undefined && (!["proposal", "amendment"].includes(decision.kind)
             || typeof decision.replyBody !== "string" || !decision.replyBody.trim())

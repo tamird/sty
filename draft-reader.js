@@ -26,7 +26,7 @@ async function readDraft() {
     if (!entry) throw Error("This version of the draft is no longer available. Open its card for the current work.");
     const { item, draft } = entry;
     back.href = draftReturnURL(url, item.id).href;
-    const labels = { issue: "Issue", reply: "Reply", review: "Review", proposal: "Pull request", amendment: "PR amendment", submission: "Pull request" };
+    const labels = { scope: "Scope authorization", issue: "Issue", reply: "Reply", review: "Review", proposal: "Pull request", amendment: "PR amendment", submission: "Pull request" };
     const kind = labels[draft.kind] || "Draft";
     document.getElementById("draft-context").textContent = [kind, item.repo || item.title].join(" · ");
     heading.textContent = draft.title || item.title;
