@@ -66,7 +66,8 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
       node.evidence.push(...(item.qualification?.evidence || []));
       if (item.settledReviews) node.settledReviews = item.settledReviews;
       if (item.nextAction && item.state !== 'Awaiting Tamir review' && !item.contributorReview)
-        node.followup = { owner: 'Agent', sourceHead: item.qualifiedHead, nextAction: item.nextAction };
+        node.followup = { owner: 'Agent', sourceHead: item.qualifiedHead, nextAction: item.nextAction,
+          ...(item.actionableComment ? { actionableComment: item.actionableComment } : {}) };
       if (node.type === 'branch' && item.state === 'Awaiting Tamir review') node.contributorReview = {
         kind: 'proposal', status: 'pending', title: 'Review qualified ty proposal',
         summary: 'Review the published change and decide whether to submit upstream. Qualification is recorded in the item details. Nothing has been submitted upstream.',

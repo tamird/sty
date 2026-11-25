@@ -10,7 +10,7 @@
   <link rel="icon" href="icon.svg?v=indigo" type="image/svg+xml">
   <link rel="stylesheet" href="style.css?v=20261119-indigo">
   <script src="draft.js?v=20261119-gvisor" defer></script>
-  <script src="app.js?v=20261125-decisions" defer></script>
+  <script src="app.js?v=20261125-feedback" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to work</a>
@@ -23,7 +23,8 @@
     <p id="outreach-pause" class="notice" hidden></p>
     <div class="toolbar">
       <div class="view-switch" aria-label="View"><button id="dag-view" aria-pressed="false" aria-controls="dag-pane">Dependency DAG</button><button id="table-view" aria-pressed="true" aria-controls="table-pane">Table</button><button id="investigations-view" aria-pressed="false" aria-controls="investigations-pane">Investigations</button></div>
-      <a href="?view=table&amp;reason=queue-user">Review queue</a>
+      <a href="?view=table&amp;reason=queue-user">Your decisions</a>
+      <a id="review-feedback" href="?view=table&amp;reason=author-feedback">Review feedback</a>
       <label class="search"><span class="sr-only">Search work</span><input id="search" type="search" placeholder="Search title, PR #, or branch" autocomplete="off"><kbd>/</kbd></label>
       <label id="investigation-search-control" class="search" hidden><span class="sr-only">Search investigations</span><input id="investigation-search" type="search" placeholder="Search investigations and findings" autocomplete="off"><kbd>/</kbd></label>
       <label id="group-control"><span class="sr-only">Workstream</span><select id="group-filter"><option value="">All workstreams</option></select></label>

@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-25T17:07:26+00:00';
+export const reviewedAt = '2026-11-25T17:37:28+00:00';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -92,6 +92,12 @@ export const upstream = [
       ]
     },
     "number": 30897,
+    "actionableComment": {
+      "kind": "review",
+      "head": "5d2628cbb2296f33d81828f6ce34a7140a36e5e4",
+      "commentId": "PRR_kwDOHy0Bzc8AAAABaETcHw",
+      "url": "https://github.com/astral-sh/ruff/pull/30897#pullrequestreview-6044310559"
+    },
     "nextAction": "Review the qualified literal-union filter and empty-dict default coverage. The debug benchmark takes 627 ms against 719 ms on the upstream parent.",
     "settledReviews": [
       {
@@ -320,6 +326,10 @@ export const upstream = [
           "url": "https://github.com/astral-sh/ruff/pull/30761#issuecomment-7167004660"
         },
         {
+          "label": "Alex on consistency of public type forms",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#issuecomment-7167092595"
+        },
+        {
           "label": "Qualified three-type normalization commit",
           "url": "https://github.com/tamird/ruff/commit/142c9403b03b7e03d5559663823689da81cca214"
         },
@@ -509,6 +519,11 @@ export const upstream = [
       "after": {
         "head": "142c9403b03b7e03d5559663823689da81cca214"
       }
+    },
+    "actionableComment": {
+      "head": "142c9403b03b7e03d5559663823689da81cca214",
+      "commentId": "IC_kwDOHy0Bzc8AAAABqy_P9A",
+      "url": "https://github.com/astral-sh/ruff/pull/30761#issuecomment-7167004660"
     },
     "nextAction": "Compare a typeshed split-overload change with the known ecosystem failure and LiteralString propagation controls before choosing any further revision."
   },
