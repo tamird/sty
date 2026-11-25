@@ -2397,7 +2397,7 @@ function applyLive(snapshot, nextRegistry = registry) {
   }
   const stale = Date.now() - new Date(snapshot.checkedAt).getTime() > STALE_AGE;
   setFreshness(`Work map · ${date(registry.meta.updatedAt)} | Evidence snapshot · ${date(snapshot.checkedAt)}${stale ? " · older than 2 hours" : ""}`, stale);
-  $("freshness-detail").textContent = "Curated records and dated GitHub issue receipts are separate from fresh reproductions. Missing check and review data stay unknown. Reload fetches the latest published registry and evidence. A non-draft PR does not establish qualification or approval. Every upstream contribution requires Tamir’s approval after qualification. " + (registry.meta.inventory?.scope || "") + " " + (registry.meta.inventory?.qualification || "");
+  $("freshness-detail").textContent = "Curated records and dated GitHub issue receipts are separate from fresh reproductions. Missing check and review data stay unknown. Reload updates the tracker application, registry and evidence. A non-draft PR does not establish qualification or approval. Every upstream contribution requires Tamir’s approval after qualification. " + (registry.meta.inventory?.scope || "") + " " + (registry.meta.inventory?.qualification || "");
 }
 function validIssueDraft(decision) {
   return decision?.kind === "issue" && /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/new$/.test(decision.url)
@@ -2978,7 +2978,8 @@ function initialize() {
   document.querySelectorAll("[data-sort]").forEach((button) => button.addEventListener("click", () => {
     const next = button.dataset.sort; sortDirection = sortKey === next ? -sortDirection : ["impact", "direct", "number", "age"].includes(next) ? -1 : 1; sortKey = next; render();
   }));
-  $("refresh").addEventListener("click", () => refresh(true));
+  // New decision kinds require new application code as well as a fresh snapshot.
+  $("refresh").addEventListener("click", () => location.reload());
   document.addEventListener("visibilitychange", scheduleRefresh);
   $("handoff-copy-all").addEventListener("click", event => copyHandoff(attentionText(visibleTableGroups, model.checkedAt), "Visible items", event.currentTarget));
   $("group-by-attention").addEventListener("change", () => { tableGrouping = $("group-by-attention").checked; if (selected?.startsWith("attention-")) selected = null; render(true, "push"); });
