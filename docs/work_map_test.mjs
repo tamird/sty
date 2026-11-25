@@ -226,7 +226,21 @@ const renderedReviewLinks = [];
 for (const item of upstream) {
   if (item.qualifiedCommitCount !== undefined) {
     const node = nodes.find(node => item.number ? node.repo === 'astral-sh/ruff' && node.number === item.number : node.id === `branch:${item.id}`);
-    if (item.contributorReview) {
+    if (item.contributorReview?.kind === 'scope') {
+      assert.equal(node.contributorReview.head, item.qualifiedHead);
+      assert.deepEqual(node.contributorReview, item.contributorReview);
+      assert.equal(tracker.refinementComparison(node, node.contributorReview), null,
+        'Scope authorization does not review a source revision');
+      assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'authorize-scope'));
+      const links = await tracker.renderDecisionLinks(node);
+      const reader = new URL(links[0].url);
+      assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), item.contributorReview);
+      assert.equal(links[1].url, node.url, 'Scope context links the existing PR');
+      const changed = { ...node, github: { ...node.github, head: '0'.repeat(40) } };
+      assert.ok(!tracker.attentionReasons(changed, 'tamird').some(reason => reason.id === 'authorize-scope'),
+        'A changed PR head requires reassessing the source-bound scope decision');
+      console.log('RENDERED_SCOPE_READER_URL', reader.href);
+    } else if (item.contributorReview) {
       assert.deepEqual(node.contributorReview, item.contributorReview);
       assert.equal(node.head, item.qualifiedHead, 'An amendment does not replace the published PR head');
       if (node.contributorReview.kind === 'amendment') {
