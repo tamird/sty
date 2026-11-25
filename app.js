@@ -322,7 +322,7 @@ const OTHER_ATTENTION_GROUPS = [
   { id: "resolved", owner: "other", title: "History · no current action" },
   { id: "other", owner: "other", title: "Other work" },
 ];
-const ATTENTION_OWNERS = { agent: "Agent work", user: "Needs your attention", maintainer: "Needs maintainer attention", other: "Other tracked work" };
+const ATTENTION_OWNERS = { agent: "Agent work", user: "Your decisions", maintainer: "Needs maintainer attention", other: "Other tracked work" };
 const QUEUE_FILTERS = Object.keys(ATTENTION_OWNERS).map(owner => "queue-" + owner);
 const LEGACY_HANDOFF_GROUPS = { "import-failed": "maintainer-import-failed", "import-checks": "maintainer-import-checks", "internal-status": "maintainer-unknown", review: "maintainer-review", import: "maintainer-import", merge: "maintainer-merge" };
 let handoffCopyVersion = 0;
@@ -1325,6 +1325,7 @@ function drawStateFilters() {
   for (const [owner, count] of Object.entries(totals)) {
     $(`attention-${owner}-summary`).textContent = `${ATTENTION_OWNERS[owner]} · ${count}`;
   }
+  $("review-feedback").textContent = `Review feedback · ${counts.get("author-feedback")}`;
   $("queue-counts-note").hidden = Boolean(model.statesAvailable);
   $("legacy-state-filter").hidden = !stateFilters.size;
   $("legacy-state-filter").textContent = stateFilters.size ? `Shared legacy state filter: ${[...stateFilters].map(key => STATE_LABELS[key]).join(", ")}. Reset to clear.` : "";
