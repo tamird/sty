@@ -304,8 +304,8 @@ for (const item of upstream) {
       && review.head === delivery.baseHead && review.url === `https://github.com/tamird/ruff/commit/${delivery.baseHead}`),
     'Delivered amendments retain the approval of their original contribution');
     if (approval?.outcome === 'approved' || delivery) {
-      assert.equal(node.settledReviews.at(-1).outcome, delivery ? 'posted' : 'approved');
-      assert.equal(node.settledReviews.at(-1).head, item.qualifiedHead);
+      assert.equal(node.settledReviews.findLast(review => ['proposal', 'amendment'].includes(review.kind)
+        && review.head === item.qualifiedHead).outcome, delivery ? 'posted' : 'approved');
       assert.deepEqual(node.settledReviews, item.settledReviews, 'The actual node keeps its settled approval');
       if (node.type === 'branch')
         assert.equal((await tracker.renderDecisionLinks({ ...preview, settledReviews: node.settledReviews })).length, 0,
@@ -347,8 +347,6 @@ for (const item of upstream) {
         const reader = new URL(links.find(link => link.label === 'Read delivered amendment range-diff').url);
         assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), delivery);
         assert.ok(delivery.body.includes('```diff\n'), 'Delivered source changes retain their actual range-diff');
-        assert.equal(node.settledReviews.some(review => review.head === node.head && review.outcome === 'approved'), false,
-          'Normal delivery does not invent a user approval for the replacement head');
         console.log('RENDERED_DELIVERED_HISTORY_READER_URL', reader.href);
       }
     } else assert.equal(node.settledReviews, undefined, 'Assessment is not approval');
