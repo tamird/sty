@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-25T20:33:33+00:00';
+export const reviewedAt = '2026-11-25T20:47:19+00:00';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -47,6 +47,31 @@ export const goals = [
 ];
 
 export const upstream = [
+  {
+    "id": "intersection-attribute-presence",
+    "ref": "review/intersection-attribute-presence-20261125",
+    "title": "[ty] Check presence across intersection members",
+    "state": "Awaiting Tamir review",
+    "source": "ee0917acc7b83cc5a24f685a9bdef94043f0080a",
+    "summary": "A required intersection member can establish attribute presence while the assignment still checks whether the member accepts the value.",
+    "qualifiedBase": "aacccdff29525ed04398d400f4444a478f15d6aa",
+    "qualifiedHead": "ee0917acc7b83cc5a24f685a9bdef94043f0080a",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/ee0917acc7b83cc5a24f685a9bdef94043f0080a",
+    "qualification": {
+      "summary": "The updated existing assertion fails on upstream and passes with the candidate. All 532 mdtests, native suites, formatting, strict Clippy and hooks pass. The patch removes the old TODO and expected error rather than adding a test fixture.",
+      "evidence": [
+        {
+          "label": "Qualified two-file change",
+          "url": "https://github.com/tamird/ruff/commit/ee0917acc7b83cc5a24f685a9bdef94043f0080a"
+        },
+        {
+          "label": "Same-fixture negative control and all 532 mdtests",
+          "url": "https://app.buildbuddy.io/invocation/3508273c-b6a7-4f48-a343-579688ca9c83"
+        }
+      ]
+    }
+  },
   {
     "id": "typeguard-expansion-targets",
     "ref": "review/typeguard-expansion-targets-20261125",
@@ -413,6 +438,14 @@ export const upstream = [
       "summary": "The reduced pytest-autoprofile case and explicit-annotation controls pass on RBE. Native suites, all 532 mdtests, formatting and strict Clippy pass. The two conditional and tuple split probes still produce the invariant-list error.",
       "evidence": [
         {
+          "label": "CodSpeed simple_script report on delivered head",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#issuecomment-7173586551"
+        },
+        {
+          "label": "Eight matched simple_script rounds on the exact CI trees",
+          "url": "https://app.buildbuddy.io/invocation/7d45838c-76ff-45ce-9cd9-2700ae8a1d5f"
+        },
+        {
           "label": "Published inferred-or amendment",
           "url": "https://github.com/tamird/ruff/commit/7b148056cd81a79c3b67ce5afcfdcfba1e6f565a"
         },
@@ -650,7 +683,7 @@ export const upstream = [
         "head": "7b148056cd81a79c3b67ce5afcfdcfba1e6f565a"
       }
     },
-    "nextAction": "Follow CI and reviewer feedback on the narrower revision. Conditional and tuple split cases remain outside this change."
+    "nextAction": "Investigate simple_script timing on the delivered revision. CodSpeed reports a 5.23% regression. Matched RBE rounds averaged 37.775 to 38.568 ms in round medians, with overlapping timings."
   },
   {
     "id": "residual-truthiness-guards",
@@ -2397,7 +2430,7 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Run the diagnostics/attribute_assignment.md intersection instance/class examples on current ty, including Final rejection, optional union members and dynamic getter/base negatives; isolate only a still-failing behavior.",
+    "nextAction": "Review the qualified presence fix. The existing intersection-write test caught the false warning and required only removing its obsolete TODO and error expectation.",
     "evidence": []
   },
   {
