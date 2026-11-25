@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-25T20:47:19+00:00';
+export const reviewedAt = '2026-11-25T20:52:38+00:00';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -227,7 +227,7 @@ export const upstream = [
         "postedURL": "https://github.com/astral-sh/ruff/pull/30897"
       }
     ],
-    "nextAction": "Follow CI and check Carl’s review on the amended head."
+    "nextAction": "CI passed on abaacc858. The amendment addresses Carl’s four threads; Tamir can reply in his own words and ask Carl to take another look."
   },
   {
     "id": "inplace-notimplemented",
@@ -248,6 +248,10 @@ export const upstream = [
           "url": "https://github.com/astral-sh/ruff/pull/30898#issuecomment-7163169790"
         },
         {
+          "label": "Matched simple_script timings on the hosted comparison trees",
+          "url": "https://app.buildbuddy.io/invocation/c8e573ee-79ed-40d3-8bda-3dbaf9b7d906"
+        },
+        {
           "label": "Qualified arithmetic amendment 88b15ebe",
           "url": "https://github.com/tamird/ruff/commit/88b15ebe27958d0cdac952904b9f4d497c0a0d18"
         },
@@ -266,7 +270,7 @@ export const upstream = [
       ]
     },
     "number": 30898,
-    "nextAction": "A Ruff maintainer with Actions write access can rerun the hosted walltime job. Keep the CodSpeed failure visible until the hosted result is resolved.",
+    "nextAction": "Matched RBE timings were 27.63 ms before and 27.52 ms after the change. A Ruff maintainer with Actions write access can rerun the hosted walltime job to check its reported regression.",
     "settledReviews": [
       {
         "kind": "proposal",
@@ -444,6 +448,10 @@ export const upstream = [
         {
           "label": "Eight matched simple_script rounds on the exact CI trees",
           "url": "https://app.buildbuddy.io/invocation/7d45838c-76ff-45ce-9cd9-2700ae8a1d5f"
+        },
+        {
+          "label": "Checking the fallback literal earlier did not speed up simple_script",
+          "url": "https://app.buildbuddy.io/invocation/921f8c70-7861-4c8d-9ce7-57b1a1054acf"
         },
         {
           "label": "Published inferred-or amendment",
@@ -683,7 +691,7 @@ export const upstream = [
         "head": "7b148056cd81a79c3b67ce5afcfdcfba1e6f565a"
       }
     },
-    "nextAction": "Investigate simple_script timing on the delivered revision. CodSpeed reports a 5.23% regression. Matched RBE rounds averaged 37.775 to 38.568 ms in round medians, with overlapping timings."
+    "nextAction": "CodSpeed reports a 5.23% regression. Matched RBE rounds were about 2% slower, with overlapping timings. Checking the fallback literal earlier did not help. Keep the current revision and have a maintainer confirm the hosted result before deciding on the tradeoff."
   },
   {
     "id": "residual-truthiness-guards",
@@ -897,7 +905,6 @@ export const upstream = [
       }
     },
     "number": 30848,
-    "nextAction": "Follow current-head CI and maintainer feedback. No reply has been posted.",
     "settledReviews": [
       {
         "kind": "proposal",
