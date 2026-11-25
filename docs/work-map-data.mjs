@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-25T19:59:53+00:00';
+export const reviewedAt = '2026-11-25T20:33:33+00:00';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -47,6 +47,68 @@ export const goals = [
 ];
 
 export const upstream = [
+  {
+    "id": "typeguard-expansion-targets",
+    "ref": "review/typeguard-expansion-targets-20261125",
+    "title": "[ty] Keep TypeGuard targets stable on expansion",
+    "state": "Awaiting Tamir review",
+    "source": "f082af91c9131f48c1189ae2c6572b007cce11ae",
+    "summary": "Narrow an argument only when every successful expansion and matching overload identifies the same source expression.",
+    "qualifiedBase": "aacccdff29525ed04398d400f4444a478f15d6aa",
+    "qualifiedHead": "f082af91c9131f48c1189ae2c6572b007cce11ae",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/f082af91c9131f48c1189ae2c6572b007cce11ae",
+    "qualification": {
+      "summary": "Current upstream narrows an untested argument for one tuple-union order. The fix passes that case, the reversed and stable controls, all 532 mdtests, native suites, hooks, formatting and strict Clippy.",
+      "evidence": [
+        {
+          "label": "Qualified three-file change",
+          "url": "https://github.com/tamird/ruff/commit/f082af91c9131f48c1189ae2c6572b007cce11ae"
+        },
+        {
+          "label": "Failing expansion-order control on upstream",
+          "url": "https://app.buildbuddy.io/invocation/0b9c9d9c-14cb-49b7-b248-794dac3b3ba7"
+        },
+        {
+          "label": "Passing regression, full Markdown, native and style checks",
+          "url": "https://app.buildbuddy.io/invocation/244f4e63-c790-4675-adb7-73170385ccf4"
+        }
+      ]
+    }
+  },
+  {
+    "id": "vendored-archive-root",
+    "ref": "review/vendored-root-20261125",
+    "title": "List entries at the root of vendored archives",
+    "state": "Awaiting Tamir review",
+    "source": "7c83ee2994c4833edc7d0cda06c5a305d9b29aca",
+    "summary": "Keep the prefix empty when listing the archive root so callers can discover top-level entries.",
+    "qualifiedBase": "aacccdff29525ed04398d400f4444a478f15d6aa",
+    "qualifiedHead": "7c83ee2994c4833edc7d0cda06c5a305d9b29aca",
+    "qualifiedCommitCount": 1,
+    "qualifiedURL": "https://github.com/tamird/ruff/commit/7c83ee2994c4833edc7d0cda06c5a305d9b29aca",
+    "qualification": {
+      "summary": "The root regression fails on current upstream and passes with the fix. Ruff DB has 140 passing tests and one ignored. Canonical hooks, formatting and strict Clippy pass.",
+      "evidence": [
+        {
+          "label": "Qualified one-file root fix",
+          "url": "https://github.com/tamird/ruff/commit/7c83ee2994c4833edc7d0cda06c5a305d9b29aca"
+        },
+        {
+          "label": "Failing root-listing control on upstream",
+          "url": "https://app.buildbuddy.io/invocation/ead0c18b-e9cc-4036-9745-b2502fb2aa34"
+        },
+        {
+          "label": "Passing Ruff DB suite and style checks",
+          "url": "https://app.buildbuddy.io/invocation/b6af58b2-db7e-4efe-8f5c-1a23ed8b94b7"
+        },
+        {
+          "label": "Open archive rewrite touches the same method and retains the bug",
+          "url": "https://github.com/astral-sh/ruff/pull/29829"
+        }
+      ]
+    }
+  },
   {
     "id": "typed-dict-get-key-groups",
     "ref": "review/typed-dict-get-groups-3f63e8b",
@@ -2043,7 +2105,7 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Review the qualified bounded/unbounded callback contribution before upstream submission. Finish fork backport qualification and retain the separate stored-collection overlap with #27665.",
+    "nextAction": "Find a smaller callback-inference change that preserves the shared-TypeVar TypedDict case, then measure it on current upstream. Keep the stored-collection overlap with #27665 separate.",
     "evidence": [
       {
         "label": "Merged empty collection peer inference #29131",
@@ -2407,7 +2469,7 @@ const reviewedTyWork = [
         ]
       }
     ],
-    "nextAction": "Compare the current upstream archive reader and run the existing root-listing regression; qualify normalized paths, archive subdirectories and missing-directory behavior before proposing a residual fix."
+    "nextAction": "Review the qualified root-listing fix and coordinate the overlap with the draft archive rewrite #29829."
   },
   {
     "id": "ty-guard-call-mapping",
