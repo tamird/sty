@@ -5,13 +5,13 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-25T15:14:54.126641Z';
+export const reviewedAt = '2026-11-25T16:13:02.322367+00:00';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
  {name:"rules_cc",nextAction:"Reduce the remaining advisory diagnostics.",repo:"bazelbuild/rules_cc",number:940,head:"370815600228a45d71ee2509222ad24b298a45cb",draft:true,summary:"C++ toolchain providers, helper constructors and macro contracts.",checks:"RBE 14d05b98: 134 strict files pass. All 286 advisory files complete with 37,502 errors.",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['rules_cc #960','https://github.com/bazelbuild/rules_cc/pull/960'],['rules_cc #967','https://github.com/bazelbuild/rules_cc/pull/967']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/520974a9-09ce-4123-82a6-2f0fc1666564"}, {"label": "Published workflow update", "url": "https://github.com/tamird/rules_cc/commit/370815600228a45d71ee2509222ad24b298a45cb"}]},
  {name:"hermetic-llvm",nextAction:"Resolve the 31 example and 26 proposed-type errors.",repo:"hermeticbuild/hermetic-llvm",number:835,head:"cfe15581d127f92e1bcd5582c6b62497217915cd",draft:true,summary:"LLVM helper, selector and callback contracts compatible with older Bazel releases.",checks:"RBE 14d05b98: 70 released-root files pass; the rules_cc example retains 31 errors. Proposed-types checking retains 26 errors in 64 root files. Advisory checks, native tests and formatter complete.",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/dd978d27-6ff9-436d-8925-6e9e5afc8737"}, {"label": "Published workflow update", "url": "https://github.com/tamird/hermetic-llvm/commit/cfe15581d127f92e1bcd5582c6b62497217915cd"}]},
- {name:"apple_support",nextAction:"Resolve the two lipo toolchain-field errors.",repo:"bazelbuild/apple_support",number:668,head:"7173262d16db41fe32577f6add2d1826541e7768",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"RBE 14d05b98: All 46 strict files checked; two lipo toolchain-field errors remain. All 76 advisory files complete with 5,994 errors.",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/842ad4c8-9294-49cf-af5d-a2f94fc894b1"}, {"label": "Published workflow update", "url": "https://github.com/tamird/apple_support/commit/7173262d16db41fe32577f6add2d1826541e7768"}]},
+ {name:"apple_support",nextAction:"Preserve LipoInfo through selected-toolchain lookup so strict checking accepts the lipo action.",repo:"bazelbuild/apple_support",number:668,head:"7173262d16db41fe32577f6add2d1826541e7768",draft:true,summary:"Xcode, lipo, Apple action, DMG and platform provider contracts.",checks:"RBE 14d05b98: All 46 strict files checked; two lipo toolchain-field errors remain. All 76 advisory files complete with 5,994 errors.",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #641','https://github.com/bazelbuild/bazel-skylib/pull/641'],['rules_cc #940','https://github.com/bazelbuild/rules_cc/pull/940']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/842ad4c8-9294-49cf-af5d-a2f94fc894b1"}, {"label": "Published workflow update", "url": "https://github.com/tamird/apple_support/commit/7173262d16db41fe32577f6add2d1826541e7768"}]},
  {name:"with_cfg.bzl",nextAction:"Reduce the remaining advisory diagnostics.",repo:"fmeum/with_cfg.bzl",number:269,head:"7628aba59fc362d69d1106ac13bcadd6f64b9b1e",draft:true,summary:"Settings, selectors, frontend rules, argument rewriting and provider contracts.",checks:"RBE 14d05b98: 20 root and two example files pass with zero diagnostics. All five native suites pass in fast and optimized configurations.",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/e508d5a7-d78e-4f07-9226-106a535011a7"}, {"label": "Published workflow update", "url": "https://github.com/tamird/with_cfg.bzl/commit/7628aba59fc362d69d1106ac13bcadd6f64b9b1e"}]},
  {name:"rules_runfiles_group",nextAction:"Reduce the remaining advisory diagnostics.",repo:"bazel-contrib/rules_runfiles_group",number:23,head:"b0f9531391d6683b7a1c0fbc66f16e0b9bfdde88",draft:true,summary:"Provider fields and generic handle types shared by materialize, transform and merge callbacks.",checks:"RBE 14d05b98: 32 root and 37 example files pass; advisory checks retain 646 and 344 errors.",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/3f3eb196-021a-4da7-b375-92bc34aea1da"}, {"label": "Published workflow update", "url": "https://github.com/tamird/rules_runfiles_group/commit/b0f9531391d6683b7a1c0fbc66f16e0b9bfdde88"}]},
  {name:"rules_rs",nextAction:"Keep inherited formatter debt separate from typing qualification.",repo:"hermeticbuild/rules_rs",number:306,head:"9e40f59c20b79e50f163a465f8da5e7001be8cd6",draft:true,summary:"Crate selection, generated Cargo workspaces, repository generation and Rust toolchain contracts.",checks:"RBE 14d05b98: 36 root and four fixture files pass; both Cargo tests pass. Formatter exit 1 retains exactly 148 inherited warnings and no formatting differences.",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/e50f7cbe-1644-47a6-ab44-9586d1b518c7"}, {"label": "Published workflow update", "url": "https://github.com/tamird/rules_rs/commit/9e40f59c20b79e50f163a465f8da5e7001be8cd6"}]},
@@ -62,6 +62,10 @@ export const upstream = [
       "summary": "Four current-base type assertions fail before grouping and pass after it. Whole TypedDict fixture, all 532 default Markdown fixtures, core 86, semantic 539 (35 ignored), IDE 1964, canonical hooks, formatting and strict Clippy pass. Scope is same declared value-type identity and requiredness; mixed groups remain unchanged. No performance or network-mode claim.",
       "evidence": [
         {
+          "label": "Grouped-key performance and inference review",
+          "url": "https://github.com/astral-sh/ruff/pull/30897#pullrequestreview-6044310559"
+        },
+        {
           "label": "Submitted Ruff PR #30897",
           "url": "https://github.com/astral-sh/ruff/pull/30897"
         },
@@ -88,7 +92,7 @@ export const upstream = [
       ]
     },
     "number": 30897,
-    "nextAction": "Follow current-head CI and maintainer feedback on PR #30897.",
+    "nextAction": "Qualify Carl\u2019s requested literal-union fast path and empty-dict default coverage. Keep reordered types and aliases as a documented limit of grouping.",
     "settledReviews": [
       {
         "kind": "proposal",
@@ -109,7 +113,7 @@ export const upstream = [
     "title": "[ty] Honor NotImplemented in binary operators",
     "state": "Submitted",
     "source": "88b15ebe27958d0cdac952904b9f4d497c0a0d18",
-    "summary": "Approved 88b15ebe is published on PR #30898. A late CodSpeed report flags one walltime regression; its comparison is under investigation. Replies remain held.",
+    "summary": "Approved 88b15ebe is published. Hosted CodSpeed flags simple_script; eight alternating matched RBE rounds did not reproduce the slowdown (27.63 to 27.52 ms median round averages).",
     "qualifiedBase": "3f63e8b368924bb58875a7590e07f667805839a5",
     "qualifiedHead": "88b15ebe27958d0cdac952904b9f4d497c0a0d18",
     "qualifiedCommitCount": 1,
@@ -140,7 +144,7 @@ export const upstream = [
       ]
     },
     "number": 30898,
-    "nextAction": "Investigate CodSpeed\u2019s simple_script walltime comparison before deciding whether 88b15ebe needs a performance correction.",
+    "nextAction": "A Ruff maintainer with Actions write access can rerun the hosted walltime job. Keep the CodSpeed failure visible until the hosted result is resolved.",
     "settledReviews": [
       {
         "kind": "proposal",
@@ -311,6 +315,10 @@ export const upstream = [
     "qualification": {
       "summary": "Qualified 142c9403 passes core 86, semantic 541 (35 ignored), IDE 1964, all 532 Markdown fixtures and strict style on RBE. Published 8a2c fails the two new bytes/int fallback assertions.",
       "evidence": [
+        {
+          "label": "Alex\u2019s review of the typeshed alternative",
+          "url": "https://github.com/astral-sh/ruff/pull/30761#issuecomment-7167004660"
+        },
         {
           "label": "Qualified three-type normalization commit",
           "url": "https://github.com/tamird/ruff/commit/142c9403b03b7e03d5559663823689da81cca214"
@@ -502,7 +510,7 @@ export const upstream = [
         "head": "142c9403b03b7e03d5559663823689da81cca214"
       }
     },
-    "nextAction": "Follow CI and maintainer feedback on the published normalization revision."
+    "nextAction": "Compare a typeshed split-overload change with the known ecosystem failure and LiteralString propagation controls before choosing any further revision."
   },
   {
     "id": "residual-truthiness-guards",
@@ -1090,9 +1098,9 @@ export const additionalProjects = [
     "head": "0e050975ccf0a0c6964d6f75bc277929553b7888",
     "draft": false,
     "summary": "Declare netrc entry/auth-pattern value types at their allocation boundaries.",
-    "checks": "Current check receipts have not been collected in this tracker.",
+    "checks": "Current published head passed the observed checks. A three-way comparison with live master isolates the conflict to the generated test lockfile.",
     "followup": "Native annotations would enable the whole-parser checker and encounter the optional-key narrowing gap in #32022. Current type-comment change does not require that bug to land first.",
-    "nextAction": "Confirm current-head checks and reconcile current upstream before requesting review.",
+    "nextAction": "Regenerate the test lockfile against current master with Bazel\u2019s update_default_lock_file target and verify it before presenting the port.",
     "dependencies": [
       [
         "Bazel None-narrowing feedback #32022",
