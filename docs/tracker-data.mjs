@@ -18,8 +18,8 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
     status: item.draft ? 'draft' : 'open', url: `https://github.com/${item.repo}/pull/${item.number}`,
     head: item.head, summary: `${item.summary}\n\nRecorded checks: ${item.checks}\n\n${item.followup}`,
     evidence: item.dependencies.map(([label, url]) => ({ label, url })).concat(item.evidence || []),
-    ...(item.contributorReview ? { contributorReview: item.contributorReview }
-      : { followup: { owner: 'Agent', sourceHead: item.head, nextAction: item.nextAction } }),
+    followup: { owner: 'Agent', sourceHead: item.head, nextAction: item.nextAction },
+    ...(item.settledReviews ? { settledReviews: item.settledReviews } : {}),
   }));
   const edges = [];
   for (const item of relatedChanges) {

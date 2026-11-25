@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-25T16:28:13+00:00';
+export const reviewedAt = '2026-11-25T17:07:26+00:00';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -1095,21 +1095,25 @@ export const additionalProjects = [
     "repo": "bazelbuild/bazel",
     "number": 32042,
     "title": "Type empty netrc entries and auth patterns",
-    "head": "0e050975ccf0a0c6964d6f75bc277929553b7888",
+    "head": "0e0a4084463d41831a1b6d77e88b7a39d1272609",
     "draft": false,
     "summary": "Declare netrc entry/auth-pattern value types at their allocation boundaries.",
-    "checks": "Current published head passed the observed checks. A three-way comparison with live master isolates the conflict to the generated test lockfile.",
+    "checks": "The mechanical rebase resolves the generated lockfile conflict. Bazel’s default-lockfile verifier passed remotely, including on master 1b7e3767.",
     "followup": "Native annotations would enable the whole-parser checker and encounter the optional-key narrowing gap in #32022. Current type-comment change does not require that bug to land first.",
-    "contributorReview": {
-      "kind": "amendment",
-      "status": "pending",
-      "head": "0e0a4084463d41831a1b6d77e88b7a39d1272609",
-      "baseHead": "0e050975ccf0a0c6964d6f75bc277929553b7888",
-      "url": "https://github.com/tamird/bazel/commit/0e0a4084463d41831a1b6d77e88b7a39d1272609",
-      "title": "Review regenerated Bazel test lockfile",
-      "summary": "The Starlark annotations are unchanged. Bazel regenerated the two extension digests on the newer master and the default-lockfile verifier passed.",
-      "body": "Bazel master changed the generated test lockfile. The rebased commit keeps both Starlark annotations and uses the digests emitted by the repository’s lockfile generator. [Remote lockfile verification](https://app.buildbuddy.io/invocation/8aebe42f-eb88-43e6-9eaf-01010c9d5d2f).\n\nCaptured with `git range-diff --no-color --no-dual-color --creation-factor=999 0e050975ccf0a0c6964d6f75bc277929553b7888^! 0e0a4084463d41831a1b6d77e88b7a39d1272609^!`.\n\n```diff\n1:  0e050975 ! 1:  0e0a4084 Type empty netrc entries and auth patterns\n    @@ src/test/tools/bzlmod/MODULE.bazel.lock\n        \"moduleExtensions\": {\n          \"@@rules_kotlin+//src/main/starlark/core/repositories:bzlmod_setup.bzl%rules_kotlin_extensions\": {\n            \"general\": {\n    --        \"bzlTransitiveDigest\": \"NQFIdq+YnfvjDoMTtaioZwbozGcB7rrpgG8sO/Zz30k=\",\n    -+        \"bzlTransitiveDigest\": \"CBolO2P5L7Ofqt9FhraKPpbSSChR+gmj6p/YOxjWETw=\",\n    +-        \"bzlTransitiveDigest\": \"6ME6/jGDagS39Ejq+9RGIUiKVWKi5JsB5f/WuN2b4gU=\",\n    ++        \"bzlTransitiveDigest\": \"MBLFxyNs7mQPCLrv7GDEeq9+GpM0cAmKgZS4nZD2/QM=\",\n              \"usagesDigest\": \"ZQiGVXrj8yl+WvAOGWZCipKxak7/2zZWT+1/qI4Ac4U=\",\n              \"recordedInputs\": [\n                \"REPO_MAPPING:rules_kotlin+,bazel_tools bazel_tools\"\n```"
-    },
+    "nextAction": "Follow CI and maintainer review on the rebased head.",
+    "settledReviews": [
+      {
+        "kind": "amendment",
+        "status": "settled",
+        "head": "0e0a4084463d41831a1b6d77e88b7a39d1272609",
+        "baseHead": "0e050975ccf0a0c6964d6f75bc277929553b7888",
+        "url": "https://github.com/tamird/bazel/commit/0e0a4084463d41831a1b6d77e88b7a39d1272609",
+        "title": "Review regenerated Bazel test lockfile",
+        "summary": "The mechanical rebase is published on #32042. The Starlark annotations are unchanged.",
+        "body": "Bazel master changed the generated test lockfile. The rebased commit keeps both Starlark annotations and uses the digests emitted by the repository’s lockfile generator. [Remote lockfile verification](https://app.buildbuddy.io/invocation/8aebe42f-eb88-43e6-9eaf-01010c9d5d2f).\n\nCaptured with `git range-diff --no-color --no-dual-color --creation-factor=999 0e050975ccf0a0c6964d6f75bc277929553b7888^! 0e0a4084463d41831a1b6d77e88b7a39d1272609^!`.\n\n```diff\n1:  0e050975 ! 1:  0e0a4084 Type empty netrc entries and auth patterns\n    @@ src/test/tools/bzlmod/MODULE.bazel.lock\n        \"moduleExtensions\": {\n          \"@@rules_kotlin+//src/main/starlark/core/repositories:bzlmod_setup.bzl%rules_kotlin_extensions\": {\n            \"general\": {\n    --        \"bzlTransitiveDigest\": \"NQFIdq+YnfvjDoMTtaioZwbozGcB7rrpgG8sO/Zz30k=\",\n    -+        \"bzlTransitiveDigest\": \"CBolO2P5L7Ofqt9FhraKPpbSSChR+gmj6p/YOxjWETw=\",\n    +-        \"bzlTransitiveDigest\": \"6ME6/jGDagS39Ejq+9RGIUiKVWKi5JsB5f/WuN2b4gU=\",\n    ++        \"bzlTransitiveDigest\": \"MBLFxyNs7mQPCLrv7GDEeq9+GpM0cAmKgZS4nZD2/QM=\",\n              \"usagesDigest\": \"ZQiGVXrj8yl+WvAOGWZCipKxak7/2zZWT+1/qI4Ac4U=\",\n              \"recordedInputs\": [\n                \"REPO_MAPPING:rules_kotlin+,bazel_tools bazel_tools\"\n```",
+        "outcome": "posted"
+      }
+    ],
     "dependencies": [
       [
         "Bazel None-narrowing feedback #32022",

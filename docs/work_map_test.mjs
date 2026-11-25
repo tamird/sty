@@ -216,17 +216,13 @@ for (const item of [...projects, ...additionalProjects]) {
   const node = nodes.find(node => node.repo === item.repo && node.number === item.number);
   const observed = observations.prs.find(row => row.repo === item.repo && row.number === item.number);
   assert.equal(Boolean(node.github), Boolean(observed), 'Curated prose must not manufacture provider observations');
-  if (item.contributorReview) {
-    assert.equal(node.followup, undefined);
-    assert.deepEqual(node.contributorReview, item.contributorReview);
-    const [readerLink, commitLink] = await tracker.renderDecisionLinks(node);
-    const reader = new URL(readerLink.url);
-    assert.equal(readerLink.label, 'Read amendment range-diff');
-    assert.equal(commitLink.url, item.contributorReview.url);
-    assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), item.contributorReview);
-    assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
-    console.log('RENDERED_AMENDMENT_READER_URL', reader.href);
-    continue;
+  if (item.settledReviews) {
+    assert.deepEqual(node.settledReviews, item.settledReviews);
+    assert.equal((await tracker.renderDecisionLinks(node)).length, 0);
+    const links = await tracker.renderSettledLinks(node);
+    const delivered = links.find(link => link.label === 'Read delivered amendment range-diff');
+    const reader = new URL(delivered.url);
+    assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), item.settledReviews[0]);
   }
   assert.equal(node.followup.sourceHead, item.head);
   assert.equal(node.followup.nextAction, item.nextAction);
