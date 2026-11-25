@@ -344,10 +344,11 @@ for (const item of upstream) {
       }
       if (delivery) {
         const links = await tracker.renderSettledLinks(node);
-        const reader = new URL(links.find(link => link.label === 'Read delivered amendment range-diff').url);
-        assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), delivery);
+        const deliveredLinks = links.filter(link => link.label === 'Read delivered amendment range-diff');
+        const drafts = await Promise.all(deliveredLinks.map(link =>
+          tracker.findDraft(node, new URL(link.url).searchParams.get('draft'))));
+        assert.ok(drafts.includes(delivery), 'The current delivery has a reader alongside earlier deliveries');
         assert.ok(delivery.body.includes('```diff\n'), 'Delivered source changes retain their actual range-diff');
-        console.log('RENDERED_DELIVERED_HISTORY_READER_URL', reader.href);
       }
     } else assert.equal(node.settledReviews, undefined, 'Assessment is not approval');
     if (item.state === 'Submitted') {
