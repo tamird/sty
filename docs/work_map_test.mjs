@@ -214,10 +214,22 @@ await checkProviderIntegration(tracker, generated.registry, generated.snapshot);
 assert.ok(generated.registry.edges.every(edge => edge.type === 'includes'), 'Related links do not establish blocking dependencies');
 for (const item of [...projects, ...additionalProjects]) {
   const node = nodes.find(node => node.repo === item.repo && node.number === item.number);
-  assert.equal(node.followup.sourceHead, item.head);
-  assert.equal(node.followup.nextAction, item.nextAction);
   const observed = observations.prs.find(row => row.repo === item.repo && row.number === item.number);
   assert.equal(Boolean(node.github), Boolean(observed), 'Curated prose must not manufacture provider observations');
+  if (item.contributorReview) {
+    assert.equal(node.followup, undefined);
+    assert.deepEqual(node.contributorReview, item.contributorReview);
+    const [readerLink, commitLink] = await tracker.renderDecisionLinks(node);
+    const reader = new URL(readerLink.url);
+    assert.equal(readerLink.label, 'Read amendment range-diff');
+    assert.equal(commitLink.url, item.contributorReview.url);
+    assert.deepEqual(await tracker.findDraft(node, reader.searchParams.get('draft')), item.contributorReview);
+    assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.owner === 'user'));
+    console.log('RENDERED_AMENDMENT_READER_URL', reader.href);
+    continue;
+  }
+  assert.equal(node.followup.sourceHead, item.head);
+  assert.equal(node.followup.nextAction, item.nextAction);
   if (!observed || observed.head === item.head && !['closed', 'merged'].includes(observed.status))
     assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'));
   else assert.ok(!tracker.attentionReasons(node, 'tamird').some(reason => reason.id === 'agent-recorded-followup'), 'Recorded follow-ups belong to their source head');
