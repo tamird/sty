@@ -2,8 +2,8 @@
   "schema": 1,
   "repo": "astral-sh/ruff",
   "owner": "tamird",
-  "registryDate": "2026-11-25T20:52:38+00:00",
-  "checkedAt": "2026-11-25T20:33:57.984479Z",
+  "registryDate": "2026-11-26T20:56:57+00:00",
+  "checkedAt": "2026-11-26T20:57:40.598828+00:00",
   "repositories": {
     "astral-sh/ruff": "none",
     "tamird/ruff": "none",
@@ -26251,10 +26251,10 @@
       "ref": "review/typed-dict-get-groups-3f63e8b",
       "head": "abaacc85856e55869b3a772b2e7e4ba509dfbbc2",
       "branchHead": "abaacc85856e55869b3a772b2e7e4ba509dfbbc2",
-      "base": "aacccdff29525ed04398d400f4444a478f15d6aa",
+      "base": "8f0189e0e975334474efb938eafc48f22855aadb",
       "mergeable": "MERGEABLE",
       "mergeState": "CLEAN",
-      "mergeabilityCheckedAt": "2026-11-25T20:33:57.984479Z",
+      "mergeabilityCheckedAt": "2026-11-26T20:57:40.598828+00:00",
       "headCommittedAt": "2026-11-25T16:31:01Z",
       "headHistoryComplete": true,
       "headIntroducedAt": "2026-11-25T18:01:56Z",
@@ -26263,7 +26263,7 @@
       "headRepo": "tamird/ruff",
       "authorLogin": "tamird",
       "createdAt": "2026-11-24T15:30:40Z",
-      "updatedAt": "2026-11-25T18:25:09Z",
+      "updatedAt": "2026-11-26T17:15:30Z",
       "mergedAt": null,
       "closedAt": null,
       "mergeCommit": null,
@@ -26331,6 +26331,23 @@
             }
           },
           {
+            "kind": "review",
+            "id": "PRR_kwDOHy0Bzc8AAAABaknJTg",
+            "url": "https://github.com/astral-sh/ruff/pull/30897#pullrequestreview-6078187854",
+            "body": "Thread replies prepared and posted by Codex on Tamir’s behalf.",
+            "state": "COMMENTED",
+            "submittedAt": "2026-11-26T17:15:30Z",
+            "updatedAt": "2026-11-26T17:15:30Z",
+            "authorAssociation": "CONTRIBUTOR",
+            "author": {
+              "login": "tamird",
+              "__typename": "User"
+            },
+            "commit": {
+              "oid": "abaacc85856e55869b3a772b2e7e4ba509dfbbc2"
+            }
+          },
+          {
             "kind": "inline",
             "threadId": "PRRT_kwDOHy0Bzc67gMUw",
             "isResolved": false,
@@ -26344,6 +26361,23 @@
             "updatedAt": "2026-11-24T19:31:46Z",
             "author": {
               "login": "carljm",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc67gMUw",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_semantic/src/types/class/typed_dict.rs",
+            "line": 424,
+            "id": "PRRC_kwDOHy0Bzc8AAAABGNT-pQ",
+            "url": "https://github.com/astral-sh/ruff/pull/30897#discussion_r4711579301",
+            "body": "The fast path now defers an overload when every literal in its parameter union is disjoint from the argument. Deferred overloads are still checked if the others do not match. The new 200-pair benchmark took 627 ms versus 719 ms on the upstream parent in a same-worker debug run.",
+            "createdAt": "2026-11-26T17:15:24Z",
+            "updatedAt": "2026-11-26T17:15:30Z",
+            "author": {
+              "login": "tamird",
               "__typename": "User"
             }
           },
@@ -26366,6 +26400,23 @@
           },
           {
             "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc67gMUz",
+            "isResolved": false,
+            "isOutdated": false,
+            "path": "crates/ty_python_semantic/src/types/class/typed_dict.rs",
+            "line": 411,
+            "id": "PRRC_kwDOHy0Bzc8AAAABGNT_mA",
+            "url": "https://github.com/astral-sh/ruff/pull/30897#discussion_r4711579544",
+            "body": "The mdtest now explains that grouping uses declared type identity, with a TODO for equivalent types. The reordered-union example still reveals `Unknown | None`.",
+            "createdAt": "2026-11-26T17:15:25Z",
+            "updatedAt": "2026-11-26T17:15:30Z",
+            "author": {
+              "login": "tamird",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
             "threadId": "PRRT_kwDOHy0Bzc67gMU_",
             "isResolved": false,
             "isOutdated": true,
@@ -26383,6 +26434,23 @@
           },
           {
             "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc67gMU_",
+            "isResolved": false,
+            "isOutdated": true,
+            "path": "crates/ty_python_semantic/resources/mdtest/typed_dict.md",
+            "line": null,
+            "id": "PRRC_kwDOHy0Bzc8AAAABGNUA3w",
+            "url": "https://github.com/astral-sh/ruff/pull/30897#discussion_r4711579871",
+            "body": "Added the case with two optional `ResolvedData` fields. With a union of their keys, `data.get(key, {})` now reveals `ResolvedData`.",
+            "createdAt": "2026-11-26T17:15:26Z",
+            "updatedAt": "2026-11-26T17:15:30Z",
+            "author": {
+              "login": "tamird",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
             "threadId": "PRRT_kwDOHy0Bzc67gQHb",
             "isResolved": false,
             "isOutdated": true,
@@ -26395,6 +26463,23 @@
             "updatedAt": "2026-11-24T19:31:46Z",
             "author": {
               "login": "carljm",
+              "__typename": "User"
+            }
+          },
+          {
+            "kind": "inline",
+            "threadId": "PRRT_kwDOHy0Bzc67gQHb",
+            "isResolved": false,
+            "isOutdated": true,
+            "path": "crates/ty_python_semantic/resources/mdtest/typed_dict.md",
+            "line": null,
+            "id": "PRRC_kwDOHy0Bzc8AAAABGNUB5g",
+            "url": "https://github.com/astral-sh/ruff/pull/30897#discussion_r4711580134",
+            "body": "The grouped-key tests now use `reveal_type` with `# revealed:` comments.",
+            "createdAt": "2026-11-26T17:15:28Z",
+            "updatedAt": "2026-11-26T17:15:30Z",
+            "author": {
+              "login": "tamird",
               "__typename": "User"
             }
           }
@@ -27612,7 +27697,7 @@
       "importPolicy": "none",
       "imports": [],
       "importsComplete": true,
-      "checkedAt": "2026-11-25T20:33:57.984479Z",
+      "checkedAt": "2026-11-26T20:57:40.598828+00:00",
       "reviewDecision": null,
       "approvedHead": null,
       "approvedAt": null
