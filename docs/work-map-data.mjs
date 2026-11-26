@@ -5,7 +5,7 @@ import { ruffForwardAudit } from './ruff-forward-audit.mjs';
 export { ruffForwardAudit };
 
 // Curation time; collecting provider observations does not advance it.
-export const reviewedAt = '2026-11-25T20:52:38+00:00';
+export const reviewedAt = '2026-11-26T20:56:57+00:00';
 
 export const projects = [
  {name:"Bazel Skylib",nextAction:"Prepare the qualified contribution for maintainer review.",repo:"bazelbuild/bazel-skylib",number:641,head:"0d67032913356f4e43f700a5e04b1efa20af96ae",draft:true,summary:"Helper, collection, partial, provider and rule contracts.",checks:"RBE 14d05b98: 88 root files and five Gazelle files pass with zero errors (two root warnings).",followup:"The qualified Sty 14d05b98 workflow update is published. GitHub CI and review observations are recorded separately below.",dependencies:[['Skylib #643','https://github.com/bazelbuild/bazel-skylib/pull/643'],['Skylib #647','https://github.com/bazelbuild/bazel-skylib/pull/647'],['Skylib #644','https://github.com/bazelbuild/bazel-skylib/pull/644']],evidence:[{"label": "14d05b98 workflow qualification", "url": "https://app.buildbuddy.io/invocation/8ff7faa8-2b15-4412-88dd-3bcdd71ec282"}, {"label": "Published workflow update", "url": "https://github.com/tamird/bazel-skylib/commit/0d67032913356f4e43f700a5e04b1efa20af96ae"}]},
@@ -51,9 +51,9 @@ export const upstream = [
     "id": "intersection-attribute-presence",
     "ref": "review/intersection-attribute-presence-20261125",
     "title": "[ty] Check presence across intersection members",
-    "state": "Awaiting Tamir review",
+    "state": "Agent work",
     "source": "ee0917acc7b83cc5a24f685a9bdef94043f0080a",
-    "summary": "A required intersection member can establish attribute presence while the assignment still checks whether the member accepts the value.",
+    "summary": "Superseded candidate ee0917 repeats member lookup when reporting a possibly missing attribute.",
     "qualifiedBase": "aacccdff29525ed04398d400f4444a478f15d6aa",
     "qualifiedHead": "ee0917acc7b83cc5a24f685a9bdef94043f0080a",
     "qualifiedCommitCount": 1,
@@ -62,7 +62,7 @@ export const upstream = [
       "summary": "The updated existing assertion fails on upstream and passes with the candidate. All 532 mdtests, native suites, formatting, strict Clippy and hooks pass. The patch removes the old TODO and expected error rather than adding a test fixture.",
       "evidence": [
         {
-          "label": "Qualified two-file change",
+          "label": "Superseded two-file candidate",
           "url": "https://github.com/tamird/ruff/commit/ee0917acc7b83cc5a24f685a9bdef94043f0080a"
         },
         {
@@ -70,7 +70,8 @@ export const upstream = [
           "url": "https://app.buildbuddy.io/invocation/3508273c-b6a7-4f48-a343-579688ca9c83"
         }
       ]
-    }
+    },
+    "nextAction": "Carry declared presence through the existing write requirements and evaluator, then qualify the replacement on the existing fixture."
   },
   {
     "id": "typeguard-expansion-targets",
@@ -161,6 +162,10 @@ export const upstream = [
           "url": "https://app.buildbuddy.io/invocation/5d519f3d-7e1d-456d-9ba2-1769db46c593"
         },
         {
+          "label": "Four replies to Carl on the published amendment",
+          "url": "https://github.com/astral-sh/ruff/pull/30897#pullrequestreview-6078187854"
+        },
+        {
           "label": "Grouped-key performance and inference review",
           "url": "https://github.com/astral-sh/ruff/pull/30897#pullrequestreview-6044310559"
         },
@@ -227,7 +232,7 @@ export const upstream = [
         "postedURL": "https://github.com/astral-sh/ruff/pull/30897"
       }
     ],
-    "nextAction": "CI passed on abaacc858. The amendment addresses Carl’s four threads; Tamir can reply in his own words and ask Carl to take another look."
+    "nextAction": "Four replies are posted on abaacc858. All four threads remain open. Re-request Carl’s review."
   },
   {
     "id": "inplace-notimplemented",
