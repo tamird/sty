@@ -2,7 +2,7 @@
   "meta": {
     "repo": "astral-sh/ruff",
     "owner": "tamird",
-    "updatedAt": "2026-11-26T20:56:57+00:00",
+    "updatedAt": "2026-11-27T12:42:44+00:00",
     "repositories": {
       "astral-sh/ruff": "none",
       "tamird/ruff": "none",
@@ -1047,27 +1047,48 @@
       "id": "branch:intersection-attribute-presence",
       "type": "branch",
       "repo": "tamird/ruff",
-      "title": "[ty] Check presence across intersection members",
+      "title": "[ty] Track presence during attribute writes",
       "group": "ty",
-      "status": "Agent work",
-      "ref": "review/intersection-attribute-presence-20261125",
-      "url": "https://github.com/tamird/ruff/commit/ee0917acc7b83cc5a24f685a9bdef94043f0080a",
+      "status": "Awaiting Tamir review",
+      "ref": "review/intersection-write-presence-20261127",
+      "url": "https://github.com/tamird/ruff/commit/da731a6b0e1bdcd5b1bc82a0eae6681ae4436539",
       "evidence": [
         {
-          "label": "Superseded two-file candidate",
+          "label": "Qualified replacement commit",
+          "url": "https://github.com/tamird/ruff/commit/da731a6b0e1bdcd5b1bc82a0eae6681ae4436539"
+        },
+        {
+          "label": "Superseded ee0917 candidate",
           "url": "https://github.com/tamird/ruff/commit/ee0917acc7b83cc5a24f685a9bdef94043f0080a"
         },
         {
-          "label": "Same-fixture negative control and all 532 mdtests",
-          "url": "https://app.buildbuddy.io/invocation/3508273c-b6a7-4f48-a343-579688ca9c83"
+          "label": "Existing fixture, full Markdown and native/style qualification",
+          "url": "https://app.buildbuddy.io/invocation/db0d2322-2b85-4324-883f-d95da3b87a33"
+        },
+        {
+          "label": "Matched timings for 2,800 ordinary union attribute writes",
+          "url": "https://app.buildbuddy.io/invocation/4a01ecd8-5ed7-47b6-b8f4-a2f80535d1c3"
         }
       ],
-      "head": "ee0917acc7b83cc5a24f685a9bdef94043f0080a",
-      "summary": "Superseded candidate ee0917 repeats member lookup when reporting a possibly missing attribute.\n\nThe updated existing assertion fails on upstream and passes with the candidate. All 532 mdtests, native suites, formatting, strict Clippy and hooks pass. The patch removes the old TODO and expected error rather than adding a test fixture.\n\nThis proposal is not approved for upstream submission.",
-      "followup": {
-        "owner": "Agent",
-        "sourceHead": "ee0917acc7b83cc5a24f685a9bdef94043f0080a",
-        "nextAction": "Carry declared presence through the existing write requirements and evaluator, then qualify the replacement on the existing fixture."
+      "head": "da731a6b0e1bdcd5b1bc82a0eae6681ae4436539",
+      "summary": "The write evaluator combines declared presence with the existing requirement walk and defers the warning until it has the answer.\n\nThe existing attributes fixture and all 532 Markdown tests pass, along with the native suites, canonical hooks, formatting and strict Clippy on RBE. The 2,800-write debug benchmark measured 133.6 ms on the upstream parent and 130.7 ms on the replacement, with overlapping samples.\n\nThis proposal is not approved for upstream submission.",
+      "contributorReview": {
+        "kind": "proposal",
+        "status": "pending",
+        "head": "da731a6b0e1bdcd5b1bc82a0eae6681ae4436539",
+        "baseHead": "aacccdff29525ed04398d400f4444a478f15d6aa",
+        "url": "https://github.com/tamird/ruff/commit/da731a6b0e1bdcd5b1bc82a0eae6681ae4436539",
+        "title": "Review the intersection write replacement",
+        "summary": "The write evaluator combines declared presence with the existing requirement walk and defers the warning until it has the answer.",
+        "body": "The old revision rebuilt write requirements after seeing the warning. This revision carries presence from member resolution into the existing evaluator. An intersection needs one member that establishes presence. A union needs every arm to establish it. A concrete declaration proves presence directly. If default lookup could have synthesized presence from a dynamic base, the evaluator checks the concrete member.\n\nThe existing attributes fixture and all 532 Markdown tests pass, along with the native suites, canonical hooks, formatting and strict Clippy on RBE. The 2,800-write debug benchmark measured 133.6 ms on the upstream parent and 130.7 ms on the replacement, with overlapping samples.\n\n`git range-diff --no-color --no-dual-color --creation-factor=999 ee0917acc7b83cc5a24f685a9bdef94043f0080a^! da731a6b0e1bdcd5b1bc82a0eae6681ae4436539^!`\n\n```diff\n1:  ee0917acc7 ! 1:  da731a6b0e [ty] Check presence across intersection members\n    @@ Metadata\n     Author: Tamir Duberstein <tamird@gmail.com>\n     \n      ## Commit message ##\n    -    [ty] Check presence across intersection members\n    +    [ty] Track presence during attribute writes\n     \n    -    A write to an intersection could warn that an attribute might be\n    +    Writing to an intersection could report that an attribute might be\n         missing when one component declared it conditionally and another\n         required it.\n     \n    -    Check presence across the receiver before emitting that warning. One\n    -    required intersection member establishes presence. A union requires\n    -    presence in every alternative. The assignment still checks whether\n    -    the declared member accepts the write.\n    +    Retain declared presence when resolving write members and combine it\n    +    while evaluating the assignment. An intersection needs one member\n    +    that guarantees presence. A union needs that guarantee in every arm.\n    +    When a write may be missing, finish gathering that information before\n    +    reporting the warning.\n    +\n    +    Presence is independent of whether the member accepts the write.\n    +    Dynamic bases can supply a usable write target without declaring an\n    +    attribute, so use concrete lookup when their presence is ambiguous.\n     \n      ## crates/ty_python_semantic/resources/mdtest/attributes.md ##\n     @@ crates/ty_python_semantic/resources/mdtest/attributes.md: def _(flag: bool):\n    @@ crates/ty_python_semantic/resources/mdtest/attributes.md: def _(flag: bool):\n          # Same for class objects\n          def inner2_class(a_and_b: Intersection[type[A2], type[B1]]):\n     \n    + ## crates/ty_python_semantic/src/types/attribute_write.rs ##\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: pub(super) enum AttributeWriteRequirement<'db> {\n    +         object_ty: Type<'db>,\n    +         receiver: Option<Type<'db>>,\n    +         member: InstanceAttributeWriteMember<'db>,\n    ++        declared_presence: AttributePresence,\n    +     },\n    +     /// A write through a class object, resolved against its metaclass and class attributes.\n    +     Class {\n    +         object_ty: Type<'db>,\n    +         member: ClassAttributeWriteMember<'db>,\n    ++        declared_presence: AttributePresence,\n    +     },\n    + }\n    + \n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: impl<'db> AttributeWriteRequirement<'db> {\n    +             object_ty,\n    +             receiver,\n    +             member: InstanceAttributeWriteMember::SetAttr,\n    ++            declared_presence: _,\n    +         } = self\n    +         else {\n    +             return None;\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: pub(super) enum AttributeWriteFailure<'db> {\n    +     },\n    + }\n    + \n    ++/// Presence retained from raw write-member lookup, before descriptor interpretation.\n    ++#[derive(Clone, Copy)]\n    ++pub(super) enum AttributePresence {\n    ++    Present,\n    ++    Missing,\n    ++    /// Default class lookup may synthesize boundness from a dynamic base.\n    ++    Uncertain,\n    ++}\n    ++\n    ++impl AttributePresence {\n    ++    fn from_members(members: Option<&AssignmentAttributeMembers<'_>>, class_object: bool) -> Self {\n    ++        let (type_member, receiver_member) = match members {\n    ++            Some(AssignmentAttributeMembers::TypeMember {\n    ++                member,\n    ++                receiver_fallback,\n    ++            }) => (member, receiver_fallback.as_ref()),\n    ++            Some(AssignmentAttributeMembers::ReceiverMember {\n    ++                member,\n    ++                shadowed_type_member,\n    ++            }) => (shadowed_type_member, Some(member)),\n    ++            None => return Self::Missing,\n    ++        };\n    ++        let mut uncertain = false;\n    ++        for (member, instance_storage) in\n    ++            [(Some(type_member), false), (receiver_member, !class_object)]\n    ++        {\n    ++            if let Some(PlaceAndQualifiers {\n    ++                place:\n    ++                    Place::Defined(DefinedPlace {\n    ++                        ty,\n    ++                        definedness: Definedness::AlwaysDefined,\n    ++                        origin,\n    ++                        public_type_policy: _,\n    ++                        provenance: _,\n    ++                    }),\n    ++                qualifiers: _,\n    ++            }) = member\n    ++            {\n    ++                if ty.is_divergent() {\n    ++                    continue;\n    ++                }\n    ++                // Dynamic MRO fallback synthesizes an inferred place. An always-defined\n    ++                // declaration or concrete instance storage already proves presence.\n    ++                if origin.is_declared() || instance_storage {\n    ++                    return Self::Present;\n    ++                }\n    ++                uncertain = true;\n    ++            }\n    ++        }\n    ++        if uncertain {\n    ++            Self::Uncertain\n    ++        } else {\n    ++            Self::Missing\n    ++        }\n    ++    }\n    ++\n    ++    /// Resolve uncertain provenance only when a composite write needs a presence diagnostic.\n    ++    pub(super) fn is_declared<'db>(\n    ++        self,\n    ++        db: &'db dyn Db,\n    ++        env: &ProgramEnvironment<'db>,\n    ++        object_ty: Type<'db>,\n    ++        attribute: &str,\n    ++        class_object: bool,\n    ++    ) -> bool {\n    ++        match self {\n    ++            Self::Present => return true,\n    ++            Self::Missing => return false,\n    ++            Self::Uncertain => {}\n    ++        }\n    ++        let dispatch_class = object_ty.to_meta_type(db, env).to_class_type(db);\n    ++        let receiver_class = match object_ty {\n    ++            Type::SubclassOf(subclass_of) => {\n    ++                subclass_of.to_instance(db, env).nominal_class(db, env)\n    ++            }\n    ++            _ => object_ty.to_class_type(db),\n    ++        };\n    ++        let classes = [\n    ++            dispatch_class,\n    ++            class_object.then_some(receiver_class).flatten(),\n    ++        ];\n    ++        let mut concrete = dispatch_class.is_some() && (!class_object || receiver_class.is_some());\n    ++        for class in classes.into_iter().flatten() {\n    ++            for base in class.iter_mro(db) {\n    ++                match base {\n    ++                    ClassBase::Divergent(_) => return false,\n    ++                    ClassBase::Any | ClassBase::Dynamic(_) => concrete = false,\n    ++                    ClassBase::Class(_)\n    ++                    | ClassBase::Generic\n    ++                    | ClassBase::Protocol\n    ++                    | ClassBase::TypedDict(_) => {}\n    ++                }\n    ++            }\n    ++        }\n    ++        if concrete {\n    ++            return true;\n    ++        }\n    ++        // The ordinary lookup's boundness is sufficient for concrete MROs. Dynamic bases\n    ++        // require a separate concrete projection; they can supply values without declarations.\n    ++        let type_member = object_ty.class_member_with_policy(\n    ++            db,\n    ++            env,\n    ++            attribute,\n    ++            MemberLookupPolicy::REQUIRE_CONCRETE,\n    ++        );\n    ++        let is_bound = |member: PlaceAndQualifiers<'_>| {\n    ++            member.place.is_definitely_bound()\n    ++                && !member\n    ++                    .ignore_possibly_undefined()\n    ++                    .is_some_and(|ty| ty.is_divergent())\n    ++        };\n    ++        if is_bound(type_member) {\n    ++            return true;\n    ++        }\n    ++        let receiver_member = if class_object {\n    ++            object_ty.class_object_member(db, env, attribute, MemberLookupPolicy::REQUIRE_CONCRETE)\n    ++        } else {\n    ++            object_ty.instance_member(db, env, attribute)\n    ++        };\n    ++        is_bound(receiver_member)\n    ++    }\n    ++}\n    ++\n    + /// How a writable protocol member validates an assigned value.\n    + pub(super) enum ProtocolMemberWriteRequirement<'db> {\n    +     /// Check the assigned value against a directly representable write type.\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: pub(super) enum AssignmentAttributeMembers<'db> {\n    +     },\n    +     /// The receiver member governs the write, as `C.plain` does above because `Meta.plain` is\n    +     /// definitely not a data descriptor.\n    +-    ReceiverMember(PlaceAndQualifiers<'db>),\n    ++    ReceiverMember {\n    ++        member: PlaceAndQualifiers<'db>,\n    ++        // The metaclass member can establish presence even when it does not govern writes.\n    ++        shadowed_type_member: PlaceAndQualifiers<'db>,\n    ++    },\n    + }\n    + \n    + impl<'db> AssignmentAttributeMembers<'db> {\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: impl<'db> AssignmentAttributeMembers<'db> {\n    +     pub(super) fn type_member(self) -> Option<PlaceAndQualifiers<'db>> {\n    +         match self {\n    +             Self::TypeMember { member, .. } => Some(member),\n    +-            Self::ReceiverMember(_) => None,\n    ++            Self::ReceiverMember {\n    ++                member: _,\n    ++                shadowed_type_member: _,\n    ++            } => None,\n    +         }\n    +     }\n    + \n    +     pub(super) fn receiver_member(&self) -> Option<&PlaceAndQualifiers<'db>> {\n    +         match self {\n    +-            Self::ReceiverMember(member) => Some(member),\n    ++            Self::ReceiverMember {\n    ++                member,\n    ++                shadowed_type_member: _,\n    ++            } => Some(member),\n    +             Self::TypeMember {\n    +                 receiver_fallback, ..\n    +             } => receiver_fallback.as_ref(),\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: fn instance_attribute_write_requirement<'db>(\n    +     receiver: Option<Type<'db>>,\n    +     members: Option<&AssignmentAttributeMembers<'db>>,\n    + ) -> AttributeWriteRequirement<'db> {\n    ++    let declared_presence = AttributePresence::from_members(members, false);\n    +     let instance = |member| AttributeWriteRequirement::Instance {\n    +         object_ty,\n    +         receiver,\n    +         member,\n    ++        declared_presence,\n    +     };\n    +     let fallback_requirement = |member| {\n    +         instance_fallback_write_requirement(db, env, object_ty, attribute, member, receiver)\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: fn instance_attribute_write_requirement<'db>(\n    +             member,\n    +             receiver_fallback,\n    +         }) => (member, receiver_fallback),\n    +-        Some(&AssignmentAttributeMembers::ReceiverMember(member)) => {\n    ++        Some(&AssignmentAttributeMembers::ReceiverMember {\n    ++            member,\n    ++            shadowed_type_member: _,\n    ++        }) => {\n    +             return instance(InstanceAttributeWriteMember::Instance(\n    +                 fallback_requirement(member),\n    +             ));\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: fn class_attribute_write_requirement<'db>(\n    +     let Some(class_attr_self_ty) = object_ty.to_instance_approximation(db, env) else {\n    +         return AttributeWriteRequirement::Unconstrained;\n    +     };\n    ++    let declared_presence = AttributePresence::from_members(Some(&members), true);\n    +     let (type_member, receiver_fallback) = match members {\n    +         AssignmentAttributeMembers::TypeMember {\n    +             member,\n    +             receiver_fallback,\n    +         } => (member, receiver_fallback),\n    +-        AssignmentAttributeMembers::ReceiverMember(member) => {\n    ++        AssignmentAttributeMembers::ReceiverMember {\n    ++            member,\n    ++            shadowed_type_member: _,\n    ++        } => {\n    +             return AttributeWriteRequirement::Class {\n    +                 object_ty,\n    ++                declared_presence,\n    +                 member: ClassAttributeWriteMember::ClassAttribute(\n    +                     class_fallback_write_requirement(\n    +                         db,\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: fn class_attribute_write_requirement<'db>(\n    +                 };\n    +                 return AttributeWriteRequirement::Class {\n    +                     object_ty,\n    ++                    declared_presence,\n    +                     member: ClassAttributeWriteMember::ClassAttribute(\n    +                         instance_fallback_write_requirement(\n    +                             db, env, object_ty, attribute, member, None,\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: fn class_attribute_write_requirement<'db>(\n    +         },\n    +     };\n    + \n    +-    AttributeWriteRequirement::Class { object_ty, member }\n    ++    AttributeWriteRequirement::Class {\n    ++        object_ty,\n    ++        member,\n    ++        declared_presence,\n    ++    }\n    + }\n    + \n    + /// Recover the concrete descriptor hidden by an uncertain metaclass-member annotation.\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: fn class_object_assignment_members<'db>(\n    +         .filter(|class_attr| !class_attr.place.is_undefined())?;\n    + \n    +     Some(if definitely_non_data_descriptor {\n    +-        AssignmentAttributeMembers::ReceiverMember(receiver_member)\n    ++        AssignmentAttributeMembers::ReceiverMember {\n    ++            member: receiver_member,\n    ++            shadowed_type_member: type_member,\n    ++        }\n    +     } else {\n    +         AssignmentAttributeMembers::TypeMember {\n    +             member: type_member,\n    +@@ crates/ty_python_semantic/src/types/attribute_write.rs: impl<'c, 'db> TypeRelationChecker<'_, 'c, 'db> {\n    +                 object_ty,\n    +                 receiver,\n    +                 member,\n    ++                declared_presence: _,\n    +             } => self.check_instance_attribute_write(\n    +                 db,\n    +                 *object_ty,\n    +\n      ## crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs ##\n     @@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: use crate::types::class::FrozenDataclassDispatch;\n      use crate::types::dedicated::pydantic;\n    @@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: use c\n      };\n      use crate::types::{\n     @@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<'db> TypeInferenceBuilder<'db, '_> {\n    +         let db = self.db();\n    +         let requirement =\n    +             attribute_write_requirement(db, self.program_environment(), object_ty, attribute, None);\n    +-        let mut deprecation = (emit_diagnostics && self.context.is_lint_enabled(&DEPRECATED))\n    +-            .then_some(AttributeDeprecation::Missing);\n    ++        let composite = matches!(\n    ++            requirement,\n    ++            AttributeWriteRequirement::All { .. } | AttributeWriteRequirement::Any { .. }\n    ++        );\n    ++        let mut facts = AttributeWriteFacts {\n    ++            definitely_bound: (composite\n    ++                && self.context.is_lint_enabled(&POSSIBLY_MISSING_ATTRIBUTE))\n    ++            .then_some(false),\n    ++            deprecation: (emit_diagnostics && self.context.is_lint_enabled(&DEPRECATED))\n    ++                .then_some(AttributeDeprecation::Missing),\n    ++        };\n    +         let mut evaluator = AssignmentAttributeWriteEvaluator {\n    +             builder: self,\n    +             target,\n                  value,\n                  object_ty,\n                  attribute,\n    -+            requirement: &requirement,\n    -+            definitely_bound: None,\n    ++            possibly_missing: false,\n                  infer_value_ty: MultiInferenceGuard::new(infer_value_ty),\n              };\n    -         let valid = evaluator.evaluate(&requirement, emit_diagnostics, deprecation.as_mut());\n    +-        let valid = evaluator.evaluate(&requirement, emit_diagnostics, deprecation.as_mut());\n    +-        if let Some(AttributeDeprecation::Deprecated(properties)) = deprecation {\n    ++        let valid = evaluator.evaluate(&requirement, emit_diagnostics, &mut facts, true);\n    ++        if evaluator.possibly_missing && facts.definitely_bound != Some(true) {\n    ++            report_possibly_missing_attribute(&self.context, target, attribute, object_ty);\n    ++        }\n    ++        if let Some(AttributeDeprecation::Deprecated(properties)) = facts.deprecation {\n    +             self.check_deprecated_property(target, properties, ast::ExprContext::Store);\n    +         }\n    +         valid\n    +@@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: enum AttributeDeprecation<'db> {\n    + }\n    + \n    + impl<'db> AttributeDeprecation<'db> {\n    +-    /// Inspect a resolved requirement without inferring or validating the assigned value.\n    +-    /// Composite requirements need further attribute lookups.\n    +-    fn from_requirement(\n    +-        db: &'db dyn Db,\n    +-        env: &ProgramEnvironment<'db>,\n    +-        requirement: &AttributeWriteRequirement<'db>,\n    +-        attribute: &str,\n    +-    ) -> Self {\n    ++    fn from_leaf(db: &'db dyn Db, requirement: &AttributeWriteRequirement<'db>) -> Self {\n    +         match requirement {\n    +-            AttributeWriteRequirement::All {\n    +-                element_tys,\n    +-                receiver,\n    +-                ..\n    +-            } => element_tys.iter().fold(Self::Missing, |deprecation, ty| {\n    +-                let requirement = attribute_write_requirement(db, env, *ty, attribute, *receiver);\n    +-                deprecation.union(db, Self::from_requirement(db, env, &requirement, attribute))\n    +-            }),\n    +-            AttributeWriteRequirement::Any {\n    +-                intersection,\n    +-                receiver,\n    +-                ..\n    +-            } => {\n    +-                let mut deprecation = Self::Missing;\n    +-                for ty in intersection.positive(db) {\n    +-                    let requirement =\n    +-                        attribute_write_requirement(db, env, *ty, attribute, *receiver);\n    +-                    deprecation = deprecation\n    +-                        .intersection(db, Self::from_requirement(db, env, &requirement, attribute));\n    +-                    if matches!(deprecation, Self::NotDeprecated) {\n    +-                        break;\n    +-                    }\n    +-                }\n    +-                deprecation\n    +-            }\n    +             AttributeWriteRequirement::ProtocolMember {\n    +                 write: Some(ProtocolMemberWriteRequirement::Descriptor { descriptor_ty, .. }),\n    +                 ..\n     @@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<'db> AttributeDeprecation<'db> {\n          }\n      }\n      \n    -+/// Check presence across the receiver independently of which member accepts the write.\n    -+/// An intersection can require a member that is optional on another positive element.\n    -+/// Only concrete declarations establish presence; dynamic read fallbacks do not.\n    -+fn attribute_is_definitely_bound<'db>(\n    -+    db: &'db dyn Db,\n    -+    env: &ProgramEnvironment<'db>,\n    -+    requirement: &AttributeWriteRequirement<'db>,\n    -+    attribute: &str,\n    -+) -> bool {\n    -+    match requirement {\n    -+        AttributeWriteRequirement::All {\n    -+            object_ty: _,\n    -+            element_tys,\n    -+            receiver,\n    -+        } => element_tys.iter().all(|ty| {\n    -+            let requirement = attribute_write_requirement(db, env, *ty, attribute, *receiver);\n    -+            attribute_is_definitely_bound(db, env, &requirement, attribute)\n    -+        }),\n    -+        AttributeWriteRequirement::Any {\n    -+            object_ty: _,\n    -+            intersection,\n    -+            receiver,\n    -+        } => intersection.positive(db).iter().any(|ty| {\n    -+            let requirement = attribute_write_requirement(db, env, *ty, attribute, *receiver);\n    -+            attribute_is_definitely_bound(db, env, &requirement, attribute)\n    -+        }),\n    -+        AttributeWriteRequirement::ProtocolMember {\n    -+            receiver_ty: _,\n    -+            write: _,\n    -+            qualifiers: _,\n    -+        } => true,\n    -+        AttributeWriteRequirement::Instance {\n    -+            object_ty,\n    -+            receiver: _,\n    -+            member: _,\n    -+        } => {\n    -+            object_ty\n    -+                .class_member_with_policy(db, env, attribute, MemberLookupPolicy::REQUIRE_CONCRETE)\n    -+                .place\n    -+                .is_definitely_bound()\n    -+                || object_ty\n    -+                    .instance_member(db, env, attribute)\n    -+                    .place\n    -+                    .is_definitely_bound()\n    ++#[derive(Clone, Copy)]\n    ++struct AttributeWriteFacts<'db> {\n    ++    definitely_bound: Option<bool>,\n    ++    deprecation: Option<AttributeDeprecation<'db>>,\n    ++}\n    ++\n    ++impl<'db> AttributeWriteFacts<'db> {\n    ++    fn start_alternatives(&mut self, any: bool) {\n    ++        if let Some(bound) = self.definitely_bound.as_mut() {\n    ++            *bound = !any;\n     +        }\n    -+        AttributeWriteRequirement::Class {\n    -+            object_ty,\n    -+            member: _,\n    -+        } => {\n    -+            object_ty\n    -+                .class_member_with_policy(db, env, attribute, MemberLookupPolicy::REQUIRE_CONCRETE)\n    -+                .place\n    -+                .is_definitely_bound()\n    -+                || object_ty\n    -+                    .class_object_member(db, env, attribute, MemberLookupPolicy::REQUIRE_CONCRETE)\n    -+                    .place\n    -+                    .is_definitely_bound()\n    ++    }\n    ++\n    ++    fn next_alternative(self, any: bool) -> Self {\n    ++        Self {\n    ++            // OR stops at true, AND at false.\n    ++            definitely_bound: self.definitely_bound.filter(|bound| *bound != any),\n    ++            deprecation: self\n    ++                .deprecation\n    ++                .filter(|deprecation| {\n    ++                    !any || !matches!(deprecation, AttributeDeprecation::NotDeprecated)\n    ++                })\n    ++                .map(|_| AttributeDeprecation::Missing),\n    ++        }\n    ++    }\n    ++\n    ++    fn merge(&mut self, db: &'db dyn Db, other: Self, any: bool) {\n    ++        if let (Some(bound), Some(other_bound)) =\n    ++            (&mut self.definitely_bound, other.definitely_bound)\n    ++        {\n    ++            *bound = if any {\n    ++                *bound || other_bound\n    ++            } else {\n    ++                *bound && other_bound\n    ++            };\n    ++        }\n    ++        if let (Some(deprecation), Some(other_deprecation)) =\n    ++            (&mut self.deprecation, other.deprecation)\n    ++        {\n    ++            *deprecation = if any {\n    ++                deprecation.intersection(db, other_deprecation)\n    ++            } else {\n    ++                deprecation.union(db, other_deprecation)\n    ++            };\n    ++        }\n    ++    }\n    ++\n    ++    fn observe_leaf(\n    ++        &mut self,\n    ++        db: &'db dyn Db,\n    ++        env: &ProgramEnvironment<'db>,\n    ++        attribute: &str,\n    ++        requirement: &AttributeWriteRequirement<'db>,\n    ++    ) {\n    ++        if let Some(bound) = self.definitely_bound.as_mut() {\n    ++            *bound = match requirement {\n    ++                AttributeWriteRequirement::Instance {\n    ++                    object_ty,\n    ++                    receiver: _,\n    ++                    member: _,\n    ++                    declared_presence,\n    ++                } => declared_presence.is_declared(db, env, *object_ty, attribute, false),\n    ++                AttributeWriteRequirement::Class {\n    ++                    object_ty,\n    ++                    member: _,\n    ++                    declared_presence,\n    ++                } => declared_presence.is_declared(db, env, *object_ty, attribute, true),\n    ++                AttributeWriteRequirement::ProtocolMember { .. } => true,\n    ++                AttributeWriteRequirement::CannotAssign\n    ++                | AttributeWriteRequirement::Unconstrained\n    ++                | AttributeWriteRequirement::Module(_) => false,\n    ++                AttributeWriteRequirement::All { .. } | AttributeWriteRequirement::Any { .. } => {\n    ++                    unreachable!()\n    ++                }\n    ++            };\n    ++        }\n    ++        if let Some(deprecation) = self.deprecation.as_mut() {\n    ++            *deprecation = AttributeDeprecation::from_leaf(db, requirement);\n    ++        }\n    ++    }\n    ++\n    ++    /// Finish collecting facts after checking the write has short-circuited. This does not\n    ++    /// infer the assigned value or change the context selected by write validation.\n    ++    fn observe_remaining(\n    ++        &mut self,\n    ++        db: &'db dyn Db,\n    ++        env: &ProgramEnvironment<'db>,\n    ++        attribute: &str,\n    ++        remaining: &mut dyn Iterator<Item = AttributeWriteRequirement<'db>>,\n    ++        any: bool,\n    ++    ) {\n    ++        loop {\n    ++            let mut alternative = self.next_alternative(any);\n    ++            if alternative.definitely_bound.is_none() && alternative.deprecation.is_none() {\n    ++                break;\n    ++            }\n    ++            let Some(requirement) = remaining.next() else {\n    ++                break;\n    ++            };\n    ++            match requirement {\n    ++                AttributeWriteRequirement::All {\n    ++                    object_ty: _,\n    ++                    element_tys,\n    ++                    receiver,\n    ++                } => {\n    ++                    alternative.start_alternatives(false);\n    ++                    alternative.observe_remaining(\n    ++                        db,\n    ++                        env,\n    ++                        attribute,\n    ++                        &mut element_tys.iter().map(|ty| {\n    ++                            attribute_write_requirement(db, env, *ty, attribute, receiver)\n    ++                        }),\n    ++                        false,\n    ++                    );\n    ++                }\n    ++                AttributeWriteRequirement::Any {\n    ++                    object_ty: _,\n    ++                    intersection,\n    ++                    receiver,\n    ++                } => {\n    ++                    alternative.start_alternatives(true);\n    ++                    alternative.observe_remaining(\n    ++                        db,\n    ++                        env,\n    ++                        attribute,\n    ++                        &mut intersection.positive(db).iter().map(|ty| {\n    ++                            attribute_write_requirement(db, env, *ty, attribute, receiver)\n    ++                        }),\n    ++                        true,\n    ++                    );\n    ++                }\n    ++                _ => alternative.observe_leaf(db, env, attribute, &requirement),\n    ++            }\n    ++            self.merge(db, alternative, any);\n     +        }\n    -+        AttributeWriteRequirement::Unconstrained => false,\n    -+        AttributeWriteRequirement::CannotAssign => false,\n    -+        AttributeWriteRequirement::Module(_) => false,\n     +    }\n     +}\n     +\n    @@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<\n          value: &'a ast::Expr,\n          object_ty: Type<'db>,\n          attribute: &'a str,\n    -+    requirement: &'a AttributeWriteRequirement<'db>,\n    -+    definitely_bound: Option<bool>,\n    ++    possibly_missing: bool,\n          infer_value_ty: MultiInferenceGuard<'db, 'ast, 'infer>,\n      }\n      \n    +@@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<'db> AssignmentAttributeWriteEvaluator<'_, 'db, '_, '_> {\n    +         (setattr_result, value_ty)\n    +     }\n    + \n    +-    /// Validate the assignment and optionally record its accessor deprecations.\n    +-    /// After validation short-circuits, a pure collector inspects the remaining alternatives\n    +-    /// without changing the inference context selected for the assigned value.\n    +-    /// When provided, `deprecation` receives the result even if validation fails.\n    +     fn evaluate(\n    +         &mut self,\n    +         requirement: &AttributeWriteRequirement<'db>,\n    +         emit_diagnostics: bool,\n    +-        mut deprecation: Option<&mut AttributeDeprecation<'db>>,\n    ++        facts: &mut AttributeWriteFacts<'db>,\n    ++        root: bool,\n    +     ) -> bool {\n    +         let db = self.builder.db();\n    +         let env = self.builder.program_environment();\n    +-        if let Some(deprecation) = deprecation.as_deref_mut() {\n    +-            *deprecation = match requirement {\n    +-                AttributeWriteRequirement::All { .. } | AttributeWriteRequirement::Any { .. } => {\n    +-                    AttributeDeprecation::Missing\n    +-                }\n    +-                _ => AttributeDeprecation::from_requirement(db, env, requirement, self.attribute),\n    +-            };\n    ++        if !matches!(\n    ++            requirement,\n    ++            AttributeWriteRequirement::All { .. } | AttributeWriteRequirement::Any { .. }\n    ++        ) {\n    ++            facts.observe_leaf(db, env, self.attribute, requirement);\n    +         }\n    + \n    +         match requirement {\n    +@@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<'db> AssignmentAttributeWriteEvaluator<'_, 'db, '_, '_> {\n    +                 let mut requirements = element_tys\n    +                     .iter()\n    +                     .map(|ty| attribute_write_requirement(db, env, *ty, attribute, *receiver));\n    ++                facts.start_alternatives(false);\n    +                 let valid = requirements.by_ref().all(|requirement| {\n    +-                    let mut current = AttributeDeprecation::Missing;\n    +-                    let valid = self.evaluate(\n    +-                        &requirement,\n    +-                        false,\n    +-                        deprecation.as_ref().map(|_| &mut current),\n    +-                    );\n    +-                    if let Some(deprecation) = deprecation.as_deref_mut() {\n    +-                        *deprecation = deprecation.union(db, current);\n    +-                    }\n    ++                    let mut alternative = facts.next_alternative(false);\n    ++                    let valid = self.evaluate(&requirement, false, &mut alternative, false);\n    ++                    facts.merge(db, alternative, false);\n    +                     valid\n    +                 });\n    +-                if let Some(deprecation) = deprecation {\n    +-                    *deprecation = requirements.fold(*deprecation, |deprecation, requirement| {\n    +-                        deprecation.union(\n    +-                            db,\n    +-                            AttributeDeprecation::from_requirement(\n    +-                                db,\n    +-                                env,\n    +-                                &requirement,\n    +-                                attribute,\n    +-                            ),\n    +-                        )\n    +-                    });\n    ++                if root && !self.possibly_missing {\n    ++                    facts.definitely_bound = None;\n    +                 }\n    ++                facts.observe_remaining(db, env, attribute, &mut requirements, false);\n    +                 if valid {\n    +                     self.validate_composite_final_assignment(*object_ty, emit_diagnostics);\n    +                 } else if emit_diagnostics {\n    +@@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<'db> AssignmentAttributeWriteEvaluator<'_, 'db, '_, '_> {\n    +                     .positive(db)\n    +                     .iter()\n    +                     .map(|ty| attribute_write_requirement(db, env, *ty, attribute, *receiver));\n    ++                facts.start_alternatives(true);\n    +                 let valid = requirements.by_ref().any(|requirement| {\n    +-                    let mut current = AttributeDeprecation::Missing;\n    +-                    let valid = self.evaluate(\n    +-                        &requirement,\n    +-                        false,\n    +-                        deprecation.as_ref().map(|_| &mut current),\n    +-                    );\n    +-                    if let Some(deprecation) = deprecation.as_deref_mut() {\n    +-                        *deprecation = deprecation.intersection(db, current);\n    +-                    }\n    ++                    let mut alternative = facts.next_alternative(true);\n    ++                    let valid = self.evaluate(&requirement, false, &mut alternative, false);\n    ++                    facts.merge(db, alternative, true);\n    +                     valid\n    +                 });\n    +-                if let Some(deprecation) = deprecation {\n    +-                    while !matches!(deprecation, AttributeDeprecation::NotDeprecated)\n    +-                        && let Some(requirement) = requirements.next()\n    +-                    {\n    +-                        *deprecation = deprecation.intersection(\n    +-                            db,\n    +-                            AttributeDeprecation::from_requirement(\n    +-                                db,\n    +-                                env,\n    +-                                &requirement,\n    +-                                attribute,\n    +-                            ),\n    +-                        );\n    +-                    }\n    ++                if root && !self.possibly_missing {\n    ++                    facts.definitely_bound = None;\n    +                 }\n    ++                facts.observe_remaining(db, env, attribute, &mut requirements, true);\n    +                 if valid {\n    +                     self.infer_with_last_context(emit_diagnostics);\n    +                     self.validate_composite_final_assignment(*object_ty, emit_diagnostics);\n    +@@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<'db> AssignmentAttributeWriteEvaluator<'_, 'db, '_, '_> {\n    +                 object_ty,\n    +                 receiver,\n    +                 member,\n    ++                declared_presence: _,\n    +             } => self.evaluate_instance(*object_ty, *receiver, member, emit_diagnostics),\n    +-            AttributeWriteRequirement::Class { object_ty, member } => {\n    +-                self.evaluate_class(*object_ty, member, emit_diagnostics)\n    +-            }\n    ++            AttributeWriteRequirement::Class {\n    ++                object_ty,\n    ++                member,\n    ++                declared_presence: _,\n    ++            } => self.evaluate_class(*object_ty, member, emit_diagnostics),\n    +         }\n    +     }\n    + \n     @@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<'db> AssignmentAttributeWriteEvaluator<'_, 'db, '_, '_> {\n                      );\n                  }\n    @@ crates/ty_python_semantic/src/types/infer/builder/attribute_assignment.rs: impl<\n     -                    self.attribute,\n     -                    self.object_ty,\n     -                );\n    -+                if self\n    -+                    .builder\n    -+                    .context\n    -+                    .is_lint_enabled(&POSSIBLY_MISSING_ATTRIBUTE)\n    -+                    && !*self.definitely_bound.get_or_insert_with(|| {\n    -+                        attribute_is_definitely_bound(db, env, self.requirement, self.attribute)\n    -+                    })\n    -+                {\n    -+                    report_possibly_missing_attribute(\n    -+                        &self.builder.context,\n    -+                        self.target,\n    -+                        self.attribute,\n    -+                        self.object_ty,\n    -+                    );\n    -+                }\n    ++                self.possibly_missing = true;\n                  }\n                  AssignmentAttributeWriteDiagnostic::BadSetAttr { value_ty, failure } => {\n                      failure.report_diagnostics_with_override(\n```\n\n[Read the complete replacement commit](https://github.com/tamird/ruff/commit/da731a6b0e1bdcd5b1bc82a0eae6681ae4436539)."
+      },
+      "refinement": {
+        "before": {
+          "head": "ee0917acc7b83cc5a24f685a9bdef94043f0080a"
+        },
+        "after": {
+          "head": "da731a6b0e1bdcd5b1bc82a0eae6681ae4436539"
+        }
       }
     },
     {
@@ -2178,7 +2199,7 @@
       "owner": "Tamir / Agent",
       "summary": "Use ty for inference and incrementality; qualify real implementations and intentionally incorrect callers.",
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "evidence": [
         {
           "label": "sty source",
@@ -2193,7 +2214,7 @@
       "owner": "Tamir / Agent",
       "summary": "Reduce discovered gaps to reproducible examples, distinguish host behavior from checker behavior, and prepare evidence-backed feedback.",
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "evidence": [
         {
           "label": "sty source",
@@ -2208,7 +2229,7 @@
       "owner": "Tamir / Agent",
       "summary": "Adapt isolated improvements to Python semantics and upstream architecture. Track merged work and avoid duplicating contributions already in review.",
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "evidence": [
         {
           "label": "sty source",
@@ -2223,7 +2244,7 @@
       "owner": "Tamir / Agent",
       "summary": "Prioritize prominent projects with engaged maintainers, especially active #hermeticbuild participants. Keep supported Bazel versions, source annotations, stubs, real callers, and CI consistent.",
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "evidence": [
         {
           "label": "sty source",
@@ -2238,7 +2259,7 @@
       "owner": "Tamir / Agent",
       "summary": "Keep general inference and Starlark language behavior separate from Bazel APIs and repository discovery. Investigate Buck2 as another host; support is not yet established.",
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "evidence": [
         {
           "label": "sty source",
@@ -2254,7 +2275,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Submitted upstream. Tamir approved exact 0af5b7f2e, submitted as Ruff #30898. The in-place NotImplemented correction preserves other return alternatives and uses existing ordinary/reflected dispatch.",
       "nextStep": "Reconcile the fork with the outcome of upstream PR #30898 after review and merge.",
       "findings": [
@@ -2299,7 +2320,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Use compatible protocol members to infer collection elements, including nested TypedDict fields. A protocol need not declare a type parameter to supply useful context. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare with upstream #27665 before extracting; qualify aliases, unions, missing and extra fields, and incompatible index signatures.",
       "findings": [
@@ -2327,7 +2348,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Keep the relationship between a Boolean tag and its payload when a tuple is formed from local values. Extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; verify mutations, loop headers, ownership of the source values and subsequent narrowing.",
       "findings": [
@@ -2372,7 +2393,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Fork correction qualified; upstream extraction pending. The published checker retains complete later contexts for empty dictionaries, lists and sets. Skylib root and Gazelle checks now pass. Thirty native cases and incremental query-order controls cover generic keys, aliases, conflicting consumers and invalid writes; current-upstream extraction and overlap review remain open.",
       "nextStep": "Reduce the correction on current upstream and compare with ibraheemdev’s draft PR27665 at e344ca6974. Its four-file patch collects context from generic calls with one tracked collection argument; do not treat it as equivalent to selecting complete later invariant contexts. Preserve invalid writes, caller variables, conflicting consumers and query-order coverage before requesting Tamir review.",
       "findings": [
@@ -2440,7 +2461,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Normal and reflected operator calls can use the caller's expected type. Keep dispatch order and cache identity correct. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce a Python example; test reflected subclass priority, contextual callbacks and recursive calls.",
       "findings": [
@@ -2468,7 +2489,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python bugfix candidate. Infer omitted class parameters during construction while preserving parameters explicitly supplied by the caller. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Compare C(...) with C[int](...) on upstream; cover both __new__ and __init__, receiver overrides and omitted constructor stages.",
       "findings": [
@@ -2526,7 +2547,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Submitted upstream. Tamir approved exact 5d2628cbb, submitted as Ruff #30897. The TypedDict.get correction groups keys only within one declared value-type and requiredness group; mixed groups keep existing fallback behavior.",
       "nextStep": "Reconcile the fork with the outcome of upstream PR #30897 after review and merge.",
       "findings": [
@@ -2571,7 +2592,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement / host API candidate. Use the configured dictionary declarations for keys, values and items views while retaining each schema's key and value types. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Qualify ordinary Python view classes plus open, closed and extra-item schemas; test a host with custom dictionary views.",
       "findings": [
@@ -2599,7 +2620,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Infer merge result values from the operand that wins each key, including additional keys and reflected operations. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Reduce upstream failures; check both operand orders, read-only extra items and the fresh ordinary dictionary result.",
       "findings": [
@@ -2627,7 +2648,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python bugfix candidate. Apply default specialization when checking subclasses of known generic classes. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Produce a minimal Python regression on upstream and verify recursive subtype checks.",
       "findings": [
@@ -2655,7 +2676,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host API design. Host-created instances need field storage whose callable values remain ordinary fields; class descriptors retain their own binding behavior. Source reviewed at dfe98a7d; extraction and runtime qualification remain incomplete.",
       "nextStep": "Agree the reusable API; qualify optional and dynamic fields, recursive types, source identity and callable field access.",
       "findings": [
@@ -2683,7 +2704,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host adaptation not implemented. Sty currently selects Standard or Bazel dialects; native annotations and builtin extensions are tied to Bazel. Buck2 needs distinct BUCK, rule-definition and BXL environments. Existing ty parser and supplied-binding hooks are reusable boundaries, not established Buck2 support.",
       "nextStep": "Separate host file modes and builtin catalog selection from Bazel metadata; qualify native annotations and isolation between Buck2 environments.",
       "findings": [],
@@ -2709,7 +2730,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host adaptation not implemented. Reuse Sty’s FileLoader boundary for Buck2 resolution rather than Bazel repository labels. Buck2 cells come from .buckconfig; JSON and TOML can be loaded as modules exporting value. Source lookup, exports and invalidation need the same logical module identity.",
       "nextStep": "Implement a Buck2 loader using cell-relative identities and explicit data-module exports; qualify cross-cell aliases and edits to loaded data.",
       "findings": [],
@@ -2735,7 +2756,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host semantics require qualification. Buck2 exposes record, field and enum constructors alongside namespaced typing values. Map those values through host-supplied semantic contracts instead of assuming Bazel provider or struct behavior. Documentation differs on using record constructors directly versus .type in annotations; settle that against a pinned runtime.",
       "nextStep": "Pin the target Buck2/Starlark runtime, establish constructor and annotation behavior, then qualify field defaults, invalid values and nominal type identity.",
       "findings": [],
@@ -2761,7 +2782,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host-extension design. Expose custom parsing, annotation parsing and literal decoding without changing Python defaults. Preserve namespace-sensitive identities for the same physical file.",
       "nextStep": "Reconcile the public extension boundary with current ty; qualify unchanged Python parsing plus sty comment offsets and host identity.",
       "findings": [
@@ -2840,7 +2861,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host-extension design. Keep reusable extension points separate from Bazel providers, contexts and rule reflection. sty consumes the provided_* database contract; accepting the entire Bazel model into ty is not assumed.",
       "nextStep": "Migrate supplied bindings into the current PlaceLoadResolver owning mechanism introduced by upstream #29791; agree a maintainable host API before proposing it.",
       "findings": [
@@ -3055,7 +3076,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host API design. Apple lipo still lacks a static ToolchainInfo field contract. An RBE aspect/cquery probe follows the selected producer, field shape and configured dependency edge through an --extra_toolchains replacement. Producer bodies remain unchecked.",
       "nextStep": "Check selected producer bodies and handle multiple configurations without label-only joins before adding keyed host bounds. Universal source contracts still require an enforced ABI. Sty integration is not implemented.",
       "findings": [
@@ -3091,7 +3112,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Track allocation contents, indexed writes, membership guards and finite keyword schemas. Overlaps the local and conditional keyword dictionary work already in upstream review.",
       "nextStep": "Compare current upstream and PRs29138/29141/29186, isolate remaining Python regressions, then port through shared index/inference machinery.",
       "findings": [
@@ -3287,7 +3308,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. General constraint solving, callable/generic inference and type-variable improvements need separate Python regressions before porting. The existing LLVM callback case with a fresh list of \"ok\" and list[Literal[\"ok\"]] fails on the fork and pristine upstream. A fix passes the strengthened existing fixture; broader qualification is in progress.",
       "nextStep": "Finish qualification of the fresh-literal callback fix, including the actual LLVM corpus case, before preparing an upstream proposal. Continue isolating the remaining solver improvements.",
       "findings": [
@@ -3694,7 +3715,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Sty now pairs overloaded interfaces with checked source bodies and uses the same finite domains for strictness. General Python body-domain analysis still needs an upstream split and review.",
       "nextStep": "Repair with_cfg dictionary-union admission and the fork-only generic callback rejection; compare the remaining body-domain APIs with upstream.",
       "findings": [
@@ -3779,7 +3800,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Type-test results saved in values and tagged dictionary unions retain useful branch facts. Separate general Python flow improvements from Starlark type() string semantics.",
       "nextStep": "Reject global guard removal: full upstream Markdown has 24 new failing fixtures and current project checks add diagnostics. Fix the original string-splitting bug without discarding internal guards. Saved runtime type tests and tagged-union mechanisms still need separate reconciliation.",
       "findings": [
@@ -3881,7 +3902,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Empty collection defaults and call arguments can require expected-type context; the merged empty-peer change is a template, not proof this whole unit is upstream. The fresh-literal callback fix is now qualified in the fork and passes the actual LLVM corpus case. The expanded official port covers both bounded and unbounded type variables and passes native suites and all 532 default Markdown fixtures. The fork backport passes the current corpus. The official port is withheld after benchmarks found material inference overhead; a correction must preserve required return precision.",
       "nextStep": "Find a smaller callback-inference change that preserves the shared-TypeVar TypedDict case, then measure it on current upstream. Keep the stored-collection overlap with #27665 separate.",
       "findings": [
@@ -4001,7 +4022,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Expose reusable editor queries while keeping host resolution and presentation policy outside Python semantics.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -4051,7 +4072,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Separate host diagnostic selection and suppression policy from shared diagnostic production.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -4083,7 +4104,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Reconcile host runtime differences with Python defaults and keep Starlark behavior explicit.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -4134,7 +4155,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Check surviving structural relation changes against current TypedDict and protocol behavior.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -4184,7 +4205,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Reconcile expected-type inference for lambdas and callbacks with current upstream inference.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -4316,7 +4337,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Requires current-upstream reconciliation. Determine which source return-inference refinements remain necessary on current upstream.",
       "nextStep": "Compare surviving source with current upstream, classify host-only policy separately, and reproduce each general improvement before preparing a qualified proposal.",
       "findings": [
@@ -4339,7 +4360,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Old-fork candidate; current-upstream reproduction pending. certifies_predicate and initial_binding_implies_empty preserve an initial binding when a proven untouched empty list and coordinated assignments rule it out after a loop. This is a bounded tracked proof, not general loop invariant inference.",
       "nextStep": "Reproduce the coordinated-update example on current ty; retain partial-write, allocation-mutation, cycle/query-order and incremental edit negatives from loop_bindings.rs. Compare current loop reachability ownership before porting.",
       "findings": [
@@ -4362,7 +4383,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Old-fork candidate; current-upstream reproduction pending. AttributeWriteRequirement::is_definitely_bound lets a required intersection component establish member presence without treating dynamic getters or Any bases as declared storage. AssignmentAttributeWriteEvaluator preserves Final and union diagnostics.",
       "nextStep": "Review the qualified presence fix. The existing intersection-write test caught the false warning and required only removing its obsolete TODO and error expectation.",
       "findings": [
@@ -4385,7 +4406,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Old-fork candidate; current-upstream reproduction pending. SplitBoundMethodReceiver separates the actual instance used for __self__/typing.Self from the signature receiver used to check an alternative of a bounded union. Its call/methods and legacy generic fixtures are old-fork evidence.",
       "nextStep": "Reproduce bound-union receiver, Self and subscript/typevar examples on current ty. Qualify method binding and generic suites and inspect current descriptor/member policy before extracting a proposal.",
       "findings": [
@@ -4425,7 +4446,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Old-fork candidate; current-upstream reproduction pending. Upstream 19cb997763936be5bd7f3f791965366a99b3989b carries the same #29026 change title. The fork also contains later protocol and constraint changes: this lineage is not proof that the complete instance/protocol/visitor delta is equivalent.",
       "nextStep": "Compare the #29026 patches and subtract their equivalent behavior; benchmark any residual recursive specialization changes using the added recursive protocol microbenchmarks and incremental member-edit test.",
       "findings": [
@@ -4453,7 +4474,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Old-fork candidate; current-upstream reproduction pending. VendoredFileSystem::read_directory treats normalized empty paths as the archive root instead of prefixing a slash. read_directory_root checks empty, dot, slash and normalized-parent spellings.",
       "nextStep": "Review the qualified root-listing fix and coordinate the overlap with the draft archive rewrite #29829.",
       "findings": [
@@ -4476,7 +4497,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Old-fork candidate; current-upstream reproduction pending. TypeGuardArgument distinguishes a mapped call argument, an omitted target and unavailable mapping. bind_type_guard_return_type uses parameter provenance rather than guessing another argument after expansion. Later ambiguous-call changes share this boundary.",
       "nextStep": "Reproduce starred/keyword expansion, omitted targets, bound receivers and overload disagreement on current ty; retain identity-function forwarding and provisional inference negatives before extracting any still-needed change.",
       "findings": [
@@ -4531,7 +4552,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Upstream reproduced; fix not qualified. Structural comparison accepts Result[str] as Result[int] when a generic first_or method returns its payload or a caller-supplied fallback. The same false acceptance occurs with nested recursive payloads. Direct recursive payload comparison rejects correctly. Baseline and deferred-receiver experiments agree in both generic syntaxes, so this is a separate signature-comparison defect.",
       "nextStep": "Reconcile existing upstream reports #2924 and #2323, binder PR #29027 and the closed higher-rank attempt #26638 before preparing feedback or extracting another binder implementation. Keep the scoped-binder prerequisite under ty-scoped-witness-proofs. Resolve capture avoidance, bounded mapping and complete versus incomplete witness families at the actual decision boundary. Then qualify caller variables, constrained domains and recursive comparisons before requesting Tamir review.",
       "findings": [],
@@ -4573,7 +4594,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Reconciliation in progress. Qualified Sty 14d05b98 pins Ruff 07a4f30c on official 75fabee2. Eight native targets, the optimized build and all 148 unchanged corpus cases pass. All 20 community checks execute with unchanged outcomes: 11 strict passes, six advisory completions and three known failures. All eight qualified workflow refreshes are published. Full Ruff Markdown retains 507 passing and 31 unchanged failing fixtures. Ruff’s maintained build branch now pins Bazel rustfmt to Rust 1.100.0 in 928316fb; Cargo inputs and Rust sources are unchanged.",
       "nextStep": "Follow current-head CI and maintainer feedback on submitted PRs #30761, #30848, #30897 and #30898, then reconcile their outcomes with the fork. Continue the existing Apple/LLVM contract work and smaller-contribution redesign of the withdrawn fresh-collection proposal.",
       "findings": [
@@ -4629,7 +4650,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Track specialized bounds in TypeVar identity while preserving materialized views and exact ParamSpec components.",
       "nextStep": "Reduce domain identity and substitution cases; qualify captured binders and compare upstream #29555.",
       "findings": [
@@ -4719,7 +4740,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python solver design. Keep local binders, declared domains and correlated witnesses together through inference, replay and bounded proof. Unknown proofs remain incomplete.",
       "nextStep": "Compare upstream PR #29027 before extracting the binder representation. Reduce the remaining quantified-domain, witness-correlation and budget differences for design review.",
       "findings": [
@@ -5535,7 +5556,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python bugfix candidate. A sibling branch can negate a rolled-back consequence while its antecedents still hold. Retriggering cached rules detects the conflict.",
       "nextStep": "Reproduce against clean upstream and qualify both single and pair implication regressions.",
       "findings": [
@@ -5573,7 +5594,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python bugfix candidate. Exhausted generic witness proof must remain unknown instead of producing an upper-bound violation.",
       "nextStep": "Qualify the native exhausted-witness regression and reduce a Python diagnostic example.",
       "findings": [
@@ -5611,7 +5632,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Preserve strict callable relations while solving finite source domains, covering union inputs and comparing nested protocol receivers.",
       "nextStep": "Reduce strict callable cases; qualify domain replay and receiver progress against upstream #29555.",
       "findings": [
@@ -5697,7 +5718,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Specialize generic implementation inputs before declaration coverage checks. Broader implementation return annotations are permitted; body checking has a separate owner.",
       "nextStep": "Correct the invalid nullable-return assertion, then qualify generic declaration consistency.",
       "findings": [
@@ -5749,7 +5770,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Preserve callable-local binders under outer substitution and project captured callback variables before they reach ordinary results.",
       "nextStep": "Reconcile binder ownership with upstream #29553 and #29555; qualify partial and captured-return cases.",
       "findings": [
@@ -5825,7 +5846,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python bugfix candidate. Keep overload expansion available when some generic specialization accepts an argument, including provisional arity mismatches.",
       "nextStep": "Qualify the bound-method starred-union fixture and reduce the generic expansion precheck.",
       "findings": [
@@ -5863,7 +5884,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Python enhancement candidate. Use finite member facts for getattr results and fresh empty defaults. Immutable storage guarantees have a separate host contract.",
       "nextStep": "Reduce ordinary Python lookup cases; compare collection context with upstream #27665.",
       "findings": [
@@ -5929,7 +5950,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host API design. Distinguish accepted keyword parameters from received keyword dictionaries, then verify complete ParamSpec witnesses against the original call relation.",
       "nextStep": "Specify host annotation and capture semantics before proposing shared solver APIs.",
       "findings": [
@@ -6025,7 +6046,7 @@
       "owner": "Agent",
       "task": true,
       "status": "active",
-      "updatedAt": "2026-11-26T20:56:57+00:00",
+      "updatedAt": "2026-11-27T12:42:44+00:00",
       "summary": "Host API design. Keep source definitions or ranges through parameter specialization, default presentation and hidden internal keyword handling.",
       "nextStep": "Review the public source-location contract and qualify navigation and signature presentation.",
       "findings": [
