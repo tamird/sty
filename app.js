@@ -704,13 +704,21 @@ function attentionReasons(node, owner) {
   if (alternative && !landed && !attentionDisposition(node, alternative.reason))
     add("agent-refresh", "Reassess the author’s preference for the alternative PR. The review evidence or one of the two revisions has changed or is unavailable.");
   const contexts = pr.checks?.contexts || [];
+  const reviewer = node.maintainerReviewRequest;
+  if (!landed && reviewer && node.head === pr.head && pr.reviewRequestsComplete && pr.feedback?.complete
+      && !pr.reviewRequests.some(request => request.login === reviewer)
+      && !pr.feedback.items.some(item => item.kind === "review" && item.author?.login === reviewer
+        && item.commit?.oid === pr.head && item.submittedAt))
+    add("maintainer-response", `A Ruff maintainer with write access needs to request review from @${reviewer}. GitHub denied the author’s request.`, "Request reviewer on GitHub");
   const sourceFix = sourceFixRecovery(node);
   if (!landed && ["inspect", "ready"].includes(sourceFix?.state)) add("author-ci-remedy", sourceFix.detail);
   const copybara = name => contexts.find(check => check.kind === "status" && check.name === name);
   const importStatus = copybara("import/copybara"), feedbackStatus = copybara("feedback/copybara");
   const sourceRecovery = sourceAuthenticationRecovery(node);
   const publicFailures = failedValidationChecks(pr).filter(check => !isPrivateBuildkiteCheck(pr, check));
-  const authorFailures = publicFailures.filter(check => !sourceRecovery?.ids.has(check.id));
+  const maintainerCheck = node.head === pr.head && publicFailures.some(check => check.id === node.maintainerCheck?.checkId)
+    ? node.maintainerCheck : null;
+  const authorFailures = publicFailures.filter(check => check.id !== maintainerCheck?.checkId && !sourceRecovery?.ids.has(check.id));
   if (!landed && authorFailures.length) add("author-public-checks", authorFailures.map(check => `${check.name}: ${check.state}`).join("; "));
   const reviewHold = activeReviewHold(node, pr);
   const approvalGates = contexts.filter(check => isApprovalGate(pr, check));
@@ -769,6 +777,7 @@ function attentionReasons(node, owner) {
   const failed = unresolvedImportChecks(checkImports).filter(item => checkInfo(item).tone === "bad");
   const recoveries = new Map(failed.map(item => [item.number, blockedImportRetry(node, item)]));
   const retryDetails = sourceRecovery ? [sourceRecovery.detail] : [];
+  if (maintainerCheck) retryDetails.push(`${maintainerCheck.nextAction} (${maintainerCheck.jobURL})`);
   retryDetails.push(...[...recoveries.values()].filter(Boolean).map(item => item.detail));
   const cancellationDetails = [];
   for (const item of [pr, ...active]) {
@@ -2478,6 +2487,16 @@ function validateRegistry(candidate, { allowRetiredExecution = false } = {}) {
     const retiredExecution = allowRetiredExecution && action?.kind === "execution" && proposalRepo
       && /^[a-f0-9]{40}$/.test(action.sourceHead) && commitLinkMatches(proposalRepo, action.sourceHead, action.url);
     validateHumanAction(node, retiredExecution);
+    if (node.maintainerReviewRequest !== undefined && (node.type !== "pr" || !/^[a-f0-9]{40}$/.test(node.head)
+        || typeof node.maintainerReviewRequest !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(node.maintainerReviewRequest)))
+      throw new Error(`Invalid maintainer review request for ${node.id}`);
+    const maintainerCheck = node.maintainerCheck;
+    if (maintainerCheck !== undefined && (!maintainerCheck || node.type !== "pr" || !/^[a-f0-9]{40}$/.test(node.head)
+        || typeof maintainerCheck.checkId !== "string" || !maintainerCheck.checkId.trim()
+        || typeof maintainerCheck.nextAction !== "string" || !maintainerCheck.nextAction.trim()
+        || !safeURL(maintainerCheck.jobURL) || !maintainerCheck.jobURL.startsWith(`https://github.com/${node.repo}/actions/runs/`)
+        || !/\/actions\/runs\/\d+\/job\/\d+$/.test(maintainerCheck.jobURL)))
+      throw new Error(`Invalid maintainer check for ${node.id}`);
     if (node.additionalReviews !== undefined && (!Array.isArray(node.additionalReviews) || node.type !== "pr" || action ||
         node.additionalReviews.some(review => review?.kind !== "review"))) throw new Error("Invalid additional review");
     const decisions = node.contributorReview === undefined ? [] : [node.contributorReview];
