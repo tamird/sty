@@ -234,6 +234,26 @@ const renderedReviewLinks = [];
 for (const item of upstream) {
   if (item.qualifiedCommitCount !== undefined) {
     const node = nodes.find(node => item.number ? node.repo === 'astral-sh/ruff' && node.number === item.number : node.id === `branch:${item.id}`);
+    if (item.maintainerCheck) {
+      const { checkId, jobURL } = item.maintainerCheck;
+      const reasons = tracker.attentionReasons(node, 'tamird');
+      assert.ok(reasons.some(reason => reason.id === 'maintainer-ci-retry' && reason.detail.includes(jobURL)));
+      const contexts = node.github.checks.contexts.map(check => check.id === checkId ? { ...check, id: 'replacement' } : check);
+      const changed = { ...node, github: { ...node.github, checks: { ...node.github.checks, contexts } } };
+      const changedReasons = tracker.attentionReasons(changed, 'tamird');
+      assert.ok(!changedReasons.some(reason => reason.id === 'maintainer-ci-retry'));
+      assert.ok(changedReasons.some(reason => reason.id === 'author-public-checks'));
+      assert.ok(!reasons.some(reason => reason.id === 'author-public-checks'
+        && reason.detail.includes('CodSpeed Performance Analysis')));
+    }
+    if (item.maintainerReviewRequest) {
+      const title = 'Request reviewer on GitHub';
+      assert.ok(tracker.attentionReasons(node, 'tamird').some(reason => reason.title === title
+        && reason.owner === 'maintainer' && reason.detail.includes(item.maintainerReviewRequest)));
+      const requested = { ...node, github: { ...node.github, reviewRequests: [{ login: item.maintainerReviewRequest }] } };
+      assert.ok(!tracker.attentionReasons(requested, 'tamird').some(reason => reason.title === title));
+      assert.equal(node.followup, undefined);
+    }
     if (item.contributorReview?.kind === 'scope') {
       assert.equal(node.contributorReview.head, item.qualifiedHead);
       assert.deepEqual(node.contributorReview, item.contributorReview);

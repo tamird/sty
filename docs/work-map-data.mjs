@@ -261,7 +261,7 @@ export const upstream = [
         "postedURL": "https://github.com/astral-sh/ruff/pull/30897"
       }
     ],
-    "nextAction": "Four replies are posted on abaacc858. All four threads remain open. Re-request Carl’s review."
+    "maintainerReviewRequest": "carljm"
   },
   {
     "id": "inplace-notimplemented",
@@ -304,7 +304,11 @@ export const upstream = [
       ]
     },
     "number": 30898,
-    "nextAction": "Matched RBE timings were 27.63 ms before and 27.52 ms after the change. A Ruff maintainer with Actions write access can rerun the hosted walltime job to check its reported regression.",
+    "maintainerCheck": {
+      "checkId": "CR_kwDOHy0Bzc8AAAAgalQOMA",
+      "jobURL": "https://github.com/astral-sh/ruff/actions/runs/45615701745/job/139214182548",
+      "nextAction": "A Ruff maintainer with Actions write access needs to rerun the ty x86_64 walltime job and check whether CodSpeed still reports a slowdown. The hosted comparison was 19.5 → 20.5 ms. Matched RBE timings were 27.63 → 27.52 ms."
+    },
     "settledReviews": [
       {
         "kind": "proposal",
@@ -725,7 +729,11 @@ export const upstream = [
         "head": "7b148056cd81a79c3b67ce5afcfdcfba1e6f565a"
       }
     },
-    "nextAction": "CodSpeed reports a 5.23% regression. Matched RBE rounds were about 2% slower, with overlapping timings. Checking the fallback literal earlier did not help. Keep the current revision and have a maintainer confirm the hosted result before deciding on the tradeoff."
+    "maintainerCheck": {
+      "checkId": "CR_kwDOHy0Bzc8AAAAgeiDTVw",
+      "jobURL": "https://github.com/astral-sh/ruff/actions/runs/45690571854/job/139478207847",
+      "nextAction": "A Ruff maintainer with Actions write access needs to rerun the ty x86_64 walltime job. If CodSpeed repeats the 5.23% regression, decide whether the cost is acceptable. Matched RBE timings were 37.775 → 38.568 ms with overlapping rounds. Checking the fallback literal earlier did not improve timings."
+    }
   },
   {
     "id": "residual-truthiness-guards",

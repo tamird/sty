@@ -65,6 +65,11 @@ export function buildRegistry({ projects, additionalProjects, upstream, goals, b
       node.summary = `${item.summary}\n\n${item.qualification?.summary || ''}\n\n${permission}`;
       node.evidence.push(...(item.qualification?.evidence || []));
       if (item.settledReviews) node.settledReviews = item.settledReviews;
+      if (item.maintainerCheck) {
+        node.maintainerCheck = item.maintainerCheck;
+        node.evidence.push({ label: 'Hosted benchmark job to rerun', url: item.maintainerCheck.jobURL });
+      }
+      if (item.maintainerReviewRequest) node.maintainerReviewRequest = item.maintainerReviewRequest;
       if (item.nextAction && item.state !== 'Awaiting Tamir review' && !item.contributorReview)
         node.followup = { owner: 'Agent', sourceHead: item.qualifiedHead, nextAction: item.nextAction,
           ...(item.actionableComment ? { actionableComment: item.actionableComment } : {}) };
